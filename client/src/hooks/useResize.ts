@@ -38,7 +38,7 @@ const useResize = (direction: "row" | "column", initialRatio: number = 0.5) => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [isDragging]);
 
   return {
     firstRatio,
