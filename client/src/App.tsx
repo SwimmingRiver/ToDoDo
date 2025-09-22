@@ -20,9 +20,19 @@ function App() {
           </div>
         }
         children2={
-          <div>
-            <h1>children2</h1>
-          </div>
+          <ResizeableLayout
+            direction="column"
+            children1={
+              <div>
+                <h1>children2-1</h1>
+              </div>
+            }
+            children2={
+              <div>
+                <h1>children2-2</h1>
+              </div>
+            }
+          />
         }
       />
 
