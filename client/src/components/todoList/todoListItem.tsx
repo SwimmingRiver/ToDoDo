@@ -14,6 +14,28 @@ const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
     background-color: #f0f0f0;
   }
 `;
+
+const ExpandButton = styled.button<{ isExpanded: boolean }>`
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #e9ecef;
+    color: #333;
+  }
+
+  &::before {
+    content: '${props => props.isExpanded ? '▼' : '▶'}';
+    margin-right: 4px;
+  }
+`;
+
 const TodoListItem = ({
   todo,
   isChild,
@@ -31,9 +53,12 @@ const TodoListItem = ({
         <input type="checkbox" />
         <span>{todo.title}</span>
         {childTodos && childTodos.length > 0 && (
-          <button onClick={() => setIsMore(!isMore)}>
-            {isMore ? 'collapse' : 'expand'}
-          </button>
+          <ExpandButton
+            isExpanded={isMore}
+            onClick={() => setIsMore(!isMore)}
+          >
+            {childTodos.length}
+          </ExpandButton>
         )}
       </TodoListItemContainer>
       {isMore && childTodos?.map((childTodo) => (
