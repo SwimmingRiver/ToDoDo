@@ -7,7 +7,7 @@ interface Todo {
   updatedAt: string;
   startAt: string | null;
   dueAt: string | null;
-  doneAt: string;
+  doneAt: string | null;
   priority: "low" | "medium" | "high";
   parentId: string | null;
   order: number;
