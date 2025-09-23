@@ -1,7 +1,7 @@
 import { styled } from "styled-components";
 import TodoListItem from "./todoListItem";
 import type { Todo } from "../../types/todo.type";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 const TodoListContainer = styled.div`
   width: 100%;
@@ -22,28 +22,10 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       };
     });
   }, [todos]);
-  const [isMore, setIsMore] = useState(false);
   return (
     <TodoListContainer>
       {todoTree.map((todo) => (
-        <>
-          <TodoListItem
-            key={todo.id}
-            todo={todo}
-            isMore={isMore}
-            setIsMore={setIsMore}
-          />
-          {isMore &&
-            todo.childTodos?.map((childTodo) => (
-              <TodoListItem
-                key={childTodo.id}
-                todo={childTodo}
-                isMore={isMore}
-                setIsMore={setIsMore}
-                isChild={true}
-              />
-            ))}
-        </>
+        <TodoListItem key={todo.id} todo={todo} childTodos={todo.childTodos} />
       ))}
     </TodoListContainer>
   );

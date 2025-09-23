@@ -1,5 +1,6 @@
 import type { Todo } from "../../types/todo.type";
 import { styled } from "styled-components";
+import { useState } from "react";
 const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
   border: 1px solid #e0e0e0;
   padding: 10px;
@@ -15,21 +16,34 @@ const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
 `;
 const TodoListItem = ({
   todo,
-  isMore,
-  setIsMore,
   isChild,
+  childTodos,
 }: {
   todo: Todo;
-  isMore?: boolean;
-  setIsMore?: (isMore: boolean) => void;
   isChild?: boolean;
+  childTodos?: Todo[];
 }) => {
+  const [isMore, setIsMore] = useState(false);
+
   return (
-    <TodoListItemContainer isChild={isChild}>
-      <input type="checkbox" />
-      <span>{todo.title}</span>
-      <button onClick={() => setIsMore?.(!isMore)}>more</button>
-    </TodoListItemContainer>
+    <>
+      <TodoListItemContainer isChild={isChild}>
+        <input type="checkbox" />
+        <span>{todo.title}</span>
+        {childTodos && childTodos.length > 0 && (
+          <button onClick={() => setIsMore(!isMore)}>
+            {isMore ? 'collapse' : 'expand'}
+          </button>
+        )}
+      </TodoListItemContainer>
+      {isMore && childTodos?.map((childTodo) => (
+        <TodoListItem
+          key={childTodo.id}
+          todo={childTodo}
+          isChild={true}
+        />
+      ))}
+    </>
   );
 };
 
