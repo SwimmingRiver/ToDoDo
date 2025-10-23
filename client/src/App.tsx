@@ -5,6 +5,7 @@ import ResizeableLayout from "./layouts/resizeableLayout/resizeableLayout";
 import TodoList from "./components/todoList/todoList";
 import { styled } from "styled-components";
 import type { Todo } from "./types/todo.type";
+import PieChartComponent from "./components/charts/pieChart";
 const Container = styled.div`
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -79,11 +80,7 @@ function App() {
         children2={
           <ResizeableLayout
             direction="column"
-            children1={
-              <div>
-                <h1>children2-1</h1>
-              </div>
-            }
+            children1={<PieChartComponent />}
             children2={
               <div>
                 <h1>children2-2</h1>
