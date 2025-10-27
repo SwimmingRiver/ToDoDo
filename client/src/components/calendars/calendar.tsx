@@ -1,6 +1,7 @@
 import { styled } from "styled-components";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
+import { useEffect, useRef } from "react";
 
 const CalendarContainer = styled.div`
   width: 100%;
@@ -39,12 +40,35 @@ const events = [
 ];
 
 const Calendar = () => {
+  const calendarRef = useRef<FullCalendar>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        calendarApi.updateSize();
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   return (
-    <CalendarContainer>
+    <CalendarContainer ref={containerRef}>
       <FullCalendar
+        ref={calendarRef}
         plugins={[dayGridPlugin]}
         initialView="dayGridMonth"
         events={events}
+        height="100%"
+        aspectRatio={0}
       />
     </CalendarContainer>
   );
