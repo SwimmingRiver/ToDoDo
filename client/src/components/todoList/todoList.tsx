@@ -11,6 +11,18 @@ const TodoListContainer = styled.div`
   flex-direction: column;
   gap: 4px;
 `;
+const AddButton = styled.button`
+  width: 100%;
+  height: 40px;
+  background-color: #1c72eb;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 4px;
+`;
 
 const TodoList = ({ todos }: { todos: Todo[] }) => {
   const todoTree = useMemo(() => {
@@ -24,6 +36,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   }, [todos]);
   return (
     <TodoListContainer>
+      <AddButton>+</AddButton>
       {todoTree.map((todo) => (
         <TodoListItem key={todo.id} todo={todo} childTodos={todo.childTodos} />
       ))}
