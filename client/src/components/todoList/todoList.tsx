@@ -2,6 +2,8 @@ import { styled } from "styled-components";
 import TodoListItem from "./todoListItem";
 import type { Todo } from "../../types/todo.type";
 import { useMemo } from "react";
+import useModal from "../../hooks/useModal";
+import Modal from "../modal";
 
 const TodoListContainer = styled.div`
   width: 100%;
@@ -25,6 +27,7 @@ const AddButton = styled.button`
 `;
 
 const TodoList = ({ todos }: { todos: Todo[] }) => {
+  const { isOpen, setIsOpen } = useModal();
   const todoTree = useMemo(() => {
     const rootTodos = todos.filter((todo) => todo.parentId === null);
     return rootTodos.map((rootTodo) => {
@@ -36,7 +39,12 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   }, [todos]);
   return (
     <TodoListContainer>
-      <AddButton>+</AddButton>
+      <Modal
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        children={<div>Modal</div>}
+      />
+      <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
       {todoTree.map((todo) => (
         <TodoListItem key={todo.id} todo={todo} childTodos={todo.childTodos} />
       ))}
