@@ -12,8 +12,12 @@ const ModalBackground = styled.div`
   z-index: 999;
 `;
 const ModalContainer = styled.div`
-  width: 500px;
-  height: 400px;
+  width: auto;
+
+  min-width: 400px;
+  height: auto;
+  max-height: 80vh;
+  padding: 16px;
   background-color: white;
   z-index: 1000;
   border-radius: 12px;
@@ -29,13 +33,18 @@ const ModalHeader = styled.div`
   justify-content: flex-end;
   align-items: center;
   padding: 10px;
-  border-bottom: 1px solid #e0e0e0;
 `;
 
 const ModalBody = styled.div`
   width: 100%;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   background-color: white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  box-sizing: border-box;
 `;
 const ModalFooter = styled.div`
   width: 100%;
@@ -49,14 +58,26 @@ const ModalCloseButton = styled.button`
   border: none;
   cursor: pointer;
 `;
+const ModalSubmitButton = styled.button`
+  width: 100%;
+  height: 100%;
+  background-color: #1c72eb;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+`;
 const Modal = ({
   children,
   isOpen,
   setIsOpen,
+  onSubmit,
 }: {
   children: React.ReactNode;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  onSubmit: () => void;
 }) => {
   if (!isOpen) return null;
   const handleClose = () => {
@@ -71,7 +92,7 @@ const Modal = ({
           </ModalHeader>
           <ModalBody>{children}</ModalBody>
           <ModalFooter>
-            <button>Submit</button>
+            <ModalSubmitButton onClick={onSubmit}>Submit</ModalSubmitButton>
           </ModalFooter>
         </ModalContainer>
       </ModalBackground>

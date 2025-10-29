@@ -4,6 +4,7 @@ import type { Todo } from "../../types/todo.type";
 import { useMemo } from "react";
 import useModal from "../../hooks/useModal";
 import Modal from "../modal";
+import TodoForm from "./todoForm";
 
 const TodoListContainer = styled.div`
   width: 100%;
@@ -42,7 +43,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       <Modal
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        children={<div>Modal</div>}
+        children={<TodoForm />}
+        onSubmit={() => {}}
       />
       <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
       {todoTree.map((todo) => (
