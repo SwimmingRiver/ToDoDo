@@ -72,12 +72,10 @@ const Modal = ({
   children,
   isOpen,
   setIsOpen,
-  onSubmit,
 }: {
   children: React.ReactNode;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  onSubmit: () => void;
 }) => {
   if (!isOpen) return null;
   const handleClose = () => {
@@ -92,7 +90,7 @@ const Modal = ({
           </ModalHeader>
           <ModalBody>{children}</ModalBody>
           <ModalFooter>
-            <ModalSubmitButton onClick={onSubmit}>Submit</ModalSubmitButton>
+            <ModalSubmitButton type="submit" form="todo-form">Submit</ModalSubmitButton>
           </ModalFooter>
         </ModalContainer>
       </ModalBackground>

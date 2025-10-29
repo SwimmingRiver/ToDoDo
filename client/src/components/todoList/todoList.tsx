@@ -44,7 +44,6 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         isOpen={isOpen}
         setIsOpen={setIsOpen}
         children={<TodoForm />}
-        onSubmit={() => {}}
       />
       <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
       {todoTree.map((todo) => (
