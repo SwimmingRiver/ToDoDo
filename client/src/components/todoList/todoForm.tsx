@@ -2,6 +2,8 @@ import { useForm } from "react-hook-form";
 import { styled } from "styled-components";
 import { useState } from "react";
 
+import useCreateTodo from "./queries/useCreateTodo";
+import type { Todo } from "../../types/todo.type";
 const FormContainer = styled.form`
   display: flex;
   flex-direction: column;
@@ -94,9 +96,16 @@ const TodoForm = () => {
     handleSubmit,
     formState: { errors },
   } = useForm<TodoFormData>();
-
+  const { mutate: createTodo } = useCreateTodo();
   const onSubmit = (data: TodoFormData) => {
-    console.log(data);
+    createTodo({
+      ...data,
+      status: "todo",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      parentId: null,
+      order: 0,
+    } as Todo);
   };
 
   return (
@@ -129,16 +138,10 @@ const TodoForm = () => {
           </Select>
 
           <InputLabel>시작일시</InputLabel>
-          <Input
-            type="datetime-local"
-            {...register("startAt")}
-          />
+          <Input type="datetime-local" {...register("startAt")} />
 
           <InputLabel>만료일시</InputLabel>
-          <Input
-            type="datetime-local"
-            {...register("dueAt")}
-          />
+          <Input type="datetime-local" {...register("dueAt")} />
         </DetailContent>
       </DetailSection>
 
