@@ -6,7 +6,7 @@ export class TodoList extends Document {
   @Prop({ required: true })
   title: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   description: string;
 
   @Prop({ required: true, default: 'pending' })
