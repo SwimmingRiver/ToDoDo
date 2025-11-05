@@ -28,6 +28,7 @@ const AddButton = styled.button`
 `;
 
 const TodoList = ({ todos }: { todos: Todo[] }) => {
+  console.log("todos", todos);
   const { isOpen, setIsOpen } = useModal();
   const todoTree = useMemo(() => {
     const rootTodos = todos.filter((todo) => todo.parentId === null);
@@ -40,11 +41,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   }, [todos]);
   return (
     <TodoListContainer>
-      <Modal
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        children={<TodoForm />}
-      />
+      <Modal isOpen={isOpen} setIsOpen={setIsOpen} children={<TodoForm />} />
       <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
       {todoTree.map((todo) => (
         <TodoListItem key={todo.id} todo={todo} childTodos={todo.childTodos} />
