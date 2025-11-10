@@ -1,10 +1,11 @@
 import type { Todo } from "../../types/todo.type";
 import { styled } from "styled-components";
 import { useState } from "react";
+import { useTodo } from "./queries";
 const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
   border: 1px solid #e0e0e0;
   padding: 10px;
-  padding-left: ${props => props.isChild ? '32px' : '10px'};
+  padding-left: ${(props) => (props.isChild ? "32px" : "10px")};
   border-radius: 12px;
   cursor: pointer;
   display: flex;
@@ -31,7 +32,7 @@ const ExpandButton = styled.button<{ isExpanded: boolean }>`
   }
 
   &::before {
-    content: '${props => props.isExpanded ? '▼' : '▶'}';
+    content: "${(props) => (props.isExpanded ? "▼" : "▶")}";
     margin-right: 4px;
   }
 `;
@@ -40,34 +41,37 @@ const TodoListItem = ({
   todo,
   isChild,
   childTodos,
+  onEdit,
 }: {
   todo: Todo;
   isChild?: boolean;
   childTodos?: Todo[];
+  onEdit?: (todo: Todo) => void;
 }) => {
   const [isMore, setIsMore] = useState(false);
+  const { userDeleteTodo } = useTodo();
+
+  const handleDelete = () => {
+    userDeleteTodo.mutate(todo.id);
+  };
 
   return (
     <>
-      <TodoListItemContainer isChild={isChild}>
+      <TodoListItemContainer key={todo.id} isChild={isChild}>
         <input type="checkbox" />
         <span>{todo.title}</span>
+        <button onClick={() => onEdit?.(todo)}>Edit</button>
+        <button onClick={handleDelete}>Delete</button>
         {childTodos && childTodos.length > 0 && (
-          <ExpandButton
-            isExpanded={isMore}
-            onClick={() => setIsMore(!isMore)}
-          >
+          <ExpandButton isExpanded={isMore} onClick={() => setIsMore(!isMore)}>
             {childTodos.length}
           </ExpandButton>
         )}
       </TodoListItemContainer>
-      {isMore && childTodos?.map((childTodo) => (
-        <TodoListItem
-          key={childTodo.id}
-          todo={childTodo}
-          isChild={true}
-        />
-      ))}
+      {isMore &&
+        childTodos?.map((childTodo) => (
+          <TodoListItem key={childTodo.id} todo={childTodo} isChild={true} onEdit={onEdit} />
+        ))}
     </>
   );
 };

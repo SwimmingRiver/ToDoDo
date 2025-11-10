@@ -32,3 +32,10 @@ export class TodoList extends Document {
 }
 
 export const TodoListSchema = SchemaFactory.createForClass(TodoList);
+TodoListSchema.set('toJSON', {
+  transform: (doc, ret) => {
+    ret.id = ret._id;
+    delete ret._id;
+    return ret;
+  },
+});

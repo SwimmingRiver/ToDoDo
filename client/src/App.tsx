@@ -17,7 +17,7 @@ const App = () => {
   const {
     userGetTodos: { data: todos },
   } = useTodo();
-  console.log(todos);
+
   return (
     <Container>
       <Header />
