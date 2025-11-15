@@ -29,6 +29,9 @@ export class TodoList extends Document {
 
   @Prop({ required: true, default: 0 })
   order: number;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const TodoListSchema = SchemaFactory.createForClass(TodoList);
