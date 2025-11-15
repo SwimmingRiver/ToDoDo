@@ -10,7 +10,7 @@ export class TodoList extends Document {
   description: string;
 
   @Prop({ required: true, default: 'todo', enum: ['todo', 'doing', 'done'] })
-  status: string;
+  status: 'todo' | 'doing' | 'done';
 
   @Prop({ required: false, default: null })
   startAt: Date;
@@ -29,6 +29,9 @@ export class TodoList extends Document {
 
   @Prop({ required: true, default: 0 })
   order: number;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const TodoListSchema = SchemaFactory.createForClass(TodoList);

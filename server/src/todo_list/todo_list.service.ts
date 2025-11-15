@@ -18,7 +18,18 @@ export class TodoListService {
 
   async create(createTodoListDto: CreateTodoListDto) {
     try {
-      const createdTodoList = new this.todoListModel(createTodoListDto);
+      const createdTodoList = new this.todoListModel({
+        ...createTodoListDto,
+        startAt: createTodoListDto.startAt
+          ? new Date(createTodoListDto.startAt)
+          : null,
+        dueAt: createTodoListDto.dueAt
+          ? new Date(createTodoListDto.dueAt)
+          : null,
+        doneAt: createTodoListDto.doneAt
+          ? new Date(createTodoListDto.doneAt)
+          : null,
+      });
       return await createdTodoList.save();
     } catch (error) {
       if (error instanceof Error.ValidationError) {
