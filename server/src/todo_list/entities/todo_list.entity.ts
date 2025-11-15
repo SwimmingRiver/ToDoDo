@@ -10,7 +10,7 @@ export class TodoList extends Document {
   description: string;
 
   @Prop({ required: true, default: 'todo', enum: ['todo', 'doing', 'done'] })
-  status: string;
+  status: 'todo' | 'doing' | 'done';
 
   @Prop({ required: false, default: null })
   startAt: Date;
