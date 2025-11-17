@@ -101,31 +101,40 @@ const TodoForm = ({ todo, onClose }: TodoFormProps) => {
     handleSubmit,
     formState: { errors },
   } = useForm<TodoFormData>({
-    defaultValues: todo ? {
-      title: todo.title,
-      description: todo.description,
-      priority: todo.priority,
-      startAt: todo.startAt ? new Date(todo.startAt).toISOString().slice(0, 16) : undefined,
-      dueAt: todo.dueAt ? new Date(todo.dueAt).toISOString().slice(0, 16) : undefined,
-    } : undefined,
+    defaultValues: todo
+      ? {
+          title: todo.title,
+          description: todo.description,
+          priority: todo.priority,
+          startAt: todo.startAt
+            ? new Date(todo.startAt).toISOString().slice(0, 16)
+            : undefined,
+          dueAt: todo.dueAt
+            ? new Date(todo.dueAt).toISOString().slice(0, 16)
+            : undefined,
+        }
+      : undefined,
   });
-  const { userCreateTodo, userUpdateTodo } = useTodo();
+  const { useCreateTodo, useUpdateTodo } = useTodo();
   const onSubmit = (data: TodoFormData) => {
     if (todo) {
       // 수정 시 기존 todo의 모든 필드를 유지하면서 변경된 필드만 덮어씀
-      userUpdateTodo.mutate({
-        ...todo,
-        ...data,
-        // datetime-local input의 값을 ISO string으로 변환
-        startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
-        dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
-      } as Todo, {
-        onSuccess: () => {
-          onClose?.();
-        },
-      });
+      useUpdateTodo.mutate(
+        {
+          ...todo,
+          ...data,
+          // datetime-local input의 값을 ISO string으로 변환
+          startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
+          dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+        } as Todo,
+        {
+          onSuccess: () => {
+            onClose?.();
+          },
+        }
+      );
     } else {
-      userCreateTodo.mutate(data as Todo, {
+      useCreateTodo.mutate(data as Todo, {
         onSuccess: () => {
           onClose?.();
         },

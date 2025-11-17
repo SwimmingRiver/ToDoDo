@@ -49,16 +49,22 @@ const TodoListItem = ({
   onEdit?: (todo: Todo) => void;
 }) => {
   const [isMore, setIsMore] = useState(false);
-  const { userDeleteTodo } = useTodo();
+  const { useDeleteTodo, useUpdateToDone } = useTodo();
 
   const handleDelete = () => {
-    userDeleteTodo.mutate(todo.id);
+    useDeleteTodo.mutate(todo.id);
   };
-
+  const handleUpdateToDone = () => {
+    useUpdateToDone.mutate(todo.id);
+  };
   return (
     <>
       <TodoListItemContainer key={todo.id} isChild={isChild}>
-        <input type="checkbox" />
+        <input
+          type="checkbox"
+          checked={todo.status === "done"}
+          onChange={handleUpdateToDone}
+        />
         <span>{todo.title}</span>
         <button onClick={() => onEdit?.(todo)}>Edit</button>
         <button onClick={handleDelete}>Delete</button>
@@ -70,7 +76,12 @@ const TodoListItem = ({
       </TodoListItemContainer>
       {isMore &&
         childTodos?.map((childTodo) => (
-          <TodoListItem key={childTodo.id} todo={childTodo} isChild={true} onEdit={onEdit} />
+          <TodoListItem
+            key={childTodo.id}
+            todo={childTodo}
+            isChild={true}
+            onEdit={onEdit}
+          />
         ))}
     </>
   );

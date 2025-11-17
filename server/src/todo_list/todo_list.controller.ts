@@ -43,4 +43,8 @@ export class TodoListController {
   remove(@Param('id') id: string) {
     return this.todoListService.remove(id);
   }
+  @Patch(':id/done')
+  updateToDone(@Param('id') id: string) {
+    return this.todoListService.updateToDone(id);
+  }
 }

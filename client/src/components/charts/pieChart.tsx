@@ -19,8 +19,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PieChartComponent = () => {
-  const { userGetTodos } = useTodo();
-  const { data: todos } = userGetTodos;
+  const { useGetTodos } = useTodo();
+  const { data: todos } = useGetTodos;
 
   const data = useMemo(() => {
     if (!todos || todos.length === 0) return [];

@@ -35,3 +35,8 @@ export const deleteTodo = async (id: string) => {
   const response = await api.delete<Todo>(`/todo-list/${id}`);
   return response.data;
 };
+
+export const updateToDone = async (id: string) => {
+  const response = await api.patch<MongoTodo>(`/todo-list/${id}/done`);
+  return mapMongoToTodo(response.data);
+};
