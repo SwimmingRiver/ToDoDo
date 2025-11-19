@@ -14,8 +14,8 @@ const CalendarContainer = styled.div`
 const Calendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { userGetTodos } = useTodo();
-  const { data: todos } = userGetTodos;
+  const { useGetTodos } = useTodo();
+  const { data: todos } = useGetTodos;
   const events = useMemo(() => {
     return todos
       ?.filter((todo: Todo) => todo.startAt !== null || todo.dueAt !== null)

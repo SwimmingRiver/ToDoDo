@@ -15,7 +15,7 @@ const Container = styled.div`
 
 const App = () => {
   const {
-    userGetTodos: { data: todos },
+    useGetTodos: { data: todos },
   } = useTodo();
 
   return (

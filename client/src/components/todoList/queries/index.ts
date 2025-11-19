@@ -1,38 +1,62 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Todo } from "../../../types/todo.type";
-import { createTodo, getTodos, editTodo, deleteTodo } from "../api";
+import {
+  createTodo,
+  getTodos,
+  editTodo,
+  deleteTodo,
+  updateToDone,
+  createChildTodo,
+} from "../api";
 
 export const useTodo = () => {
   const queryClient = useQueryClient();
-  const userCreateTodo = useMutation({
+  const useCreateTodo = useMutation({
     mutationFn: (todo: Todo) => createTodo(todo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
 
-  const userUpdateTodo = useMutation({
+  const useUpdateTodo = useMutation({
     mutationFn: (todo: Todo) => editTodo(todo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
 
-  const userDeleteTodo = useMutation({
+  const useDeleteTodo = useMutation({
     mutationFn: (id: string) => deleteTodo(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
 
-  const userGetTodos = useQuery({
+  const useGetTodos = useQuery({
     queryKey: ["todos"],
     queryFn: getTodos,
   });
+  const useUpdateToDone = useMutation({
+    mutationFn: (id: string) => updateToDone(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
+  const useCreateChildTodo = useMutation({
+    mutationFn: ({ parentId, todo }: { parentId: string; todo: Partial<Todo> }) =>
+      createChildTodo(parentId, todo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
   return {
-    userCreateTodo,
-    userUpdateTodo,
-    userDeleteTodo,
-    userGetTodos,
+    useCreateTodo,
+    useUpdateTodo,
+    useDeleteTodo,
+    useGetTodos,
+    useUpdateToDone,
+    useCreateChildTodo,
   };
 };
