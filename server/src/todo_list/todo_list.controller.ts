@@ -47,4 +47,11 @@ export class TodoListController {
   updateToDone(@Param('id') id: string) {
     return this.todoListService.updateToDone(id);
   }
+  @Post(':id/child')
+  addChildTodo(
+    @Param('id') id: string,
+    @Body() createTodoListDto: CreateTodoListDto,
+  ) {
+    return this.todoListService.addChildTodo(id, createTodoListDto);
+  }
 }

@@ -37,16 +37,43 @@ const ExpandButton = styled.button<{ isExpanded: boolean }>`
   }
 `;
 
+const AddChildButton = styled.button`
+  width: calc(100% - 32px);
+  padding: 8px 12px;
+  margin-left: 32px;
+  margin-top: 4px;
+  background-color: #f8f9fa;
+  border: 1px dashed #dee2e6;
+  border-radius: 8px;
+  color: #495057;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    color: #212529;
+  }
+
+  &::before {
+    content: "+ ";
+    font-weight: bold;
+  }
+`;
+
 const TodoListItem = ({
   todo,
   isChild,
   childTodos,
   onEdit,
+  onAddChild,
 }: {
   todo: Todo;
   isChild?: boolean;
   childTodos?: Todo[];
   onEdit?: (todo: Todo) => void;
+  onAddChild?: (parentId: string) => void;
 }) => {
   const [isMore, setIsMore] = useState(false);
   const { useDeleteTodo, useUpdateToDone } = useTodo();
@@ -68,21 +95,28 @@ const TodoListItem = ({
         <span>{todo.title}</span>
         <button onClick={() => onEdit?.(todo)}>Edit</button>
         <button onClick={handleDelete}>Delete</button>
-        {childTodos && childTodos.length > 0 && (
+        {!isChild && (
           <ExpandButton isExpanded={isMore} onClick={() => setIsMore(!isMore)}>
-            {childTodos.length}
+            {childTodos && childTodos.length > 0 ? childTodos.length : ""}
           </ExpandButton>
         )}
       </TodoListItemContainer>
-      {isMore &&
-        childTodos?.map((childTodo) => (
-          <TodoListItem
-            key={childTodo.id}
-            todo={childTodo}
-            isChild={true}
-            onEdit={onEdit}
-          />
-        ))}
+      {isMore && (
+        <>
+          {childTodos?.map((childTodo) => (
+            <TodoListItem
+              key={childTodo.id}
+              todo={childTodo}
+              isChild={true}
+              onEdit={onEdit}
+              onAddChild={onAddChild}
+            />
+          ))}
+          <AddChildButton onClick={() => onAddChild?.(todo.id)}>
+            새 하위 작업 추가
+          </AddChildButton>
+        </>
+      )}
     </>
   );
 };

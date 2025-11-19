@@ -91,10 +91,11 @@ interface TodoFormData {
 
 interface TodoFormProps {
   todo?: Todo;
+  parentId?: string;
   onClose?: () => void;
 }
 
-const TodoForm = ({ todo, onClose }: TodoFormProps) => {
+const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
   const [showMore, setShowMore] = useState(false);
   const {
     register,
@@ -115,7 +116,7 @@ const TodoForm = ({ todo, onClose }: TodoFormProps) => {
         }
       : undefined,
   });
-  const { useCreateTodo, useUpdateTodo } = useTodo();
+  const { useCreateTodo, useUpdateTodo, useCreateChildTodo } = useTodo();
   const onSubmit = (data: TodoFormData) => {
     if (todo) {
       // 수정 시 기존 todo의 모든 필드를 유지하면서 변경된 필드만 덮어씀
@@ -133,7 +134,21 @@ const TodoForm = ({ todo, onClose }: TodoFormProps) => {
           },
         }
       );
+    } else if (parentId) {
+      // 자식 todo 생성
+      useCreateChildTodo.mutate(
+        {
+          parentId,
+          todo: data,
+        },
+        {
+          onSuccess: () => {
+            onClose?.();
+          },
+        }
+      );
     } else {
+      // 일반 todo 생성
       useCreateTodo.mutate(data as Todo, {
         onSuccess: () => {
           onClose?.();

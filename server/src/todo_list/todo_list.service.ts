@@ -132,4 +132,29 @@ export class TodoListService {
       );
     }
   }
+  async addChildTodo(id: string, childTodo: CreateTodoListDto) {
+    try {
+      const createdChildTodo = new this.todoListModel({
+        ...childTodo,
+        parentId: id,
+        status: 'todo',
+        startAt: null,
+        dueAt: null,
+        doneAt: null,
+        priority: 'medium',
+        order: childTodo.order,
+      });
+      return await createdChildTodo.save();
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error instanceof Error.ValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      if (error instanceof Error.CastError) {
+        throw new BadRequestException(`Invalid ID: ${error.value}`);
+      }
+    }
+  }
 }

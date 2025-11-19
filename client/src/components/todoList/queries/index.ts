@@ -6,6 +6,7 @@ import {
   editTodo,
   deleteTodo,
   updateToDone,
+  createChildTodo,
 } from "../api";
 
 export const useTodo = () => {
@@ -41,11 +42,21 @@ export const useTodo = () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
+
+  const useCreateChildTodo = useMutation({
+    mutationFn: ({ parentId, todo }: { parentId: string; todo: Partial<Todo> }) =>
+      createChildTodo(parentId, todo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
   return {
     useCreateTodo,
     useUpdateTodo,
     useDeleteTodo,
     useGetTodos,
     useUpdateToDone,
+    useCreateChildTodo,
   };
 };

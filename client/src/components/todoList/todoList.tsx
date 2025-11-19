@@ -31,7 +31,9 @@ const AddButton = styled.button`
 const TodoList = ({ todos }: { todos: Todo[] }) => {
   const { isOpen, setIsOpen } = useModal();
   const { isOpen: isEditOpen, setIsOpen: setIsEditOpen } = useModal();
+  const { isOpen: isAddChildOpen, setIsOpen: setIsAddChildOpen } = useModal();
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
+  const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
 
   const todoTree = useMemo(() => {
     const rootTodos = todos.filter((todo) => todo.parentId === null);
@@ -48,13 +50,29 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
     setIsEditOpen(true);
   };
 
+  const handleAddChild = (parentId: string) => {
+    setParentTodoId(parentId);
+    setIsAddChildOpen(true);
+  };
+
   return (
     <TodoListContainer>
       <Modal isOpen={isOpen} setIsOpen={setIsOpen} children={<TodoForm onClose={() => setIsOpen(false)} />} />
       <Modal isOpen={isEditOpen} setIsOpen={setIsEditOpen} children={<TodoForm todo={editingTodo || undefined} onClose={() => setIsEditOpen(false)} />} />
+      <Modal
+        isOpen={isAddChildOpen}
+        setIsOpen={setIsAddChildOpen}
+        children={<TodoForm parentId={parentTodoId || undefined} onClose={() => setIsAddChildOpen(false)} />}
+      />
       <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
       {todoTree.map((todo) => (
-        <TodoListItem key={todo.id} todo={todo} childTodos={todo.childTodos} onEdit={handleEdit} />
+        <TodoListItem
+          key={todo.id}
+          todo={todo}
+          childTodos={todo.childTodos}
+          onEdit={handleEdit}
+          onAddChild={handleAddChild}
+        />
       ))}
     </TodoListContainer>
   );
