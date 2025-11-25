@@ -72,17 +72,20 @@ const TodoListItem = ({
   todo: Todo;
   isChild?: boolean;
   childTodos?: Todo[];
-  onEdit?: (todo: Todo) => void;
+  onEdit: (todo: Todo) => void;
   onAddChild?: (parentId: string) => void;
 }) => {
   const [isMore, setIsMore] = useState(false);
-  const { useDeleteTodo, useUpdateToDone } = useTodo();
+  const { useDeleteTodo, useUpdateTodo } = useTodo();
 
   const handleDelete = () => {
     useDeleteTodo.mutate(todo.id);
   };
   const handleUpdateToDone = () => {
-    useUpdateToDone.mutate(todo.id);
+    useUpdateTodo.mutate({
+      ...todo,
+      status: todo.status !== "done" ? "done" : "todo",
+    });
   };
   return (
     <>
