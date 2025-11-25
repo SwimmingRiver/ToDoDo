@@ -17,7 +17,6 @@ export class TodoListController {
 
   @Post()
   create(@Body() createTodoListDto: CreateTodoListDto) {
-    console.log(createTodoListDto);
     return this.todoListService.create(createTodoListDto);
   }
 
@@ -43,10 +42,7 @@ export class TodoListController {
   remove(@Param('id') id: string) {
     return this.todoListService.remove(id);
   }
-  @Patch(':id/done')
-  updateToDone(@Param('id') id: string) {
-    return this.todoListService.updateToDone(id);
-  }
+
   @Post(':id/child')
   addChildTodo(
     @Param('id') id: string,
