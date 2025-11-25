@@ -62,6 +62,27 @@ const AddChildButton = styled.button`
   }
 `;
 
+const StatusSelect = styled.select`
+  padding: 6px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background-color: white;
+  color: #495057;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #adb5bd;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #1c72eb;
+    box-shadow: 0 0 0 2px rgba(28, 114, 235, 0.1);
+  }
+`;
+
 const TodoListItem = ({
   todo,
   isChild,
@@ -81,20 +102,20 @@ const TodoListItem = ({
   const handleDelete = () => {
     useDeleteTodo.mutate(todo.id);
   };
-  const handleUpdateToDone = () => {
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     useUpdateTodo.mutate({
       ...todo,
-      status: todo.status !== "done" ? "done" : "todo",
+      status: e.target.value as "todo" | "doing" | "done",
     });
   };
   return (
     <>
       <TodoListItemContainer key={todo.id} isChild={isChild}>
-        <input
-          type="checkbox"
-          checked={todo.status === "done"}
-          onChange={handleUpdateToDone}
-        />
+        <StatusSelect value={todo.status} onChange={handleStatusChange}>
+          <option value="todo">Todo</option>
+          <option value="doing">Doing</option>
+          <option value="done">Done</option>
+        </StatusSelect>
         <span>{todo.title}</span>
         <button onClick={() => onEdit?.(todo)}>Edit</button>
         <button onClick={handleDelete}>Delete</button>
