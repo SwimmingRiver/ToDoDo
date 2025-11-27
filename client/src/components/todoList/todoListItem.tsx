@@ -2,6 +2,7 @@ import type { Todo } from "../../types/todo.type";
 import { styled } from "styled-components";
 import { useState } from "react";
 import { useTodo } from "./queries";
+import { useNavigate } from "react-router-dom";
 const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
   border: 1px solid #e0e0e0;
   padding: 10px;
@@ -83,6 +84,18 @@ const StatusSelect = styled.select`
   }
 `;
 
+const TodoTitle = styled.span`
+  cursor: pointer;
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: #e3f2fd;
+  }
+`;
+
 const TodoListItem = ({
   todo,
   isChild,
@@ -98,6 +111,7 @@ const TodoListItem = ({
 }) => {
   const [isMore, setIsMore] = useState(false);
   const { useDeleteTodo, useUpdateTodo } = useTodo();
+  const navigate = useNavigate();
 
   const handleDelete = () => {
     useDeleteTodo.mutate(todo.id);
@@ -116,7 +130,9 @@ const TodoListItem = ({
           <option value="doing">Doing</option>
           <option value="done">Done</option>
         </StatusSelect>
-        <span>{todo.title}</span>
+        <TodoTitle onClick={() => navigate(`/todo/${todo.id}`)}>
+          {todo.title}
+        </TodoTitle>
         <button onClick={() => onEdit?.(todo)}>Edit</button>
         <button onClick={handleDelete}>Delete</button>
         {!isChild && (

@@ -7,6 +7,9 @@ import { styled } from "styled-components";
 import PieChartComponent from "./components/charts/pieChart";
 import Calendar from "./components/calendars/calendar";
 import { useTodo } from "./components/todoList/queries";
+import { Routes, Route } from "react-router-dom";
+import TodoDetail from "./components/todoList/todoDetail";
+
 const Container = styled.div`
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -32,7 +35,9 @@ const App = () => {
           />
         }
       />
-
+      <Routes>
+        <Route path="/todo/:id" element={<TodoDetail />} />
+      </Routes>
       <Footer />
     </Container>
   );
