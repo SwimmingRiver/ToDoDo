@@ -2,6 +2,7 @@ import type { Todo } from "../../types/todo.type";
 import { styled } from "styled-components";
 import { useState } from "react";
 import { useTodo } from "./queries";
+import { useNavigate } from "react-router-dom";
 const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
   border: 1px solid #e0e0e0;
   padding: 10px;
@@ -62,6 +63,39 @@ const AddChildButton = styled.button`
   }
 `;
 
+const StatusSelect = styled.select`
+  padding: 6px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background-color: white;
+  color: #495057;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #adb5bd;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #1c72eb;
+    box-shadow: 0 0 0 2px rgba(28, 114, 235, 0.1);
+  }
+`;
+
+const TodoTitle = styled.span`
+  cursor: pointer;
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: #e3f2fd;
+  }
+`;
+
 const TodoListItem = ({
   todo,
   isChild,
@@ -77,25 +111,28 @@ const TodoListItem = ({
 }) => {
   const [isMore, setIsMore] = useState(false);
   const { useDeleteTodo, useUpdateTodo } = useTodo();
+  const navigate = useNavigate();
 
   const handleDelete = () => {
     useDeleteTodo.mutate(todo.id);
   };
-  const handleUpdateToDone = () => {
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     useUpdateTodo.mutate({
       ...todo,
-      status: todo.status !== "done" ? "done" : "todo",
+      status: e.target.value as "todo" | "doing" | "done",
     });
   };
   return (
     <>
       <TodoListItemContainer key={todo.id} isChild={isChild}>
-        <input
-          type="checkbox"
-          checked={todo.status === "done"}
-          onChange={handleUpdateToDone}
-        />
-        <span>{todo.title}</span>
+        <StatusSelect value={todo.status} onChange={handleStatusChange}>
+          <option value="todo">Todo</option>
+          <option value="doing">Doing</option>
+          <option value="done">Done</option>
+        </StatusSelect>
+        <TodoTitle onClick={() => navigate(`/todo/${todo.id}`)}>
+          {todo.title}
+        </TodoTitle>
         <button onClick={() => onEdit?.(todo)}>Edit</button>
         <button onClick={handleDelete}>Delete</button>
         {!isChild && (

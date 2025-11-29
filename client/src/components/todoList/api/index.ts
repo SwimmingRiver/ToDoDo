@@ -41,7 +41,18 @@ export const updateToDone = async (id: string) => {
   return mapMongoToTodo(response.data);
 };
 
-export const createChildTodo = async (parentId: string, todo: Partial<Todo>) => {
-  const response = await api.post<MongoTodo>(`/todo-list/${parentId}/child`, todo);
+export const createChildTodo = async (
+  parentId: string,
+  todo: Partial<Todo>
+) => {
+  const response = await api.post<MongoTodo>(
+    `/todo-list/${parentId}/child`,
+    todo
+  );
   return mapMongoToTodo(response.data);
+};
+
+export const getTodoDetail = async (id: string) => {
+  const response = await api.get<Todo>(`/todo-list/${id}`);
+  return response.data;
 };
