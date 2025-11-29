@@ -37,7 +37,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
 
   const todoTree = useMemo(() => {
     const rootTodos = todos.filter((todo) => todo.parentId === null);
-    return rootTodos.map((rootTodo) => {
+    const activatedTodos = rootTodos.filter((todo) => todo.status !== "done");
+    return activatedTodos.map((rootTodo) => {
       return {
         ...rootTodo,
         childTodos: todos.filter((todo) => todo.parentId === rootTodo.id),
@@ -57,12 +58,30 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
 
   return (
     <TodoListContainer>
-      <Modal isOpen={isOpen} setIsOpen={setIsOpen} children={<TodoForm onClose={() => setIsOpen(false)} />} />
-      <Modal isOpen={isEditOpen} setIsOpen={setIsEditOpen} children={<TodoForm todo={editingTodo || undefined} onClose={() => setIsEditOpen(false)} />} />
+      <Modal
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        children={<TodoForm onClose={() => setIsOpen(false)} />}
+      />
+      <Modal
+        isOpen={isEditOpen}
+        setIsOpen={setIsEditOpen}
+        children={
+          <TodoForm
+            todo={editingTodo || undefined}
+            onClose={() => setIsEditOpen(false)}
+          />
+        }
+      />
       <Modal
         isOpen={isAddChildOpen}
         setIsOpen={setIsAddChildOpen}
-        children={<TodoForm parentId={parentTodoId || undefined} onClose={() => setIsAddChildOpen(false)} />}
+        children={
+          <TodoForm
+            parentId={parentTodoId || undefined}
+            onClose={() => setIsAddChildOpen(false)}
+          />
+        }
       />
       <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
       {todoTree.map((todo) => (
