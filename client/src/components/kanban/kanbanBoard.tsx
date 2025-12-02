@@ -72,6 +72,13 @@ const KanbanItemStyled = styled.div<{ $isDragging?: boolean }>`
   }
 `;
 
+const ParentLabel = styled.span`
+  font-size: 11px;
+  color: #5e6c84;
+  display: block;
+  margin-bottom: 4px;
+`;
+
 const ItemTitle = styled.h3`
   font-size: 14px;
   font-weight: 500;
@@ -91,10 +98,11 @@ type Status = "todo" | "doing" | "done";
 
 interface SortableItemProps {
   todo: Todo;
+  parentTitle?: string;
   onNavigate: (id: string) => void;
 }
 
-const SortableItem = ({ todo, onNavigate }: SortableItemProps) => {
+const SortableItem = ({ todo, parentTitle, onNavigate }: SortableItemProps) => {
   const {
     attributes,
     listeners,
@@ -118,6 +126,7 @@ const SortableItem = ({ todo, onNavigate }: SortableItemProps) => {
       {...listeners}
       onClick={() => onNavigate(todo.id)}
     >
+      {parentTitle && <ParentLabel>{parentTitle}</ParentLabel>}
       <ItemTitle>{todo.title}</ItemTitle>
     </KanbanItemStyled>
   );
@@ -127,13 +136,20 @@ interface ColumnProps {
   title: string;
   status: Status;
   todos: Todo[];
+  allTodos: Todo[];
   onNavigate: (id: string) => void;
 }
 
-const Column = ({ title, status, todos, onNavigate }: ColumnProps) => {
+const Column = ({ title, status, todos, allTodos, onNavigate }: ColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
   });
+
+  const getParentTitle = (parentId: string | null) => {
+    if (!parentId) return undefined;
+    const parent = allTodos.find((t) => t.id === parentId);
+    return parent?.title;
+  };
 
   return (
     <KanbanColumn>
@@ -145,7 +161,12 @@ const Column = ({ title, status, todos, onNavigate }: ColumnProps) => {
       >
         <KanbanItemList ref={setNodeRef} $isOver={isOver}>
           {todos.map((todo) => (
-            <SortableItem key={todo.id} todo={todo} onNavigate={onNavigate} />
+            <SortableItem
+              key={todo.id}
+              todo={todo}
+              parentTitle={getParentTitle(todo.parentId)}
+              onNavigate={onNavigate}
+            />
           ))}
         </KanbanItemList>
       </SortableContext>
@@ -234,24 +255,32 @@ const KanbanBoard = () => {
           title="To Do"
           status="todo"
           todos={todoList}
+          allTodos={todos ?? []}
           onNavigate={handleNavigate}
         />
         <Column
           title="Doing"
           status="doing"
           todos={doingList}
+          allTodos={todos ?? []}
           onNavigate={handleNavigate}
         />
         <Column
           title="Done"
           status="done"
           todos={doneList}
+          allTodos={todos ?? []}
           onNavigate={handleNavigate}
         />
       </KanbanBoardContainer>
       <DragOverlay>
         {activeTodo ? (
           <DragOverlayItem>
+            {activeTodo.parentId && (
+              <ParentLabel>
+                {todos?.find((t) => t.id === activeTodo.parentId)?.title}
+              </ParentLabel>
+            )}
             <ItemTitle>{activeTodo.title}</ItemTitle>
           </DragOverlayItem>
         ) : null}
