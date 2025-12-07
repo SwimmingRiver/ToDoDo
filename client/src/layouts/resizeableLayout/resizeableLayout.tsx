@@ -1,8 +1,6 @@
 import React from "react";
 
-import Separator from "../../components/separator";
-import Panel from "../../components/panel";
-import useResize from "../../hooks/useResize";
+import { Separator, Panel, useResize } from "@/shared";
 
 const ResizeableLayout = ({
   children1,

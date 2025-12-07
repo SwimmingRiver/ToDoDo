@@ -110,28 +110,7 @@ export class TodoListService {
       throw new InternalServerErrorException('Failed to delete todo list');
     }
   }
-  async updateToDone(id: string) {
-    try {
-      const updatedTodoList = await this.todoListModel
-        .findByIdAndUpdate(
-          id,
-          { status: 'done', doneAt: new Date() },
-          { new: true },
-        )
-        .exec();
-      if (!updatedTodoList) {
-        throw new NotFoundException(`Todo list with ID ${id} not found`);
-      }
-      return updatedTodoList;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        'Failed to update todo list to done',
-      );
-    }
-  }
+
   async addChildTodo(id: string, childTodo: CreateTodoListDto) {
     try {
       const createdChildTodo = new this.todoListModel({
