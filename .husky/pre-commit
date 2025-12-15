@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Client: lint-staged (lint)
+(cd client && npx lint-staged)
+
+# Client: type check
+(cd client && npx tsc -b --noEmit)
+
+# Server: lint-staged (lint)
+(cd server && npx lint-staged)
