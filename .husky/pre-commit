@@ -6,5 +6,11 @@
 # Client: type check
 (cd client && npx tsc -b --noEmit)
 
+# Client: unit test
+(cd client && npm run test)
+
 # Server: lint-staged (lint)
 (cd server && npx lint-staged)
+
+# Server: unit test
+(cd server && npm run test)
