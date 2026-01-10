@@ -2,100 +2,52 @@ import "./App.css";
 import Header from "./layouts/header/header";
 import Footer from "./layouts/footer/footer";
 import ResizeableLayout from "./layouts/resizeableLayout/resizeableLayout";
-import TodoList from "./components/todoList/todoList";
-import { styled } from "styled-components";
-import type { Todo } from "./types/todo.type";
-const Container = styled.div`
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  height: 100vh;
-`;
-const exmapleTodoList: Todo[] = [
-  {
-    id: "1",
-    title: "Todo 1",
-    description: "Description 1",
-    status: "todo",
-    createdAt: "2025-01-01",
-    updatedAt: "2025-01-01",
-    startAt: null,
-    dueAt: null,
-    doneAt: null,
-    priority: "low",
-    parentId: null,
-    order: 1,
-  },
-  {
-    id: "2",
-    title: "Todo 2",
-    description: "Description 2",
-    status: "todo",
-    createdAt: "2025-01-01",
-    updatedAt: "2025-01-01",
-    startAt: null,
-    dueAt: null,
-    doneAt: null,
-    priority: "low",
-    parentId: null,
-    order: 2,
-  },
+import { TodoList, TodoDetail, useTodo } from "@/features/todo";
+import { PieChartComponent, Calendar } from "@/features/dashboard";
+import { KanbanBoard } from "@/features/kanban";
+import { Routes, Route } from "react-router-dom";
+import { useState } from "react";
+import { Container, ModeTapContainer, TabButton } from "./App.styles";
 
-  {
-    id: "3",
-    title: "Todo 3",
-    description: "Description 3",
-    status: "todo",
-    createdAt: "2025-01-01",
-    updatedAt: "2025-01-01",
-    startAt: null,
-    dueAt: null,
-    doneAt: null,
-    priority: "low",
-    parentId: null,
-    order: 3,
-  },
-  {
-    id: "4",
-    title: "Todo 4",
-    description: "Description 4",
-    status: "todo",
-    createdAt: "2025-01-01",
-    updatedAt: "2025-01-01",
-    startAt: null,
-    dueAt: null,
-    doneAt: null,
-    priority: "low",
-    parentId: "1",
-    order: 1,
-  },
-];
-function App() {
+const App = () => {
+  const {
+    useGetTodos: { data: todos },
+  } = useTodo();
+  const [mode, setMode] = useState<"todo" | "kanban">("todo");
   return (
     <Container>
       <Header />
-      <ResizeableLayout
-        direction="row"
-        children1={<TodoList todos={exmapleTodoList} />}
-        children2={
-          <ResizeableLayout
-            direction="column"
-            children1={
-              <div>
-                <h1>children2-1</h1>
-              </div>
-            }
-            children2={
-              <div>
-                <h1>children2-2</h1>
-              </div>
-            }
-          />
-        }
-      />
-
+      <ModeTapContainer>
+        <TabButton $active={mode === "todo"} onClick={() => setMode("todo")}>
+          Todo
+        </TabButton>
+        <TabButton
+          $active={mode === "kanban"}
+          onClick={() => setMode("kanban")}
+        >
+          Kanban
+        </TabButton>
+      </ModeTapContainer>
+      {mode === "kanban" && <KanbanBoard />}
+      {mode === "todo" && (
+        <ResizeableLayout
+          direction="row"
+          children1={<TodoList todos={todos ?? []} />}
+          children2={
+            <ResizeableLayout
+              direction="column"
+              children1={<PieChartComponent />}
+              children2={<Calendar />}
+            />
+          }
+        />
+      )}
+      <Routes>
+        <Route path="/todo/:id" element={<TodoDetail />} />
+      </Routes>
       <Footer />
     </Container>
   );
-}
+};
 
 export default App;
