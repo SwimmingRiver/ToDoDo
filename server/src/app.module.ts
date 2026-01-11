@@ -7,7 +7,10 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({
+      envFilePath:
+        process.env.NODE_ENV === 'production' ? '.env' : '.env.development',
+    }),
     TodoListModule,
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
