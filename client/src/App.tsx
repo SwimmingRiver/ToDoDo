@@ -7,7 +7,7 @@ import { PieChartComponent, Calendar } from "@/features/dashboard";
 import { KanbanBoard } from "@/features/kanban";
 import { Routes, Route } from "react-router-dom";
 import { useState } from "react";
-import { Container, ModeTapContainer, TabButton } from "./App.styles";
+import { Container, ModeTapContainer, TabButton, Main } from "./App.styles";
 
 const App = () => {
   const {
@@ -28,23 +28,25 @@ const App = () => {
           Kanban
         </TabButton>
       </ModeTapContainer>
-      {mode === "kanban" && <KanbanBoard />}
-      {mode === "todo" && (
-        <ResizeableLayout
-          direction="row"
-          children1={<TodoList todos={todos ?? []} />}
-          children2={
-            <ResizeableLayout
-              direction="column"
-              children1={<PieChartComponent />}
-              children2={<Calendar />}
-            />
-          }
-        />
-      )}
-      <Routes>
-        <Route path="/todo/:id" element={<TodoDetail />} />
-      </Routes>
+      <Main>
+        {mode === "kanban" && <KanbanBoard />}
+        {mode === "todo" && (
+          <ResizeableLayout
+            direction="row"
+            children1={<TodoList todos={todos ?? []} />}
+            children2={
+              <ResizeableLayout
+                direction="column"
+                children1={<PieChartComponent />}
+                children2={<Calendar />}
+              />
+            }
+          />
+        )}
+        <Routes>
+          <Route path="/todo/:id" element={<TodoDetail />} />
+        </Routes>
+      </Main>
       <Footer />
     </Container>
   );

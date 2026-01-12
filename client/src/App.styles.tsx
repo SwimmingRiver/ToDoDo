@@ -33,4 +33,8 @@ const TabButton = styled.button<{ $active: boolean }>`
   }
 `;
 
-export { Container, ModeTapContainer, TabButton };
+const Main = styled.main`
+  overflow: auto;
+`;
+
+export { Container, ModeTapContainer, TabButton, Main };
