@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { media } from "../../../styles/breakpoints";
 
 const TodoListContainer = styled.div`
   width: 100%;
@@ -7,7 +8,13 @@ const TodoListContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 0 8px;
+
+  ${media.mobile} {
+    padding: 0 4px;
+  }
 `;
+
 const AddButton = styled.button`
   width: 100%;
   height: 40px;
@@ -19,5 +26,10 @@ const AddButton = styled.button`
   border-radius: 4px;
   cursor: pointer;
   margin-bottom: 4px;
+
+  ${media.mobile} {
+    height: 36px;
+    font-size: 14px;
+  }
 `;
 export { TodoListContainer, AddButton };

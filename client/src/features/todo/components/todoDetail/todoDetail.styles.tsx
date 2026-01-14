@@ -1,4 +1,5 @@
 import { keyframes, styled } from "styled-components";
+import { media } from "../../../../styles/breakpoints";
 
 const slideIn = keyframes`
   from {
@@ -41,6 +42,14 @@ const Panel = styled.div`
   animation: ${slideIn} 0.3s ease-out;
   display: flex;
   flex-direction: column;
+
+  ${media.tablet} {
+    width: 70%;
+  }
+
+  ${media.mobile} {
+    width: 100%;
+  }
 `;
 
 const PanelHeader = styled.div`
@@ -49,6 +58,10 @@ const PanelHeader = styled.div`
   align-items: center;
   padding: 20px 24px;
   border-bottom: 1px solid #e0e0e0;
+
+  ${media.mobile} {
+    padding: 16px;
+  }
 `;
 
 const PanelTitle = styled.h2`
@@ -77,6 +90,10 @@ const PanelContent = styled.div`
   flex: 1;
   padding: 24px;
   overflow-y: auto;
+
+  ${media.mobile} {
+    padding: 16px;
+  }
 `;
 
 const FormContainer = styled.form`
@@ -148,6 +165,11 @@ const Select = styled.select`
 const InfoRow = styled.div`
   display: flex;
   gap: 16px;
+
+  ${media.mobile} {
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 
 const InfoItem = styled.div`
@@ -173,6 +195,11 @@ const PanelFooter = styled.div`
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid #e0e0e0;
+
+  ${media.mobile} {
+    padding: 12px 16px;
+    flex-direction: column-reverse;
+  }
 `;
 
 const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
@@ -203,6 +230,11 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
       background-color: #f5f5f5;
     }
   `}
+
+  ${media.mobile} {
+    width: 100%;
+    padding: 12px;
+  }
 `;
 
 const StatusBadge = styled.span<{ $status: string }>`
