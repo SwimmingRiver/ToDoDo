@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { media } from "../../../../styles/breakpoints";
 
 const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
   border: 1px solid #e0e0e0;
@@ -11,6 +12,12 @@ const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
   align-items: center;
   &:hover {
     background-color: #f0f0f0;
+  }
+
+  ${media.mobile} {
+    padding: 8px;
+    padding-left: ${(props) => (props.isChild ? "20px" : "8px")};
+    border-radius: 8px;
   }
 `;
 
@@ -55,8 +62,15 @@ const AddChildButton = styled.button`
   }
 
   &::before {
-    content: "+ ";
+    content: "+";
     font-weight: bold;
+  }
+
+  ${media.mobile} {
+    width: calc(100% - 20px);
+    margin-left: 20px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 `;
 
@@ -79,6 +93,11 @@ const StatusSelect = styled.select`
     border-color: #1c72eb;
     box-shadow: 0 0 0 2px rgba(28, 114, 235, 0.1);
   }
+
+  ${media.mobile} {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
 `;
 
 const TodoTitle = styled.span`
@@ -87,10 +106,6 @@ const TodoTitle = styled.span`
   padding: 4px 8px;
   border-radius: 4px;
   transition: background-color 0.2s;
-
-  &:hover {
-    background-color: #e3f2fd;
-  }
 `;
 
 export {

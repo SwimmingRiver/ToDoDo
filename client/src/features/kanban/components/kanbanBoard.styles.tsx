@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { media } from "../../../styles/breakpoints";
 
 const KanbanBoardContainer = styled.div`
   width: 100%;
@@ -6,6 +7,11 @@ const KanbanBoardContainer = styled.div`
   display: flex;
   gap: 8px;
   padding: 8px;
+
+  ${media.tablet} {
+    flex-direction: column;
+    overflow-y: auto;
+  }
 `;
 
 const KanbanColumn = styled.div`
@@ -16,6 +22,11 @@ const KanbanColumn = styled.div`
   padding: 12px;
   display: flex;
   flex-direction: column;
+
+  ${media.tablet} {
+    min-height: 200px;
+    height: auto;
+  }
 `;
 
 const ColumnTitle = styled.h2`
@@ -72,6 +83,38 @@ const DragOverlayItem = styled.div`
   cursor: grabbing;
 `;
 
+const MobileTabContainer = styled.div`
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #fff;
+`;
+
+const MobileTabButton = styled.button<{ $active: boolean }>`
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background-color: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: ${({ $active }) => ($active ? "#1c72eb" : "#5f6368")};
+  border-bottom: 2px solid
+    ${({ $active }) => ($active ? "#1c72eb" : "transparent")};
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
+    background-color: #f8f9fa;
+  }
+`;
+
+const MobileColumnWrapper = styled.div`
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+`;
+
 export {
   KanbanBoardContainer,
   KanbanColumn,
@@ -81,4 +124,7 @@ export {
   ParentLabel,
   ItemTitle,
   DragOverlayItem,
+  MobileTabContainer,
+  MobileTabButton,
+  MobileColumnWrapper,
 };

@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { media } from "../../styles/breakpoints";
 
 const FooterContainer = styled.footer`
   width: 100%;
@@ -11,6 +12,12 @@ const FooterContainer = styled.footer`
   gap: 8px;
   font-size: 14px;
   color: #666;
+
+  ${media.mobile} {
+    padding: 12px 8px;
+    font-size: 12px;
+    gap: 6px;
+  }
 `;
 
 const FooterLink = styled.a`

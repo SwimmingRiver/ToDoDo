@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { media } from "../../../styles/breakpoints";
 
 const ModalBackground = styled.div`
   position: fixed;
@@ -11,10 +12,14 @@ const ModalBackground = styled.div`
   justify-content: center;
   align-items: center;
   z-index: 999;
+
+  ${media.mobile} {
+    align-items: flex-end;
+  }
 `;
+
 const ModalContainer = styled.div`
   width: auto;
-
   min-width: 400px;
   height: auto;
   max-height: 80vh;
@@ -25,6 +30,13 @@ const ModalContainer = styled.div`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  ${media.mobile} {
+    width: 100%;
+    min-width: unset;
+    max-height: 90vh;
+    border-radius: 12px 12px 0 0;
+  }
 `;
 
 const ModalHeader = styled.div`
