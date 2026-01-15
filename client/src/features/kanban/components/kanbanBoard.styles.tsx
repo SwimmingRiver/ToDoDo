@@ -3,19 +3,23 @@ import { styled } from "styled-components";
 const KanbanBoardContainer = styled.div`
   width: 100%;
   height: 100%;
+  flex: 1;
   display: flex;
   gap: 8px;
   padding: 8px;
+  overflow: hidden;
 `;
 
 const KanbanColumn = styled.div`
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   background-color: #f4f5f7;
   border-radius: 10px;
   padding: 12px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 `;
 
 const ColumnTitle = styled.h2`
@@ -33,6 +37,7 @@ const KanbanItemList = styled.div<{ $isOver?: boolean }>`
   border-radius: 8px;
   transition: background-color 0.2s ease;
   background-color: ${({ $isOver }) => ($isOver ? "#e3e6ea" : "transparent")};
+  overflow-y: auto;
 `;
 
 const KanbanItemStyled = styled.div<{ $isDragging?: boolean }>`
@@ -72,6 +77,66 @@ const DragOverlayItem = styled.div`
   cursor: grabbing;
 `;
 
+const MobileTabContainer = styled.div`
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #fff;
+`;
+
+const MobileTabButton = styled.button<{ $active: boolean }>`
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background-color: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: ${({ $active }) => ($active ? "#1c72eb" : "#5f6368")};
+  border-bottom: 2px solid
+    ${({ $active }) => ($active ? "#1c72eb" : "transparent")};
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  &:hover {
+    color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
+    background-color: #f8f9fa;
+  }
+`;
+
+const MobileColumnWrapper = styled.div`
+  flex: 1;
+  overflow: hidden;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+`;
+
+const EmptyColumn = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+  color: #9aa0a6;
+`;
+
+const EmptyIcon = styled.div`
+  margin-bottom: 12px;
+  opacity: 0.6;
+`;
+
+const EmptyText = styled.p`
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.4;
+`;
+
 export {
   KanbanBoardContainer,
   KanbanColumn,
@@ -81,4 +146,10 @@ export {
   ParentLabel,
   ItemTitle,
   DragOverlayItem,
+  MobileTabContainer,
+  MobileTabButton,
+  MobileColumnWrapper,
+  EmptyColumn,
+  EmptyIcon,
+  EmptyText,
 };
