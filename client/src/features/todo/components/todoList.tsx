@@ -5,7 +5,9 @@ import React from "react";
 import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import TodoForm from "./todoForm/todoForm";
-import { TodoListContainer, AddButton } from "./todoList.styles";
+import { TodoListContainer, AddButton, ListWrapper } from "./todoList.styles";
+import { Plus, ClipboardList } from "lucide-react";
+import { EmptyState } from "@/shared";
 
 const TodoList = ({ todos }: { todos: Todo[] }) => {
   const { isOpen, setIsOpen } = useModal();
@@ -62,16 +64,31 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
           />
         }
       />
-      <AddButton onClick={() => setIsOpen(true)}>+</AddButton>
-      {todoTree.map((todo) => (
-        <TodoListItem
-          key={todo.id}
-          todo={todo}
-          childTodos={todo.childTodos}
-          onEdit={handleEdit}
-          onAddChild={handleAddChild}
-        />
-      ))}
+      <AddButton onClick={() => setIsOpen(true)}>
+        <Plus size={18} /> 새 할일
+      </AddButton>
+      <ListWrapper>
+        {todoTree.length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            title="할 일이 없습니다"
+            description="새로운 할 일을 추가하고 생산적인 하루를 시작해보세요!"
+            actionLabel="새 할일 추가"
+            actionIcon={Plus}
+            onAction={() => setIsOpen(true)}
+          />
+        ) : (
+          todoTree.map((todo) => (
+            <TodoListItem
+              key={todo.id}
+              todo={todo}
+              childTodos={todo.childTodos}
+              onEdit={handleEdit}
+              onAddChild={handleAddChild}
+            />
+          ))
+        )}
+      </ListWrapper>
     </TodoListContainer>
   );
 };

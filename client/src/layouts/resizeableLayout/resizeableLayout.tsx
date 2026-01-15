@@ -17,7 +17,7 @@ const ResizeableLayout = ({
     <div
       ref={containerRef}
       className="resizeable-layout"
-      style={{ display: "flex", flexDirection: direction, height: "100%" }}
+      style={{ display: "flex", flexDirection: direction, height: "100%", flex: 1 }}
     >
       <Panel ratio={firstRatio}>{children1}</Panel>
       <Separator direction={direction} handleMouseDown={handleMouseDown} />

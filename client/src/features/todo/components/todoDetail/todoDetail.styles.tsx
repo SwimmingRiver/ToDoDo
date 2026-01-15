@@ -74,11 +74,14 @@ const PanelTitle = styled.h2`
 const CloseButton = styled.button`
   background: none;
   border: none;
-  font-size: 24px;
   cursor: pointer;
   color: #666;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 
   &:hover {
     background-color: #f0f0f0;

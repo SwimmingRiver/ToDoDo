@@ -5,9 +5,10 @@ import ResizeableLayout from "./layouts/resizeableLayout/resizeableLayout";
 import { TodoList, TodoDetail, useTodo } from "@/features/todo";
 import { PieChartComponent, Calendar } from "@/features/dashboard";
 import { KanbanBoard } from "@/features/kanban";
-import { useMediaQuery } from "@/shared";
+import { useMediaQuery, CheckboxSkeleton } from "@/shared";
 import { Routes, Route } from "react-router-dom";
 import { useState } from "react";
+import { ListTodo, Columns3, List, Calendar as CalendarIcon, PieChart } from "lucide-react";
 import {
   Container,
   ModeTapContainer,
@@ -16,13 +17,14 @@ import {
   MobileTabContainer,
   MobileTabButton,
   MobileContent,
+  ContentWrapper,
 } from "./App.styles";
 
 type MobileTab = "list" | "calendar" | "chart";
 
 const App = () => {
   const {
-    useGetTodos: { data: todos },
+    useGetTodos: { data: todos, isLoading },
   } = useTodo();
   const [mode, setMode] = useState<"todo" | "kanban">("todo");
   const [mobileTab, setMobileTab] = useState<MobileTab>("list");
@@ -31,7 +33,7 @@ const App = () => {
   const renderMobileContent = () => {
     switch (mobileTab) {
       case "list":
-        return <TodoList todos={todos ?? []} />;
+        return isLoading ? <CheckboxSkeleton count={5} /> : <TodoList todos={todos ?? []} />;
       case "calendar":
         return <Calendar />;
       case "chart":
@@ -44,19 +46,19 @@ const App = () => {
       <Header />
       <ModeTapContainer>
         <TabButton $active={mode === "todo"} onClick={() => setMode("todo")}>
-          Todo
+          <ListTodo size={16} /> Todo
         </TabButton>
         <TabButton
           $active={mode === "kanban"}
           onClick={() => setMode("kanban")}
         >
-          Kanban
+          <Columns3 size={16} /> Kanban
         </TabButton>
       </ModeTapContainer>
       <Main>
         {mode === "kanban" && <KanbanBoard />}
         {mode === "todo" && (
-          <>
+          <ContentWrapper>
             {isTablet ? (
               <>
                 <MobileTabContainer>
@@ -64,19 +66,19 @@ const App = () => {
                     $active={mobileTab === "list"}
                     onClick={() => setMobileTab("list")}
                   >
-                    리스트
+                    <List size={16} /> 리스트
                   </MobileTabButton>
                   <MobileTabButton
                     $active={mobileTab === "calendar"}
                     onClick={() => setMobileTab("calendar")}
                   >
-                    캘린더
+                    <CalendarIcon size={16} /> 캘린더
                   </MobileTabButton>
                   <MobileTabButton
                     $active={mobileTab === "chart"}
                     onClick={() => setMobileTab("chart")}
                   >
-                    차트
+                    <PieChart size={16} /> 차트
                   </MobileTabButton>
                 </MobileTabContainer>
                 <MobileContent>{renderMobileContent()}</MobileContent>
@@ -84,7 +86,7 @@ const App = () => {
             ) : (
               <ResizeableLayout
                 direction="row"
-                children1={<TodoList todos={todos ?? []} />}
+                children1={isLoading ? <CheckboxSkeleton count={6} /> : <TodoList todos={todos ?? []} />}
                 children2={
                   <ResizeableLayout
                     direction="column"
@@ -94,7 +96,7 @@ const App = () => {
                 }
               />
             )}
-          </>
+          </ContentWrapper>
         )}
         <Routes>
           <Route path="/todo/:id" element={<TodoDetail />} />
