@@ -30,15 +30,13 @@ const ExpandButton = styled.button<{ isExpanded: boolean }>`
   font-size: 12px;
   color: #666;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 
   &:hover {
     background-color: #e9ecef;
     color: #333;
-  }
-
-  &::before {
-    content: "${(props) => (props.isExpanded ? "▼" : "▶")}";
-    margin-right: 4px;
   }
 `;
 
@@ -54,16 +52,15 @@ const AddChildButton = styled.button`
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 
   &:hover {
     background-color: #e9ecef;
     border-color: #adb5bd;
     color: #212529;
-  }
-
-  &::before {
-    content: "+";
-    font-weight: bold;
   }
 
   ${media.mobile} {
@@ -107,11 +104,40 @@ const TodoTitle = styled.span`
   border-radius: 4px;
   transition: background-color 0.2s;
 `;
+const TodoIconButton = styled.button<{ $variant?: "danger" }>`
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 
+  &:hover {
+    background-color: ${({ $variant }) =>
+      $variant === "danger" ? "#ffebee" : "#f0f0f0"};
+    color: ${({ $variant }) => ($variant === "danger" ? "#d32f2f" : "#333")};
+  }
+
+  ${media.mobile} {
+    padding: 4px;
+  }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 4px;
+  align-items: center;
+`;
 export {
   TodoListItemContainer,
   ExpandButton,
   AddChildButton,
   StatusSelect,
   TodoTitle,
+  TodoIconButton,
+  ButtonGroup,
 };

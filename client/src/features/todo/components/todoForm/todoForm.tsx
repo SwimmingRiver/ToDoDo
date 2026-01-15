@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 
 import { useTodo } from "../../hooks";
+import { useToast } from "@/shared";
 import type { Todo } from "../../types";
 import {
   FormContainer,
@@ -30,6 +31,7 @@ interface TodoFormProps {
 
 const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
   const [showMore, setShowMore] = useState(false);
+  const toast = useToast();
   const {
     register,
     handleSubmit,
@@ -63,7 +65,11 @@ const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
         } as Todo,
         {
           onSuccess: () => {
+            toast.success("수정 완료", `"${data.title}" 할 일이 수정되었습니다`);
             onClose?.();
+          },
+          onError: () => {
+            toast.error("수정 실패", "할 일 수정 중 오류가 발생했습니다");
           },
         }
       );
@@ -76,7 +82,11 @@ const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
         },
         {
           onSuccess: () => {
+            toast.success("추가 완료", `"${data.title}" 하위 할 일이 추가되었습니다`);
             onClose?.();
+          },
+          onError: () => {
+            toast.error("추가 실패", "하위 할 일 추가 중 오류가 발생했습니다");
           },
         }
       );
@@ -84,7 +94,11 @@ const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
       // 일반 todo 생성
       useCreateTodo.mutate(data as Todo, {
         onSuccess: () => {
+          toast.success("추가 완료", `"${data.title}" 할 일이 추가되었습니다`);
           onClose?.();
+        },
+        onError: () => {
+          toast.error("추가 실패", "할 일 추가 중 오류가 발생했습니다");
         },
       });
     }

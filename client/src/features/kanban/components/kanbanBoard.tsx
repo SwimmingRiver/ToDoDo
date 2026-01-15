@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import { useTodo } from "@/features/todo";
-import { useMediaQuery } from "@/shared";
+import { useMediaQuery, KanbanSkeleton } from "@/shared";
 import KanbanColumn from "./kanbanColumn";
 import { useKanbanDrag } from "../hooks/useKanbanDrag";
+import { Circle, Loader, CheckCircle } from "lucide-react";
 import {
   KanbanBoardContainer,
   DragOverlayItem,
@@ -20,7 +21,7 @@ type KanbanTab = "todo" | "doing" | "done";
 const KanbanBoard = () => {
   const navigate = useNavigate();
   const { useGetTodos, useUpdateTodo } = useTodo();
-  const { data: todos } = useGetTodos;
+  const { data: todos, isLoading } = useGetTodos;
   const [activeTab, setActiveTab] = useState<KanbanTab>("todo");
   const isTablet = useMediaQuery("tablet");
 
@@ -83,6 +84,10 @@ const KanbanBoard = () => {
     }
   };
 
+  if (isLoading) {
+    return <KanbanSkeleton mobile={isTablet} />;
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -97,19 +102,19 @@ const KanbanBoard = () => {
               $active={activeTab === "todo"}
               onClick={() => setActiveTab("todo")}
             >
-              To Do ({todoList.length})
+              <Circle size={16} /> To Do ({todoList.length})
             </MobileTabButton>
             <MobileTabButton
               $active={activeTab === "doing"}
               onClick={() => setActiveTab("doing")}
             >
-              Doing ({doingList.length})
+              <Loader size={16} /> Doing ({doingList.length})
             </MobileTabButton>
             <MobileTabButton
               $active={activeTab === "done"}
               onClick={() => setActiveTab("done")}
             >
-              Done ({doneList.length})
+              <CheckCircle size={16} /> Done ({doneList.length})
             </MobileTabButton>
           </MobileTabContainer>
           <MobileColumnWrapper>{renderActiveColumn()}</MobileColumnWrapper>

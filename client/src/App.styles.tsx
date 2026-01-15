@@ -35,6 +35,9 @@ const TabButton = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? "#1a1a1a" : "#5f6368")};
   box-shadow: ${({ $active }) =>
     $active ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none"};
+  display: flex;
+  align-items: center;
+  gap: 6px;
 
   &:hover {
     background-color: ${({ $active }) => ($active ? "#fff" : "#e8eaed")};
@@ -44,11 +47,14 @@ const TabButton = styled.button<{ $active: boolean }>`
     padding: 8px 12px;
     font-size: 13px;
     flex: 1;
+    justify-content: center;
   }
 `;
 
 const Main = styled.main`
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 `;
 
 const MobileTabContainer = styled.div`
@@ -67,8 +73,13 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
   font-weight: 500;
   cursor: pointer;
   color: ${({ $active }) => ($active ? "#1c72eb" : "#5f6368")};
-  border-bottom: 2px solid ${({ $active }) => ($active ? "#1c72eb" : "transparent")};
+  border-bottom: 2px solid
+    ${({ $active }) => ($active ? "#1c72eb" : "transparent")};
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 
   &:hover {
     color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
@@ -78,8 +89,16 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
 
 const MobileContent = styled.div`
   flex: 1;
-  overflow: auto;
-  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+`;
+
+const ContentWrapper = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 `;
 
 export {
@@ -90,4 +109,5 @@ export {
   MobileTabContainer,
   MobileTabButton,
   MobileContent,
+  ContentWrapper,
 };

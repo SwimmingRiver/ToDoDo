@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
+import { X } from "lucide-react";
 import {
   Overlay,
   Panel,
@@ -104,7 +105,9 @@ const TodoDetail = () => {
       <Panel>
         <PanelHeader>
           <PanelTitle>Todo 상세</PanelTitle>
-          <CloseButton onClick={handleClose}>×</CloseButton>
+          <CloseButton onClick={handleClose}>
+            <X size={20} />
+          </CloseButton>
         </PanelHeader>
 
         <PanelContent>
