@@ -41,6 +41,19 @@ export class TodoListService {
       throw new InternalServerErrorException('Failed to create todo list');
     }
   }
+  async getSearchTodoList(query: string) {
+    try {
+      const todoList = await this.todoListModel
+        .find({ title: { $regex: query, $options: 'i' } })
+        .exec();
+      return todoList;
+    } catch (error) {
+      if (error instanceof Error.CastError) {
+        throw new BadRequestException(`Invalid ID: ${error.value}`);
+      }
+      throw new InternalServerErrorException('Failed to search todo list');
+    }
+  }
 
   async findAll() {
     try {
