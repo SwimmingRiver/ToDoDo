@@ -44,8 +44,9 @@ const ToastContainer = styled.div`
   ${media.mobile} {
     top: auto;
     bottom: 20px;
-    right: 12px;
     left: 12px;
+    right: auto;
+    width: calc(100% - 24px);
   }
 `;
 

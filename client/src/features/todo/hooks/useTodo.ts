@@ -8,6 +8,7 @@ import {
   updateToDone,
   createChildTodo,
   getTodoDetail,
+  getSearchTodoList,
 } from "../api";
 
 export const useTodo = () => {
@@ -17,6 +18,12 @@ export const useTodo = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
+  });
+
+  const useGetSearchTodoList = useQuery({
+    queryKey: ["searchTodoList"],
+    queryFn: ({ queryKey }: { queryKey: string[] }) =>
+      getSearchTodoList(queryKey[1]),
   });
 
   const useUpdateTodo = useMutation({
@@ -64,6 +71,7 @@ export const useTodo = () => {
     useGetTodos,
     useUpdateToDone,
     useCreateChildTodo,
+    useGetSearchTodoList,
   };
 };
 

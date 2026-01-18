@@ -1,10 +1,12 @@
 import { styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
+import { statusColors, type Status } from "../../../../styles/statusColors";
 
-const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
+const TodoListItemContainer = styled.div<{ isChild?: boolean; $status?: Status }>`
   border: 1px solid #e0e0e0;
+  border-left: 4px solid ${({ $status }) => $status ? statusColors[$status].main : "#e0e0e0"};
   padding: 10px;
-  padding-left: ${(props) => (props.isChild ? "32px" : "10px")};
+  padding-left: ${(props) => (props.isChild ? "28px" : "10px")};
   border-radius: 12px;
   cursor: pointer;
   display: flex;
@@ -16,7 +18,7 @@ const TodoListItemContainer = styled.div<{ isChild?: boolean }>`
 
   ${media.mobile} {
     padding: 8px;
-    padding-left: ${(props) => (props.isChild ? "20px" : "8px")};
+    padding-left: ${(props) => (props.isChild ? "16px" : "8px")};
     border-radius: 8px;
   }
 `;
@@ -71,32 +73,6 @@ const AddChildButton = styled.button`
   }
 `;
 
-const StatusSelect = styled.select`
-  padding: 6px 12px;
-  background-color: white;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  color: #495057;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    border-color: #adb5bd;
-  }
-
-  &:focus {
-    outline: none;
-    border-color: #1c72eb;
-    box-shadow: 0 0 0 2px rgba(28, 114, 235, 0.1);
-  }
-
-  ${media.mobile} {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
-`;
-
 const TodoTitle = styled.span`
   cursor: pointer;
   flex: 1;
@@ -136,7 +112,6 @@ export {
   TodoListItemContainer,
   ExpandButton,
   AddChildButton,
-  StatusSelect,
   TodoTitle,
   TodoIconButton,
   ButtonGroup,
