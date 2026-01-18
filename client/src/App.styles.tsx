@@ -92,6 +92,7 @@ const MobileContent = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-top: 4px;
 `;
 
 const ContentWrapper = styled.div`

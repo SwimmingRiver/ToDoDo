@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useTodo } from "../../hooks";
 import { useNavigate } from "react-router-dom";
 import { ConfirmModal, useToast } from "@/shared";
+import StatusSelect from "./statusSelect";
 import {
   TodoListItemContainer,
   ExpandButton,
   AddChildButton,
-  StatusSelect,
   TodoTitle,
   TodoIconButton,
   ButtonGroup,
@@ -54,8 +54,7 @@ const TodoListItem = ({
     }
   };
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStatus = e.target.value as "todo" | "doing" | "done";
+  const handleStatusChange = (newStatus: "todo" | "doing" | "done") => {
     useUpdateTodo.mutate({
       ...todo,
       status: newStatus,
@@ -69,6 +68,7 @@ const TodoListItem = ({
       },
     });
   };
+
   return (
     <>
       <ConfirmModal
@@ -80,12 +80,8 @@ const TodoListItem = ({
         onConfirm={handleDelete}
         onCancel={() => setIsDeleteModalOpen(false)}
       />
-      <TodoListItemContainer key={todo.id} isChild={isChild}>
-        <StatusSelect value={todo.status} onChange={handleStatusChange}>
-          <option value="todo">Todo</option>
-          <option value="doing">Doing</option>
-          <option value="done">Done</option>
-        </StatusSelect>
+      <TodoListItemContainer key={todo.id} isChild={isChild} $status={todo.status}>
+        <StatusSelect value={todo.status} onChange={handleStatusChange} />
         <TodoTitle onClick={() => navigate(`/todo/${todo.id}`)}>
           {todo.title}
         </TodoTitle>
