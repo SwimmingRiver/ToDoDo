@@ -13,13 +13,11 @@ const ModeTapContainer = styled.div`
   padding: 4px;
   background-color: #f1f3f4;
   border-radius: 8px;
-  width: fit-content;
   margin: 8px 16px;
   position: relative;
 
   ${media.mobile} {
     margin: 8px;
-    width: calc(100% - 16px);
     justify-content: center;
   }
 `;
@@ -53,10 +51,10 @@ const TabButton = styled.button<{ $active: boolean }>`
 `;
 
 const Main = styled.main`
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
   flex: 1;
 `;
 

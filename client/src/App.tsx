@@ -9,13 +9,12 @@ import SNB from "@/layouts/snb/snb";
 import styled from "styled-components";
 
 const App = () => {
-  const [isopen, setIsOpen] = useState(false);
+  const [isopen, setIsOpen] = useState(true);
   return (
     <Container>
       <Header />
       <ContentContainer>
         <SNB isopen={isopen} setIsOpen={setIsOpen} />
-
         <Main>
           <Outlet />
         </Main>
@@ -27,7 +26,6 @@ const App = () => {
 
 const ContentContainer = styled.div`
   display: flex;
-  flex: 1;
   height: 100%;
 `;
 
