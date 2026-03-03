@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarCheckIcon,
   ChartPieIcon,
+  KanbanIcon,
   ListCheckIcon,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -31,6 +32,10 @@ const SNB = ({
           <SidebarItem onClick={() => navigate("/pie-chart")}>
             <ChartPieIcon />
             <span>chart</span>
+          </SidebarItem>
+          <SidebarItem onClick={() => navigate("/kanban")}>
+            <KanbanIcon />
+            <span>kanban</span>
           </SidebarItem>
         </>
       )}

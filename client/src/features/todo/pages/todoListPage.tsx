@@ -1,5 +1,7 @@
 import TodoList from "@/features/todo/components/todoList";
-
+import { useTodo } from "@/features/todo/hooks";
 export default function TodoListPage() {
-  return <TodoList todos={[]} />;
+  const { useGetTodos: todosQuery } = useTodo();
+  const { data: todos } = todosQuery;
+  return <TodoList todos={todos ?? []} />;
 }

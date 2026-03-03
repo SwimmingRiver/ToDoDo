@@ -1,5 +1,6 @@
 import { styled } from "styled-components";
 import { media } from "../../styles/breakpoints";
+import { useNavigate } from "react-router-dom";
 
 const HeaderContainer = styled.header`
   width: 100%;
@@ -11,11 +12,19 @@ const HeaderContainer = styled.header`
 `;
 
 const Header = () => {
+  const navigate = useNavigate();
   return (
     <HeaderContainer>
-      <h1>ToDoDo</h1>
+      <HeaderTitle onClick={() => navigate("/")}>ToDoDo</HeaderTitle>
     </HeaderContainer>
   );
 };
 
 export default Header;
+
+const HeaderTitle = styled.h1`
+  cursor: pointer;
+  &:hover {
+    color: #1c72eb;
+  }
+`;

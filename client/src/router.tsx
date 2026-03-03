@@ -4,12 +4,18 @@ import TodoListPage from "@/features/todo/pages/todoListPage";
 import CalendarPage from "@/features/dashboard/Pages/calendarPage";
 import PieChartPage from "@/features/dashboard/Pages/pieChartPage";
 import KanbanPage from "@/features/kanban/pages/kanbanPage";
+import HomePage from "@/HomePage";
+import { TodoDetail } from "@/features/todo";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
     children: [
+      {
+        path: "",
+        element: <HomePage />,
+      },
       {
         path: "todo",
         element: <TodoListPage />,
@@ -25,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: "kanban",
         element: <KanbanPage />,
+      },
+      {
+        path: "todo/:id",
+        element: <TodoDetail />,
       },
     ],
   },
