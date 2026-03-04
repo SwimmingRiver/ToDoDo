@@ -6,7 +6,7 @@ import {
   KanbanIcon,
   ListCheckIcon,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 const SNB = ({
@@ -17,23 +17,36 @@ const SNB = ({
   setIsOpen: (isOpen: boolean) => void;
 }) => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   return (
     <SNBContainer $isopen={isopen}>
       {isopen && (
         <>
-          <SidebarItem onClick={() => navigate("/todo")}>
+          <SidebarItem
+            $active={pathname === "/todo"}
+            onClick={() => navigate("/todo")}
+          >
             <ListCheckIcon />
             <span>list</span>
           </SidebarItem>
-          <SidebarItem onClick={() => navigate("/calendar")}>
+          <SidebarItem
+            $active={pathname === "/calendar"}
+            onClick={() => navigate("/calendar")}
+          >
             <CalendarCheckIcon />
             <span>calendar</span>
           </SidebarItem>
-          <SidebarItem onClick={() => navigate("/pie-chart")}>
+          <SidebarItem
+            $active={pathname === "/pie-chart"}
+            onClick={() => navigate("/pie-chart")}
+          >
             <ChartPieIcon />
             <span>chart</span>
           </SidebarItem>
-          <SidebarItem onClick={() => navigate("/kanban")}>
+          <SidebarItem
+            $active={pathname === "/kanban"}
+            onClick={() => navigate("/kanban")}
+          >
             <KanbanIcon />
             <span>kanban</span>
           </SidebarItem>
@@ -54,7 +67,7 @@ const SNBContainer = styled.div<{ $isopen: boolean }>`
   transition: all 0.3s ease;
   transform: translateX(${({ $isopen }) => ($isopen ? "0" : "-10%")});
 `;
-const SidebarItem = styled.div`
+const SidebarItem = styled.div<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   gap: 10px;
@@ -62,9 +75,11 @@ const SidebarItem = styled.div`
   cursor: pointer;
   font-size: 20px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
+  background-color: ${({ $active }) => ($active ? "#e8f0fe" : "transparent")};
+  border-radius: 8px;
   &:hover {
-    background-color: #e0e0e0;
+    background-color: ${({ $active }) => ($active ? "#e8f0fe" : "#e0e0e0")};
   }
 `;
 
