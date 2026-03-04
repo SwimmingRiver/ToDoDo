@@ -12,7 +12,9 @@ import {
   TodoTitle,
   TodoIconButton,
   ButtonGroup,
+  DueBadge,
 } from "./todoListItem.styles";
+import { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel } from "@/shared/utils";
 
 const TodoListItem = ({
   todo,
@@ -69,6 +71,12 @@ const TodoListItem = ({
     });
   };
 
+  const daysLeft =
+    todo.dueAt && todo.status !== "done"
+      ? getDaysLeft(todo.dueAt)
+      : null;
+  const showDueBadge = daysLeft !== null && daysLeft <= DUE_SOON_DAYS;
+
   return (
     <>
       <ConfirmModal
@@ -85,6 +93,9 @@ const TodoListItem = ({
         <TodoTitle onClick={() => navigate(`/todo/${todo.id}`)}>
           {todo.title}
         </TodoTitle>
+        {showDueBadge && (
+          <DueBadge $daysLeft={daysLeft!}>{getDueBadgeLabel(daysLeft!)}</DueBadge>
+        )}
         <ButtonGroup>
           <TodoIconButton onClick={() => onEdit?.(todo)}>
             <PencilIcon size={16} />
