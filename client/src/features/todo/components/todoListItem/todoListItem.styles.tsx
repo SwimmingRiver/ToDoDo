@@ -108,6 +108,18 @@ const ButtonGroup = styled.div`
   gap: 4px;
   align-items: center;
 `;
+
+const DueBadge = styled.span<{ $daysLeft: number }>`
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  background-color: ${({ $daysLeft }) =>
+    $daysLeft < 0 ? "#ef4444" : $daysLeft === 0 ? "#f97316" : "#f59e0b"};
+  color: white;
+`;
+
 export {
   TodoListItemContainer,
   ExpandButton,
@@ -115,4 +127,5 @@ export {
   TodoTitle,
   TodoIconButton,
   ButtonGroup,
+  DueBadge,
 };
