@@ -15,6 +15,12 @@ export const router = createBrowserRouter([
       {
         path: "",
         element: <HomePage />,
+        children: [
+          {
+            path: "todo/:id",
+            element: <TodoDetail />,
+          },
+        ],
       },
       {
         path: "todo",
@@ -31,10 +37,6 @@ export const router = createBrowserRouter([
       {
         path: "kanban",
         element: <KanbanPage />,
-      },
-      {
-        path: "todo/:id",
-        element: <TodoDetail />,
       },
     ],
   },
