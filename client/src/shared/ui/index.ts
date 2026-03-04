@@ -7,3 +7,5 @@ export { default as CheckboxSkeleton } from "./skeleton/checkboxSkeleton";
 export { default as KanbanSkeleton } from "./skeleton/kanbanSkeleton";
 export { ToastProvider } from "./toast/toastContext";
 export { useToast } from "./toast/useToast";
+export { default as BottomSheet } from "./bottomSheet/bottomSheet";
+export type { BottomSheetOption } from "./bottomSheet/bottomSheet";

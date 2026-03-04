@@ -14,6 +14,10 @@ export const createTodo = async (todo: Todo) => {
   const response = await api.post<MongoTodo>("/todo-list", todo);
   return mapMongoToTodo(response.data);
 };
+export const getSearchTodoList = async (query: string) => {
+  const response = await api.get<Todo[]>(`/todo-list/search?query=${query}`);
+  return response.data;
+};
 
 export const getTodos = async () => {
   try {

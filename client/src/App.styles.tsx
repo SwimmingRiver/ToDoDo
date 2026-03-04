@@ -2,9 +2,9 @@ import { styled } from "styled-components";
 import { media } from "./styles/breakpoints";
 
 const Container = styled.div`
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 `;
 
 const ModeTapContainer = styled.div`
@@ -13,12 +13,11 @@ const ModeTapContainer = styled.div`
   padding: 4px;
   background-color: #f1f3f4;
   border-radius: 8px;
-  width: fit-content;
   margin: 8px 16px;
+  position: relative;
 
   ${media.mobile} {
     margin: 8px;
-    width: calc(100% - 16px);
     justify-content: center;
   }
 `;
@@ -52,9 +51,11 @@ const TabButton = styled.button<{ $active: boolean }>`
 `;
 
 const Main = styled.main`
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  width: 100%;
+  flex: 1;
 `;
 
 const MobileTabContainer = styled.div`
@@ -92,13 +93,13 @@ const MobileContent = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-top: 4px;
 `;
 
 const ContentWrapper = styled.div`
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  height: 100%;
 `;
 
 export {

@@ -1,18 +1,19 @@
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useMemo } from "react";
 import type { Todo } from "@/features/todo";
 import { useTodo } from "@/features/todo";
 import { PieChartContainer } from "./pieChart.styles";
-
-const STATUS_COLORS: Record<string, string> = {
-  todo: "#FF8042", // 빨강
-  doing: "#FFBB28", // 노랑
-  done: "#00C49F", // 초록
-};
+import { statusColors, type Status } from "../../../styles/statusColors";
 
 const PieChartComponent = () => {
   const { useGetTodos } = useTodo();
   const { data: todos } = useGetTodos;
+
+  const statusLabels: Record<string, string> = {
+    todo: "할 일",
+    doing: "진행 중",
+    done: "완료",
+  };
 
   const data = useMemo(() => {
     if (!todos || todos.length === 0) return [];
@@ -28,9 +29,9 @@ const PieChartComponent = () => {
     const total = todos.length;
 
     return Object.entries(statusCount).map(([status, count]) => ({
-      name: status,
+      status,
+      name: `${statusLabels[status]}: ${count}개 (${((count / total) * 100).toFixed(0)}%)`,
       value: count,
-      percentage: ((count / total) * 100).toFixed(1),
     }));
   }, [todos]);
   return (
@@ -38,26 +39,29 @@ const PieChartComponent = () => {
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            label={({ name, value, percentage }) =>
-              `${name}: ${value} (${percentage}%)`
-            }
             data={data}
             cx="50%"
-            cy="50%"
+            cy="40%"
             innerRadius={0}
-            outerRadius="70%"
+            outerRadius="60%"
             dataKey="value"
             nameKey="name"
           >
             {data?.map((entry, index: number) => (
               <Cell
                 key={`cell-${index}`}
-                fill={STATUS_COLORS[entry.name] || "#999999"}
+                fill={statusColors[entry.status as Status]?.main ?? "#999999"}
               />
             ))}
           </Pie>
           <Tooltip
             contentStyle={{ backgroundColor: "white", color: "black" }}
+          />
+          <Legend
+            layout="horizontal"
+            verticalAlign="bottom"
+            align="center"
+            wrapperStyle={{ paddingTop: 16 }}
           />
         </PieChart>
       </ResponsiveContainer>

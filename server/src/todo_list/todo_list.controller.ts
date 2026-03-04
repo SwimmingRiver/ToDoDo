@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { TodoListService } from './todo_list.service';
 import { CreateTodoListDto } from './dto/create-todo_list.dto';
@@ -23,6 +24,10 @@ export class TodoListController {
   @Get()
   findAll() {
     return this.todoListService.findAll();
+  }
+  @Get('search')
+  getSearchTodoList(@Query('query') query: string) {
+    return this.todoListService.getSearchTodoList(query);
   }
 
   @Get(':id')

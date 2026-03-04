@@ -6,10 +6,10 @@ const TodoListContainer = styled.div`
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0 8px;
+  padding: 8px;
 
   ${media.mobile} {
-    padding: 0 4px;
+    padding: 12px 8px;
   }
 `;
 
