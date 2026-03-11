@@ -19,13 +19,16 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: searchResults, isLoading: isSearchLoading } = useSearchTodo(searchQuery);
+  const { data: searchResults, isLoading: isSearchLoading } =
+    useSearchTodo(searchQuery);
 
   const isSearching = searchQuery.length > 0;
 
   const todoTree = useMemo(() => {
     const rootTodos = todos.filter((todo) => todo.parentId === null);
+
     const activatedTodos = rootTodos.filter((todo) => todo.status !== "done");
+
     return activatedTodos.map((rootTodo) => {
       return {
         ...rootTodo,
