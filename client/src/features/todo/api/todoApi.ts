@@ -1,62 +1,99 @@
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  getDoc,
+} from "firebase/firestore";
+import { db, auth } from "@/shared/lib/firebase";
 import type { Todo } from "../types/todo.type";
-import { api } from "../../../shared/utils/api";
 
-// MongoDB 응답 타입 (서버에서 받는 타입)
-type MongoTodo = Omit<Todo, "id"> & { _id: string };
+const todosRef = collection(db, "todos");
 
-// MongoDB의 _id를 클라이언트의 id로 변환
-const mapMongoToTodo = (mongoTodo: MongoTodo): Todo => ({
-  ...mongoTodo,
-  id: mongoTodo._id,
-});
-
-export const createTodo = async (todo: Todo) => {
-  const response = await api.post<MongoTodo>("/todo-list", todo);
-  return mapMongoToTodo(response.data);
+const getUserId = () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+  return user.uid;
 };
-export const getSearchTodoList = async (query: string) => {
-  const response = await api.get<Todo[]>(`/todo-list/search?query=${query}`);
-  return response.data;
-};
+
+const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
+  ({ id, ...data }) as Todo;
 
 export const getTodos = async () => {
-  try {
-    const response = await api.get<Todo[]>("/todo-list");
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      error instanceof Error ? error.message : "Failed to fetch todos"
-    );
-  }
+  const userId = getUserId();
+  const q = query(todosRef, where("userId", "==", userId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs
+    .map((doc) => mapDocToTodo(doc.id, doc.data()))
+    .sort((a, b) => a.order - b.order);
+};
+
+export const getTodoDetail = async (id: string) => {
+  const snapshot = await getDoc(doc(db, "todos", id));
+  if (!snapshot.exists()) throw new Error("Todo not found");
+  return mapDocToTodo(snapshot.id, snapshot.data());
+};
+
+export const getSearchTodoList = async (queryStr: string) => {
+  const todos = await getTodos();
+  return todos.filter((todo) =>
+    todo.title.toLowerCase().includes(queryStr.toLowerCase()),
+  );
+};
+
+export const createTodo = async (todo: Todo) => {
+  const userId = getUserId();
+  const now = new Date().toISOString();
+  const { id: _, ...todoData } = todo; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const docRef = await addDoc(todosRef, {
+    ...todoData,
+    userId,
+    createdAt: now,
+    updatedAt: now,
+    parentId: null,
+    status: "todo",
+  });
+  return { ...todo, id: docRef.id };
 };
 
 export const editTodo = async (todo: Todo) => {
-  const response = await api.patch<MongoTodo>(`/todo-list/${todo.id}`, todo);
-  return mapMongoToTodo(response.data);
+  const { id, ...data } = todo;
+  await updateDoc(doc(db, "todos", id), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+  return todo;
 };
 
 export const deleteTodo = async (id: string) => {
-  const response = await api.delete<Todo>(`/todo-list/${id}`);
-  return response.data;
+  await deleteDoc(doc(db, "todos", id));
 };
 
 export const updateToDone = async (id: string) => {
-  const response = await api.patch<MongoTodo>(`/todo-list/${id}/done`);
-  return mapMongoToTodo(response.data);
+  const now = new Date().toISOString();
+  const docRef = doc(db, "todos", id);
+  await updateDoc(docRef, { status: "done", doneAt: now, updatedAt: now });
+  const snapshot = await getDoc(docRef);
+  return mapDocToTodo(snapshot.id, snapshot.data()!);
 };
 
 export const createChildTodo = async (
   parentId: string,
-  todo: Partial<Todo>
+  todo: Partial<Todo>,
 ) => {
-  const response = await api.post<MongoTodo>(
-    `/todo-list/${parentId}/child`,
-    todo
-  );
-  return mapMongoToTodo(response.data);
-};
-
-export const getTodoDetail = async (id: string) => {
-  const response = await api.get<Todo>(`/todo-list/${id}`);
-  return response.data;
+  const userId = getUserId();
+  const now = new Date().toISOString();
+  const docRef = await addDoc(todosRef, {
+    ...todo,
+    parentId,
+    userId,
+    createdAt: now,
+    updatedAt: now,
+    status: "todo",
+  });
+  return { ...todo, id: docRef.id, parentId } as Todo;
 };
