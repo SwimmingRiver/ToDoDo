@@ -6,11 +6,21 @@ import PieChartPage from "@/features/dashboard/Pages/pieChartPage";
 import KanbanPage from "@/features/kanban/pages/kanbanPage";
 import HomePage from "@/HomePage";
 import { TodoDetail } from "@/features/todo";
+import LoginPage from "@/features/auth/pages/loginPage";
+import ProtectedRoute from "@/features/auth/components/protectedRoute";
 
 export const router = createBrowserRouter([
   {
+    path: "/login",
+    element: <LoginPage />,
+  },
+  {
     path: "/",
-    element: <App />,
+    element: (
+      <ProtectedRoute>
+        <App />
+      </ProtectedRoute>
+    ),
     children: [
       {
         path: "",
