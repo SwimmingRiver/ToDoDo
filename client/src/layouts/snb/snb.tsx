@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
+import { media } from "@/styles/breakpoints";
 
 const SNB = ({
   isopen,
@@ -66,7 +67,12 @@ const SNBContainer = styled.div<{ $isopen: boolean }>`
   border-right: 1px solid #e0e0e0;
   transition: all 0.3s ease;
   transform: translateX(${({ $isopen }) => ($isopen ? "0" : "-10%")});
+
+  ${media.tablet} {
+    display: none;
+  }
 `;
+
 const SidebarItem = styled.div<{ $active?: boolean }>`
   display: flex;
   align-items: center;
