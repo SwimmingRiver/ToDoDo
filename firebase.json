@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "tododo-83576",
     "public": "client/dist",
     "ignore": [
       "firebase.json",
