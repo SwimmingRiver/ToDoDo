@@ -60,12 +60,59 @@ export const createTodo = async (todo: Todo) => {
   return { ...todo, id: docRef.id };
 };
 
-export const editTodo = async (todo: Todo) => {
+const calcParentStatus = (
+  siblings: Todo[],
+): { status: Todo["status"]; doneAt: string | null } => {
+  const now = new Date().toISOString();
+  if (siblings.every((s) => s.status === "done")) {
+    return { status: "done", doneAt: now };
+  }
+  if (siblings.some((s) => s.status === "doing" || s.status === "done")) {
+    return { status: "doing", doneAt: null };
+  }
+  return { status: "todo", doneAt: null };
+};
+
+export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
   const { id, ...data } = todo;
-  await updateDoc(doc(db, "todos", id), {
-    ...data,
-    updatedAt: new Date().toISOString(),
-  });
+  const now = new Date().toISOString();
+
+  const writes: Array<{ id: string; updates: object }> = [
+    { id, updates: { ...data, updatedAt: now } },
+  ];
+
+  // 상위 done → 하위 전부 done
+  if (data.status === "done") {
+    allTodos
+      .filter((t) => t.parentId === id)
+      .forEach((child) => {
+        writes.push({
+          id: child.id,
+          updates: { status: "done", doneAt: now, updatedAt: now },
+        });
+      });
+  }
+
+  // 하위 변경 → 상위 상태 재계산 (캐시 기반)
+  if (todo.parentId) {
+    const updatedTodos = allTodos.map((t) =>
+      t.id === id ? { ...t, ...data } : t,
+    );
+    const siblings = updatedTodos.filter((t) => t.parentId === todo.parentId);
+    const { status: parentStatus, doneAt } = calcParentStatus(siblings);
+    writes.push({
+      id: todo.parentId,
+      updates: { status: parentStatus, doneAt, updatedAt: now },
+    });
+  }
+
+  await Promise.all(
+    writes.map(({ id: writeId, updates }) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updateDoc(doc(db, "todos", writeId), updates as any),
+    ),
+  );
+
   return todo;
 };
 
@@ -84,6 +131,7 @@ export const updateToDone = async (id: string) => {
 export const createChildTodo = async (
   parentId: string,
   todo: Partial<Todo>,
+  allTodos: Todo[],
 ) => {
   const userId = getUserId();
   const now = new Date().toISOString();
@@ -95,5 +143,16 @@ export const createChildTodo = async (
     updatedAt: now,
     status: "todo",
   });
+
+  // 새 하위(todo) 추가 → 상위 상태 재계산
+  const newChild = { id: docRef.id, status: "todo" as const, parentId } as Todo;
+  const siblings = [...allTodos.filter((t) => t.parentId === parentId), newChild];
+  const { status: parentStatus, doneAt } = calcParentStatus(siblings);
+  await updateDoc(doc(db, "todos", parentId), {
+    status: parentStatus,
+    doneAt,
+    updatedAt: now,
+  });
+
   return { ...todo, id: docRef.id, parentId } as Todo;
 };
