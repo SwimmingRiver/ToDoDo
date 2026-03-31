@@ -27,8 +27,66 @@ export const useTodo = () => {
   });
 
   const useUpdateTodo = useMutation({
-    mutationFn: (todo: Todo) => editTodo(todo),
-    onSuccess: () => {
+    mutationFn: (todo: Todo) => {
+      const allTodos = queryClient.getQueryData<Todo[]>(["todos"]) ?? [];
+      return editTodo(todo, allTodos);
+    },
+    onMutate: async (updatedTodo) => {
+      await queryClient.cancelQueries({ queryKey: ["todos"] });
+      const previous = queryClient.getQueryData<Todo[]>(["todos"]);
+
+      queryClient.setQueryData<Todo[]>(["todos"], (old = []) => {
+        const now = new Date().toISOString();
+        let next = old.map((t) =>
+          t.id === updatedTodo.id ? { ...t, ...updatedTodo } : t,
+        );
+
+        // 상위 done → 하위 전부 done
+        if (updatedTodo.status === "done") {
+          next = next.map((t) =>
+            t.parentId === updatedTodo.id
+              ? { ...t, status: "done" as const, doneAt: now }
+              : t,
+          );
+        }
+
+        // 하위 변경 → 상위 상태 재계산
+        if (updatedTodo.parentId) {
+          const siblings = next.filter(
+            (t) => t.parentId === updatedTodo.parentId,
+          );
+          let newParentStatus: Todo["status"];
+          if (siblings.every((s) => s.status === "done")) {
+            newParentStatus = "done";
+          } else if (
+            siblings.some((s) => s.status === "doing" || s.status === "done")
+          ) {
+            newParentStatus = "doing";
+          } else {
+            newParentStatus = "todo";
+          }
+          next = next.map((t) =>
+            t.id === updatedTodo.parentId
+              ? {
+                  ...t,
+                  status: newParentStatus,
+                  doneAt: newParentStatus === "done" ? now : null,
+                }
+              : t,
+          );
+        }
+
+        return next;
+      });
+
+      return { previous };
+    },
+    onError: (_err, _todo, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["todos"], context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
@@ -59,7 +117,10 @@ export const useTodo = () => {
     }: {
       parentId: string;
       todo: Partial<Todo>;
-    }) => createChildTodo(parentId, todo),
+    }) => {
+      const allTodos = queryClient.getQueryData<Todo[]>(["todos"]) ?? [];
+      return createChildTodo(parentId, todo, allTodos);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     },

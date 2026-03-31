@@ -48,6 +48,35 @@ jobs:
       - name: Unit Test
         run: npm run test
 
+  e2e:
+    name: E2E Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-client-npm
+        with:
+          path: client/node_modules
+          key: ${{ runner.os }}-client-node-modules-${{ hashFiles('client/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-client-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-client-npm.outputs.cache-hit != 'true'
+        run: npm ci
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         id: cache-playwright
@@ -145,6 +174,14 @@ jobs:
 
       - name: Build
         working-directory: client
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
 
       - name: Deploy to Firebase Hosting
