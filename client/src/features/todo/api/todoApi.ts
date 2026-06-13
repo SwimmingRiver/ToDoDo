@@ -52,6 +52,15 @@ export const createTodo = async (todo: Todo) => {
   const userId = getUserId();
   const now = new Date().toISOString();
   const { id: _, ...todoData } = todo; // eslint-disable-line @typescript-eslint/no-unused-vars
+
+  const rootTodosSnapshot = await getDocs(
+    query(todosRef, where("userId", "==", userId), where("parentId", "==", null)),
+  );
+  const maxOrder = rootTodosSnapshot.docs.reduce(
+    (max, d) => Math.max(max, (d.data().order as number) ?? 0),
+    -1,
+  );
+
   const docRef = await addDoc(todosRef, {
     ...todoData,
     userId,
@@ -59,6 +68,7 @@ export const createTodo = async (todo: Todo) => {
     updatedAt: now,
     parentId: null,
     status: "todo",
+    order: maxOrder + 1,
   });
   return { ...todo, id: docRef.id };
 };
@@ -152,6 +162,13 @@ export const createChildTodo = async (
 ) => {
   const userId = getUserId();
   const now = new Date().toISOString();
+
+  const existingSiblings = allTodos.filter((t) => t.parentId === parentId);
+  const maxOrder = existingSiblings.reduce(
+    (max, t) => Math.max(max, t.order ?? 0),
+    -1,
+  );
+
   const docRef = await addDoc(todosRef, {
     ...todo,
     parentId,
@@ -159,11 +176,12 @@ export const createChildTodo = async (
     createdAt: now,
     updatedAt: now,
     status: "todo",
+    order: maxOrder + 1,
   });
 
   // 새 하위(todo) 추가 → 상위 상태 재계산
   const newChild = { id: docRef.id, status: "todo" as const, parentId } as Todo;
-  const siblings = [...allTodos.filter((t) => t.parentId === parentId), newChild];
+  const siblings = [...existingSiblings, newChild];
   const { status: parentStatus, doneAt } = calcParentStatus(siblings);
   await updateDoc(doc(db, "todos", parentId), {
     status: parentStatus,
