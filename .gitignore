@@ -4,3 +4,6 @@ node_modules
 .env
 .env.development
 .env.production
+
+.claude
+CLAUDE.md
