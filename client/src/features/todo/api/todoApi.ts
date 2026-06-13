@@ -33,9 +33,12 @@ export const getTodos = async () => {
 };
 
 export const getTodoDetail = async (id: string) => {
+  const userId = getUserId();
   const snapshot = await getDoc(doc(db, "todos", id));
   if (!snapshot.exists()) throw new Error("Todo not found");
-  return mapDocToTodo(snapshot.id, snapshot.data());
+  const data = snapshot.data();
+  if (data.userId !== userId) throw new Error("Forbidden");
+  return mapDocToTodo(snapshot.id, data);
 };
 
 export const getSearchTodoList = async (queryStr: string) => {
@@ -74,8 +77,14 @@ const calcParentStatus = (
 };
 
 export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
+  const userId = getUserId();
   const { id, ...data } = todo;
   const now = new Date().toISOString();
+
+  const docRef = doc(db, "todos", id);
+  const existing = await getDoc(docRef);
+  if (!existing.exists()) throw new Error("Todo not found");
+  if (existing.data().userId !== userId) throw new Error("Forbidden");
 
   const writes: Array<{ id: string; updates: object }> = [
     { id, updates: { ...data, updatedAt: now } },
@@ -117,15 +126,23 @@ export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
 };
 
 export const deleteTodo = async (id: string) => {
-  await deleteDoc(doc(db, "todos", id));
+  const userId = getUserId();
+  const docRef = doc(db, "todos", id);
+  const existing = await getDoc(docRef);
+  if (!existing.exists()) throw new Error("Todo not found");
+  if (existing.data().userId !== userId) throw new Error("Forbidden");
+  await deleteDoc(docRef);
 };
 
 export const updateToDone = async (id: string) => {
+  const userId = getUserId();
   const now = new Date().toISOString();
   const docRef = doc(db, "todos", id);
+  const existing = await getDoc(docRef);
+  if (!existing.exists()) throw new Error("Todo not found");
+  if (existing.data().userId !== userId) throw new Error("Forbidden");
   await updateDoc(docRef, { status: "done", doneAt: now, updatedAt: now });
-  const snapshot = await getDoc(docRef);
-  return mapDocToTodo(snapshot.id, snapshot.data()!);
+  return mapDocToTodo(docRef.id, { ...existing.data(), status: "done", doneAt: now, updatedAt: now });
 };
 
 export const createChildTodo = async (
