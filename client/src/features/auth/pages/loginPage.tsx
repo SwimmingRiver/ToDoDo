@@ -1,7 +1,8 @@
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "@/shared/lib/firebase";
 import { useNavigate } from "react-router-dom";
-import { Container, Card, Title, GoogleButton } from "./loginPage.styles";
+import { useState } from "react";
+import { Container, Card, Title, GoogleButton, ErrorMessage } from "./loginPage.styles";
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 48 48">
@@ -14,19 +15,35 @@ const GoogleIcon = () => (
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
-    await signInWithPopup(auth, googleProvider);
-    navigate("/");
+    setErrorMessage(null);
+    setIsLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      navigate("/");
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // 사용자가 직접 닫은 경우 - 에러 메시지 불필요
+      } else {
+        setErrorMessage("로그인 중 오류가 발생했습니다. 다시 시도해주세요.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <Container>
       <Card>
         <Title>ToDoDo</Title>
-        <GoogleButton onClick={handleGoogleLogin}>
+        {errorMessage && <ErrorMessage>{errorMessage}</ErrorMessage>}
+        <GoogleButton onClick={handleGoogleLogin} disabled={isLoading}>
           <GoogleIcon />
-          Google로 로그인
+          {isLoading ? "로그인 중..." : "Google로 로그인"}
         </GoogleButton>
       </Card>
     </Container>

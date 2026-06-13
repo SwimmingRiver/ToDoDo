@@ -1,4 +1,5 @@
 import { styled, keyframes } from "styled-components";
+import { NavLink } from "react-router-dom";
 
 const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
 const fadeOut = keyframes`from { opacity: 1; } to { opacity: 0; }`;
@@ -84,5 +85,32 @@ export const NavItem = styled.div<{ $active?: boolean }>`
 
   &:hover {
     background-color: ${({ $active }) => ($active ? "#e8f0fe" : "#f1f3f4")};
+  }
+`;
+
+export const NavNavLink = styled(NavLink)`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  background-color: transparent;
+  border-radius: 8px;
+  text-decoration: none;
+
+  &:hover {
+    background-color: #f1f3f4;
+  }
+
+  &.active {
+    color: #1c72eb;
+    background-color: #e8f0fe;
+
+    &:hover {
+      background-color: #e8f0fe;
+    }
   }
 `;

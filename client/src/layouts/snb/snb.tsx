@@ -6,9 +6,16 @@ import {
   KanbanIcon,
   ListCheckIcon,
 } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import styled from "styled-components";
 import { media } from "@/styles/breakpoints";
+
+const NAV_ITEMS = [
+  { path: "/todo", icon: <ListCheckIcon />, label: "list" },
+  { path: "/calendar", icon: <CalendarCheckIcon />, label: "calendar" },
+  { path: "/pie-chart", icon: <ChartPieIcon />, label: "chart" },
+  { path: "/kanban", icon: <KanbanIcon />, label: "kanban" },
+];
 
 const SNB = ({
   isopen,
@@ -17,43 +24,22 @@ const SNB = ({
   isopen: boolean;
   setIsOpen: (isOpen: boolean) => void;
 }) => {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
   return (
     <SNBContainer $isopen={isopen}>
       {isopen && (
         <>
-          <SidebarItem
-            $active={pathname === "/todo"}
-            onClick={() => navigate("/todo")}
-          >
-            <ListCheckIcon />
-            <span>list</span>
-          </SidebarItem>
-          <SidebarItem
-            $active={pathname === "/calendar"}
-            onClick={() => navigate("/calendar")}
-          >
-            <CalendarCheckIcon />
-            <span>calendar</span>
-          </SidebarItem>
-          <SidebarItem
-            $active={pathname === "/pie-chart"}
-            onClick={() => navigate("/pie-chart")}
-          >
-            <ChartPieIcon />
-            <span>chart</span>
-          </SidebarItem>
-          <SidebarItem
-            $active={pathname === "/kanban"}
-            onClick={() => navigate("/kanban")}
-          >
-            <KanbanIcon />
-            <span>kanban</span>
-          </SidebarItem>
+          {NAV_ITEMS.map(({ path, icon, label }) => (
+            <SidebarNavLink key={path} to={path}>
+              {icon}
+              <span>{label}</span>
+            </SidebarNavLink>
+          ))}
         </>
       )}
-      <SidebarButton onClick={() => setIsOpen(!isopen)}>
+      <SidebarButton
+        onClick={() => setIsOpen(!isopen)}
+        aria-label={isopen ? "사이드바 닫기" : "사이드바 열기"}
+      >
         {isopen ? <ArrowLeft size={20} /> : <ArrowRight size={20} />}
       </SidebarButton>
     </SNBContainer>
@@ -73,7 +59,7 @@ const SNBContainer = styled.div<{ $isopen: boolean }>`
   }
 `;
 
-const SidebarItem = styled.div<{ $active?: boolean }>`
+const SidebarNavLink = styled(NavLink)`
   display: flex;
   align-items: center;
   gap: 10px;
@@ -81,11 +67,22 @@ const SidebarItem = styled.div<{ $active?: boolean }>`
   cursor: pointer;
   font-size: 20px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
-  background-color: ${({ $active }) => ($active ? "#e8f0fe" : "transparent")};
+  color: #1a1a1a;
+  background-color: transparent;
   border-radius: 8px;
+  text-decoration: none;
+
   &:hover {
-    background-color: ${({ $active }) => ($active ? "#e8f0fe" : "#e0e0e0")};
+    background-color: #e0e0e0;
+  }
+
+  &.active {
+    color: #1c72eb;
+    background-color: #e8f0fe;
+
+    &:hover {
+      background-color: #e8f0fe;
+    }
   }
 `;
 

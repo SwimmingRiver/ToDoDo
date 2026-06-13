@@ -15,7 +15,9 @@ import {
   EmptyMessage,
 } from "./calendar.styles";
 import { statusColors, type Status } from "../../../styles/statusColors";
-import { BottomSheet } from "@/shared";
+import { BottomSheet, EmptyState } from "@/shared";
+import { AlertCircle } from "lucide-react";
+import styled, { keyframes } from "styled-components";
 
 const statusLabels: Record<Status, string> = {
   todo: "할 일",
@@ -27,7 +29,7 @@ const Calendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { useGetTodos } = useTodo();
-  const { data: todos } = useGetTodos;
+  const { data: todos, isLoading, isError } = useGetTodos;
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
 
@@ -97,6 +99,24 @@ const Calendar = () => {
     });
   };
 
+  if (isLoading) {
+    return (
+      <LoadingWrapper>
+        <Spinner />
+      </LoadingWrapper>
+    );
+  }
+
+  if (isError) {
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="캘린더 데이터를 불러오지 못했습니다"
+        description="네트워크 연결을 확인하고 다시 시도해주세요"
+      />
+    );
+  }
+
   return (
     <>
       <CalendarContainer ref={containerRef}>
@@ -143,5 +163,27 @@ const Calendar = () => {
     </>
   );
 };
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+const LoadingWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+`;
+
+const Spinner = styled.div`
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #1c72eb;
+  border-radius: 50%;
+  animation: ${spin} 0.8s linear infinite;
+`;
 
 export default Calendar;

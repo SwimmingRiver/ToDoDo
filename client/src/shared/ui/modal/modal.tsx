@@ -26,7 +26,7 @@ const Modal = ({
       <ModalBackground onClick={handleClose}>
         <ModalContainer onClick={(e) => e.stopPropagation()}>
           <ModalHeader>
-            <ModalCloseButton onClick={handleClose}>X</ModalCloseButton>
+            <ModalCloseButton onClick={handleClose} aria-label="모달 닫기">X</ModalCloseButton>
           </ModalHeader>
           <ModalBody>{children}</ModalBody>
           <ModalFooter>

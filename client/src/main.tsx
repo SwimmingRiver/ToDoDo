@@ -8,7 +8,13 @@ import { RouterProvider } from "react-router-dom";
 import { ToastProvider } from "@/shared";
 import { AuthProvider } from "@/features/auth/context/authProvider";
 import { router } from "./router";
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000, // 1분: 탭 전환 시 불필요한 재조회 방지
+    },
+  },
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

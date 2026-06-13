@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
 import { X } from "lucide-react";
+import { useToast } from "@/shared";
 import {
   Overlay,
   Panel,
@@ -51,6 +52,7 @@ const TodoDetail = () => {
   const navigate = useNavigate();
   const { todo } = useTodoDetail({ id: id! });
   const { useUpdateTodo } = useTodo();
+  const toast = useToast();
 
   const {
     register,
@@ -89,7 +91,11 @@ const TodoDetail = () => {
       } as Todo,
       {
         onSuccess: () => {
+          toast.success("저장 완료", "할 일이 성공적으로 저장되었습니다");
           handleClose();
+        },
+        onError: () => {
+          toast.error("저장 실패", "할 일 저장 중 오류가 발생했습니다. 다시 시도해주세요");
         },
       }
     );
@@ -105,7 +111,7 @@ const TodoDetail = () => {
       <Panel>
         <PanelHeader>
           <PanelTitle>Todo 상세</PanelTitle>
-          <CloseButton onClick={handleClose}>
+          <CloseButton onClick={handleClose} aria-label="닫기">
             <X size={20} />
           </CloseButton>
         </PanelHeader>

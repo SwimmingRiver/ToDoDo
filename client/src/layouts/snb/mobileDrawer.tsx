@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate, useLocation } from "react-router-dom";
 import {
   ListCheckIcon,
   CalendarCheckIcon,
@@ -17,7 +16,7 @@ import {
   UserName,
   LogoutButton,
   NavList,
-  NavItem,
+  NavNavLink,
 } from "./mobileDrawer.styles";
 
 interface MobileDrawerProps {
@@ -35,8 +34,6 @@ const NAV_ITEMS = [
 const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
   const [isClosing, setIsClosing] = useState(false);
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
@@ -45,11 +42,6 @@ const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
       onClose();
     }, 200);
   }, [onClose]);
-
-  const handleNavigate = (path: string) => {
-    navigate(path);
-    handleClose();
-  };
 
   useEffect(() => {
     if (isOpen) document.body.style.overflow = "hidden";
@@ -73,14 +65,14 @@ const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
         </UserSection>
         <NavList>
           {NAV_ITEMS.map(({ path, icon, label }) => (
-            <NavItem
+            <NavNavLink
               key={path}
-              $active={pathname === path}
-              onClick={() => handleNavigate(path)}
+              to={path}
+              onClick={handleClose}
             >
               {icon}
               <span>{label}</span>
-            </NavItem>
+            </NavNavLink>
           ))}
         </NavList>
       </DrawerContainer>

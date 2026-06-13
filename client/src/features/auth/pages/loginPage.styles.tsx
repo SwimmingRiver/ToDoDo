@@ -41,12 +41,28 @@ export const GoogleButton = styled.button`
   transition: box-shadow 0.2s ease, background-color 0.2s ease;
   white-space: nowrap;
 
-  &:hover {
+  &:hover:not(:disabled) {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     background-color: #f8f9fa;
   }
 
-  &:active {
+  &:active:not(:disabled) {
     background-color: #f1f3f4;
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+export const ErrorMessage = styled.p`
+  font-size: 14px;
+  color: #d93025;
+  text-align: center;
+  margin: 0;
+  padding: 8px 12px;
+  background-color: #fce8e6;
+  border-radius: 6px;
+  width: 100%;
 `;
