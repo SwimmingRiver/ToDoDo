@@ -20,7 +20,7 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
         <UserInfoImage src={user?.photoURL || ""} alt="user" />
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
       </UserInfo>
-      <HamburgerMenuButton onClick={onMenuOpen}>
+      <HamburgerMenuButton onClick={onMenuOpen} aria-label="메뉴 열기">
         <MenuIcon size={20} />
       </HamburgerMenuButton>
     </HeaderContainer>

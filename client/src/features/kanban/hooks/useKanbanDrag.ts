@@ -3,6 +3,7 @@ import {
   useSensor,
   useSensors,
   PointerSensor,
+  TouchSensor,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -21,6 +22,12 @@ export const useKanbanDrag = ({ todos, onUpdateTodo }: UseKanbanDragProps) => {
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 8,
       },
     })
   );

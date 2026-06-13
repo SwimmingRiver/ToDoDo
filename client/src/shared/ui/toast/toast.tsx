@@ -57,7 +57,7 @@ const Toast = ({ toasts, onClose }: ToastProps) => {
               <Title>{toast.title}</Title>
               {toast.message && <Message>{toast.message}</Message>}
             </Content>
-            <CloseButton onClick={() => onClose(toast.id)}>
+            <CloseButton onClick={() => onClose(toast.id)} aria-label="알림 닫기">
               <X size={16} />
             </CloseButton>
             {!toast.isExiting && <ProgressBar $type={toast.type} $duration={duration} />}

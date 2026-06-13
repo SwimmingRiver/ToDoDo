@@ -97,10 +97,10 @@ const TodoListItem = ({
           <DueBadge $daysLeft={daysLeft!}>{getDueBadgeLabel(daysLeft!)}</DueBadge>
         )}
         <ButtonGroup>
-          <TodoIconButton onClick={() => onEdit?.(todo)}>
+          <TodoIconButton onClick={() => onEdit?.(todo)} aria-label="할 일 편집">
             <PencilIcon size={16} />
           </TodoIconButton>
-          <TodoIconButton $variant="danger" onClick={() => setIsDeleteModalOpen(true)}>
+          <TodoIconButton $variant="danger" onClick={() => setIsDeleteModalOpen(true)} aria-label="할 일 삭제">
             <TrashIcon size={16} />
           </TodoIconButton>
         </ButtonGroup>
