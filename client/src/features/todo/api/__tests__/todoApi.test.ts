@@ -64,14 +64,14 @@ describe('todoApi', () => {
 
     it('인증되지 않은 경우 에러를 던져야 한다', async () => {
       const firebase = await import('@/shared/lib/firebase')
-      vi.mocked(firebase.auth).currentUser = null
+      Object.defineProperty(firebase.auth, 'currentUser', { value: null, configurable: true })
 
       const { getTodos } = await import('../todoApi')
 
       await expect(getTodos()).rejects.toThrow('Not authenticated')
 
       // 복원
-      vi.mocked(firebase.auth).currentUser = { uid: 'test-user-id' } as ReturnType<typeof firebase.auth>['currentUser']
+      Object.defineProperty(firebase.auth, 'currentUser', { value: { uid: 'test-user-id' }, configurable: true })
     })
   })
 
