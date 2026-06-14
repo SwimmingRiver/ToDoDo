@@ -78,7 +78,6 @@ describe('useMediaQuery 훅', () => {
   })
 
   it('미디어 쿼리 변경 시 상태가 업데이트되어야 한다', () => {
-    const mockMatchMedia = createMatchMedia(false)
     let capturedHandler: ((event: MediaQueryListEvent) => void) | null = null
 
     const mediaQueryList = {

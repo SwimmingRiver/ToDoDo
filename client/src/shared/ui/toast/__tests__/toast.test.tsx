@@ -42,9 +42,6 @@ describe('Toast 컴포넌트', () => {
     expect(screen.getByText('알림')).toBeInTheDocument()
     // message가 undefined일 때 메시지 영역이 렌더링되지 않아야 한다
     // (toast.tsx: {toast.message && <Message>{toast.message}</Message>})
-    const allText = screen.getAllByText(/.*/)
-    const messageTexts = allText.filter(el => el.textContent !== '알림' && el.textContent?.trim() !== '')
-    // 알림 제목 외에 메시지 텍스트가 없어야 한다 - title만 존재해야 함
     expect(screen.queryByText('undefined')).not.toBeInTheDocument()
   })
 
