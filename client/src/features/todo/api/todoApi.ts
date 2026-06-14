@@ -51,7 +51,7 @@ export const getSearchTodoList = async (queryStr: string) => {
 export const createTodo = async (todo: Todo) => {
   const userId = getUserId();
   const now = new Date().toISOString();
-  const { id: _, ...todoData } = todo; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { id: _, ...todoData } = todo;
 
   const rootTodosSnapshot = await getDocs(
     query(todosRef, where("userId", "==", userId), where("parentId", "==", null)),
