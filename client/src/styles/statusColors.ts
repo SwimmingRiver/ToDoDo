@@ -10,7 +10,7 @@ export const statusColors = {
     border: "#60a5fa",
   },
   done: {
-    main: "#10b981", // 초록 - 완료
+    main: "#1D9E75", // 초록(틸) - 완료, 리브랜딩 스펙 1-4 통일값
     light: "#d1fae5", // 연한 배경
     border: "#34d399",
   },
