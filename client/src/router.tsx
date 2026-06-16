@@ -8,6 +8,7 @@ import HomePage from "@/HomePage";
 import { TodoDetail } from "@/features/todo";
 import LoginPage from "@/features/auth/pages/loginPage";
 import ProtectedRoute from "@/features/auth/components/protectedRoute";
+import TodayPage from "@/features/today/pages/todayPage";
 
 export const router = createBrowserRouter([
   {
@@ -31,6 +32,10 @@ export const router = createBrowserRouter([
             element: <TodoDetail />,
           },
         ],
+      },
+      {
+        path: "today",
+        element: <TodayPage />,
       },
       {
         path: "todo",

@@ -50,12 +50,13 @@ const TabButton = styled.button<{ $active: boolean }>`
   }
 `;
 
-const Main = styled.main`
+const Main = styled.main<{ $bottomInset?: number }>`
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
   flex: 1;
+  padding-bottom: ${({ $bottomInset }) => ($bottomInset ? `${$bottomInset}px` : "0")};
 `;
 
 const MobileTabContainer = styled.div`

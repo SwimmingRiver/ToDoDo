@@ -7,22 +7,31 @@ import { useState } from "react";
 import { Container, Main } from "@/App.styles";
 import SNB from "@/layouts/snb/snb";
 import MobileDrawer from "@/layouts/snb/mobileDrawer";
+import MobileHeader from "@/layouts/mobileHeader/mobileHeader";
+import BottomTabBar from "@/layouts/bottomTabBar/bottomTabBar";
+import { BOTTOM_TAB_BAR_HEIGHT } from "@/layouts/bottomTabBar/bottomTabBar.styles";
 import styled from "styled-components";
+import { useMediaQuery } from "@/shared/hooks";
 
 const App = () => {
   const [isopen, setIsOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isMobile = useMediaQuery("tablet");
 
   return (
     <Container>
-      <Header onMenuOpen={() => setIsMobileMenuOpen(true)} />
+      {isMobile ? (
+        <MobileHeader onAvatarClick={() => setIsMobileMenuOpen(true)} />
+      ) : (
+        <Header onMenuOpen={() => setIsMobileMenuOpen(true)} />
+      )}
       <ContentContainer>
         <SNB isopen={isopen} setIsOpen={setIsOpen} />
-        <Main>
+        <Main $bottomInset={isMobile ? BOTTOM_TAB_BAR_HEIGHT : 0}>
           <Outlet />
         </Main>
       </ContentContainer>
-      <Footer />
+      {isMobile ? <BottomTabBar /> : <Footer />}
       <MobileDrawer
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
