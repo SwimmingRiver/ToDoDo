@@ -194,7 +194,5 @@ jobs:
 
       - name: Deploy to Firebase Hosting
         env:
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        run: |
-          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/gcloud-key.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-key.json npx firebase-tools deploy --only hosting --project tododo-83576
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: npx firebase-tools deploy --only hosting --project tododo-83576 --token "$FIREBASE_TOKEN"
