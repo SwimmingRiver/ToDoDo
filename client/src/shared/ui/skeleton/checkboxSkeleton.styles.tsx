@@ -1,4 +1,5 @@
 import { styled, keyframes } from "styled-components";
+import { colors } from "@/styles/colors";
 
 const shimmer = keyframes`
   0% {
@@ -72,7 +73,7 @@ const CheckMark = styled.svg<{ $delay: number }>`
   animation-delay: ${({ $delay }) => $delay}s;
 
   .check-path {
-    stroke: #1c72eb;
+    stroke: ${colors.brand.secondary};
     stroke-width: 2.5;
     stroke-linecap: round;
     stroke-linejoin: round;

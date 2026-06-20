@@ -9,6 +9,7 @@ import {
 import { NavLink } from "react-router-dom";
 import styled from "styled-components";
 import { media } from "@/styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const NAV_ITEMS = [
   { path: "/todo", icon: <ListCheckIcon />, label: "list" },
@@ -77,7 +78,7 @@ const SidebarNavLink = styled(NavLink)`
   }
 
   &.active {
-    color: #1c72eb;
+    color: ${colors.brand.secondary};
     background-color: #e8f0fe;
 
     &:hover {

@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { colors } from "@/styles/colors";
 const FormContainer = styled.form`
   display: flex;
   flex-direction: column;
@@ -23,7 +24,7 @@ const Input = styled.input`
   box-sizing: border-box;
 
   &:focus {
-    border-color: #1c72eb;
+    border-color: ${colors.brand.secondary};
   }
 `;
 
@@ -32,7 +33,7 @@ const MoreButton = styled.button`
   border: none;
   cursor: pointer;
   background: none;
-  color: #1c72eb;
+  color: ${colors.brand.secondary};
   font-size: 14px;
 
   &:hover {
@@ -72,7 +73,7 @@ const Select = styled.select`
   cursor: pointer;
 
   &:focus {
-    border-color: #1c72eb;
+    border-color: ${colors.brand.secondary};
   }
 `;
 

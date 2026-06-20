@@ -1,5 +1,6 @@
 import { styled, keyframes } from "styled-components";
 import { NavLink } from "react-router-dom";
+import { colors } from "@/styles/colors";
 
 const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
 const fadeOut = keyframes`from { opacity: 1; } to { opacity: 0; }`;
@@ -62,7 +63,7 @@ export const LogoutButton = styled.button`
   margin-top: 2px;
 
   &:hover {
-    color: #1c72eb;
+    color: ${colors.brand.secondary};
   }
 `;
 
@@ -79,7 +80,7 @@ export const NavItem = styled.div<{ $active?: boolean }>`
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
+  color: ${({ $active }) => ($active ? colors.brand.secondary : "#1a1a1a")};
   background-color: ${({ $active }) => ($active ? "#e8f0fe" : "transparent")};
   border-radius: 8px;
 
@@ -106,7 +107,7 @@ export const NavNavLink = styled(NavLink)`
   }
 
   &.active {
-    color: #1c72eb;
+    color: ${colors.brand.secondary};
     background-color: #e8f0fe;
 
     &:hover {

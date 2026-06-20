@@ -1,4 +1,5 @@
 import { styled, keyframes } from "styled-components";
+import { colors } from "@/styles/colors";
 
 const fadeIn = keyframes`
   from { opacity: 0; }
@@ -101,7 +102,7 @@ const OptionList = styled.ul`
 const OptionItem = styled.li<{ $selected?: boolean }>`
   padding: 16px 20px;
   font-size: 16px;
-  color: ${({ $selected }) => ($selected ? "#1c72eb" : "#1a1a1a")};
+  color: ${({ $selected }) => ($selected ? colors.brand.secondary : "#1a1a1a")};
   background-color: ${({ $selected }) => ($selected ? "#e8f0fe" : "transparent")};
   cursor: pointer;
   display: flex;

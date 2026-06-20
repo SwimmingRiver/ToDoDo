@@ -1,5 +1,6 @@
 import { styled } from "styled-components";
 import { media } from "../../../styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const ModalBackground = styled.div`
   position: fixed;
@@ -74,7 +75,7 @@ const ModalCloseButton = styled.button`
 const ModalSubmitButton = styled.button`
   width: 100%;
   height: 100%;
-  background-color: #1c72eb;
+  background-color: ${colors.brand.secondary};
   color: white;
   font-size: 16px;
   font-weight: bold;

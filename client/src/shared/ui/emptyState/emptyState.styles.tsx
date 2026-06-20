@@ -1,5 +1,6 @@
 import { styled } from "styled-components";
 import { media } from "../../../styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const Container = styled.div`
   flex: 1;
@@ -56,7 +57,7 @@ const ActionButton = styled.button`
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background-color: #1c72eb;
+  background-color: ${colors.brand.secondary};
   color: white;
   font-size: 14px;
   font-weight: 600;
@@ -66,7 +67,7 @@ const ActionButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: #1560c7;
+    background-color: ${colors.brand.primary};
   }
 
   ${media.mobile} {

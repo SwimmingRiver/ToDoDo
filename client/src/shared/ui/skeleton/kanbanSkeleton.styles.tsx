@@ -1,4 +1,5 @@
 import { styled, keyframes } from "styled-components";
+import { colors } from "@/styles/colors";
 
 const shimmer = keyframes`
   0% {
@@ -79,7 +80,7 @@ const CardCheckbox = styled.div<{ $delay: number }>`
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: #1c72eb;
+  background-color: ${colors.brand.secondary};
   opacity: 0.3;
   flex-shrink: 0;
   margin-top: 2px;

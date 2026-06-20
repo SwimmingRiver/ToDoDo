@@ -1,5 +1,6 @@
 import { useState } from "react";
 import styled from "styled-components";
+import { colors } from "@/styles/colors";
 import TodoList from "@/features/todo/components/todoList";
 import DueTodo from "@/features/todo/components/dueTodo";
 import PieChart from "@/features/dashboard/components/pieChart";
@@ -61,13 +62,13 @@ const TabButton = styled.button<{ $active: boolean }>`
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  color: ${({ $active }) => ($active ? "#1c72eb" : "#5f6368")};
+  color: ${({ $active }) => ($active ? `${colors.brand.secondary}` : "#5f6368")};
   border-bottom: 2px solid
-    ${({ $active }) => ($active ? "#1c72eb" : "transparent")};
+    ${({ $active }) => ($active ? `${colors.brand.secondary}` : "transparent")};
   transition: all 0.2s ease;
 
   &:hover {
-    color: ${({ $active }) => ($active ? "#1c72eb" : "#1a1a1a")};
+    color: ${({ $active }) => ($active ? `${colors.brand.secondary}` : "#1a1a1a")};
     background-color: #f8f9fa;
   }
 `;

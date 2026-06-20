@@ -1,5 +1,6 @@
 import { styled, keyframes } from "styled-components";
 import { media } from "@/styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
@@ -38,9 +39,9 @@ const SearchInput = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #1c72eb;
+    border-color: ${colors.brand.secondary};
     background-color: #fff;
-    box-shadow: 0 0 0 3px rgba(28, 114, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.1);
   }
 
   &::placeholder {
@@ -80,7 +81,7 @@ const LoadingSpinner = styled.div`
   width: 18px;
   height: 18px;
   border: 2px solid #e0e0e0;
-  border-top-color: #1c72eb;
+  border-top-color: ${colors.brand.secondary};
   border-radius: 50%;
   animation: ${spin} 0.8s linear infinite;
 `;
@@ -99,14 +100,14 @@ const ResultCount = styled.span`
   color: #1a1a1a;
 
   strong {
-    color: #1c72eb;
+    color: ${colors.brand.secondary};
   }
 `;
 
 const CancelSearchButton = styled.button`
   border: none;
   background: none;
-  color: #1c72eb;
+  color: ${colors.brand.secondary};
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

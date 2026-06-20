@@ -1,5 +1,6 @@
 import { keyframes, styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const slideIn = keyframes`
   from {
@@ -128,7 +129,7 @@ const Input = styled.input`
   transition: border-color 0.2s;
 
   &:focus {
-    border-color: #1c72eb;
+    border-color: ${colors.brand.secondary};
   }
 `;
 
@@ -145,7 +146,7 @@ const TextArea = styled.textarea`
   transition: border-color 0.2s;
 
   &:focus {
-    border-color: #1c72eb;
+    border-color: ${colors.brand.secondary};
   }
 `;
 
@@ -161,7 +162,7 @@ const Select = styled.select`
   transition: border-color 0.2s;
 
   &:focus {
-    border-color: #1c72eb;
+    border-color: ${colors.brand.secondary};
   }
 `;
 
@@ -216,12 +217,12 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   ${({ $variant }) =>
     $variant === "primary"
       ? `
-    background-color: #1c72eb;
+    background-color: ${colors.brand.secondary};
     color: white;
     border: none;
 
     &:hover {
-      background-color: #1560c7;
+      background-color: ${colors.brand.primary};
     }
   `
       : `

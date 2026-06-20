@@ -7,6 +7,7 @@ import { statusColors, type Status } from "../../../styles/statusColors";
 import { EmptyState } from "@/shared";
 import { AlertCircle, ChartPie } from "lucide-react";
 import styled, { keyframes } from "styled-components";
+import { colors } from "@/styles/colors";
 
 const PieChartComponent = () => {
   const { useGetTodos } = useTodo();
@@ -117,7 +118,7 @@ const Spinner = styled.div`
   width: 36px;
   height: 36px;
   border: 3px solid #e0e0e0;
-  border-top-color: #1c72eb;
+  border-top-color: ${colors.brand.secondary};
   border-radius: 50%;
   animation: ${spin} 0.8s linear infinite;
 `;

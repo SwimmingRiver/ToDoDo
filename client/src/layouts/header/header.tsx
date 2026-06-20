@@ -3,6 +3,7 @@ import { media } from "../../styles/breakpoints";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
 import { MenuIcon } from "lucide-react";
+import { colors } from "@/styles/colors";
 
 interface HeaderProps {
   onMenuOpen: () => void;
@@ -32,7 +33,7 @@ export default Header;
 const HeaderTitle = styled.h1`
   cursor: pointer;
   &:hover {
-    color: #1c72eb;
+    color: ${colors.brand.secondary};
   }
 `;
 
@@ -55,7 +56,7 @@ const LogoutButton = styled.button`
   font-size: 14px;
   background: none;
   border: none;
-  color: #1c72eb;
+  color: ${colors.brand.secondary};
   cursor: pointer;
 
   &:hover {
