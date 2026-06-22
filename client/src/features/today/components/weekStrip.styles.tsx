@@ -4,14 +4,69 @@ import { radius } from "@/styles/radius";
 
 const Container = styled.div`
   display: flex;
+  align-items: center;
+  padding: 8px;
+  gap: 4px;
+`;
+
+const StripScroll = styled.div`
+  display: flex;
+  flex: 1;
   gap: 8px;
-  padding: 8px 16px;
   overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+const ArrowButton = styled.button`
+  flex-shrink: 0;
+  width: 28px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: ${colors.text.tertiary};
+  border-radius: ${radius.md};
+
+  &:hover {
+    color: ${colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.primary};
+    outline-offset: 2px;
+  }
+`;
+
+const TodayChip = styled.button`
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${colors.brand.primary};
+  color: #ffffff;
+  border: none;
+  border-radius: ${radius.md};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.primary};
+    outline-offset: 2px;
+  }
 `;
 
 const DayCell = styled.div<{ $isSelected: boolean; $isToday: boolean }>`
-  flex-shrink: 0;
-  width: 38px;
+  flex: 1;
+  min-width: 0;
   min-height: 44px;
   padding: 8px 0;
   display: flex;
@@ -64,4 +119,4 @@ const Dot = styled.span<{
   }};
 `;
 
-export { Container, DayCell, DayLabel, DateLabel, Dot };
+export { Container, StripScroll, ArrowButton, TodayChip, DayCell, DayLabel, DateLabel, Dot };

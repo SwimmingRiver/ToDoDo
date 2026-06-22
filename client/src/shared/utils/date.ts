@@ -24,6 +24,18 @@ export const isSameLocalDay = (a: Date, b: Date): boolean =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
+export const STRIP_WINDOW_DAYS = 7;
+
+/** startDateKey부터 count일 연속 Date를 반환한다. */
+export const getStripDates = (startDateKey: string, count: number = STRIP_WINDOW_DAYS): Date[] => {
+  const start = parseLocalDateOnly(startDateKey);
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+};
+
 /** selectedDate가 속한 주(일~토)의 7개 Date를 반환한다. */
 export const getWeekDates = (selectedDate: string): Date[] => {
   const target = parseLocalDateOnly(selectedDate);
