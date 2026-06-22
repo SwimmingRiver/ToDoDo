@@ -94,7 +94,7 @@ describe('useTodayTodos 훅', () => {
     ]
     vi.mocked(getTodos).mockResolvedValue(mockTodos)
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -128,7 +128,7 @@ describe('useTodayTodos 훅', () => {
     ]
     vi.mocked(getTodos).mockResolvedValue(mockTodos)
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -143,7 +143,7 @@ describe('useTodayTodos 훅', () => {
     const { getTodos } = await import('@/features/todo/api')
     vi.mocked(getTodos).mockResolvedValue([])
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -163,7 +163,7 @@ describe('useTodayTodos 훅', () => {
     ]
     vi.mocked(getTodos).mockResolvedValue(mockTodos)
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -177,11 +177,11 @@ describe('useTodayTodos 훅', () => {
   it('마감 초과(getDaysLeft <= 0)인 todo가 있으면 markers는 "danger"여야 한다', async () => {
     const { getTodos } = await import('@/features/todo/api')
     const mockTodos: Todo[] = [
-      makeTodo({ id: '1', dueAt: localISO(2026, 6, 14, 10) }), // 일요일, 이미 지남
+      makeTodo({ id: '1', dueAt: localISO(2026, 6, 15, 8) }), // 오늘 08:00, 현재(09:00) 기준 이미 지남
     ]
     vi.mocked(getTodos).mockResolvedValue(mockTodos)
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -189,14 +189,14 @@ describe('useTodayTodos 훅', () => {
       expect(result.current.isLoading).toBe(false)
     })
 
-    expect(result.current.markers['2026-06-14']).toBe('danger')
+    expect(result.current.markers['2026-06-15']).toBe('danger')
   })
 
-  it('주간 마커는 selectedDate가 속한 일~토 범위만 포함해야 한다', async () => {
+  it('마커는 windowStart 기준 7일 범위만 포함해야 한다', async () => {
     const { getTodos } = await import('@/features/todo/api')
     vi.mocked(getTodos).mockResolvedValue([])
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -206,14 +206,47 @@ describe('useTodayTodos 훅', () => {
 
     const keys = Object.keys(result.current.markers).sort()
     expect(keys).toEqual([
-      '2026-06-14',
       '2026-06-15',
       '2026-06-16',
       '2026-06-17',
       '2026-06-18',
       '2026-06-19',
       '2026-06-20',
+      '2026-06-21',
     ])
+  })
+
+  it('windowStart와 selectedDate가 다를 때 markers는 windowStart 기준으로 계산되어야 한다', async () => {
+    const { getTodos } = await import('@/features/todo/api')
+    const mockTodos: Todo[] = [
+      makeTodo({ id: '1', dueAt: localISO(2026, 6, 22, 10) }), // 2026-06-22, windowStart 범위 내
+      makeTodo({ id: '2', dueAt: localISO(2026, 6, 15, 10) }), // 2026-06-15, selectedDate이지만 windowStart 범위 밖
+    ]
+    vi.mocked(getTodos).mockResolvedValue(mockTodos)
+
+    const { result } = renderHook(
+      () => useTodayTodos('2026-06-15', '2026-06-22'),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    const keys = Object.keys(result.current.markers).sort()
+    // windowStart(2026-06-22)부터 7일: 06-22 ~ 06-28
+    expect(keys).toEqual([
+      '2026-06-22',
+      '2026-06-23',
+      '2026-06-24',
+      '2026-06-25',
+      '2026-06-26',
+      '2026-06-27',
+      '2026-06-28',
+    ])
+    expect(result.current.markers['2026-06-22']).toBe('normal')
+    // selectedDate(06-15)는 범위 밖이므로 markers에 없음
+    expect(result.current.markers['2026-06-15']).toBeUndefined()
   })
 
   it('toggleDone 호출 시 미완료 todo를 done으로 변경하고 doneAt을 세팅해야 한다', async () => {
@@ -222,7 +255,7 @@ describe('useTodayTodos 훅', () => {
     vi.mocked(getTodos).mockResolvedValue([todo])
     vi.mocked(editTodo).mockResolvedValue(todo)
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -254,7 +287,7 @@ describe('useTodayTodos 훅', () => {
     vi.mocked(getTodos).mockResolvedValue([todo])
     vi.mocked(editTodo).mockResolvedValue(todo)
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 
@@ -279,7 +312,7 @@ describe('useTodayTodos 훅', () => {
     const { getTodos } = await import('@/features/todo/api')
     vi.mocked(getTodos).mockRejectedValueOnce(new Error('Firestore 오류'))
 
-    const { result } = renderHook(() => useTodayTodos('2026-06-15'), {
+    const { result } = renderHook(() => useTodayTodos('2026-06-15', '2026-06-15'), {
       wrapper: createWrapper(),
     })
 

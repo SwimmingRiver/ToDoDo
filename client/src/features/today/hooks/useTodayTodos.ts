@@ -2,13 +2,9 @@ import { useCallback, useMemo } from "react";
 import { useTodo } from "@/features/todo/hooks";
 import type { Todo } from "@/features/todo/types";
 import { getDaysLeft } from "@/shared/utils/due";
-import { getWeekDates, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
+import { getStripDates, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 
 export type DayMarker = "none" | "normal" | "danger";
-
-/** selectedDate가 속한 주(일~토)의 7개 날짜 키를 반환한다. */
-const getWeekDateKeys = (selectedDate: string): string[] =>
-  getWeekDates(selectedDate).map(toDateKey);
 
 export interface UseTodayTodosResult {
   inProgressTodos: Todo[];
@@ -25,7 +21,7 @@ export interface UseTodayTodosResult {
  * 선택된 날짜(dueAt 기준)에 해당하는 todo를 진행중/완료로 분리하고,
  * 주간 스트립용 마커와 완료율을 계산한다.
  */
-export const useTodayTodos = (selectedDate: string): UseTodayTodosResult => {
+export const useTodayTodos = (selectedDate: string, windowStart: string): UseTodayTodosResult => {
   const { useGetTodos, useUpdateTodo } = useTodo();
   const { data: todos, isLoading, isError } = useGetTodos;
   const { mutate: updateTodo } = useUpdateTodo;
@@ -55,10 +51,10 @@ export const useTodayTodos = (selectedDate: string): UseTodayTodosResult => {
   );
 
   const markers = useMemo(() => {
-    const weekDateKeys = getWeekDateKeys(selectedDate);
+    const stripDateKeys = getStripDates(windowStart).map(toDateKey);
     const result: Record<string, DayMarker> = {};
 
-    for (const dateKey of weekDateKeys) {
+    for (const dateKey of stripDateKeys) {
       const todosOnDate = (todos ?? []).filter(
         (todo) => todo.dueAt && toDateKeyFromISO(todo.dueAt) === dateKey,
       );
@@ -69,13 +65,13 @@ export const useTodayTodos = (selectedDate: string): UseTodayTodosResult => {
       }
 
       const hasDanger = todosOnDate.some(
-        (todo) => getDaysLeft(todo.dueAt as string) <= 0,
+        (todo) => todo.status !== "done" && getDaysLeft(todo.dueAt as string) <= 0,
       );
       result[dateKey] = hasDanger ? "danger" : "normal";
     }
 
     return result;
-  }, [todos, selectedDate]);
+  }, [todos, windowStart]);
 
   const toggleDone = useCallback(
     (todo: Todo) => {
