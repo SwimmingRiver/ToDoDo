@@ -1,23 +1,49 @@
-import TodoListItem from "./todoListItem/todoListItem";
+import ProjectCard from "./projectCard";
+import ChildTodoCard from "./childTodoCard";
 import type { Todo } from "../types";
+import type { ProjectCardData } from "../utils/projectUtils";
+import {
+  getProjectProgress,
+  getProjectSubtaskInfo,
+  getProjectOverdue,
+} from "../utils/projectUtils";
 import { useMemo, useState, useCallback } from "react";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import TodoForm from "./todoForm/todoForm";
-import { TodoListContainer, AddButton, ListWrapper } from "./todoList.styles";
+import { useTodo } from "../hooks";
+import {
+  TodoListContainer,
+  AddButton,
+  ListWrapper,
+  ProjectListToolbar,
+  ProjectCountText,
+  NewProjectLink,
+} from "./todoList.styles";
 import { Plus, ClipboardList, SearchX } from "lucide-react";
 import { EmptyState } from "@/shared";
 import { TodoSearch } from "./todoSearch";
 import { useSearchTodo } from "../hooks";
+import { ConfirmModal, useToast } from "@/shared";
 
 const TodoList = ({ todos }: { todos: Todo[] }) => {
+  const navigate = useNavigate();
   const { isOpen, setIsOpen } = useModal();
   const { isOpen: isEditOpen, setIsOpen: setIsEditOpen } = useModal();
   const { isOpen: isAddChildOpen, setIsOpen: setIsAddChildOpen } = useModal();
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(
+    null
+  );
+  const { useDeleteTodo } = useTodo();
+  const toast = useToast();
 
   const { data: searchResults, isLoading: isSearchLoading } =
     useSearchTodo(searchQuery);
@@ -37,25 +63,21 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
     });
   }, [todos]);
 
-  // 검색 결과를 트리 구조로 변환
   const searchResultTree = useMemo(() => {
     if (!searchResults) return [];
     return searchResults.map((todo: Todo) => ({
       ...todo,
-      childTodos: [],
+      childTodos: todo.parentId === null
+        ? todos.filter((t) => t.parentId === todo.id)
+        : [],
     }));
-  }, [searchResults]);
+  }, [searchResults, todos]);
 
   const displayTodos = isSearching ? searchResultTree : todoTree;
 
   const handleEdit = (todo: Todo) => {
     setEditingTodo(todo);
     setIsEditOpen(true);
-  };
-
-  const handleAddChild = (parentId: string) => {
-    setParentTodoId(parentId);
-    setIsAddChildOpen(true);
   };
 
   const handleSearch = useCallback((query: string) => {
@@ -65,6 +87,46 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const handleClearSearch = useCallback(() => {
     setSearchQuery("");
   }, []);
+
+  const handleToggleExpand = (id: string) => {
+    setExpandedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleCardClick = (todo: Todo) => {
+    navigate(`/todo/${todo.id}`);
+  };
+
+  const handleDeleteProject = (id: string) => {
+    setDeleteTargetId(id);
+  };
+
+  const handleAddChild = (parentId: string) => {
+    setParentTodoId(parentId);
+    setIsAddChildOpen(true);
+  };
+
+  const projectCards = useMemo<ProjectCardData[]>(() => {
+    return todoTree.map((rootTodo) => ({
+      todo: rootTodo,
+      childTodos: rootTodo.childTodos,
+      progress: getProjectProgress(todos, rootTodo.id),
+      subtaskInfo: getProjectSubtaskInfo(todos, rootTodo.id),
+      overdueInfo: getProjectOverdue(todos, rootTodo.id),
+      isExpanded: expandedProjectIds.has(rootTodo.id),
+    }));
+  }, [todoTree, todos, expandedProjectIds]);
+
+  const deleteTargetTodo = deleteTargetId
+    ? todos.find((t) => t.id === deleteTargetId)
+    : null;
 
   return (
     <TodoListContainer>
@@ -83,20 +145,34 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
           />
         }
       />
+      <ConfirmModal
+        isOpen={deleteTargetId !== null}
+        title="프로젝트 삭제"
+        message={`"${deleteTargetTodo?.title ?? ""}"을(를) 삭제하시겠습니까?`}
+        confirmText="삭제"
+        cancelText="취소"
+        onConfirm={() => {
+          if (deleteTargetId) {
+            const title = deleteTargetTodo?.title ?? "";
+            useDeleteTodo.mutate(deleteTargetId, {
+              onSuccess: () => toast.success("삭제 완료", `"${title}" 프로젝트가 삭제되었습니다`),
+              onError: () => toast.error("삭제 실패", "삭제 중 오류가 발생했습니다"),
+            });
+          }
+          setDeleteTargetId(null);
+        }}
+        onCancel={() => setDeleteTargetId(null)}
+      />
       <Modal
         isOpen={isAddChildOpen}
         setIsOpen={setIsAddChildOpen}
         children={
           <TodoForm
-            parentId={parentTodoId || undefined}
-            onClose={() => setIsAddChildOpen(false)}
+            parentId={parentTodoId ?? undefined}
+            onClose={() => { setIsAddChildOpen(false); setParentTodoId(null); }}
           />
         }
       />
-
-      <AddButton onClick={() => setIsOpen(true)}>
-        <Plus size={18} /> 새 할일
-      </AddButton>
 
       <TodoSearch
         onSearch={handleSearch}
@@ -107,8 +183,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       />
 
       <ListWrapper>
-        {displayTodos.length === 0 ? (
-          isSearching ? (
+        {isSearching ? (
+          displayTodos.length === 0 ? (
             <EmptyState
               icon={SearchX}
               title="검색 결과가 없습니다"
@@ -117,27 +193,79 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
               onAction={handleClearSearch}
             />
           ) : (
-            <EmptyState
-              icon={ClipboardList}
-              title="할 일이 없습니다"
-              description="새로운 할 일을 추가하고 생산적인 하루를 시작해보세요!"
-              actionLabel="새 할일 추가"
-              actionIcon={Plus}
-              onAction={() => setIsOpen(true)}
-            />
+            displayTodos.map((todo) => {
+              if (todo.parentId === null) {
+                const projectData: ProjectCardData = {
+                  todo,
+                  childTodos: todo.childTodos,
+                  progress: getProjectProgress(todos, todo.id),
+                  subtaskInfo: getProjectSubtaskInfo(todos, todo.id),
+                  overdueInfo: getProjectOverdue(todos, todo.id),
+                  isExpanded: expandedProjectIds.has(todo.id),
+                };
+                return (
+                  <ProjectCard
+                    key={todo.id}
+                    data={projectData}
+                    onCardClick={handleCardClick}
+                    onToggleExpand={handleToggleExpand}
+                    onEdit={handleEdit}
+                    onDelete={handleDeleteProject}
+                    onAddChild={handleAddChild}
+                  />
+                );
+              }
+              return (
+                <ChildTodoCard
+                  key={todo.id}
+                  todo={todo}
+                  onEdit={handleEdit}
+                />
+              );
+            })
           )
+        ) : projectCards.length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            title="할 일이 없습니다"
+            description="새로운 할 일을 추가하고 생산적인 하루를 시작해보세요!"
+            actionLabel="새 할일 추가"
+            actionIcon={Plus}
+            onAction={() => setIsOpen(true)}
+          />
         ) : (
-          displayTodos.map((todo) => (
-            <TodoListItem
-              key={todo.id}
-              todo={todo}
-              childTodos={todo.childTodos}
-              onEdit={handleEdit}
-              onAddChild={handleAddChild}
-            />
-          ))
+          <>
+            <ProjectListToolbar>
+              <ProjectCountText>
+                프로젝트 {projectCards.length}개
+              </ProjectCountText>
+              <NewProjectLink
+                onClick={() => setIsOpen(true)}
+                aria-label="새 프로젝트 추가"
+              >
+                <Plus size={14} />
+                새 프로젝트
+              </NewProjectLink>
+            </ProjectListToolbar>
+            {projectCards.map((card) => (
+              <ProjectCard
+                key={card.todo.id}
+                data={card}
+                onCardClick={handleCardClick}
+                onToggleExpand={handleToggleExpand}
+                onEdit={handleEdit}
+                onDelete={handleDeleteProject}
+                onAddChild={handleAddChild}
+              />
+            ))}
+          </>
         )}
       </ListWrapper>
+
+      <AddButton onClick={() => setIsOpen(true)}>
+        <Plus size={16} />
+        새 할일
+      </AddButton>
     </TodoListContainer>
   );
 };

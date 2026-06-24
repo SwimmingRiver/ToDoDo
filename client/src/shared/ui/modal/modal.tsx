@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   ModalBackground,
   ModalContainer,
@@ -21,7 +22,7 @@ const Modal = ({
   const handleClose = () => {
     setIsOpen(false);
   };
-  return (
+  return createPortal(
     <>
       <ModalBackground onClick={handleClose}>
         <ModalContainer onClick={(e) => e.stopPropagation()}>
@@ -34,7 +35,8 @@ const Modal = ({
           </ModalFooter>
         </ModalContainer>
       </ModalBackground>
-    </>
+    </>,
+    document.body
   );
 };
 

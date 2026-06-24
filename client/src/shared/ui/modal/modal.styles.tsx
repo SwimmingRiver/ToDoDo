@@ -12,7 +12,7 @@ const ModalBackground = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 999;
+  z-index: 10000;
 
   ${media.mobile} {
     align-items: flex-end;
