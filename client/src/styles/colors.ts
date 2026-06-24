@@ -5,6 +5,7 @@ export const colors = {
   },
   danger: {
     main: "#E24B4A",
+    subtle: "#F5C2C1",
     background: "#FBEAEA",
     text: "#C53A39",
   },
