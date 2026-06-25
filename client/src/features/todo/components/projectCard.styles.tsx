@@ -6,6 +6,7 @@ import { statusColors } from "@/styles/statusColors";
 export const CardContainer = styled.div<{ $isOverdue?: boolean }>`
   border-radius: 12px;
   overflow: hidden;
+  flex-shrink: 0;
   border: 0.5px solid
     ${({ $isOverdue }) =>
       $isOverdue ? colors.danger.subtle : "var(--color-border-tertiary, #E5E7EB)"};
@@ -101,6 +102,11 @@ export const IconButton = styled.button<{
           : colors.text.secondary};
   }
 
+  @media (min-width: 768px) {
+    min-width: 28px;
+    min-height: 28px;
+  }
+
 `;
 
 export const ProgressBar = styled.div`
@@ -128,6 +134,10 @@ export const ExpandedArea = styled.div`
   background: ${colors.background.secondary};
   max-height: 260px;
   overflow-y: auto;
+
+  @media (min-width: 768px) {
+    max-height: 400px;
+  }
 `;
 
 export const ChildTodoCardList = styled.div`
@@ -149,7 +159,12 @@ export const ChildCardWrapper = styled.div<{ $status: Status }>`
   border-radius: 10px;
   border: 0.5px solid ${({ $status }) => statusColors[$status].border};
   overflow: hidden;
+  flex-shrink: 0;
   background: ${colors.background.primary};
+
+  @media (min-width: 768px) {
+    min-width: 280px;
+  }
 `;
 
 export const ChildCardContainer = styled.div`
@@ -157,6 +172,7 @@ export const ChildCardContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 56px;
 `;
 
 export const InlineStatusRow = styled.div`
@@ -233,6 +249,14 @@ export const ChildCardTitle = styled.p`
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+
+  @media (min-width: 768px) {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 `;
 
 export const ChildCardRight = styled.div`
