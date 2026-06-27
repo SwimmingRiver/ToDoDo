@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
 import {
   HeaderContainer,
@@ -14,10 +15,11 @@ interface MobileHeaderProps {
 
 const MobileHeader = ({ onAvatarClick }: MobileHeaderProps) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <HeaderContainer>
-      <LogoGroup>
+      <LogoGroup onClick={() => navigate("/today")}>
         <LogoMark aria-hidden="true" />
         <LogoText>tododo</LogoText>
       </LogoGroup>

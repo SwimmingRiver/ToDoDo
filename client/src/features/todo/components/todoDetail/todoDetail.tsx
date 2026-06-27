@@ -76,7 +76,11 @@ const TodoDetail = () => {
   });
 
   const handleClose = () => {
-    navigate("/");
+    if (window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/today");
+    }
   };
 
   const onSubmit = (data: TodoFormData) => {

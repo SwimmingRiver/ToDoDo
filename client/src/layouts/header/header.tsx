@@ -15,7 +15,7 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
 
   return (
     <HeaderContainer>
-      <HeaderTitle onClick={() => navigate("/")}>ToDoDo</HeaderTitle>
+      <HeaderTitle onClick={() => navigate("/today")}>ToDoDo</HeaderTitle>
       <UserInfo>
         <UserInfoText>{user?.displayName}</UserInfoText>
         <UserInfoImage src={user?.photoURL || ""} alt="user" />
