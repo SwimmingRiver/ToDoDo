@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import {
   ListCheckIcon,
   CalendarCheckIcon,
-  ChartPieIcon,
   KanbanIcon,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
@@ -27,7 +26,6 @@ interface MobileDrawerProps {
 const NAV_ITEMS = [
   { path: "/todo", icon: <ListCheckIcon size={20} />, label: "list" },
   { path: "/calendar", icon: <CalendarCheckIcon size={20} />, label: "calendar" },
-  { path: "/pie-chart", icon: <ChartPieIcon size={20} />, label: "chart" },
   { path: "/kanban", icon: <KanbanIcon size={20} />, label: "kanban" },
 ];
 

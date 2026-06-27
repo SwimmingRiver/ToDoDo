@@ -6,6 +6,7 @@ import {
   editTodo,
   deleteTodo,
   updateToDone,
+  updateTodoDueAt,
   createChildTodo,
   getTodoDetail,
 } from "../api";
@@ -103,6 +104,21 @@ export const useTodo = () => {
     },
   });
 
+  const useUpdateTodoDueAt = useMutation({
+    mutationFn: ({
+      id,
+      dueAt,
+      startAt,
+    }: {
+      id: string;
+      dueAt: string | null;
+      startAt?: string | null;
+    }) => updateTodoDueAt(id, dueAt, startAt),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
   const useCreateChildTodo = useMutation({
     mutationFn: ({
       parentId,
@@ -125,6 +141,7 @@ export const useTodo = () => {
     useDeleteTodo,
     useGetTodos,
     useUpdateToDone,
+    useUpdateTodoDueAt,
     useCreateChildTodo,
   };
 };

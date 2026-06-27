@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarCheckIcon,
-  ChartPieIcon,
   KanbanIcon,
   ListCheckIcon,
 } from "lucide-react";
@@ -14,7 +13,6 @@ import { colors } from "@/styles/colors";
 const NAV_ITEMS = [
   { path: "/todo", icon: <ListCheckIcon />, label: "list" },
   { path: "/calendar", icon: <CalendarCheckIcon />, label: "calendar" },
-  { path: "/pie-chart", icon: <ChartPieIcon />, label: "chart" },
   { path: "/kanban", icon: <KanbanIcon />, label: "kanban" },
 ];
 
