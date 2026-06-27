@@ -96,13 +96,14 @@ const WeekStrip = ({
       <ArrowButton onClick={onShiftRight} aria-label="다음 날짜">
         <ChevronRight size={16} />
       </ArrowButton>
-      <TodayChip
-        onClick={onGoToToday}
-        aria-label="오늘로 이동"
-        style={{ visibility: isTodayInStrip ? "hidden" : "visible" }}
-      >
-        오늘
-      </TodayChip>
+      {!isTodayInStrip && (
+        <TodayChip
+          onClick={onGoToToday}
+          aria-label="오늘로 이동"
+        >
+          오늘
+        </TodayChip>
+      )}
     </Container>
   );
 };

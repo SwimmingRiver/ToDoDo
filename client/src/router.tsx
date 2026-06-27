@@ -1,10 +1,9 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "@/App";
 import TodoListPage from "@/features/todo/pages/todoListPage";
 import CalendarPage from "@/features/dashboard/Pages/calendarPage";
 import PieChartPage from "@/features/dashboard/Pages/pieChartPage";
 import KanbanPage from "@/features/kanban/pages/kanbanPage";
-import HomePage from "@/HomePage";
 import { TodoDetail } from "@/features/todo";
 import LoginPage from "@/features/auth/pages/loginPage";
 import ProtectedRoute from "@/features/auth/components/protectedRoute";
@@ -24,18 +23,16 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
-        path: "",
-        element: <HomePage />,
-        children: [
-          {
-            path: "todo/:id",
-            element: <TodoDetail />,
-          },
-        ],
+        index: true,
+        element: <Navigate to="/today" replace />,
       },
       {
         path: "today",
         element: <TodayPage />,
+      },
+      {
+        path: "todo/:id",
+        element: <TodoDetail />,
       },
       {
         path: "todo",
