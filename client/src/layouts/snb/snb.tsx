@@ -11,9 +11,9 @@ import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
 
 const NAV_ITEMS = [
-  { path: "/todo", icon: <ListCheckIcon />, label: "list" },
-  { path: "/calendar", icon: <CalendarCheckIcon />, label: "calendar" },
-  { path: "/kanban", icon: <KanbanIcon />, label: "kanban" },
+  { path: "/todo", icon: <ListCheckIcon />, label: "목록" },
+  { path: "/calendar", icon: <CalendarCheckIcon />, label: "캘린더" },
+  { path: "/kanban", icon: <KanbanIcon />, label: "칸반" },
 ];
 
 const SNB = ({
@@ -25,16 +25,22 @@ const SNB = ({
 }) => {
   return (
     <SNBContainer $isopen={isopen}>
-      {isopen && (
-        <>
-          {NAV_ITEMS.map(({ path, icon, label }) => (
-            <SidebarNavLink key={path} to={path}>
-              {icon}
-              <span>{label}</span>
-            </SidebarNavLink>
-          ))}
-        </>
-      )}
+      {NAV_ITEMS.map(({ path, icon, label }) => (
+        <SidebarNavLink key={path} to={path} $isopen={isopen}>
+          {({ isActive }) => (
+            <>
+              <IconWrapper
+                $isopen={isopen}
+                $active={isActive}
+                aria-label={!isopen ? label : undefined}
+              >
+                {icon}
+              </IconWrapper>
+              {isopen && <span>{label}</span>}
+            </>
+          )}
+        </SidebarNavLink>
+      ))}
       <SidebarButton
         onClick={() => setIsOpen(!isopen)}
         aria-label={isopen ? "사이드바 닫기" : "사이드바 열기"}
@@ -58,11 +64,28 @@ const SNBContainer = styled.div<{ $isopen: boolean }>`
   }
 `;
 
-const SidebarNavLink = styled(NavLink)`
+const IconWrapper = styled.span<{ $isopen: boolean; $active: boolean }>`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  justify-content: center;
+  width: ${({ $isopen }) => ($isopen ? "auto" : "36px")};
+  height: ${({ $isopen }) => ($isopen ? "auto" : "36px")};
+  border-radius: 8px;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+
+  ${({ $isopen, $active }) =>
+    !$isopen && $active
+      ? `background-color: #E8F5EF; color: ${colors.brand.secondary};`
+      : ""}
+`;
+
+const SidebarNavLink = styled(NavLink)<{ $isopen: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: ${({ $isopen }) => ($isopen ? "10px" : "0")};
+  padding: ${({ $isopen }) => ($isopen ? "10px" : "4px")};
+  justify-content: ${({ $isopen }) => ($isopen ? "flex-start" : "center")};
   cursor: pointer;
   font-size: 20px;
   font-weight: 500;
@@ -70,6 +93,7 @@ const SidebarNavLink = styled(NavLink)`
   background-color: transparent;
   border-radius: 8px;
   text-decoration: none;
+  transition: background-color 0.15s ease;
 
   &:hover {
     background-color: #e0e0e0;
@@ -77,10 +101,14 @@ const SidebarNavLink = styled(NavLink)`
 
   &.active {
     color: ${colors.brand.secondary};
-    background-color: #e8f0fe;
+    background-color: ${({ $isopen }) => ($isopen ? "#E8F5EF" : "transparent")};
 
     &:hover {
-      background-color: #e8f0fe;
+      background-color: ${({ $isopen }) => ($isopen ? "#D5EDE4" : "transparent")};
+    }
+
+    &:hover ${IconWrapper} {
+      background-color: #D5EDE4;
     }
   }
 `;

@@ -81,11 +81,12 @@ export const NavItem = styled.div<{ $active?: boolean }>`
   font-size: 16px;
   font-weight: 500;
   color: ${({ $active }) => ($active ? colors.brand.secondary : "#1a1a1a")};
-  background-color: ${({ $active }) => ($active ? "#e8f0fe" : "transparent")};
+  background-color: ${({ $active }) => ($active ? "#E8F5EF" : "transparent")};
   border-radius: 8px;
+  transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: ${({ $active }) => ($active ? "#e8f0fe" : "#f1f3f4")};
+    background-color: ${({ $active }) => ($active ? "#D5EDE4" : "#f1f3f4")};
   }
 `;
 
@@ -101,6 +102,7 @@ export const NavNavLink = styled(NavLink)`
   background-color: transparent;
   border-radius: 8px;
   text-decoration: none;
+  transition: background-color 0.15s ease;
 
   &:hover {
     background-color: #f1f3f4;
@@ -108,10 +110,10 @@ export const NavNavLink = styled(NavLink)`
 
   &.active {
     color: ${colors.brand.secondary};
-    background-color: #e8f0fe;
+    background-color: #E8F5EF;
 
     &:hover {
-      background-color: #e8f0fe;
+      background-color: #D5EDE4;
     }
   }
 `;
