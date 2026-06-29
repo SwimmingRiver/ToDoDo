@@ -24,9 +24,9 @@ interface MobileDrawerProps {
 }
 
 const NAV_ITEMS = [
-  { path: "/todo", icon: <ListCheckIcon size={20} />, label: "list" },
-  { path: "/calendar", icon: <CalendarCheckIcon size={20} />, label: "calendar" },
-  { path: "/kanban", icon: <KanbanIcon size={20} />, label: "kanban" },
+  { path: "/todo", icon: <ListCheckIcon size={20} />, label: "목록" },
+  { path: "/calendar", icon: <CalendarCheckIcon size={20} />, label: "캘린더" },
+  { path: "/kanban", icon: <KanbanIcon size={20} />, label: "칸반" },
 ];
 
 const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
