@@ -1,5 +1,6 @@
 import { styled } from "styled-components";
 import { media } from "@/styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const CalendarContainer = styled.div`
   width: 100%;
@@ -17,18 +18,15 @@ const CalendarContainer = styled.div`
     padding: 2px 4px !important;
     margin: 1px 2px !important;
     font-size: 11px !important;
-    pointer-events: none;
+  }
+
+  /* 드래그 drop 타겟 셀 강조 */
+  .fc-highlight {
+    background-color: #e8f5ef !important;
   }
 
   .fc-daygrid-event-dot {
     display: none;
-  }
-
-  .fc-daygrid-block-event .fc-event-title {
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .fc-daygrid-day-events {
@@ -68,6 +66,23 @@ const CalendarContainer = styled.div`
       padding: 4px 8px;
       font-size: 12px;
     }
+
+    /* 모바일: 이벤트를 얇은 컬러 바로 표시 (텍스트 숨김) */
+    .fc-daygrid-event {
+      height: 6px !important;
+      min-height: 6px !important;
+      padding: 0 !important;
+      margin: 1px 2px !important;
+      overflow: hidden !important;
+    }
+
+    .fc-daygrid-event .fc-event-main {
+      display: none !important;
+    }
+
+    .fc-daygrid-more-link {
+      display: none !important;
+    }
   }
 `;
 
@@ -77,10 +92,10 @@ const DayDetailList = styled.ul`
   padding: 0;
 `;
 
-const DayDetailItem = styled.li<{ $color: string }>`
+const DayDetailItem = styled.li<{ $color: string; $overdue?: boolean }>`
   padding: 12px 16px;
   border-left: 4px solid ${({ $color }) => $color};
-  background-color: #f9f9f9;
+  background-color: ${({ $overdue }) => ($overdue ? colors.danger.background : "#f9f9f9")};
   margin-bottom: 8px;
   border-radius: 0 8px 8px 0;
 `;
@@ -105,6 +120,71 @@ const EmptyMessage = styled.p`
   font-size: 14px;
 `;
 
+const ViewToggleRow = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+`;
+
+const ViewButton = styled.button<{ $active: boolean }>`
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid
+    ${({ $active }) => ($active ? colors.brand.secondary : colors.border.secondary)};
+  background-color: ${({ $active }) => ($active ? colors.brand.secondary : "transparent")};
+  color: ${({ $active }) => ($active ? "#ffffff" : colors.text.secondary)};
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  min-height: 44px;
+
+  &:first-child {
+    border-radius: 6px 0 0 6px;
+  }
+
+  &:last-child {
+    border-radius: 0 6px 6px 0;
+    border-left: none;
+  }
+
+  &:not([aria-pressed="true"]):hover {
+    background-color: ${colors.background.secondary};
+  }
+
+  ${media.mobile} {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+`;
+
+const AddButton = styled.button`
+  width: calc(100% - 32px);
+  margin: 12px 16px 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1.5px solid ${colors.brand.secondary};
+  border-radius: 8px;
+  background-color: transparent;
+  color: ${colors.brand.secondary};
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: #f0fbf7;
+  }
+
+  &:active {
+    background-color: #d1f5e8;
+  }
+`;
+
 export {
   CalendarContainer,
   DayDetailList,
@@ -112,4 +192,7 @@ export {
   DayDetailTitle,
   DayDetailDate,
   EmptyMessage,
+  ViewToggleRow,
+  ViewButton,
+  AddButton,
 };

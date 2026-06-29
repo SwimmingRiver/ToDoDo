@@ -26,7 +26,7 @@ test.describe('네비게이션 및 라우팅', () => {
   test('여러 보호된 라우트가 순서대로 모두 /login으로 리다이렉트되어야 한다', async ({
     page,
   }) => {
-    const protectedRoutes = ['/todo', '/kanban', '/calendar', '/pie-chart']
+    const protectedRoutes = ['/todo', '/kanban', '/calendar']
 
     for (const route of protectedRoutes) {
       await page.goto(route)

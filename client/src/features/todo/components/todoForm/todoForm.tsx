@@ -26,10 +26,11 @@ interface TodoFormData {
 interface TodoFormProps {
   todo?: Todo;
   parentId?: string;
+  initialDueAt?: string;
   onClose?: () => void;
 }
 
-const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
+const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
   const [showMore, setShowMore] = useState(false);
   const toast = useToast();
   const {
@@ -49,7 +50,9 @@ const TodoForm = ({ todo, parentId, onClose }: TodoFormProps) => {
             ? new Date(todo.dueAt).toISOString().slice(0, 16)
             : undefined,
         }
-      : undefined,
+      : initialDueAt
+        ? { dueAt: initialDueAt }
+        : undefined,
   });
   const { useCreateTodo, useUpdateTodo, useCreateChildTodo } = useTodo();
   const onSubmit = (data: TodoFormData) => {

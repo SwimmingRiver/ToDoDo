@@ -2,7 +2,6 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "@/App";
 import TodoListPage from "@/features/todo/pages/todoListPage";
 import CalendarPage from "@/features/dashboard/Pages/calendarPage";
-import PieChartPage from "@/features/dashboard/Pages/pieChartPage";
 import KanbanPage from "@/features/kanban/pages/kanbanPage";
 import { TodoDetail } from "@/features/todo";
 import LoginPage from "@/features/auth/pages/loginPage";
@@ -41,10 +40,6 @@ export const router = createBrowserRouter([
       {
         path: "calendar",
         element: <CalendarPage />,
-      },
-      {
-        path: "pie-chart",
-        element: <PieChartPage />,
       },
       {
         path: "kanban",

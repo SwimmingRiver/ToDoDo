@@ -155,6 +155,27 @@ export const updateToDone = async (id: string) => {
   return mapDocToTodo(docRef.id, { ...existing.data(), status: "done", doneAt: now, updatedAt: now });
 };
 
+export const updateTodoDueAt = async (
+  id: string,
+  dueAt: string | null,
+  startAt?: string | null,
+): Promise<void> => {
+  const userId = getUserId();
+  const now = new Date().toISOString();
+  const docRef = doc(db, "todos", id);
+  const existing = await getDoc(docRef);
+  if (!existing.exists()) throw new Error("Todo not found");
+  if (existing.data().userId !== userId) throw new Error("Forbidden");
+  const updates: { dueAt: string | null; updatedAt: string; startAt?: string | null } = {
+    dueAt,
+    updatedAt: now,
+  };
+  if (startAt !== undefined) {
+    updates.startAt = startAt;
+  }
+  await updateDoc(docRef, updates);
+};
+
 export const createChildTodo = async (
   parentId: string,
   todo: Partial<Todo>,
