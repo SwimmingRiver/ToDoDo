@@ -98,7 +98,7 @@ export const NavNavLink = styled(NavLink)`
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: #666;
   background-color: transparent;
   border-radius: 8px;
   text-decoration: none;
@@ -110,7 +110,10 @@ export const NavNavLink = styled(NavLink)`
 
   &.active {
     color: ${colors.brand.secondary};
-    background-color: #E8F5EF;
+    background-color: #E8F4F1;
+    border-left: 3px solid #1D9E75;
+    border-radius: 0 8px 8px 0;
+    padding-left: 7px;
 
     &:hover {
       background-color: #D5EDE4;

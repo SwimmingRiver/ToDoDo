@@ -1,11 +1,11 @@
-import { Sun, ListChecks, CalendarCheckIcon, KanbanIcon } from "lucide-react";
+import { Sun, ListTodo, CalendarDays, Kanban } from "lucide-react";
 import { TabNavLink, TabBarContainer } from "./bottomTabBar.styles";
 
 const TAB_ITEMS = [
   { path: "/today", icon: Sun, label: "오늘" },
-  { path: "/todo", icon: ListChecks, label: "목록" },
-  { path: "/calendar", icon: CalendarCheckIcon, label: "캘린더" },
-  { path: "/kanban", icon: KanbanIcon, label: "칸반" },
+  { path: "/todo", icon: ListTodo, label: "목록" },
+  { path: "/calendar", icon: CalendarDays, label: "캘린더" },
+  { path: "/kanban", icon: Kanban, label: "칸반" },
 ] as const;
 
 const BottomTabBar = () => {
