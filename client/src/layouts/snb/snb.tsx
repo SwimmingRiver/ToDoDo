@@ -1,9 +1,9 @@
 import {
   ArrowLeft,
   ArrowRight,
-  CalendarCheckIcon,
-  KanbanIcon,
-  ListCheckIcon,
+  ListTodo,
+  CalendarDays,
+  Kanban,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import styled from "styled-components";
@@ -11,9 +11,9 @@ import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
 
 const NAV_ITEMS = [
-  { path: "/todo", icon: <ListCheckIcon />, label: "목록" },
-  { path: "/calendar", icon: <CalendarCheckIcon />, label: "캘린더" },
-  { path: "/kanban", icon: <KanbanIcon />, label: "칸반" },
+  { path: "/todo", icon: <ListTodo size={16} />, label: "목록" },
+  { path: "/calendar", icon: <CalendarDays size={16} />, label: "캘린더" },
+  { path: "/kanban", icon: <Kanban size={16} />, label: "칸반" },
 ];
 
 const SNB = ({
@@ -76,7 +76,7 @@ const IconWrapper = styled.span<{ $isopen: boolean; $active: boolean }>`
 
   ${({ $isopen, $active }) =>
     !$isopen && $active
-      ? `background-color: #E8F5EF; color: ${colors.brand.secondary};`
+      ? `background-color: #E8F4F1; color: ${colors.brand.secondary};`
       : ""}
 `;
 
@@ -89,19 +89,27 @@ const SidebarNavLink = styled(NavLink)<{ $isopen: boolean }>`
   cursor: pointer;
   font-size: 20px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: #666;
   background-color: transparent;
   border-radius: 8px;
   text-decoration: none;
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #e0e0e0;
+    background-color: #E0EDE8;
   }
 
   &.active {
     color: ${colors.brand.secondary};
-    background-color: ${({ $isopen }) => ($isopen ? "#E8F5EF" : "transparent")};
+    background-color: ${({ $isopen }) => ($isopen ? "#E8F4F1" : "transparent")};
+    ${({ $isopen }) =>
+      $isopen
+        ? `
+      border-left: 3px solid #1D9E75;
+      border-radius: 0 8px 8px 0;
+      padding-left: 7px;
+    `
+        : ""}
 
     &:hover {
       background-color: ${({ $isopen }) => ($isopen ? "#D5EDE4" : "transparent")};

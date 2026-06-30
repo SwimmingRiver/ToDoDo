@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
-  ListCheckIcon,
-  CalendarCheckIcon,
-  KanbanIcon,
+  ListTodo,
+  CalendarDays,
+  Kanban,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
 import {
@@ -24,9 +24,9 @@ interface MobileDrawerProps {
 }
 
 const NAV_ITEMS = [
-  { path: "/todo", icon: <ListCheckIcon size={20} />, label: "목록" },
-  { path: "/calendar", icon: <CalendarCheckIcon size={20} />, label: "캘린더" },
-  { path: "/kanban", icon: <KanbanIcon size={20} />, label: "칸반" },
+  { path: "/todo", icon: <ListTodo size={20} />, label: "목록" },
+  { path: "/calendar", icon: <CalendarDays size={20} />, label: "캘린더" },
+  { path: "/kanban", icon: <Kanban size={20} />, label: "칸반" },
 ];
 
 const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
