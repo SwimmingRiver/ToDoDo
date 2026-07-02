@@ -209,17 +209,15 @@ const TodoDetail = () => {
               </FormGroup>
             </InfoRow>
 
-            <InfoRow>
-              <FormGroup style={{ flex: 1 }}>
-                <Label>시작일시</Label>
-                <Input type="datetime-local" {...register("startAt")} />
-              </FormGroup>
+            <FormGroup>
+              <Label>시작일시</Label>
+              <Input type="datetime-local" {...register("startAt")} />
+            </FormGroup>
 
-              <FormGroup style={{ flex: 1 }}>
-                <Label>마감일시</Label>
-                <Input type="datetime-local" {...register("dueAt")} />
-              </FormGroup>
-            </InfoRow>
+            <FormGroup>
+              <Label>마감일시</Label>
+              <Input type="datetime-local" {...register("dueAt")} />
+            </FormGroup>
           </FormContainer>
         </PanelContent>
 
