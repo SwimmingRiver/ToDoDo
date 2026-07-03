@@ -436,3 +436,83 @@ export const deleteRecurringSeries = async (recurrenceId: string): Promise<void>
   });
   await batch.commit();
 };
+
+/**
+ * "무기한(indefinite)" 반복 시리즈들의 남은 인스턴스를, 오늘 기준 새 호라이즌
+ * (getDefaultHorizonEnd)까지 이어서 생성한다. 기존 인스턴스는 전혀 건드리지 않고
+ * 마지막 인스턴스 이후의 빈 구간만 채운다 — 앱 진입 시(App.tsx) 1회 호출해서,
+ * 사용자가 앱을 계속 쓰는 한 "무기한"이 실제로 끊기지 않게 한다.
+ *
+ * 종료 조건이 "특정 날짜까지(untilDate)"인 시리즈는 대상이 아니다(이미 끝이
+ * 정해져 있어 확장이 필요 없음). 종료 조건이 없는(recurrence: null, 반복
+ * OFF) 일반 할 일도 당연히 대상이 아니다.
+ */
+export const extendIndefiniteRecurringSeries = async (
+  horizonEnd: Date = getDefaultHorizonEnd(),
+): Promise<void> => {
+  const userId = getUserId();
+  const q = query(todosRef, where("userId", "==", userId));
+  const snapshot = await getDocs(q);
+  const allTodos = snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
+
+  const seriesByRecurrenceId = new Map<string, Todo[]>();
+  for (const todo of allTodos) {
+    if (!todo.recurrenceId || !todo.recurrence) continue;
+    if (todo.recurrence.endType !== "indefinite") continue;
+    if (!todo.dueAt) continue;
+    const list = seriesByRecurrenceId.get(todo.recurrenceId) ?? [];
+    list.push(todo);
+    seriesByRecurrenceId.set(todo.recurrenceId, list);
+  }
+
+  if (seriesByRecurrenceId.size === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+  let hasWrites = false;
+
+  for (const [recurrenceId, instances] of seriesByRecurrenceId) {
+    const latest = instances.reduce((a, b) =>
+      new Date(a.dueAt as string).getTime() > new Date(b.dueAt as string).getTime() ? a : b,
+    );
+    const latestTime = new Date(latest.dueAt as string).getTime();
+    if (latestTime >= horizonEnd.getTime()) continue; // 이미 새 호라이즌까지 채워져 있음
+
+    const rule = latest.recurrence as RecurrenceRule;
+    // 멀티탭 등에서 이미 존재하는 날짜를 다시 만들지 않도록 최소한의 존재 체크를 한다.
+    const existingDateKeys = new Set(
+      instances.map((t) => new Date(t.dueAt as string).toDateString()),
+    );
+    const newDueDates = generateRecurringDueDates(latest.dueAt as string, rule, horizonEnd)
+      .filter((iso) => new Date(iso).getTime() > latestTime)
+      .filter((iso) => !existingDateKeys.has(new Date(iso).toDateString()));
+
+    if (newDueDates.length === 0) continue;
+
+    let nextOrder = await getNextRootOrder(userId);
+    // 가장 최근 인스턴스의 제목/우선순위 등 필드를 그대로 이어서 사용한다(기존 값 승계).
+    const { id: _id, ...rest } = latest;
+
+    newDueDates.forEach((dueAt) => {
+      const newDocRef = doc(todosRef);
+      batch.set(newDocRef, {
+        ...rest,
+        userId,
+        dueAt,
+        status: "todo",
+        doneAt: null,
+        parentId: null,
+        recurrenceId,
+        createdAt: now,
+        updatedAt: now,
+        order: nextOrder,
+      });
+      nextOrder += 1;
+      hasWrites = true;
+    });
+  }
+
+  if (hasWrites) {
+    await batch.commit();
+  }
+};

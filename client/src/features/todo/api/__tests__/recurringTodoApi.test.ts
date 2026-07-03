@@ -522,3 +522,126 @@ describe("deleteRecurringSeries", () => {
     expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("extendIndefiniteRecurringSeries", () => {
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+  });
+
+  const toDocSnapshot = (todos: Todo[]) => ({
+    docs: todos.map((t) => ({
+      id: t.id,
+      ref: { id: t.id },
+      data: () => {
+        const { id: _id, ...rest } = t;
+        return rest;
+      },
+    })),
+  });
+
+  it("무기한 시리즈의 마지막 인스턴스 이후 빈 구간을 새 호라이즌까지 채운다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const now = new Date("2026-07-10T00:00:00");
+    const latestExisting = makeTodo({
+      id: "latest-1",
+      status: "todo",
+      dueAt: "2026-07-12T09:00:00",
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-15T00:00:00");
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      // getNextRootOrder용 조회
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { extendIndefiniteRecurringSeries } = await import("../todoApi");
+    await extendIndefiniteRecurringSeries(horizonEnd);
+    void now;
+
+    // 7/13, 7/14, 7/15 (7/12는 이미 존재하므로 제외) = 3건 생성
+    expect(batch.set).toHaveBeenCalledTimes(3);
+    const createdDueDates = batch.set.mock.calls.map((call) => (call[1] as { dueAt: string }).dueAt);
+    expect(createdDueDates.every((d) => new Date(d).getTime() > new Date(latestExisting.dueAt as string).getTime())).toBe(true);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("이미 새 호라이즌까지 채워져 있으면 아무것도 생성하지 않는다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const latestExisting = makeTodo({
+      id: "latest-1",
+      status: "todo",
+      dueAt: "2026-08-01T09:00:00",
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-15T00:00:00"); // latest보다 이전
+
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { extendIndefiniteRecurringSeries } = await import("../todoApi");
+    await extendIndefiniteRecurringSeries(horizonEnd);
+
+    expect(batch.set).not.toHaveBeenCalled();
+    expect(batch.commit).not.toHaveBeenCalled();
+    // getNextRootOrder용 추가 조회도 발생하지 않아야 한다
+    expect(vi.mocked(getDocs)).toHaveBeenCalledTimes(1);
+  });
+
+  it("종료 조건이 특정 날짜(untilDate)인 시리즈는 확장 대상에서 제외한다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const untilDateInstance = makeTodo({
+      id: "until-1",
+      status: "todo",
+      dueAt: "2026-07-12T09:00:00",
+      recurrenceId: "series-until",
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-07-20" },
+    });
+    const horizonEnd = new Date("2026-08-01T00:00:00");
+
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([untilDateInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { extendIndefiniteRecurringSeries } = await import("../todoApi");
+    await extendIndefiniteRecurringSeries(horizonEnd);
+
+    expect(batch.set).not.toHaveBeenCalled();
+    expect(vi.mocked(writeBatch)).not.toHaveBeenCalled();
+  });
+
+  it("반복 시리즈가 하나도 없으면 아무 조회/쓰기도 추가로 하지 않는다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const plainTodo = makeTodo({ id: "plain-1", recurrence: null, recurrenceId: null });
+
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([plainTodo]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
+
+    const { extendIndefiniteRecurringSeries } = await import("../todoApi");
+    await extendIndefiniteRecurringSeries(new Date("2026-08-01T00:00:00"));
+
+    expect(vi.mocked(writeBatch)).not.toHaveBeenCalled();
+  });
+});

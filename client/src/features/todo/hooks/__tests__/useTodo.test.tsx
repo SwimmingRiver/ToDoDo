@@ -27,6 +27,7 @@ vi.mock('../../api', () => ({
   createRecurringTodo: vi.fn(),
   editRecurringSeries: vi.fn(),
   deleteRecurringSeries: vi.fn(),
+  extendIndefiniteRecurringSeries: vi.fn(),
 }))
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
@@ -312,6 +313,40 @@ describe('useTodo 훅', () => {
       })
 
       expect(vi.mocked(deleteRecurringSeries)).toHaveBeenCalledWith('series-1')
+    })
+  })
+
+  describe('useExtendIndefiniteRecurringSeries', () => {
+    it('무기한 반복 시리즈 확장 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useExtendIndefiniteRecurringSeries).toBeDefined()
+      expect(typeof result.current.useExtendIndefiniteRecurringSeries.mutate).toBe('function')
+    })
+
+    it('성공 시 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, extendIndefiniteRecurringSeries } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      vi.mocked(extendIndefiniteRecurringSeries).mockResolvedValueOnce(undefined)
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useExtendIndefiniteRecurringSeries.mutate()
+
+      await waitFor(() => {
+        expect(result.current.useExtendIndefiniteRecurringSeries.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(extendIndefiniteRecurringSeries)).toHaveBeenCalled()
     })
   })
 })
