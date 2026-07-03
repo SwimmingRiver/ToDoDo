@@ -30,6 +30,7 @@ import {
   TextArea,
   Select,
   Button,
+  ErrorText,
 } from "./todoDetail.styles";
 
 interface TodoFormData {
@@ -287,9 +288,7 @@ const TodoDetail = () => {
                 placeholder="할 일 제목"
               />
               {errors.title && (
-                <span style={{ color: "red", fontSize: "12px" }}>
-                  {errors.title.message}
-                </span>
+                <ErrorText>{errors.title.message}</ErrorText>
               )}
             </FormGroup>
 
@@ -321,17 +320,15 @@ const TodoDetail = () => {
               </FormGroup>
             </InfoRow>
 
-            <InfoRow>
-              <FormGroup style={{ flex: 1 }}>
-                <Label>시작일시</Label>
-                <Input type="datetime-local" {...register("startAt")} />
-              </FormGroup>
+            <FormGroup>
+              <Label>시작일시</Label>
+              <Input type="datetime-local" {...register("startAt")} />
+            </FormGroup>
 
-              <FormGroup style={{ flex: 1 }}>
-                <Label>마감일시</Label>
-                <Input type="datetime-local" {...register("dueAt")} />
-              </FormGroup>
-            </InfoRow>
+            <FormGroup>
+              <Label>마감일시</Label>
+              <Input type="datetime-local" {...register("dueAt")} />
+            </FormGroup>
 
             {!todo.parentId && (
               <FormGroup>

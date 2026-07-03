@@ -1,6 +1,7 @@
 import { keyframes, styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
 import { colors } from "@/styles/colors";
+import { statusColors, type Status } from "@/styles/statusColors";
 
 const slideIn = keyframes`
   from {
@@ -58,7 +59,7 @@ const PanelHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid ${colors.border.tertiary};
 
   ${media.mobile} {
     padding: 16px;
@@ -69,24 +70,29 @@ const PanelTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #333;
+  color: ${colors.text.primary};
 `;
 
 const CloseButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: #666;
+  color: ${colors.text.secondary};
   padding: 8px;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: #f0f0f0;
-    color: #333;
+    background-color: #e0ede8;
+    color: ${colors.brand.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.secondary};
+    outline-offset: 2px;
   }
 `;
 
@@ -110,26 +116,32 @@ const FormGroup = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 `;
 
 const Label = styled.label`
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: ${colors.text.primary};
 `;
 
 const Input = styled.input`
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid ${colors.border.secondary};
   border-radius: 8px;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &::placeholder {
+    color: ${colors.text.tertiary};
+  }
 
   &:focus {
     border-color: ${colors.brand.secondary};
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
   }
 `;
 
@@ -137,32 +149,38 @@ const TextArea = styled.textarea`
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid ${colors.border.secondary};
   border-radius: 8px;
   outline: none;
   box-sizing: border-box;
   resize: vertical;
   min-height: 100px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &::placeholder {
+    color: ${colors.text.tertiary};
+  }
 
   &:focus {
     border-color: ${colors.brand.secondary};
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
   }
 `;
 
 const Select = styled.select`
   width: 100%;
-  padding: 12px 14px;
+  padding: 12px 36px 12px 14px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid ${colors.border.secondary};
   border-radius: 8px;
   outline: none;
   box-sizing: border-box;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:focus {
     border-color: ${colors.brand.secondary};
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
   }
 `;
 
@@ -185,12 +203,12 @@ const InfoItem = styled.div`
 
 const InfoLabel = styled.span`
   font-size: 12px;
-  color: #888;
+  color: ${colors.text.tertiary};
 `;
 
 const InfoValue = styled.span`
   font-size: 14px;
-  color: #333;
+  color: ${colors.text.primary};
 `;
 
 const PanelFooter = styled.div`
@@ -198,7 +216,7 @@ const PanelFooter = styled.div`
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid ${colors.border.tertiary};
 
   ${media.mobile} {
     padding: 12px 16px;
@@ -212,7 +230,12 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   font-weight: 500;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.secondary};
+    outline-offset: 2px;
+  }
 
   ${({ $variant }) =>
     $variant === "primary"
@@ -220,18 +243,26 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
     background-color: ${colors.brand.secondary};
     color: white;
     border: none;
+    box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
 
     &:hover {
       background-color: ${colors.brand.primary};
+      box-shadow: 0 2px 6px rgba(15, 110, 86, 0.25);
+    }
+
+    &:active {
+      background-color: ${colors.brand.primary};
+      box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
     }
   `
       : `
     background-color: white;
-    color: #666;
-    border: 1px solid #ddd;
+    color: ${colors.text.secondary};
+    border: 1px solid ${colors.border.secondary};
 
     &:hover {
-      background-color: #f5f5f5;
+      background-color: ${colors.background.secondary};
+      border-color: ${colors.text.tertiary};
     }
   `}
 
@@ -241,47 +272,50 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   }
 `;
 
-const StatusBadge = styled.span<{ $status: string }>`
+const StatusBadge = styled.span<{ $status: Status }>`
   display: inline-block;
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-
-  ${({ $status }) => {
-    switch ($status) {
-      case "todo":
-        return `background-color: #e3f2fd; color: #1976d2;`;
-      case "doing":
-        return `background-color: #fff3e0; color: #f57c00;`;
-      case "done":
-        return `background-color: #e8f5e9; color: #388e3c;`;
-      default:
-        return `background-color: #f5f5f5; color: #666;`;
-    }
-  }}
+  background-color: ${({ $status }) => statusColors[$status].light};
+  color: ${({ $status }) => statusColors[$status].main};
 `;
 
-const PriorityBadge = styled.span<{ $priority: string }>`
+const priorityStyles = {
+  high: {
+    border: colors.danger.main,
+    background: colors.danger.background,
+    text: colors.danger.text,
+  },
+  medium: {
+    border: "#F59E0B",
+    background: "#FEF3E2",
+    text: "#B45309",
+  },
+  low: {
+    border: colors.border.tertiary,
+    background: colors.background.secondary,
+    text: colors.text.secondary,
+  },
+} as const;
+
+const PriorityBadge = styled.span<{ $priority: keyof typeof priorityStyles }>`
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
+  padding: 4px 10px 4px 8px;
+  border-left: 3px solid ${({ $priority }) => priorityStyles[$priority].border};
+  border-radius: 0 4px 4px 0;
   font-size: 12px;
   font-weight: 500;
-
-  ${({ $priority }) => {
-    switch ($priority) {
-      case "high":
-        return `background-color: #ffebee; color: #d32f2f;`;
-      case "medium":
-        return `background-color: #fff3e0; color: #f57c00;`;
-      case "low":
-        return `background-color: #e8f5e9; color: #388e3c;`;
-      default:
-        return `background-color: #f5f5f5; color: #666;`;
-    }
-  }}
+  background-color: ${({ $priority }) => priorityStyles[$priority].background};
+  color: ${({ $priority }) => priorityStyles[$priority].text};
 `;
+
+const ErrorText = styled.span`
+  color: ${colors.danger.text};
+  font-size: 12px;
+`;
+
 export {
   Overlay,
   Panel,
@@ -303,4 +337,5 @@ export {
   Button,
   StatusBadge,
   PriorityBadge,
+  ErrorText,
 };
