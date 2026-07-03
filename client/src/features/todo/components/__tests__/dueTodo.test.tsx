@@ -21,6 +21,8 @@ const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
   doneAt: null,
   parentId: null,
   order: 0,
+  recurrence: null,
+  recurrenceId: null,
   createdAt: '2026-06-14T00:00:00.000Z',
   updatedAt: '2026-06-14T00:00:00.000Z',
   ...overrides,

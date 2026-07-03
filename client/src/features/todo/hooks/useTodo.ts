@@ -9,6 +9,9 @@ import {
   updateTodoDueAt,
   createChildTodo,
   getTodoDetail,
+  createRecurringTodo,
+  editRecurringSeries,
+  deleteRecurringSeries,
 } from "../api";
 
 export const useTodo = () => {
@@ -135,6 +138,36 @@ export const useTodo = () => {
     },
   });
 
+  // 반복(recurrence)이 설정된 할 일 생성은 useCreateTodo와 별도 훅으로 분리했다.
+  // 생성 시점에 이미 N개의 Todo 문서를 batch로 만들어야 해서 성공/무효화 흐름이
+  // 단일 문서 생성(useCreateTodo)과 다르고, 폼(todoForm)에서 recurrence 유무에 따라
+  // 호출할 훅을 명시적으로 분기하는 편이 "이 저장은 여러 문서를 만든다"는 것을
+  // 호출부에서 더 명확히 드러낸다고 판단했다.
+  const useCreateRecurringTodo = useMutation({
+    mutationFn: (todo: Todo) => createRecurringTodo(todo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
+  // 반복 시리즈 전체 수정(반복 OFF 전환 포함). 입력은 시리즈 대표 todo(수정 폼에서
+  // 편집 중인 인스턴스)의 새 필드값 + 새 recurrence 규칙.
+  const useEditRecurringSeries = useMutation({
+    mutationFn: (seriesTodo: Todo) => editRecurringSeries(seriesTodo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
+  // 반복 시리즈 전체 삭제(할 일 목록에서 반복 할 일 카드 삭제 시 사용). 단일 문서만
+  // 지우는 useDeleteTodo와 달리 같은 recurrenceId의 모든 인스턴스를 지운다.
+  const useDeleteRecurringSeries = useMutation({
+    mutationFn: (recurrenceId: string) => deleteRecurringSeries(recurrenceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+
   return {
     useCreateTodo,
     useUpdateTodo,
@@ -143,6 +176,9 @@ export const useTodo = () => {
     useUpdateToDone,
     useUpdateTodoDueAt,
     useCreateChildTodo,
+    useCreateRecurringTodo,
+    useEditRecurringSeries,
+    useDeleteRecurringSeries,
   };
 };
 

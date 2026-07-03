@@ -7,7 +7,7 @@ import BottomSheet from "@/shared/ui/bottomSheet/bottomSheet";
 import type { BottomSheetOption } from "@/shared/ui/bottomSheet/bottomSheet";
 import useMediaQuery from "@/shared/hooks/useMediaQuery";
 import { useTodo } from "../hooks";
-import { useToast } from "@/shared";
+import { useToast, RecurrenceBadge } from "@/shared";
 import { statusColors, type Status } from "@/styles/statusColors";
 import {
   CardContainer,
@@ -105,6 +105,7 @@ const ProjectCard = ({
               <CardTitle>{todo.title}</CardTitle>
               <CardSubtitle>{subtitleText}</CardSubtitle>
             </CardTitleGroup>
+            {todo.recurrenceId != null && <RecurrenceBadge />}
             {isOverdue && <OverdueBadge>{daysOver}일 초과</OverdueBadge>}
           </CardLeft>
           <CardRight>
@@ -122,7 +123,18 @@ const ProjectCard = ({
             )}
             <IconButton
               $variant="expand"
-              onClick={(e) => { e.stopPropagation(); onAddChild(todo.id); }}
+              onClick={(e) => {
+                if (todo.recurrence) return;
+                e.stopPropagation();
+                onAddChild(todo.id);
+              }}
+              disabled={todo.recurrence != null}
+              aria-disabled={todo.recurrence != null}
+              title={
+                todo.recurrence != null
+                  ? "반복 할 일에는 하위 작업을 추가할 수 없습니다"
+                  : undefined
+              }
               aria-label="하위 작업 추가"
             >
               <Plus size={15} />

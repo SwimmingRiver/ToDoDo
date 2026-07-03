@@ -1,5 +1,40 @@
 import type { Todo } from "../types";
 
+/**
+ * 같은 recurrenceId를 가진 반복 인스턴스 중 dueAt이 가장 이른 것(지난 미완료(overdue)가
+ * 있으면 그것, 없으면 다음 예정 건) 하나만 남기고 나머지는 목록에서 숨긴다. 반복 아닌
+ * 할 일(recurrenceId === null)은 그대로 통과시킨다. 다른 문서를 지우는 게 아니라 이
+ * 목록에 렌더링할 대표만 고르는 순수 함수다 — 실제 삭제는 useDeleteRecurringSeries가 담당.
+ */
+export function collapseRecurringInstances(todos: Todo[]): Todo[] {
+  const representativeByRecurrenceId = new Map<string, Todo>();
+  const result: Todo[] = [];
+
+  for (const todo of todos) {
+    if (!todo.recurrenceId) {
+      result.push(todo);
+      continue;
+    }
+
+    const existing = representativeByRecurrenceId.get(todo.recurrenceId);
+    if (!existing) {
+      representativeByRecurrenceId.set(todo.recurrenceId, todo);
+      result.push(todo);
+      continue;
+    }
+
+    const existingDue = existing.dueAt ? new Date(existing.dueAt).getTime() : Infinity;
+    const currentDue = todo.dueAt ? new Date(todo.dueAt).getTime() : Infinity;
+    if (currentDue < existingDue) {
+      const index = result.indexOf(existing);
+      result[index] = todo;
+      representativeByRecurrenceId.set(todo.recurrenceId, todo);
+    }
+  }
+
+  return result;
+}
+
 export interface ProjectCardData {
   todo: Todo;
   childTodos: Todo[];

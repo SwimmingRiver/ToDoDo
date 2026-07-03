@@ -70,6 +70,15 @@ const ItemTitle = styled.h3`
   margin: 0;
 `;
 
+// 배지가 제목을 가리지 않도록 wrap 허용(recurringTodo.spec.md 1-3절, 8-5절 —
+// ItemTitle에는 의도적으로 text-overflow: ellipsis를 적용하지 않는다).
+const ItemTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`;
+
 const DragOverlayItem = styled.div`
   background: #fff;
   border-radius: 8px;
@@ -146,6 +155,7 @@ export {
   KanbanItemStyled,
   ParentLabel,
   ItemTitle,
+  ItemTitleRow,
   DragOverlayItem,
   MobileTabContainer,
   MobileTabButton,

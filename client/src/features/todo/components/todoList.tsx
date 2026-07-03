@@ -6,6 +6,7 @@ import {
   getProjectProgress,
   getProjectSubtaskInfo,
   getProjectOverdue,
+  collapseRecurringInstances,
 } from "../utils/projectUtils";
 import { useMemo, useState, useCallback } from "react";
 import React from "react";
@@ -42,7 +43,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(
     null
   );
-  const { useDeleteTodo } = useTodo();
+  const { useDeleteTodo, useDeleteRecurringSeries } = useTodo();
   const toast = useToast();
 
   const { data: searchResults, isLoading: isSearchLoading } =
@@ -55,7 +56,11 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
 
     const activatedTodos = rootTodos.filter((todo) => todo.status !== "done");
 
-    return activatedTodos.map((rootTodo) => {
+    // 반복 할 일은 최대 4주치 인스턴스가 각각 별도 문서로 존재하므로, 이 목록에서는
+    // 시리즈당 대표 1건(지난 미완료 우선, 없으면 다음 예정 건)만 카드로 노출한다.
+    const collapsedTodos = collapseRecurringInstances(activatedTodos);
+
+    return collapsedTodos.map((rootTodo) => {
       return {
         ...rootTodo,
         childTodos: todos.filter((todo) => todo.parentId === rootTodo.id),
@@ -148,16 +153,27 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       <ConfirmModal
         isOpen={deleteTargetId !== null}
         title="프로젝트 삭제"
-        message={`"${deleteTargetTodo?.title ?? ""}"을(를) 삭제하시겠습니까?`}
+        message={
+          deleteTargetTodo?.recurrenceId
+            ? `"${deleteTargetTodo?.title ?? ""}"은(는) 반복 일정입니다.\n\n삭제하면 이 반복 시리즈의 모든 일정이 함께 삭제됩니다.`
+            : `"${deleteTargetTodo?.title ?? ""}"을(를) 삭제하시겠습니까?`
+        }
         confirmText="삭제"
         cancelText="취소"
         onConfirm={() => {
           if (deleteTargetId) {
             const title = deleteTargetTodo?.title ?? "";
-            useDeleteTodo.mutate(deleteTargetId, {
-              onSuccess: () => toast.success("삭제 완료", `"${title}" 프로젝트가 삭제되었습니다`),
-              onError: () => toast.error("삭제 실패", "삭제 중 오류가 발생했습니다"),
-            });
+            if (deleteTargetTodo?.recurrenceId) {
+              useDeleteRecurringSeries.mutate(deleteTargetTodo.recurrenceId, {
+                onSuccess: () => toast.success("삭제 완료", `"${title}" 반복 일정이 모두 삭제되었습니다`),
+                onError: () => toast.error("삭제 실패", "삭제 중 오류가 발생했습니다"),
+              });
+            } else {
+              useDeleteTodo.mutate(deleteTargetId, {
+                onSuccess: () => toast.success("삭제 완료", `"${title}" 프로젝트가 삭제되었습니다`),
+                onError: () => toast.error("삭제 실패", "삭제 중 오류가 발생했습니다"),
+              });
+            }
           }
           setDeleteTargetId(null);
         }}

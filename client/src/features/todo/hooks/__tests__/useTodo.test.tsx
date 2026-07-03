@@ -22,7 +22,11 @@ vi.mock('../../api', () => ({
   editTodo: vi.fn(),
   deleteTodo: vi.fn(),
   updateToDone: vi.fn(),
+  updateTodoDueAt: vi.fn(),
   createChildTodo: vi.fn(),
+  createRecurringTodo: vi.fn(),
+  editRecurringSeries: vi.fn(),
+  deleteRecurringSeries: vi.fn(),
 }))
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
@@ -36,6 +40,8 @@ const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
   doneAt: null,
   parentId: null,
   order: 0,
+  recurrence: null,
+  recurrenceId: null,
   createdAt: '2026-06-14T00:00:00.000Z',
   updatedAt: '2026-06-14T00:00:00.000Z',
   ...overrides,
@@ -202,6 +208,110 @@ describe('useTodo 훅', () => {
 
       expect(result.current.useCreateChildTodo).toBeDefined()
       expect(typeof result.current.useCreateChildTodo.mutate).toBe('function')
+    })
+  })
+
+  describe('useCreateRecurringTodo', () => {
+    it('반복 할 일 생성 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useCreateRecurringTodo).toBeDefined()
+      expect(typeof result.current.useCreateRecurringTodo.mutate).toBe('function')
+    })
+
+    it('생성 성공 시 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, createRecurringTodo } = await import('../../api')
+      const newTodo = makeTodo({ id: 'new-todo', title: '반복 할 일', recurrence: { type: 'daily', endType: 'indefinite' }, recurrenceId: 'series-1' })
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      vi.mocked(createRecurringTodo).mockResolvedValueOnce([newTodo])
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useCreateRecurringTodo.mutate(newTodo)
+
+      await waitFor(() => {
+        expect(result.current.useCreateRecurringTodo.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(createRecurringTodo)).toHaveBeenCalledWith(newTodo)
+    })
+  })
+
+  describe('useEditRecurringSeries', () => {
+    it('반복 시리즈 수정 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useEditRecurringSeries).toBeDefined()
+      expect(typeof result.current.useEditRecurringSeries.mutate).toBe('function')
+    })
+
+    it('수정 성공 시 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, editRecurringSeries } = await import('../../api')
+      const seriesTodo = makeTodo({ id: 'todo-1', recurrence: { type: 'daily', endType: 'indefinite' }, recurrenceId: 'series-1' })
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      vi.mocked(editRecurringSeries).mockResolvedValueOnce(undefined)
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useEditRecurringSeries.mutate(seriesTodo)
+
+      await waitFor(() => {
+        expect(result.current.useEditRecurringSeries.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(editRecurringSeries)).toHaveBeenCalledWith(seriesTodo)
+    })
+  })
+
+  describe('useDeleteRecurringSeries', () => {
+    it('반복 시리즈 삭제 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useDeleteRecurringSeries).toBeDefined()
+      expect(typeof result.current.useDeleteRecurringSeries.mutate).toBe('function')
+    })
+
+    it('삭제 성공 시 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, deleteRecurringSeries } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      vi.mocked(deleteRecurringSeries).mockResolvedValueOnce(undefined)
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useDeleteRecurringSeries.mutate('series-1')
+
+      await waitFor(() => {
+        expect(result.current.useDeleteRecurringSeries.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(deleteRecurringSeries)).toHaveBeenCalledWith('series-1')
     })
   })
 })

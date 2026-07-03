@@ -63,6 +63,7 @@ const Message = styled.p`
   font-size: 14px;
   color: #666;
   line-height: 1.5;
+  white-space: pre-line;
 `;
 
 const ButtonGroup = styled.div`
@@ -99,6 +100,11 @@ const Button = styled.button<{ $variant?: "danger" | "cancel" }>`
       background-color: #f5f5f5;
     }
   `}
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
   ${media.mobile} {
     flex: 1;

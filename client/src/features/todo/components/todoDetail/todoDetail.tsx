@@ -1,9 +1,14 @@
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
 import { X } from "lucide-react";
-import { useToast } from "@/shared";
+import { useToast, ConfirmModal } from "@/shared";
+import RecurrenceFields from "../recurrence/recurrenceFields";
+import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
+import { toFormValue, toRecurrenceRule } from "../recurrence/recurrenceTransform";
+import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import {
   Overlay,
   Panel,
@@ -51,12 +56,20 @@ const TodoDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { todo } = useTodoDetail({ id: id! });
-  const { useUpdateTodo } = useTodo();
+  const {
+    useUpdateTodo,
+    useCreateRecurringTodo,
+    useEditRecurringSeries,
+    useDeleteTodo,
+    useGetTodos,
+  } = useTodo();
+  const { data: allTodos } = useGetTodos;
   const toast = useToast();
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<TodoFormData>({
     values: todo
@@ -75,6 +88,41 @@ const TodoDetail = () => {
       : undefined,
   });
 
+  const dueAtWatch = watch("dueAt");
+
+  const hasChildren = useMemo(() => {
+    if (!todo) return false;
+    return (allTodos ?? []).some((t) => t.parentId === todo.id);
+  }, [allTodos, todo]);
+
+  const [recurrenceValue, setRecurrenceValue] = useState<RecurrenceFormValue | null>(null);
+
+  // 상세 페이지가 새 todo를 불러올 때(id 변경)만 로컬 recurrence 상태를 동기화한다.
+  useEffect(() => {
+    if (todo) {
+      setRecurrenceValue(toFormValue(todo.recurrence));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todo?.id]);
+
+  // 4-2절: dueAt이 지워지면(반복이 이미 켜진 상태) 반복 체크박스 강제 OFF + value 리셋
+  useEffect(() => {
+    if (!dueAtWatch && recurrenceValue !== null) {
+      setRecurrenceValue(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dueAtWatch]);
+
+  const recurrenceDisabled = hasChildren || !dueAtWatch;
+  const recurrenceDisabledReason: "hasChildren" | "noDueAt" | undefined = hasChildren
+    ? "hasChildren"
+    : !dueAtWatch
+      ? "noDueAt"
+      : undefined;
+
+  const [isSeriesConfirmOpen, setIsSeriesConfirmOpen] = useState(false);
+  const [pendingSeriesUpdate, setPendingSeriesUpdate] = useState<Todo | null>(null);
+
   const handleClose = () => {
     if (window.history.state?.idx > 0) {
       navigate(-1);
@@ -83,26 +131,89 @@ const TodoDetail = () => {
     }
   };
 
+  const closeSeriesConfirm = () => {
+    setIsSeriesConfirmOpen(false);
+    setPendingSeriesUpdate(null);
+  };
+
+  const handleConfirmSeriesEdit = () => {
+    if (!pendingSeriesUpdate) return;
+    useEditRecurringSeries.mutate(pendingSeriesUpdate, {
+      onSuccess: () => {
+        toast.success("저장 완료", "반복 일정이 성공적으로 저장되었습니다");
+        closeSeriesConfirm();
+        handleClose();
+      },
+      onError: () => {
+        toast.error("저장 실패", "반복 일정 저장 중 오류가 발생했습니다. 다시 시도해주세요");
+        closeSeriesConfirm();
+      },
+    });
+  };
+
   const onSubmit = (data: TodoFormData) => {
     if (!todo) return;
 
-    useUpdateTodo.mutate(
-      {
-        ...todo,
-        ...data,
-        startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
-        dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
-      } as Todo,
-      {
+    const validationError = getRecurrenceValidationError(recurrenceValue, dueAtWatch ?? null);
+    if (validationError) {
+      toast.error("입력 확인", validationError);
+      return;
+    }
+
+    const newRecurrence = toRecurrenceRule(recurrenceValue);
+    const updatedFields = {
+      ...todo,
+      ...data,
+      startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
+      dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+      recurrence: newRecurrence,
+    } as Todo;
+
+    const wasRecurring = todo.recurrence != null;
+
+    if (wasRecurring) {
+      // 4-4절: 반복 시리즈였던 할 일의 수정(반복 유지든 OFF 전환이든)은 확인 모달을 먼저 띄운다.
+      setPendingSeriesUpdate(updatedFields);
+      setIsSeriesConfirmOpen(true);
+      return;
+    }
+
+    if (!wasRecurring && newRecurrence) {
+      // todoForm.tsx와 동일한 근거: editRecurringSeries는 recurrenceId 없이는 호출할 수
+      // 없으므로(todoApi.ts), 원래 비반복이던 todo를 새로 반복 전환할 때는
+      // createRecurringTodo로 새 인스턴스를 먼저 만들고 성공 후에만 기존 문서를 삭제한다.
+      useCreateRecurringTodo.mutate(updatedFields, {
         onSuccess: () => {
-          toast.success("저장 완료", "할 일이 성공적으로 저장되었습니다");
-          handleClose();
+          useDeleteTodo.mutate(todo.id, {
+            onSuccess: () => {
+              toast.success("반복 설정 완료", "할 일이 반복 일정으로 전환되었습니다");
+              handleClose();
+            },
+            onError: () => {
+              toast.error(
+                "정리 실패",
+                "새 반복 일정은 생성되었지만 기존 항목 정리에 실패했습니다. 목록을 확인해주세요",
+              );
+              handleClose();
+            },
+          });
         },
         onError: () => {
           toast.error("저장 실패", "할 일 저장 중 오류가 발생했습니다. 다시 시도해주세요");
         },
-      }
-    );
+      });
+      return;
+    }
+
+    useUpdateTodo.mutate(updatedFields, {
+      onSuccess: () => {
+        toast.success("저장 완료", "할 일이 성공적으로 저장되었습니다");
+        handleClose();
+      },
+      onError: () => {
+        toast.error("저장 실패", "할 일 저장 중 오류가 발생했습니다. 다시 시도해주세요");
+      },
+    });
   };
 
   if (!todo) {
@@ -221,6 +332,18 @@ const TodoDetail = () => {
                 <Input type="datetime-local" {...register("dueAt")} />
               </FormGroup>
             </InfoRow>
+
+            {!todo.parentId && (
+              <FormGroup>
+                <RecurrenceFields
+                  disabled={recurrenceDisabled}
+                  disabledReason={recurrenceDisabledReason}
+                  dueAt={dueAtWatch ?? null}
+                  value={recurrenceValue}
+                  onChange={setRecurrenceValue}
+                />
+              </FormGroup>
+            )}
           </FormContainer>
         </PanelContent>
 
@@ -233,6 +356,19 @@ const TodoDetail = () => {
           </Button>
         </PanelFooter>
       </Panel>
+
+      <ConfirmModal
+        isOpen={isSeriesConfirmOpen}
+        title="반복 일정 전체 수정"
+        message={
+          "이 변경은 앞으로의 일정에만 적용됩니다.\n\n진행 중이거나 완료된 일정, 이미 지난 미완료 일정은 그대로 유지됩니다."
+        }
+        confirmText="전체 적용"
+        cancelText="취소"
+        confirmDisabled={useEditRecurringSeries.isPending}
+        onConfirm={handleConfirmSeriesEdit}
+        onCancel={closeSeriesConfirm}
+      />
     </>
   );
 };
