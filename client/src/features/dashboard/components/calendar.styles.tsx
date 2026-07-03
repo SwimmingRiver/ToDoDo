@@ -100,6 +100,13 @@ const DayDetailItem = styled.li<{ $color: string; $overdue?: boolean }>`
   border-radius: 0 8px 8px 0;
 `;
 
+const DayDetailTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`;
+
 const DayDetailTitle = styled.p`
   margin: 0;
   font-size: 14px;
@@ -111,6 +118,22 @@ const DayDetailDate = styled.p`
   margin: 4px 0 0;
   font-size: 12px;
   color: #666;
+`;
+
+const DayDetailRecurrenceCaption = styled.p`
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: ${colors.brand.primary};
+`;
+
+// eventContent 콜백에서 반복 아이콘 + 제목을 함께 배치하기 위한 래퍼
+const EventContentWrapper = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 `;
 
 const EmptyMessage = styled.p`
@@ -189,8 +212,11 @@ export {
   CalendarContainer,
   DayDetailList,
   DayDetailItem,
+  DayDetailTitleRow,
   DayDetailTitle,
   DayDetailDate,
+  DayDetailRecurrenceCaption,
+  EventContentWrapper,
   EmptyMessage,
   ViewToggleRow,
   ViewButton,

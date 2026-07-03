@@ -1,7 +1,8 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Todo } from "@/features/todo";
-import { KanbanItemStyled, ParentLabel, ItemTitle } from "./kanbanBoard.styles";
+import { RecurrenceBadge } from "@/shared";
+import { KanbanItemStyled, ParentLabel, ItemTitle, ItemTitleRow } from "./kanbanBoard.styles";
 
 interface KanbanItemProps {
   todo: Todo;
@@ -34,7 +35,10 @@ const KanbanItem = ({ todo, parentTitle, onNavigate }: KanbanItemProps) => {
       onClick={() => onNavigate(todo.id)}
     >
       {parentTitle && <ParentLabel>{parentTitle}</ParentLabel>}
-      <ItemTitle>{todo.title}</ItemTitle>
+      <ItemTitleRow>
+        <ItemTitle>{todo.title}</ItemTitle>
+        {todo.recurrenceId != null && <RecurrenceBadge />}
+      </ItemTitleRow>
     </KanbanItemStyled>
   );
 };

@@ -5,26 +5,30 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTodo, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
-import type { EventInput, EventClickArg } from "@fullcalendar/core/index.js";
+import type { EventInput, EventClickArg, EventContentArg } from "@fullcalendar/core/index.js";
 import type { DateClickArg } from "@fullcalendar/interaction";
 import type { EventDropArg } from "@fullcalendar/core";
 import {
   CalendarContainer,
   DayDetailList,
   DayDetailItem,
+  DayDetailTitleRow,
   DayDetailTitle,
   DayDetailDate,
+  DayDetailRecurrenceCaption,
+  EventContentWrapper,
   EmptyMessage,
   ViewToggleRow,
   ViewButton,
   AddButton,
 } from "./calendar.styles";
 import { statusColors, type Status } from "../../../styles/statusColors";
-import { BottomSheet, EmptyState, Modal, useToast } from "@/shared";
-import { AlertCircle, Plus } from "lucide-react";
+import { BottomSheet, EmptyState, Modal, RecurrenceBadge, useToast } from "@/shared";
+import { AlertCircle, Plus, Repeat } from "lucide-react";
 import styled, { keyframes } from "styled-components";
 import { colors } from "@/styles/colors";
 import { isOverdue } from "../utils/calendarUtils";
+import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
 
 const statusLabels: Record<Status, string> = {
   todo: "할 일",
@@ -81,13 +85,27 @@ const Calendar = () => {
           color: overdue
             ? colors.danger.main
             : (statusColors[todo.status as Status]?.main ?? statusColors.todo.main),
+          // 반복 인스턴스는 드래그로 dueAt을 바꾸면 "시리즈 전체 수정" 정책(확인 모달,
+          // 날짜 중복 방지)을 모두 우회해 단일 문서만 어긋나게 되므로 드래그를 막는다.
+          // 날짜를 바꾸려면 반드시 폼을 통한 시리즈 수정 플로우를 거쳐야 한다.
+          editable: todo.recurrenceId == null,
           extendedProps: {
             status: todo.status,
             overdue,
+            isRecurring: todo.recurrenceId != null,
           },
         };
       });
   }, [todos]);
+
+  const renderEventContent = useCallback((arg: EventContentArg) => (
+    <EventContentWrapper>
+      {arg.event.extendedProps.isRecurring && (
+        <Repeat size={10} color="#ffffff" aria-hidden="true" />
+      )}
+      <span>{arg.event.title}</span>
+    </EventContentWrapper>
+  ), []);
 
   const selectedDateTodos = useMemo(() => {
     if (!selectedDate || !todos) return [];
@@ -123,6 +141,18 @@ const Calendar = () => {
     const todo = todos?.find((t: Todo) => t.id === info.event.id);
     if (!todo) {
       info.revert();
+      return;
+    }
+
+    // 이벤트 자체에 editable: false를 부여해 두었지만, 방어적으로 한 번 더 막는다.
+    // 반복 인스턴스는 단일 문서 드래그로 dueAt을 바꾸면 시리즈 수정 정책(확인 모달,
+    // 날짜 중복 방지)을 우회하게 된다.
+    if (todo.recurrenceId) {
+      info.revert();
+      toast.error(
+        "변경 불가",
+        "반복 할 일의 날짜는 드래그로 바꿀 수 없습니다. 수정 화면에서 변경해주세요",
+      );
       return;
     }
 
@@ -230,6 +260,7 @@ const Calendar = () => {
           displayEventTime={false}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
+          eventContent={renderEventContent}
           editable={true}
           eventDrop={handleEventDrop}
           longPressDelay={1000}
@@ -253,12 +284,20 @@ const Calendar = () => {
                 $color={isOverdue(todo) ? colors.danger.main : (statusColors[todo.status as Status]?.main ?? statusColors.todo.main)}
                 $overdue={isOverdue(todo)}
               >
-                <DayDetailTitle>{todo.title}</DayDetailTitle>
+                <DayDetailTitleRow>
+                  <DayDetailTitle>{todo.title}</DayDetailTitle>
+                  {todo.recurrenceId != null && <RecurrenceBadge />}
+                </DayDetailTitleRow>
                 <DayDetailDate>
                   {statusLabels[todo.status as Status]}
                   {todo.startAt && ` · 시작: ${formatDate(todo.startAt)}`}
                   {todo.dueAt && ` · 마감: ${formatDate(todo.dueAt)}`}
                 </DayDetailDate>
+                {todo.recurrenceId != null && todo.recurrence && (
+                  <DayDetailRecurrenceCaption>
+                    {formatRecurrenceSummary(todo.recurrence, todo.dueAt)}
+                  </DayDetailRecurrenceCaption>
+                )}
               </DayDetailItem>
             ))}
           </DayDetailList>

@@ -107,6 +107,10 @@ export const IconButton = styled.button<{
     min-height: 28px;
   }
 
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 `;
 
 export const ProgressBar = styled.div`

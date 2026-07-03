@@ -10,3 +10,5 @@ export { ToastProvider } from "./toast/toastContext";
 export { useToast } from "./toast/useToast";
 export { default as BottomSheet } from "./bottomSheet/bottomSheet";
 export type { BottomSheetOption } from "./bottomSheet/bottomSheet";
+export { default as RecurrenceBadge } from "./recurrenceBadge/recurrenceBadge";
+export type { RecurrenceBadgeProps } from "./recurrenceBadge/recurrenceBadge";

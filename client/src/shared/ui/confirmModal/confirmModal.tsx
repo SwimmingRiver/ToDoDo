@@ -15,6 +15,8 @@ interface ConfirmModalProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** true면 "확인" 버튼을 disabled 처리 (mutation isPending 연동 등 중복 클릭 방지용) */
+  confirmDisabled?: boolean;
 }
 
 const ConfirmModal = ({
@@ -25,6 +27,7 @@ const ConfirmModal = ({
   cancelText = "취소",
   onConfirm,
   onCancel,
+  confirmDisabled = false,
 }: ConfirmModalProps) => {
   if (!isOpen) return null;
 
@@ -35,7 +38,7 @@ const ConfirmModal = ({
         <Message>{message}</Message>
         <ButtonGroup>
           <Button onClick={onCancel}>{cancelText}</Button>
-          <Button $variant="danger" onClick={onConfirm}>
+          <Button $variant="danger" onClick={onConfirm} disabled={confirmDisabled}>
             {confirmText}
           </Button>
         </ButtonGroup>

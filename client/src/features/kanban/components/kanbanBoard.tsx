@@ -5,6 +5,8 @@ import { useTodo } from "@/features/todo";
 import { useMediaQuery, KanbanSkeleton } from "@/shared";
 import KanbanColumn from "./kanbanColumn";
 import { useKanbanDrag } from "../hooks/useKanbanDrag";
+import { isVisibleInKanban } from "../utils/kanbanFilters";
+import { collapseRecurringInstances } from "@/features/todo";
 import { Circle, Loader, CheckCircle } from "lucide-react";
 import {
   KanbanBoardContainer,
@@ -31,16 +33,34 @@ const KanbanBoard = () => {
       onUpdateTodo: (todo) => useUpdateTodo.mutate(todo),
     });
 
+  // 반복 인스턴스는 며칠 방치되면 같은 recurrenceId의 인스턴스가 여러 개 노출 조건을
+  // 만족할 수 있다(예: 매일 반복을 3일간 열어보지 않은 경우). 시리즈당 대표 1건(가장
+  // 이른 dueAt)만 카드로 보여준다 — todoList.tsx와 동일한 원칙.
   const todoList = useMemo(() => {
-    return todos?.filter((todo) => todo.status === "todo") ?? [];
+    const today = new Date();
+    return collapseRecurringInstances(
+      todos?.filter(
+        (todo) => todo.status === "todo" && isVisibleInKanban(todo, today),
+      ) ?? [],
+    );
   }, [todos]);
 
   const doingList = useMemo(() => {
-    return todos?.filter((todo) => todo.status === "doing") ?? [];
+    const today = new Date();
+    return collapseRecurringInstances(
+      todos?.filter(
+        (todo) => todo.status === "doing" && isVisibleInKanban(todo, today),
+      ) ?? [],
+    );
   }, [todos]);
 
   const doneList = useMemo(() => {
-    return todos?.filter((todo) => todo.status === "done") ?? [];
+    const today = new Date();
+    return collapseRecurringInstances(
+      todos?.filter(
+        (todo) => todo.status === "done" && isVisibleInKanban(todo, today),
+      ) ?? [],
+    );
   }, [todos]);
 
   const handleNavigate = (id: string) => {
