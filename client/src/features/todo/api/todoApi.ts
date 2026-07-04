@@ -26,6 +26,26 @@ const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
   ({ id, ...data }) as Todo;
 
 /**
+ * 반복 시리즈를 읽고(getDocs) 판단한 뒤 batch로 쓰는 함수들(createRecurringTodo,
+ * editRecurringSeries, deleteRecurringSeries, extendIndefiniteRecurringSeries)은 트랜잭션으로
+ * 묶여있지 않다. 이 함수들이 겹쳐 실행되면(예: 앱 마운트 시 백그라운드로 도는
+ * extendIndefiniteRecurringSeries와 사용자가 그 사이에 실행하는 editRecurringSeries) 서로
+ * 상대방의 쓰기를 반영하지 못한 stale 스냅샷을 기준으로 각자 커밋해서, 같은 recurrenceId의
+ * 같은 날짜에 문서가 중복 생성되는 문제가 있었다. 완전한 원자성 대신, 이 함수들을 항상 하나씩
+ * 순서대로만 실행되게 직렬화해 겹쳐 실행 자체를 막는다.
+ */
+let recurringSeriesMutex: Promise<unknown> = Promise.resolve();
+
+const withRecurringSeriesLock = <T>(run: () => Promise<T>): Promise<T> => {
+  const result = recurringSeriesMutex.then(run, run);
+  recurringSeriesMutex = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+};
+
+/**
  * 반복(recurrence)과 하위 할 일(parentId)은 상호 배제 관계다 (PM 확정 스코프).
  * UI에서 이미 막고 있지만, UI 우회(직접 API 호출 등)를 방지하기 위해 데이터 레이어에서도
  * 방어적으로 막는다. "조용히 무시하고 recurrence를 강제로 null 처리"하는 대신 명시적으로
@@ -257,9 +277,14 @@ const getNextRootOrder = async (userId: string): Promise<number> => {
  * 하나씩 Todo 문서를 batch 생성하고, 모두 동일한 recurrenceId(신규 Firestore 문서 id)를
  * 부여해 같은 시리즈로 묶는다. 개별 인스턴스는 status: "todo"로 시작한다.
  */
-export const createRecurringTodo = async (
+export const createRecurringTodo = (
   todo: Todo,
   horizonEnd: Date = getDefaultHorizonEnd(),
+): Promise<Todo[]> => withRecurringSeriesLock(() => createRecurringTodoImpl(todo, horizonEnd));
+
+const createRecurringTodoImpl = async (
+  todo: Todo,
+  horizonEnd: Date,
 ): Promise<Todo[]> => {
   const userId = getUserId();
   if (todo.parentId) {
@@ -319,9 +344,14 @@ export const createRecurringTodo = async (
  * 그대로 두고, 미래 "todo" 인스턴스만 재생성 없이 완전히 삭제한다(문서 자체가 사라지므로
  * recurrenceId도 함께 사라진다).
  */
-export const editRecurringSeries = async (
+export const editRecurringSeries = (
   seriesTodo: Todo,
   horizonEnd: Date = getDefaultHorizonEnd(),
+): Promise<void> => withRecurringSeriesLock(() => editRecurringSeriesImpl(seriesTodo, horizonEnd));
+
+const editRecurringSeriesImpl = async (
+  seriesTodo: Todo,
+  horizonEnd: Date,
 ): Promise<void> => {
   const userId = getUserId();
   const { recurrenceId } = seriesTodo;
@@ -419,7 +449,10 @@ export const editRecurringSeries = async (
  * "삭제"를 선택한 경우이므로 done/doing/overdue를 보존하지 않고 같은 recurrenceId를
  * 가진 모든 인스턴스를 예외 없이 삭제한다.
  */
-export const deleteRecurringSeries = async (recurrenceId: string): Promise<void> => {
+export const deleteRecurringSeries = (recurrenceId: string): Promise<void> =>
+  withRecurringSeriesLock(() => deleteRecurringSeriesImpl(recurrenceId));
+
+const deleteRecurringSeriesImpl = async (recurrenceId: string): Promise<void> => {
   const userId = getUserId();
 
   const seriesSnapshot = await getDocs(
@@ -447,9 +480,11 @@ export const deleteRecurringSeries = async (recurrenceId: string): Promise<void>
  * 정해져 있어 확장이 필요 없음). 종료 조건이 없는(recurrence: null, 반복
  * OFF) 일반 할 일도 당연히 대상이 아니다.
  */
-export const extendIndefiniteRecurringSeries = async (
+export const extendIndefiniteRecurringSeries = (
   horizonEnd: Date = getDefaultHorizonEnd(),
-): Promise<void> => {
+): Promise<void> => withRecurringSeriesLock(() => extendIndefiniteRecurringSeriesImpl(horizonEnd));
+
+const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<void> => {
   const userId = getUserId();
   const q = query(todosRef, where("userId", "==", userId));
   const snapshot = await getDocs(q);

@@ -645,3 +645,108 @@ describe("extendIndefiniteRecurringSeries", () => {
     expect(vi.mocked(writeBatch)).not.toHaveBeenCalled();
   });
 });
+
+describe("extendIndefiniteRecurringSeries와 editRecurringSeries 동시 실행", () => {
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+  });
+
+  const toDocSnapshot = (todos: Todo[]) => ({
+    docs: todos.map((t) => ({
+      id: t.id,
+      data: () => {
+        const { id: _id, ...rest } = t;
+        return rest;
+      },
+    })),
+  });
+
+  // 버그 재현: App 마운트 시 extendIndefiniteRecurringSeries가 백그라운드로 실행되는 동안
+  // 사용자가 반복 시리즈를 수정(editRecurringSeries)하면, 두 함수가 각자 읽은(stale) 스냅샷을
+  // 기준으로 독립적으로 batch를 커밋해 같은 recurrenceId/날짜에 문서가 중복 생성될 수 있다.
+  // 이를 막으려면 두 함수(및 시리즈를 쓰는 다른 함수들)가 서로 겹쳐 실행되지 않고 순서대로
+  // (직렬로) 실행되어야 한다.
+  it("extend 실행 중 editRecurringSeries를 호출하면 extend가 완전히 끝난 뒤에 실행된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const horizonEnd = new Date("2026-07-15T00:00:00");
+
+    const indefiniteInstance = makeTodo({
+      id: "latest-1",
+      status: "todo",
+      dueAt: "2026-07-11T09:00:00",
+      recurrenceId: "series-extend",
+      recurrence: dailyRule,
+    });
+
+    const futureEditInstance = makeTodo({
+      id: "future-edit-1",
+      status: "todo",
+      dueAt: "2026-07-12T09:00:00",
+      recurrenceId: "series-edit",
+      recurrence: dailyRule,
+    });
+
+    let resolveExtendRead: (value: unknown) => void = () => {};
+    const extendReadPromise = new Promise((resolve) => {
+      resolveExtendRead = resolve;
+    });
+
+    vi.mocked(getDocs)
+      // 1) extend의 전체 조회 - 의도적으로 지연시켜 "느린 네트워크"를 흉내낸다
+      .mockImplementationOnce(() => extendReadPromise as ReturnType<typeof getDocs>)
+      // 2) extend의 getNextRootOrder 조회
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      )
+      // 3) edit의 시리즈 조회
+      .mockResolvedValueOnce(
+        toDocSnapshot([futureEditInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      // 4) edit의 getNextRootOrder 조회
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+
+    const extendBatch = makeBatch();
+    const editBatch = makeBatch();
+    vi.mocked(writeBatch)
+      .mockReturnValueOnce(extendBatch as unknown as ReturnType<typeof writeBatch>)
+      .mockReturnValueOnce(editBatch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries, extendIndefiniteRecurringSeries } = await import("../todoApi");
+
+    const extendPromise = extendIndefiniteRecurringSeries(horizonEnd);
+
+    const seriesTodo = makeTodo({
+      id: "future-edit-1",
+      status: "todo",
+      dueAt: "2026-07-12T09:00:00",
+      title: "수정된 제목",
+      recurrenceId: "series-edit",
+      recurrence: dailyRule,
+    });
+    const editPromise = editRecurringSeries(seriesTodo, new Date("2026-07-20T00:00:00"));
+
+    // extend의 첫 조회가 아직 끝나지 않은 시점 - edit이 새치기해서 자신의 조회를
+    // 먼저 실행하면 안 된다 (직렬화가 안 되어 있으면 이 시점에 getDocs가 2번 이상 호출됨)
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(vi.mocked(getDocs).mock.calls.length).toBe(1);
+    expect(editBatch.commit).not.toHaveBeenCalled();
+
+    resolveExtendRead(
+      toDocSnapshot([indefiniteInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
+    await extendPromise;
+    expect(extendBatch.commit).toHaveBeenCalledTimes(1);
+
+    await editPromise;
+    expect(editBatch.commit).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getDocs).mock.calls.length).toBe(4);
+  });
+});
