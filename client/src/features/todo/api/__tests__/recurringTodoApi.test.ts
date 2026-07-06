@@ -75,6 +75,7 @@ const emptyDocsSnapshot: { docs: { id: string; data: () => Record<string, unknow
 
 const makeBatch = () => ({
   set: vi.fn(),
+  update: vi.fn(),
   delete: vi.fn(),
   commit: vi.fn().mockResolvedValue(undefined),
 });
@@ -157,6 +158,33 @@ describe("createRecurringTodo", () => {
     created.forEach((t) => {
       expect(t.status).toBe("todo");
     });
+  });
+
+  it("생성한 인스턴스 문서 ID는 {recurrenceId}_{날짜} 형태로 결정론적이다 (멀티탭/멀티기기 동시 생성 시 중복 방지)", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../todoApi");
+
+    const todo = makeTodo({
+      dueAt: "2026-07-10T09:00:00",
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-12T00:00:00");
+
+    const created = await createRecurringTodo(todo, horizonEnd);
+
+    // recurrenceId는 createRecurringTodoImpl 내부에서 doc(todosRef).id로 딱 한 번 생성되므로
+    // 테스트 환경(autoIdCounter)에서는 "auto-1"로 고정된다.
+    expect(created.map((t) => t.id)).toEqual([
+      "auto-1_2026-07-10",
+      "auto-1_2026-07-11",
+      "auto-1_2026-07-12",
+    ]);
   });
 
   it("recurrence가 없으면 에러를 던진다", async () => {
@@ -303,6 +331,49 @@ describe("editRecurringSeries", () => {
     expect(batch.delete).not.toHaveBeenCalled();
   });
 
+  it("overdue 인스턴스 자신을 수정하면 삭제/재생성이 아니라 그 문서를 직접 갱신해 수정 내용이 반영된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const pastIso = "2020-01-01T09:00:00";
+    const overdueInstance = makeTodo({
+      id: "overdue-1",
+      status: "todo",
+      description: "원래 설명",
+      dueAt: pastIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([overdueInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+
+    const seriesTodo = makeTodo({
+      id: "overdue-1",
+      status: "todo",
+      description: "수정된 설명",
+      dueAt: pastIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    await editRecurringSeries(seriesTodo, new Date("2026-08-01T00:00:00"));
+
+    expect(batch.delete).not.toHaveBeenCalled();
+    expect(batch.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ description: "수정된 설명" }),
+    );
+  });
+
   it("미래 todo 인스턴스는 삭제 후 새 규칙으로 재생성한다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     const now = new Date();
@@ -344,6 +415,50 @@ describe("editRecurringSeries", () => {
     expect(batch.delete).toHaveBeenCalledTimes(1);
     expect(batch.set).toHaveBeenCalled();
     expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("재생성되는 인스턴스 문서 ID도 {recurrenceId}_{날짜} 형태로 결정론적이다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const now = new Date();
+    const futureIso = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3).toISOString();
+    const futureInstance = makeTodo({
+      id: "future-1",
+      status: "todo",
+      dueAt: futureIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([futureInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+
+    const seriesTodo = makeTodo({
+      id: "future-1",
+      status: "todo",
+      dueAt: futureIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    await editRecurringSeries(seriesTodo, new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3));
+
+    const setCall = batch.set.mock.calls[0] as [{ id: string }, { dueAt: string }];
+    const [docRef] = setCall;
+    // toDateString()과 동일하게 로컬 타임존 기준 연-월-일로 키를 계산한다(구현과 동일한 방식으로 기대값 산출).
+    const d = new Date(futureIso);
+    const expectedDateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    expect(docRef.id).toBe(`series-1_${expectedDateKey}`);
   });
 
   it("반복 OFF 전환(recurrence: null) 시 미래 todo 인스턴스만 삭제하고 재생성하지 않는다", async () => {
@@ -463,6 +578,151 @@ describe("editRecurringSeries", () => {
     const duplicatesForToday = createdDueDates.filter((d) => d.startsWith(todayDateStr));
     expect(duplicatesForToday).toHaveLength(0);
   });
+
+  it("doing 인스턴스 자신을 수정하면 삭제/재생성이 아니라 그 문서를 직접 갱신해 수정 내용이 반영된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const now = new Date();
+    const todayIso = now.toISOString();
+
+    const doingInstance = makeTodo({
+      id: "doing-1",
+      status: "doing",
+      description: "원래 설명",
+      dueAt: todayIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([doingInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+
+    const horizonEnd = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 10);
+    // 사용자가 doing 인스턴스를 열어 설명만 바꾸고 저장 (status/dueAt/recurrence는 그대로).
+    const seriesTodo = makeTodo({
+      id: "doing-1",
+      status: "doing",
+      description: "수정된 설명",
+      dueAt: todayIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    await editRecurringSeries(seriesTodo, horizonEnd);
+
+    // 보존 정책 때문에 삭제되면 안 되고
+    expect(batch.delete).not.toHaveBeenCalled();
+    // 수정 내용은 그 문서에 직접 반영되어야 한다 — 지금은 아무 곳에도 반영되지 않아 실패한다.
+    expect(batch.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ description: "수정된 설명" }),
+    );
+  });
+
+  it("보존된 인스턴스를 직접 갱신할 때도 userId는 클라이언트 입력이 아니라 getUserId()로 재계산한 값을 쓴다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const now = new Date();
+    const todayIso = now.toISOString();
+
+    const doingInstance = makeTodo({
+      id: "doing-1",
+      status: "doing",
+      dueAt: todayIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([doingInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+
+    const horizonEnd = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 10);
+    // 다른 사용자의 userId를 흉내내 보내더라도 반영되면 안 된다.
+    const seriesTodo = makeTodo({
+      id: "doing-1",
+      status: "doing",
+      userId: "다른-사용자-id",
+      dueAt: todayIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    await editRecurringSeries(seriesTodo, horizonEnd);
+
+    expect(batch.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: "test-user-id" }),
+    );
+  });
+
+  it("보존된 인스턴스의 마감일을 다른 보존된 인스턴스가 이미 점유한 날짜로 바꾸면 에러를 던진다(중복 재현 방지)", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const now = new Date();
+    const todayIso = now.toISOString();
+    const pastIso = "2020-01-01T09:00:00";
+
+    // 오늘 날짜의 doing 인스턴스와, 지난 overdue 인스턴스가 같은 시리즈에 공존.
+    const doingInstance = makeTodo({
+      id: "doing-1",
+      status: "doing",
+      dueAt: todayIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+    const overdueInstance = makeTodo({
+      id: "overdue-1",
+      status: "todo",
+      dueAt: pastIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([doingInstance, overdueInstance]) as ReturnType<
+        typeof getDocs
+      > extends Promise<infer T>
+        ? T
+        : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+
+    // overdue-1을 열어 마감일을 doing-1이 이미 점유한 오늘 날짜로 옮기려는 시도.
+    const seriesTodo = makeTodo({
+      id: "overdue-1",
+      status: "todo",
+      dueAt: todayIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    await expect(
+      editRecurringSeries(seriesTodo, new Date(now.getTime() + 1000 * 60 * 60 * 24 * 10)),
+    ).rejects.toThrow();
+    expect(batch.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("deleteRecurringSeries", () => {
@@ -573,6 +833,47 @@ describe("extendIndefiniteRecurringSeries", () => {
     const createdDueDates = batch.set.mock.calls.map((call) => (call[1] as { dueAt: string }).dueAt);
     expect(createdDueDates.every((d) => new Date(d).getTime() > new Date(latestExisting.dueAt as string).getTime())).toBe(true);
     expect(batch.commit).toHaveBeenCalledTimes(1);
+
+    // 생성된 인스턴스 문서 ID도 {recurrenceId}_{날짜} 형태로 결정론적이어야 한다.
+    const setDocRefs = batch.set.mock.calls.map((call) => call[0] as { id: string });
+    expect(setDocRefs.map((ref) => ref.id)).toEqual([
+      "series-1_2026-07-13",
+      "series-1_2026-07-14",
+      "series-1_2026-07-15",
+    ]);
+  });
+
+  it("editRecurringSeries와 동일한 recurrenceId+날짜에 대해 항상 같은 문서 ID를 계산한다 (멀티탭/멀티기기에서 동시에 실행돼도 같은 문서로 수렴)", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const latestExisting = makeTodo({
+      id: "latest-1",
+      status: "todo",
+      dueAt: "2026-07-12T09:00:00",
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-15T00:00:00");
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { extendIndefiniteRecurringSeries } = await import("../todoApi");
+    await extendIndefiniteRecurringSeries(horizonEnd);
+
+    // editRecurringSeries 쪽 테스트("재생성되는 인스턴스 문서 ID도 ... 결정론적이다")와 별개로 실행되지만,
+    // 같은 recurrenceId("series-1")·같은 날짜(2026-07-13)에 대해 항상 같은 문자열 ID를 계산하므로
+    // 두 함수가 서로 다른 탭/기기에서 이 날짜에 대해 동시에 문서를 만들어도 하나의 문서로 수렴한다.
+    const firstDocRef = batch.set.mock.calls[0][0] as { id: string };
+    expect(firstDocRef.id).toBe("series-1_2026-07-13");
   });
 
   it("이미 새 호라이즌까지 채워져 있으면 아무것도 생성하지 않는다", async () => {

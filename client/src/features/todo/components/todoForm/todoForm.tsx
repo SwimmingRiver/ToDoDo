@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { useEffect, useMemo, useState } from "react";
 
 import { useTodo } from "../../hooks";
-import { useToast, ConfirmModal } from "@/shared";
+import { useToast, ConfirmModal, toDatetimeLocalValue } from "@/shared";
 import type { RecurrenceRule, Todo } from "../../types";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
@@ -48,12 +48,8 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
           title: todo.title,
           description: todo.description,
           priority: todo.priority,
-          startAt: todo.startAt
-            ? new Date(todo.startAt).toISOString().slice(0, 16)
-            : undefined,
-          dueAt: todo.dueAt
-            ? new Date(todo.dueAt).toISOString().slice(0, 16)
-            : undefined,
+          startAt: todo.startAt ? toDatetimeLocalValue(todo.startAt) : undefined,
+          dueAt: todo.dueAt ? toDatetimeLocalValue(todo.dueAt) : undefined,
         }
       : initialDueAt
         ? { dueAt: initialDueAt }
@@ -308,7 +304,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
         isOpen={isSeriesConfirmOpen}
         title="반복 일정 전체 수정"
         message={
-          "이 변경은 앞으로의 일정에만 적용됩니다.\n\n진행 중이거나 완료된 일정, 이미 지난 미완료 일정은 그대로 유지됩니다."
+          "이 변경은 앞으로의 일정과 지금 수정 중인 일정에 적용됩니다.\n\n그 외 이미 완료됐거나 진행 중/지난 다른 회차는 그대로 유지됩니다."
         }
         confirmText="전체 적용"
         cancelText="취소"

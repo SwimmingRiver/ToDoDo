@@ -19,6 +19,19 @@ export const toDateKey = (date: Date): string => {
 /** ISO 문자열을 로컬 타임존 기준 "yyyy-MM-dd" 키로 변환한다. */
 export const toDateKeyFromISO = (iso: string): string => toDateKey(new Date(iso));
 
+/**
+ * ISO 문자열을 <input type="datetime-local">에 넣을 로컬 타임존 기준
+ * "yyyy-MM-ddTHH:mm" 값으로 변환한다. `new Date(iso).toISOString().slice(0, 16)`은
+ * UTC 시각을 반환하므로, UTC보다 시간이 빠른 타임존(예: Asia/Seoul)에서 자정 근처
+ * 시각을 다루면 날짜가 하루 전으로 밀려 보이는 문제가 있다.
+ */
+export const toDatetimeLocalValue = (iso: string): string => {
+  const d = new Date(iso);
+  const hours = `${d.getHours()}`.padStart(2, "0");
+  const minutes = `${d.getMinutes()}`.padStart(2, "0");
+  return `${toDateKey(d)}T${hours}:${minutes}`;
+};
+
 export const isSameLocalDay = (a: Date, b: Date): boolean =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
