@@ -5,6 +5,7 @@ export {
   parseLocalDateOnly,
   toDateKey,
   toDateKeyFromISO,
+  toDatetimeLocalValue,
   isSameLocalDay,
   getWeekDates,
 } from "./date";

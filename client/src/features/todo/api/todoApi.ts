@@ -11,6 +11,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db, auth } from "@/shared/lib/firebase";
+import { toDateKeyFromISO } from "@/shared/utils/date";
 import type { RecurrenceRule, Todo } from "../types/todo.type";
 import { generateRecurringDueDates, getDefaultHorizonEnd } from "../utils/recurrence";
 
@@ -24,6 +25,20 @@ const getUserId = () => {
 
 const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
   ({ id, ...data }) as Todo;
+
+/**
+ * 반복 인스턴스 문서 ID를 {recurrenceId}_{YYYY-MM-DD}로 결정론적으로 만든다(로컬 타임존
+ * 기준 연-월-일 — 코드베이스 전반의 toDateString() 기반 "같은 날짜" 판정과 동일 기준).
+ *
+ * createRecurringTodo/editRecurringSeries/extendIndefiniteRecurringSeries는 서로 다른
+ * 탭·기기에서 겹쳐 실행될 수 있는데(withRecurringSeriesLock은 탭 내부만 직렬화), 인스턴스를
+ * 매번 새 자동생성 ID로 만들면 같은 recurrenceId·같은 날짜에 대해 두 문서가 동시에 생성될 수
+ * 있다. ID 자체를 recurrenceId+날짜로 고정하면 Firestore 문서 ID의 유일성이 곧 "같은
+ * 날짜엔 항상 같은 문서"를 보장하므로, 여러 곳에서 동시에 써도(batch.set은 없으면 생성,
+ * 있으면 덮어쓰는 upsert) 마지막에 커밋된 내용으로 수렴할 뿐 중복 문서가 생기지 않는다.
+ */
+const buildRecurringInstanceId = (recurrenceId: string, dueAt: string): string =>
+  `${recurrenceId}_${toDateKeyFromISO(dueAt)}`;
 
 /**
  * 반복 시리즈를 읽고(getDocs) 판단한 뒤 batch로 쓰는 함수들(createRecurringTodo,
@@ -308,7 +323,7 @@ const createRecurringTodoImpl = async (
   const created: Todo[] = [];
 
   for (const dueAt of dueDates) {
-    const newDocRef = doc(todosRef);
+    const newDocRef = doc(db, "todos", buildRecurringInstanceId(recurrenceId, dueAt));
     const instanceData = {
       ...todoData,
       userId,
@@ -401,6 +416,53 @@ const editRecurringSeriesImpl = async (
       .map((t) => new Date(t.dueAt as string).toDateString()),
   );
 
+  // 지금 수정 중인 인스턴스 자신이 "doing" 또는 overdue(todo && dueAt < 오늘)라서
+  // 위 toDelete에서 보존 대상으로 빠졌다면, 그 문서는 삭제/재생성되지 않아 사용자가
+  // 방금 입력한 수정 내용(제목/설명/마감일 등)이 반영될 곳이 없다. 이 문서만 예외적으로
+  // 직접 갱신한다. status/doneAt은 원본을 그대로 유지해 진행 상태를 잃지 않는다.
+  // done 인스턴스(이미 완료된 과거 기록)는 대상에서 제외 — 완료된 회차는 그대로 보존한다.
+  const editedOriginal = seriesTodos.find((t) => t.id === seriesTodo.id);
+  const editedIsPreserved =
+    !!editedOriginal &&
+    (editedOriginal.status === "doing" ||
+      (editedOriginal.status === "todo" &&
+        !!editedOriginal.dueAt &&
+        new Date(editedOriginal.dueAt).getTime() < todayStart.getTime()));
+
+  if (editedIsPreserved) {
+    if (seriesTodo.dueAt) {
+      // 다른 보존된(done/doing/overdue) 형제 인스턴스가 이미 점유한 날짜로 마감일을
+      // 옮기면, 그 문서와 지금 갱신하는 문서가 같은 날짜에 공존해 캘린더 중복이
+      // 재현되므로 미리 막는다.
+      const newDateKey = new Date(seriesTodo.dueAt).toDateString();
+      const collidesWithOtherPreserved = seriesTodos.some(
+        (t) =>
+          t.id !== seriesTodo.id &&
+          !toDeleteIds.has(t.id) &&
+          !!t.dueAt &&
+          new Date(t.dueAt).toDateString() === newDateKey,
+      );
+      if (collidesWithOtherPreserved) {
+        throw new Error(
+          "이미 다른 인스턴스가 있는 날짜로는 마감일을 변경할 수 없습니다",
+        );
+      }
+    }
+
+    const {
+      id: _editedId,
+      recurrenceId: _editedRid,
+      status: _s,
+      doneAt: _d,
+      userId: _uid,
+      ...editableRest
+    } = seriesTodo;
+    batch.update(doc(db, "todos", seriesTodo.id), { ...editableRest, userId, updatedAt: now });
+    if (seriesTodo.dueAt) {
+      preservedDateKeys.add(new Date(seriesTodo.dueAt).toDateString());
+    }
+  }
+
   const newRecurrence = seriesTodo.recurrence;
 
   if (newRecurrence) {
@@ -422,7 +484,7 @@ const editRecurringSeriesImpl = async (
     const { id: _id, recurrenceId: _rid, ...rest } = seriesTodo;
 
     dueDates.forEach((dueAt) => {
-      const newDocRef = doc(todosRef);
+      const newDocRef = doc(db, "todos", buildRecurringInstanceId(recurrenceId, dueAt));
       batch.set(newDocRef, {
         ...rest,
         userId,
@@ -529,7 +591,7 @@ const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<vo
     const { id: _id, ...rest } = latest;
 
     newDueDates.forEach((dueAt) => {
-      const newDocRef = doc(todosRef);
+      const newDocRef = doc(db, "todos", buildRecurringInstanceId(recurrenceId, dueAt));
       batch.set(newDocRef, {
         ...rest,
         userId,
