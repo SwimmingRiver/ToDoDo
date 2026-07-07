@@ -86,40 +86,6 @@ export const MonthlySubCaption = styled.span`
   padding-left: 20px;
 `;
 
-export const EndOptionRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  font-size: 13px;
-  color: ${colors.text.primary};
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-  }
-
-  input[type="radio"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-  }
-
-  input[type="date"] {
-    padding: 6px 8px;
-    font-size: 13px;
-    border: 1px solid ${colors.border.secondary};
-    border-radius: ${radius.sm};
-    outline: none;
-
-    &:focus {
-      border-color: ${colors.brand.secondary};
-    }
-  }
-`;
-
 export const ErrorText = styled.span`
   font-size: 12px;
   color: ${colors.danger.text};
