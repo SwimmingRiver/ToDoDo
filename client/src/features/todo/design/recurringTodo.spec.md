@@ -255,7 +255,7 @@ interface RecurrenceFormValue {
 }
 ```
 
-- `RecurrenceFields`는 `todoForm.tsx`의 `DetailContent` 내부, 만료일시 입력 아래에 위치.
+- `RecurrenceFields`는 `todoForm.tsx`의 `DetailContent` 내부, 시작일시·마감일시 입력 아래에 위치 (반복 활성화 여부는 마감일시가 아니라 시작일시 입력 여부로 결정된다 — 4-2절 참고).
 - 내부적으로 체크박스(반복 on/off) + `RecurrenceTypeTabs` + `WeekdayPicker`(조건부) + 읽기 전용 반복 범위 요약(마감일 유무로 자동 유도)을 조합한 복합 컴포넌트.
 - `todoDetail.tsx`(할 일 상세 편집 패널)에도 동일하게 통합 필요 — 현재 `todoDetail.tsx`는 `todoForm.tsx`와 별도 구현(중복 코드)이므로, `RecurrenceFields`를 공용 컴포넌트로 분리해 두 곳에서 import.
 
