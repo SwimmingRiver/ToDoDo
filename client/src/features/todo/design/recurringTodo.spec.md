@@ -10,7 +10,7 @@
 | 항목 | 내용 |
 |---|---|
 | 반복 주기 | 매일 / 매주(요일 다중 선택) / 매월(같은 날짜) |
-| 기준 | `dueAt` 기준 반복만 지원 (완료일 기준 없음) |
+| 기준 | `startAt` 기준 반복만 지원 (완료일 기준 없음) |
 | 반복 앵커/종료 | 시작일(startAt)이 반복 시작 앵커(필수). 마감일(dueAt)은 선택 — 있으면 그 날짜까지, 없으면 무기한 (2026-07-07 개정: 자세한 배경은 `docs/superpowers/specs/2026-07-07-recurring-anchor-field-redesign-design.md` 참고) |
 | 수정 단위 | 항상 전체 시리즈 (이 인스턴스만 수정 불가) |
 | 자연어 입력 | 스코프 아웃 |
@@ -237,7 +237,7 @@
 
 ### 3-2. 신규 컴포넌트
 
-#### `RecurrenceFields` (신규, `todoForm/` 하위)
+#### `RecurrenceFields` (`components/recurrence/` 하위)
 
 ```ts
 interface RecurrenceFieldsProps {
