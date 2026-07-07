@@ -85,6 +85,7 @@ const TodoDetail = () => {
       : undefined,
   });
 
+  const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
 
   const hasChildren = useMemo(() => {
@@ -102,19 +103,20 @@ const TodoDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todo?.id]);
 
-  // 4-2절: dueAt이 지워지면(반복이 이미 켜진 상태) 반복 체크박스 강제 OFF + value 리셋
+  // 반복의 시작 앵커는 startAt이다. startAt이 지워지면(반복이 이미 켜진 상태) 반복
+  // 체크박스를 강제 OFF하고 value를 리셋한다.
   useEffect(() => {
-    if (!dueAtWatch && recurrenceValue !== null) {
+    if (!startAtWatch && recurrenceValue !== null) {
       setRecurrenceValue(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dueAtWatch]);
+  }, [startAtWatch]);
 
-  const recurrenceDisabled = hasChildren || !dueAtWatch;
-  const recurrenceDisabledReason: "hasChildren" | "noDueAt" | undefined = hasChildren
+  const recurrenceDisabled = hasChildren || !startAtWatch;
+  const recurrenceDisabledReason: "hasChildren" | "noStartAt" | undefined = hasChildren
     ? "hasChildren"
-    : !dueAtWatch
-      ? "noDueAt"
+    : !startAtWatch
+      ? "noStartAt"
       : undefined;
 
   const [isSeriesConfirmOpen, setIsSeriesConfirmOpen] = useState(false);
@@ -151,18 +153,23 @@ const TodoDetail = () => {
   const onSubmit = (data: TodoFormData) => {
     if (!todo) return;
 
-    const validationError = getRecurrenceValidationError(recurrenceValue, dueAtWatch ?? null);
+    const validationError = getRecurrenceValidationError(
+      recurrenceValue,
+      startAtWatch ?? null,
+      dueAtWatch ?? null,
+    );
     if (validationError) {
       toast.error("입력 확인", validationError);
       return;
     }
 
-    const newRecurrence = toRecurrenceRule(recurrenceValue);
+    const dueAtIso = data.dueAt ? new Date(data.dueAt).toISOString() : null;
+    const newRecurrence = toRecurrenceRule(recurrenceValue, dueAtIso);
     const updatedFields = {
       ...todo,
       ...data,
       startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
-      dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+      dueAt: dueAtIso,
       recurrence: newRecurrence,
     } as Todo;
 
@@ -331,6 +338,7 @@ const TodoDetail = () => {
                 <RecurrenceFields
                   disabled={recurrenceDisabled}
                   disabledReason={recurrenceDisabledReason}
+                  startAt={startAtWatch ?? null}
                   dueAt={dueAtWatch ?? null}
                   value={recurrenceValue}
                   onChange={setRecurrenceValue}

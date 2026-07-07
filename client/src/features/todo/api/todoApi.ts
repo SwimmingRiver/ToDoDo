@@ -308,13 +308,13 @@ const createRecurringTodoImpl = async (
   if (!todo.recurrence) {
     throw new Error("recurrence가 없는 할 일은 createRecurringTodo로 생성할 수 없습니다");
   }
-  if (!todo.dueAt) {
-    throw new Error("반복 할 일은 dueAt(만료일시)이 필요합니다");
+  if (!todo.startAt) {
+    throw new Error("반복 할 일은 startAt(시작일시)이 필요합니다");
   }
 
   const now = new Date().toISOString();
   const recurrenceId = doc(todosRef).id;
-  const dueDates = generateRecurringDueDates(todo.dueAt, todo.recurrence, horizonEnd);
+  const dueDates = generateRecurringDueDates(todo.startAt, todo.recurrence, horizonEnd);
 
   let nextOrder = await getNextRootOrder(userId);
   const { id: _id, ...todoData } = todo;
@@ -327,6 +327,12 @@ const createRecurringTodoImpl = async (
     const instanceData = {
       ...todoData,
       userId,
+      // 인스턴스별 startAt도 그 발생일(dueAt과 같은 날짜) + 원래 startAt의 시:분으로 갱신한다.
+      // generateRecurringDueDates가 이미 todo.startAt을 앵커로 시:분을 적용해 dueAt을
+      // 계산하므로(applyTimeOfDay), dueAt 자체가 "발생일 + 원래 startAt 시각"이다 — 원본
+      // todoData.startAt(모든 인스턴스에 동일한 고정값)을 그대로 물려받으면 calendar.tsx가
+      // startAt~dueAt을 다중일 span으로 잘못 렌더링하는 회귀가 생긴다.
+      startAt: dueAt,
       dueAt,
       status: "todo" as const,
       doneAt: null,
@@ -466,14 +472,14 @@ const editRecurringSeriesImpl = async (
   const newRecurrence = seriesTodo.recurrence;
 
   if (newRecurrence) {
-    if (!seriesTodo.dueAt) {
-      throw new Error("반복 할 일은 dueAt(만료일시)이 필요합니다");
+    if (!seriesTodo.startAt) {
+      throw new Error("반복 할 일은 startAt(시작일시)이 필요합니다");
     }
 
     // 오늘 이후 첫 유효 발생일부터 horizonEnd까지 새 규칙으로 재생성하되, 이미 보존된
     // 인스턴스가 점유한 날짜는 건너뛴다.
     const dueDates = generateRecurringDueDates(
-      seriesTodo.dueAt,
+      seriesTodo.startAt,
       newRecurrence,
       horizonEnd,
     )
@@ -488,6 +494,9 @@ const editRecurringSeriesImpl = async (
       batch.set(newDocRef, {
         ...rest,
         userId,
+        // createRecurringTodoImpl과 동일한 이유: 인스턴스별 startAt을 원본 시리즈의 고정값
+        // 그대로 물려받지 않고 발생일(dueAt)로 갱신한다.
+        startAt: dueAt,
         dueAt,
         status: "todo",
         doneAt: null,
@@ -595,6 +604,10 @@ const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<vo
       batch.set(newDocRef, {
         ...rest,
         userId,
+        // createRecurringTodoImpl과 동일한 이유: rest(마지막 인스턴스 필드 승계)에 담긴
+        // startAt은 latest 인스턴스 자신의 발생일 기준 값이라 새로 만드는 인스턴스에는
+        // 맞지 않으므로, 매번 그 인스턴스의 발생일(dueAt)로 덮어쓴다.
+        startAt: dueAt,
         dueAt,
         status: "todo",
         doneAt: null,

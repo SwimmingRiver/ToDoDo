@@ -63,7 +63,15 @@ const Content = styled.div`
   gap: 2px;
 `;
 
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+`;
+
 const Title = styled.span<{ $isDone: boolean }>`
+  min-width: 0;
   font-size: 14px;
   color: ${({ $isDone }) => ($isDone ? colors.text.tertiary : colors.text.primary)};
   text-decoration: ${({ $isDone }) => ($isDone ? "line-through" : "none")};
@@ -100,6 +108,7 @@ export {
   Row,
   Checkbox,
   Content,
+  TitleRow,
   Title,
   Description,
   TimeLabel,

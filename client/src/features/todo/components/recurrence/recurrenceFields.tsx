@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { Info } from "lucide-react";
+import { toDateKeyFromISO } from "@/shared/utils/date";
 import RecurrenceTypeTabs from "./recurrenceTypeTabs";
 import WeekdayPicker from "./weekdayPicker";
 import { WEEKDAY_REQUIRED_ERROR } from "./weekdayConstants";
@@ -16,14 +17,14 @@ import {
   MonthlyInfo,
   InfoLine,
   MonthlySubCaption,
-  EndOptionRow,
   ErrorText,
 } from "./recurrence.styles";
 
 interface RecurrenceFieldsProps {
-  disabled: boolean; // 하위 할 일 존재 또는 dueAt 미입력 시 true
-  disabledReason?: "hasChildren" | "noDueAt";
-  dueAt: string | null; // 매월 반복 시 '일(day)' 유도에 사용 (datetime-local 원본 문자열)
+  disabled: boolean; // 하위 할 일 존재 또는 startAt 미입력 시 true
+  disabledReason?: "hasChildren" | "noStartAt";
+  startAt: string | null; // 반복 시작 앵커. 매월 반복 시 '일(day)' 유도에도 사용
+  dueAt: string | null; // 있으면 반복 종료일(마지막 발생일) 역할
   value: RecurrenceFormValue | null; // null = 반복 OFF
   onChange: (value: RecurrenceFormValue | null) => void;
 }
@@ -31,21 +32,21 @@ interface RecurrenceFieldsProps {
 const RecurrenceFields = ({
   disabled,
   disabledReason,
+  startAt,
   dueAt,
   value,
   onChange,
 }: RecurrenceFieldsProps) => {
   const hintId = useId();
-  const endTypeName = useId();
   const checked = value !== null;
 
   const weekdayError = value?.type === "weekly" && (value.weekdays?.length ?? 0) === 0;
-  const validationError = getRecurrenceValidationError(value, dueAt);
-  const endDateError = validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
+  const validationError = getRecurrenceValidationError(value, startAt, dueAt);
+  const rangeError = validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
 
   const handleToggle = () => {
     if (disabled) return;
-    onChange(checked ? null : { type: "daily", endType: "indefinite" });
+    onChange(checked ? null : { type: "daily" });
   };
 
   const handleTypeChange = (type: RecurrenceFormValue["type"]) => {
@@ -66,21 +67,7 @@ const RecurrenceFields = ({
     onChange({ ...value, weekdays: next });
   };
 
-  const handleEndTypeChange = (endType: RecurrenceFormValue["endType"]) => {
-    if (!value) return;
-    onChange({
-      ...value,
-      endType,
-      endDate: endType === "untilDate" ? value.endDate : undefined,
-    });
-  };
-
-  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!value) return;
-    onChange({ ...value, endDate: e.target.value });
-  };
-
-  const dueDay = dueAt ? new Date(dueAt).getDate() : null;
+  const startDay = startAt ? new Date(startAt).getDate() : null;
   const isPanelOpen = checked && !disabled;
 
   return (
@@ -102,7 +89,7 @@ const RecurrenceFields = ({
           <span>
             {disabledReason === "hasChildren"
               ? "하위 할 일이 있는 항목은 반복을 설정할 수 없습니다"
-              : "반복 설정은 마감일시를 입력해야 사용할 수 있습니다"}
+              : "반복 설정은 시작일시를 입력해야 사용할 수 있습니다"}
           </span>
         </DisabledHint>
       )}
@@ -127,13 +114,13 @@ const RecurrenceFields = ({
                 </FieldGroup>
               )}
 
-              {value.type === "monthly" && dueDay !== null && (
+              {value.type === "monthly" && startDay !== null && (
                 <MonthlyInfo>
                   <InfoLine>
                     <Info size={14} aria-hidden="true" />
-                    <span>매월 {dueDay}일에 반복됩니다 (마감일시 기준)</span>
+                    <span>매월 {startDay}일에 반복됩니다 (시작일시 기준)</span>
                   </InfoLine>
-                  {dueDay >= 29 && (
+                  {startDay >= 29 && (
                     <MonthlySubCaption>
                       31일이 없는 달은 해당 월 마지막 날에 생성됩니다
                     </MonthlySubCaption>
@@ -142,42 +129,16 @@ const RecurrenceFields = ({
               )}
 
               <FieldGroup>
-                <FieldLabel>종료 조건</FieldLabel>
+                <FieldLabel>반복 범위</FieldLabel>
                 <InfoLine>
                   <Info size={14} aria-hidden="true" />
-                  <span>마감일시(언제 반복이 시작될지)와는 별개로, 반복을 언제까지 계속할지 정합니다</span>
+                  <span>
+                    {dueAt
+                      ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
+                      : "마감일시가 없으면 무기한으로 반복됩니다"}
+                  </span>
                 </InfoLine>
-                <EndOptionRow>
-                  <label>
-                    <input
-                      type="radio"
-                      name={endTypeName}
-                      checked={value.endType === "indefinite"}
-                      onChange={() => handleEndTypeChange("indefinite")}
-                    />
-                    무기한
-                  </label>
-                </EndOptionRow>
-                <EndOptionRow>
-                  <label>
-                    <input
-                      type="radio"
-                      name={endTypeName}
-                      checked={value.endType === "untilDate"}
-                      onChange={() => handleEndTypeChange("untilDate")}
-                    />
-                    특정 날짜까지
-                  </label>
-                  {value.endType === "untilDate" && (
-                    <input
-                      type="date"
-                      value={value.endDate ?? ""}
-                      onChange={handleEndDateChange}
-                      aria-label="반복 종료일"
-                    />
-                  )}
-                </EndOptionRow>
-                {endDateError && <ErrorText role="alert">{endDateError}</ErrorText>}
+                {rangeError && <ErrorText role="alert">{rangeError}</ErrorText>}
               </FieldGroup>
             </>
           )}
