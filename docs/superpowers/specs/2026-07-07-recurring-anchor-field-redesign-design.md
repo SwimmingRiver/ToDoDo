@@ -26,14 +26,24 @@
 
 ## 3. 범위
 
+### 구현 방식 (계획 수립 중 확정 — 저위험 경로)
+
+`generateRecurringDueDates`는 이미 "앵커 날짜 하나 + 규칙 + horizonEnd"만 받는 범용 순수 함수라, 무엇을 앵커로 넘기든 내부 로직 변경 없이 그대로 동작한다. 따라서 **`recurrence.ts`와 `RecurrenceRule`(Firestore 저장 타입)은 변경하지 않고, 호출부와 폼 레이어만 바꾸는 쪽**으로 구현한다:
+- 앵커를 `todo.dueAt`에서 `todo.startAt`으로 바꾸는 것은 **호출부**(`todoApi.ts`)에서 어떤 값을 첫 인자로 넘기느냐의 문제일 뿐이다.
+- 종료 조건(`RecurrenceRule.endType`/`endDate`)은 필드 자체를 없애는 대신, 폼 레이어(`recurrenceTransform.ts`)가 `todo.dueAt` 유무로부터 **자동으로 채워 넣도록**(사용자가 더 이상 직접 고르지 않도록) 만든다. `RecurrenceRule`의 저장 형태는 그대로이므로 `extendIndefiniteRecurringSeriesImpl`의 기존 `endType === "indefinite"` 체크, `calendar.tsx`/`kanbanFilters.test.ts`/`useTodo.test.tsx` 등 기존 `RecurrenceRule` 픽스처를 쓰는 코드가 전혀 영향받지 않는다.
+
+이 방식은 §2에서 결정한 사용자 경험(시작일 필수 앵커, 마감일 선택적 종료, 종료조건 UI 제거)을 동일하게 구현하면서 변경 파일 수와 회귀 위험을 크게 줄인다.
+
 ### 변경 대상
-- `client/src/features/todo/utils/recurrence.ts` — `generateRecurringDueDates`가 `baseDueAt` 대신 `baseStartAt`을 앵커로 받고, 종료 경계를 `rule.endType`/`endDate` 대신 (선택적) `dueAt` 파라미터로 받도록 시그니처 변경
-- `client/src/features/todo/types/todo.type.ts` — `RecurrenceRule`에서 `endType`/`endDate` 필드를 제거한다 (종료 경계가 이제 `todo.dueAt` 자체이므로 별도 필드로 중복 저장할 이유가 없음)
-- `client/src/features/todo/components/recurrence/recurrenceFields.tsx` — "종료 조건" 라디오 그룹 UI 제거. 매월 반복의 "일(day)" 유도 안내("매월 {day}일에 반복됩니다")도 `dueAt` 대신 `startAt`의 day를 읽도록 변경 (앵커가 startAt으로 바뀌었으므로)
-- `client/src/features/todo/components/recurrence/recurrenceValidation.ts`, `recurrenceTransform.ts` — 유효성 검사/폼 값 변환 로직에서 종료조건 관련 로직 제거, startAt 필수 검증 추가
+- `client/src/features/todo/types/todo.type.ts` — **변경 없음** (`RecurrenceRule`은 그대로 유지)
+- `client/src/features/todo/utils/recurrence.ts` — **변경 없음** (`generateRecurringDueDates` 시그니처/로직 그대로, 호출부만 다른 값을 앵커로 전달)
+- `client/src/features/todo/components/recurrence/recurrenceFields.types.ts` — `RecurrenceFormValue`에서 `endType`/`endDate` 제거 (더 이상 사용자 입력이 아님)
+- `client/src/features/todo/components/recurrence/recurrenceTransform.ts` — `toRecurrenceRule(value, dueAt)`으로 시그니처 변경, `dueAt` 유무로 `endType`/`endDate` 자동 유도
+- `client/src/features/todo/components/recurrence/recurrenceFields.tsx` — "종료 조건" 라디오 그룹 UI 제거(읽기 전용 "반복 범위" 요약으로 대체). 매월 반복의 "일(day)" 유도 안내도 `dueAt` 대신 `startAt`의 day를 읽도록 변경
+- `client/src/features/todo/components/recurrence/recurrenceValidation.ts` — `getRecurrenceValidationError(value, startAt, dueAt)`으로 시그니처 변경, "종료일 vs 마감일" 비교를 "마감일 vs 시작일" 비교로 교체
 - `client/src/features/todo/components/todoForm/todoForm.tsx`, `todoDetail.tsx` — 반복 체크박스 활성화 조건을 `!dueAtWatch` → `!startAtWatch`로 변경, "만료일시 미입력 시 반복 불가" 안내 문구를 "시작일시 미입력 시" 로 변경
-- `client/src/features/todo/api/todoApi.ts` — `createRecurringTodoImpl`/`editRecurringSeriesImpl`/`extendIndefiniteRecurringSeriesImpl`의 `if (!todo.dueAt) throw` 가드를 `if (!todo.startAt) throw`로 변경, `generateRecurringDueDates` 호출부 인자 순서 변경
-- 관련 유닛 테스트 전부(`recurrence.test.ts`, `recurrenceValidation.test.ts`, `todoApi.test.ts` 등)
+- `client/src/features/todo/api/todoApi.ts` — `createRecurringTodoImpl`/`editRecurringSeriesImpl`의 `if (!todo.dueAt) throw` 가드를 `if (!todo.startAt) throw`로 변경, `generateRecurringDueDates` 호출부의 앵커 인자를 `dueAt`→`startAt`으로 변경. `extendIndefiniteRecurringSeriesImpl`은 기존 인스턴스의 `dueAt`을 "다음 회차 연속 앵커"로 계속 사용하므로 **변경 없음**
+- 관련 유닛 테스트 전부(`recurrenceTransform.test.ts`, `recurrenceValidation.test.ts`, `recurringTodoApi.test.ts`, 신규 `recurrenceFields.test.tsx`)
 
 ### 범위 밖 (변경하지 않음)
 - 이미 Firestore에 저장된 기존 반복 시리즈 문서는 그대로 유지 — 마이그레이션하지 않는다. 새로 생성되거나 "전체 수정"되는 시리즈부터 새 로직이 적용된다.
@@ -42,8 +52,8 @@
 
 ## 4. 검증
 
-- 유닛 테스트: `generateRecurringDueDates`가 startAt을 앵커로, dueAt(있으면)을 종료 경계로 올바르게 처리하는지(daily/weekly/monthly 각각), dueAt 없이 무기한인 경우, startAt만 있고 dueAt 없는 경우
-- 폼 유효성: 반복 체크박스가 startAt 없이는 비활성화되는지, dueAt 없이 반복 활성화가 가능한지
+- 유닛 테스트: `toRecurrenceRule`이 dueAt 유무에 따라 `endType`/`endDate`를 올바르게 유도하는지, `createRecurringTodo`/`editRecurringSeries`가 `startAt`을 앵커로 인스턴스를 생성하는지(daily 기준), `startAt` 없이는 에러를 던지는지, `dueAt` 없이도(무기한) 정상 생성되는지
+- 폼 유효성: 반복 체크박스가 startAt 없이는 비활성화되는지, dueAt 없이 반복 활성화가 가능한지, dueAt이 startAt보다 이전이면 제출이 막히는지
 - 기존 테스트 중 "마감일시 기준" 가정으로 작성된 것들(예: 매월 반복의 day 유도 안내 문구가 dueAt 기준이었던 부분)은 startAt 기준으로 갱신
 
 ## 5. 후속 작업 (본 스펙 범위 밖, 기록만)
