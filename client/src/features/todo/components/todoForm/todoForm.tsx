@@ -66,6 +66,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
   } = useTodo();
   const { data: allTodos } = useGetTodos;
 
+  const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
 
   // 하위 할 일 생성 폼(parentId 존재, 케이스 D)에서는 반복 섹션 자체를 렌더링하지 않는다.
@@ -80,19 +81,20 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
     () => toFormValue(todo?.recurrence ?? null),
   );
 
-  // 4-2절: dueAt이 지워지면(반복이 이미 켜진 상태) 반복 체크박스 강제 OFF + value 리셋
+  // 반복의 시작 앵커는 startAt이다. startAt이 지워지면(반복이 이미 켜진 상태) 반복
+  // 체크박스를 강제 OFF하고 value를 리셋한다.
   useEffect(() => {
-    if (!dueAtWatch && recurrenceValue !== null) {
+    if (!startAtWatch && recurrenceValue !== null) {
       setRecurrenceValue(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dueAtWatch]);
+  }, [startAtWatch]);
 
-  const recurrenceDisabled = hasChildren || !dueAtWatch;
-  const recurrenceDisabledReason: "hasChildren" | "noDueAt" | undefined = hasChildren
+  const recurrenceDisabled = hasChildren || !startAtWatch;
+  const recurrenceDisabledReason: "hasChildren" | "noStartAt" | undefined = hasChildren
     ? "hasChildren"
-    : !dueAtWatch
-      ? "noDueAt"
+    : !startAtWatch
+      ? "noStartAt"
       : undefined;
 
   const [isSeriesConfirmOpen, setIsSeriesConfirmOpen] = useState(false);
@@ -121,21 +123,29 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
 
   const onSubmit = (data: TodoFormData) => {
     if (showRecurrenceSection) {
-      const validationError = getRecurrenceValidationError(recurrenceValue, dueAtWatch ?? null);
+      const validationError = getRecurrenceValidationError(
+        recurrenceValue,
+        startAtWatch ?? null,
+        dueAtWatch ?? null,
+      );
       if (validationError) {
         toast.error("입력 확인", validationError);
         return;
       }
     }
 
+    // datetime-local input의 값을 ISO string으로 변환 (반복 종료일 유도에도 재사용)
+    const dueAtIso = data.dueAt ? new Date(data.dueAt).toISOString() : null;
+
     if (todo) {
-      const newRecurrence = showRecurrenceSection ? toRecurrenceRule(recurrenceValue) : null;
+      const newRecurrence = showRecurrenceSection
+        ? toRecurrenceRule(recurrenceValue, dueAtIso)
+        : null;
       const updatedFields = {
         ...todo,
         ...data,
-        // datetime-local input의 값을 ISO string으로 변환
         startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
-        dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+        dueAt: dueAtIso,
         recurrence: newRecurrence,
       } as Todo;
 
@@ -213,12 +223,12 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
       );
     } else if (recurrenceValue) {
       // 반복 설정된 신규 할 일 생성 — 확인 모달 없음(4-4절)
-      const newRecurrence = toRecurrenceRule(recurrenceValue) as RecurrenceRule;
+      const newRecurrence = toRecurrenceRule(recurrenceValue, dueAtIso) as RecurrenceRule;
       useCreateRecurringTodo.mutate(
         {
           ...data,
           startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
-          dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+          dueAt: dueAtIso,
           recurrence: newRecurrence,
         } as Todo,
         {
@@ -285,6 +295,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
               <RecurrenceFields
                 disabled={recurrenceDisabled}
                 disabledReason={recurrenceDisabledReason}
+                startAt={startAtWatch ?? null}
                 dueAt={dueAtWatch ?? null}
                 value={recurrenceValue}
                 onChange={setRecurrenceValue}
