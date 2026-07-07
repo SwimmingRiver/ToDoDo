@@ -1,12 +1,14 @@
 import { Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Todo } from "@/features/todo/types";
+import { RecurrenceBadge } from "@/shared";
 import { getDaysLeft, getDueBadgeLabel } from "@/shared/utils/due";
 import { formatDueTime } from "@/shared/utils/formatToday";
 import {
   Row,
   Checkbox,
   Content,
+  TitleRow,
   Title,
   Description,
   TimeLabel,
@@ -43,7 +45,10 @@ const TodayTodoItem = ({ todo, onToggleDone }: TodayTodoItemProps) => {
         {isDone && <Check size={12} color="#FFFFFF" />}
       </Checkbox>
       <Content onClick={handleItemClick}>
-        <Title $isDone={isDone}>{todo.title}</Title>
+        <TitleRow>
+          <Title $isDone={isDone}>{todo.title}</Title>
+          {todo.recurrenceId != null && <RecurrenceBadge compact />}
+        </TitleRow>
         {todo.description && <Description>{todo.description}</Description>}
       </Content>
       {!isDone && isOverdue && daysLeft !== null ? (
