@@ -201,6 +201,32 @@ describe("createRecurringTodo", () => {
     await expect(createRecurringTodo(todo, new Date("2026-07-13T00:00:00"))).rejects.toThrow();
   });
 
+  it("각 인스턴스의 startAt은 원본 startAt 고정값이 아니라 발생일(dueAt)로 갱신된다 (calendar.tsx 다중일 span 회귀 방지)", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../todoApi");
+
+    const todo = makeTodo({
+      startAt: "2026-07-10T09:00:00",
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-13T00:00:00");
+
+    const created = await createRecurringTodo(todo, horizonEnd);
+
+    // startAt이 모든 인스턴스에 "2026-07-10T09:00:00"으로 고정 복제되면, 마지막 인스턴스는
+    // startAt=7/10, dueAt=7/13이 되어 calendar.tsx가 4일짜리 span 이벤트로 잘못 그린다.
+    // 각 인스턴스는 자기 자신의 발생일을 startAt으로 가져야 한다(dueAt과 동일한 날짜+시각).
+    created.forEach((t) => {
+      expect(t.startAt).toBe(t.dueAt);
+    });
+  });
+
   it("dueAt이 없어도(무기한 반복) 정상적으로 생성된다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     vi.mocked(getDocs).mockResolvedValueOnce(
@@ -487,6 +513,51 @@ describe("editRecurringSeries", () => {
     const d = new Date(futureIso);
     const expectedDateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     expect(docRef.id).toBe(`series-1_${expectedDateKey}`);
+  });
+
+  it("재생성되는 인스턴스도 startAt이 원본 고정값이 아니라 발생일(dueAt)로 갱신된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const now = new Date();
+    const futureIso = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3).toISOString();
+    const futureInstance = makeTodo({
+      id: "future-1",
+      status: "todo",
+      dueAt: futureIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([futureInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+
+    const horizonEnd = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 10);
+    const seriesTodo = makeTodo({
+      id: "future-1",
+      status: "todo",
+      startAt: futureIso,
+      dueAt: futureIso,
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+
+    await editRecurringSeries(seriesTodo, horizonEnd);
+
+    const setCalls = batch.set.mock.calls as [unknown, { startAt: string; dueAt: string }][];
+    expect(setCalls.length).toBeGreaterThan(0);
+    setCalls.forEach(([, data]) => {
+      expect(data.startAt).toBe(data.dueAt);
+    });
   });
 
   it("반복 OFF 전환(recurrence: null) 시 미래 todo 인스턴스만 삭제하고 재생성하지 않는다", async () => {
@@ -873,6 +944,40 @@ describe("extendIndefiniteRecurringSeries", () => {
       "series-1_2026-07-14",
       "series-1_2026-07-15",
     ]);
+  });
+
+  it("확장 생성되는 인스턴스도 startAt이 latest 인스턴스의 고정값이 아니라 발생일(dueAt)로 갱신된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const latestExisting = makeTodo({
+      id: "latest-1",
+      status: "todo",
+      startAt: "2026-07-12T09:00:00",
+      dueAt: "2026-07-12T09:00:00",
+      recurrenceId: "series-1",
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-15T00:00:00");
+
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { extendIndefiniteRecurringSeries } = await import("../todoApi");
+    await extendIndefiniteRecurringSeries(horizonEnd);
+
+    const setCalls = batch.set.mock.calls as [unknown, { startAt: string; dueAt: string }][];
+    expect(setCalls.length).toBeGreaterThan(0);
+    setCalls.forEach(([, data]) => {
+      expect(data.startAt).toBe(data.dueAt);
+    });
   });
 
   it("editRecurringSeries와 동일한 recurrenceId+날짜에 대해 항상 같은 문서 ID를 계산한다 (멀티탭/멀티기기에서 동시에 실행돼도 같은 문서로 수렴)", async () => {
