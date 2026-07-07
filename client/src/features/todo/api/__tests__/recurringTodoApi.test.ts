@@ -143,7 +143,7 @@ describe("createRecurringTodo", () => {
     const { createRecurringTodo } = await import("../todoApi");
 
     const todo = makeTodo({
-      dueAt: "2026-07-10T09:00:00",
+      startAt: "2026-07-10T09:00:00",
       recurrence: dailyRule,
     });
     const horizonEnd = new Date("2026-07-13T00:00:00");
@@ -171,7 +171,7 @@ describe("createRecurringTodo", () => {
     const { createRecurringTodo } = await import("../todoApi");
 
     const todo = makeTodo({
-      dueAt: "2026-07-10T09:00:00",
+      startAt: "2026-07-10T09:00:00",
       recurrence: dailyRule,
     });
     const horizonEnd = new Date("2026-07-12T00:00:00");
@@ -189,16 +189,38 @@ describe("createRecurringTodo", () => {
 
   it("recurrence가 없으면 에러를 던진다", async () => {
     const { createRecurringTodo } = await import("../todoApi");
-    const todo = makeTodo({ dueAt: "2026-07-10T09:00:00", recurrence: null });
+    const todo = makeTodo({ startAt: "2026-07-10T09:00:00", recurrence: null });
 
     await expect(createRecurringTodo(todo, new Date("2026-07-13T00:00:00"))).rejects.toThrow();
   });
 
-  it("dueAt이 없으면 에러를 던진다", async () => {
+  it("startAt이 없으면 에러를 던진다", async () => {
     const { createRecurringTodo } = await import("../todoApi");
-    const todo = makeTodo({ dueAt: null, recurrence: dailyRule });
+    const todo = makeTodo({ startAt: null, recurrence: dailyRule });
 
     await expect(createRecurringTodo(todo, new Date("2026-07-13T00:00:00"))).rejects.toThrow();
+  });
+
+  it("dueAt이 없어도(무기한 반복) 정상적으로 생성된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../todoApi");
+
+    const todo = makeTodo({
+      startAt: "2026-07-10T09:00:00",
+      dueAt: null,
+      recurrence: dailyRule,
+    });
+    const horizonEnd = new Date("2026-07-12T00:00:00");
+
+    const created = await createRecurringTodo(todo, horizonEnd);
+
+    expect(created.length).toBeGreaterThan(0);
   });
 });
 
@@ -245,6 +267,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "done-1",
       status: "done",
+      startAt: "2026-07-01T09:00:00",
       dueAt: "2026-07-01T09:00:00",
       title: "새 제목",
       recurrenceId: "series-1",
@@ -283,6 +306,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "doing-1",
       status: "doing",
+      startAt: "2026-07-05T09:00:00",
       dueAt: "2026-07-05T09:00:00",
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -321,6 +345,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "overdue-1",
       status: "todo",
+      startAt: pastIso,
       dueAt: pastIso,
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -360,6 +385,7 @@ describe("editRecurringSeries", () => {
       id: "overdue-1",
       status: "todo",
       description: "수정된 설명",
+      startAt: pastIso,
       dueAt: pastIso,
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -404,6 +430,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "future-1",
       status: "todo",
+      startAt: futureIso,
       dueAt: futureIso,
       title: "바뀐 제목",
       recurrenceId: "series-1",
@@ -446,6 +473,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "future-1",
       status: "todo",
+      startAt: futureIso,
       dueAt: futureIso,
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -559,6 +587,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "doing-1",
       status: "doing",
+      startAt: todayIso,
       dueAt: todayIso,
       title: "수정된 제목",
       recurrenceId: "series-1",
@@ -613,6 +642,7 @@ describe("editRecurringSeries", () => {
       id: "doing-1",
       status: "doing",
       description: "수정된 설명",
+      startAt: todayIso,
       dueAt: todayIso,
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -662,6 +692,7 @@ describe("editRecurringSeries", () => {
       id: "doing-1",
       status: "doing",
       userId: "다른-사용자-id",
+      startAt: todayIso,
       dueAt: todayIso,
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -713,6 +744,7 @@ describe("editRecurringSeries", () => {
     const seriesTodo = makeTodo({
       id: "overdue-1",
       status: "todo",
+      startAt: todayIso,
       dueAt: todayIso,
       recurrenceId: "series-1",
       recurrence: dailyRule,
@@ -1023,6 +1055,7 @@ describe("extendIndefiniteRecurringSeries와 editRecurringSeries 동시 실행",
     const seriesTodo = makeTodo({
       id: "future-edit-1",
       status: "todo",
+      startAt: "2026-07-12T09:00:00",
       dueAt: "2026-07-12T09:00:00",
       title: "수정된 제목",
       recurrenceId: "series-edit",

@@ -308,13 +308,13 @@ const createRecurringTodoImpl = async (
   if (!todo.recurrence) {
     throw new Error("recurrence가 없는 할 일은 createRecurringTodo로 생성할 수 없습니다");
   }
-  if (!todo.dueAt) {
-    throw new Error("반복 할 일은 dueAt(만료일시)이 필요합니다");
+  if (!todo.startAt) {
+    throw new Error("반복 할 일은 startAt(시작일시)이 필요합니다");
   }
 
   const now = new Date().toISOString();
   const recurrenceId = doc(todosRef).id;
-  const dueDates = generateRecurringDueDates(todo.dueAt, todo.recurrence, horizonEnd);
+  const dueDates = generateRecurringDueDates(todo.startAt, todo.recurrence, horizonEnd);
 
   let nextOrder = await getNextRootOrder(userId);
   const { id: _id, ...todoData } = todo;
@@ -466,14 +466,14 @@ const editRecurringSeriesImpl = async (
   const newRecurrence = seriesTodo.recurrence;
 
   if (newRecurrence) {
-    if (!seriesTodo.dueAt) {
-      throw new Error("반복 할 일은 dueAt(만료일시)이 필요합니다");
+    if (!seriesTodo.startAt) {
+      throw new Error("반복 할 일은 startAt(시작일시)이 필요합니다");
     }
 
     // 오늘 이후 첫 유효 발생일부터 horizonEnd까지 새 규칙으로 재생성하되, 이미 보존된
     // 인스턴스가 점유한 날짜는 건너뛴다.
     const dueDates = generateRecurringDueDates(
-      seriesTodo.dueAt,
+      seriesTodo.startAt,
       newRecurrence,
       horizonEnd,
     )
