@@ -4,7 +4,6 @@ import {
   getDocs,
   doc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   getDoc,
@@ -183,12 +182,13 @@ export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
     });
   }
 
-  await Promise.all(
-    writes.map(({ id: writeId, updates }) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      updateDoc(doc(db, "todos", writeId), updates as any),
-    ),
-  );
+  // 상위/하위 상태 동기화 쓰기가 부분 실패하면 데이터가 어긋나므로, 하나의 batch로
+  // 묶어 전부 성공하거나 전부 실패하게 만든다.
+  const batch = writeBatch(db);
+  writes.forEach(({ id: writeId, updates }) => {
+    batch.update(doc(db, "todos", writeId), updates);
+  });
+  await batch.commit();
 
   return todo;
 };
@@ -198,8 +198,44 @@ export const deleteTodo = async (id: string) => {
   const docRef = doc(db, "todos", id);
   const existing = await getDoc(docRef);
   if (!existing.exists()) throw new Error("Todo not found");
-  if (existing.data().userId !== userId) throw new Error("Forbidden");
-  await deleteDoc(docRef);
+  const existingData = existing.data();
+  if (existingData.userId !== userId) throw new Error("Forbidden");
+
+  const batch = writeBatch(db);
+  batch.delete(docRef);
+
+  const parentId = (existingData.parentId as string | null) ?? null;
+
+  if (parentId === null) {
+    // 루트(부모) 삭제: 하위 할 일을 함께 삭제해 고아 문서를 남기지 않는다.
+    const childrenSnapshot = await getDocs(
+      query(todosRef, where("userId", "==", userId), where("parentId", "==", id)),
+    );
+    childrenSnapshot.docs.forEach((d) => {
+      batch.delete(d.ref);
+    });
+  } else {
+    // 하위 할 일 삭제: 남은 형제들 기준으로 상위 상태를 재계산한다.
+    // 단, 남은 형제가 0명이면 calcParentStatus([])가 every()의 빈 배열 특성상
+    // 무조건 "done"을 반환하는 부작용이 있으므로 상위 상태를 건드리지 않는다.
+    const siblingsSnapshot = await getDocs(
+      query(todosRef, where("userId", "==", userId), where("parentId", "==", parentId)),
+    );
+    const remainingSiblings = siblingsSnapshot.docs
+      .filter((d) => d.id !== id)
+      .map((d) => mapDocToTodo(d.id, d.data()));
+
+    if (remainingSiblings.length > 0) {
+      const { status, doneAt } = calcParentStatus(remainingSiblings);
+      batch.update(doc(db, "todos", parentId), {
+        status,
+        doneAt,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  await batch.commit();
 };
 
 export const updateToDone = async (id: string) => {
@@ -315,6 +351,15 @@ const createRecurringTodoImpl = async (
   const now = new Date().toISOString();
   const recurrenceId = doc(todosRef).id;
   const dueDates = generateRecurringDueDates(todo.startAt, todo.recurrence, horizonEnd);
+
+  // 마감일이 반복 생성 호라이즌(horizonEnd)을 넘어서면 생성 가능한 발생일이 하나도 없다.
+  // 조용히 0개를 커밋하고 성공한 것처럼 보이면 사용자는 일정이 생겼다고 착각하므로,
+  // commit 전에 명시적으로 실패시킨다.
+  if (dueDates.length === 0) {
+    throw new Error(
+      "설정한 마감일이 반복 생성 가능 기간을 벗어나 일정을 생성할 수 없습니다. 마감일을 더 가깝게 설정해주세요.",
+    );
+  }
 
   let nextOrder = await getNextRootOrder(userId);
   const { id: _id, ...todoData } = todo;
@@ -486,6 +531,16 @@ const editRecurringSeriesImpl = async (
       .filter((iso) => new Date(iso).getTime() >= todayStart.getTime())
       .filter((iso) => !preservedDateKeys.has(new Date(iso).toDateString()));
 
+    // 새 마감일이 호라이즌을 벗어나 재생성할 발생일이 하나도 없으면, 여기서(commit 전에)
+    // 명시적으로 실패시킨다. 위 batch.delete/batch.set은 스테이징일 뿐 commit 전에는
+    // Firestore에 반영되지 않으므로, 이 throw로 시리즈 삭제 자체가 취소되어 기존 미래
+    // 인스턴스가 소실되지 않는다.
+    if (dueDates.length === 0) {
+      throw new Error(
+        "설정한 마감일이 반복 생성 가능 기간을 벗어나 일정을 생성할 수 없습니다. 마감일을 더 가깝게 설정해주세요.",
+      );
+    }
+
     let nextOrder = await getNextRootOrder(userId);
     const { id: _id, recurrenceId: _rid, ...rest } = seriesTodo;
 
@@ -577,6 +632,14 @@ const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<vo
   const batch = writeBatch(db);
   let hasWrites = false;
 
+  // batch가 커밋되기 전에는 새 인스턴스가 Firestore에 반영되지 않아, 시리즈마다
+  // getNextRootOrder를 호출하면 매번 같은 maxOrder를 읽어 서로 다른 시리즈의 새
+  // 인스턴스들이 중복된 order를 받는다. 그래서 루프 전체가 하나의 nextOrder를 공유하며
+  // 실제로 쓴 만큼만 증가시킨다. 단, 이 함수는 앱 진입 시마다 실행되고 대부분의 경우
+  // 확장할 것이 없으므로, 첫 쓰기가 필요해지는 시점에 한 번만 지연 조회한다
+  // (생성할 것이 없으면 getNextRootOrder용 추가 조회도 발생하지 않아야 한다).
+  let sharedNextOrder: number | null = null;
+
   for (const [recurrenceId, instances] of seriesByRecurrenceId) {
     const latest = instances.reduce((a, b) =>
       new Date(a.dueAt as string).getTime() > new Date(b.dueAt as string).getTime() ? a : b,
@@ -595,7 +658,11 @@ const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<vo
 
     if (newDueDates.length === 0) continue;
 
-    let nextOrder = await getNextRootOrder(userId);
+    if (sharedNextOrder === null) {
+      sharedNextOrder = await getNextRootOrder(userId);
+    }
+    let nextOrder: number = sharedNextOrder;
+
     // 가장 최근 인스턴스의 제목/우선순위 등 필드를 그대로 이어서 사용한다(기존 값 승계).
     const { id: _id, ...rest } = latest;
 
@@ -620,6 +687,8 @@ const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<vo
       nextOrder += 1;
       hasWrites = true;
     });
+
+    sharedNextOrder = nextOrder;
   }
 
   if (hasWrites) {

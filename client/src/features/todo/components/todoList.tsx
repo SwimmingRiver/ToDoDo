@@ -70,7 +70,19 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
 
   const searchResultTree = useMemo(() => {
     if (!searchResults) return [];
-    return searchResults.map((todo: Todo) => ({
+
+    // 검색 결과도 목록과 동일한 규칙을 따른다: 루트 할 일은 완료(done) 제외 +
+    // 반복 시리즈당 대표 1건으로 축약. 하위 할 일 매치는 그대로 노출한다
+    // (반복은 루트에만 존재하고, 완료된 하위 항목도 검색으로는 찾을 수 있어야 한다).
+    const rootMatches = searchResults.filter(
+      (todo: Todo) => todo.parentId === null && todo.status !== "done"
+    );
+    const collapsedRootMatches = collapseRecurringInstances(rootMatches);
+    const childMatches = searchResults.filter(
+      (todo: Todo) => todo.parentId !== null
+    );
+
+    return [...collapsedRootMatches, ...childMatches].map((todo: Todo) => ({
       ...todo,
       childTodos: todo.parentId === null
         ? todos.filter((t) => t.parentId === todo.id)
