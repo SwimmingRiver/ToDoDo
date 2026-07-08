@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
-import { X } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import { useToast, ConfirmModal, toDatetimeLocalValue } from "@/shared";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
@@ -16,6 +16,7 @@ import {
   PanelTitle,
   PanelContent,
   PanelFooter,
+  PanelFooterActions,
   CloseButton,
   FormContainer,
   InfoRow,
@@ -62,6 +63,7 @@ const TodoDetail = () => {
     useCreateRecurringTodo,
     useEditRecurringSeries,
     useDeleteTodo,
+    useDeleteRecurringSeries,
     useGetTodos,
   } = useTodo();
   const { data: allTodos } = useGetTodos;
@@ -121,6 +123,7 @@ const TodoDetail = () => {
 
   const [isSeriesConfirmOpen, setIsSeriesConfirmOpen] = useState(false);
   const [pendingSeriesUpdate, setPendingSeriesUpdate] = useState<Todo | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const handleClose = () => {
     if (window.history.state?.idx > 0) {
@@ -133,6 +136,40 @@ const TodoDetail = () => {
   const closeSeriesConfirm = () => {
     setIsSeriesConfirmOpen(false);
     setPendingSeriesUpdate(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!todo) return;
+    const title = todo.title;
+
+    // todoList.tsx의 삭제 분기와 동일하게, 반복 시리즈면 recurrenceId 기준으로 전체
+    // 시리즈를 지우고, 아니면 단일 문서만 지운다.
+    if (todo.recurrenceId) {
+      useDeleteRecurringSeries.mutate(todo.recurrenceId, {
+        onSuccess: () => {
+          toast.success("삭제 완료", `"${title}" 반복 일정이 모두 삭제되었습니다`);
+          setIsDeleteConfirmOpen(false);
+          handleClose();
+        },
+        onError: () => {
+          toast.error("삭제 실패", "삭제 중 오류가 발생했습니다");
+          setIsDeleteConfirmOpen(false);
+        },
+      });
+      return;
+    }
+
+    useDeleteTodo.mutate(todo.id, {
+      onSuccess: () => {
+        toast.success("삭제 완료", `"${title}"이(가) 삭제되었습니다`);
+        setIsDeleteConfirmOpen(false);
+        handleClose();
+      },
+      onError: () => {
+        toast.error("삭제 실패", "삭제 중 오류가 발생했습니다");
+        setIsDeleteConfirmOpen(false);
+      },
+    });
   };
 
   const handleConfirmSeriesEdit = () => {
@@ -349,12 +386,23 @@ const TodoDetail = () => {
         </PanelContent>
 
         <PanelFooter>
-          <Button type="button" onClick={handleClose}>
-            취소
+          <Button
+            type="button"
+            $variant="danger"
+            onClick={() => setIsDeleteConfirmOpen(true)}
+            aria-label="할 일 삭제"
+          >
+            <Trash2 size={16} />
+            삭제
           </Button>
-          <Button type="submit" form="todo-detail-form" $variant="primary">
-            저장
-          </Button>
+          <PanelFooterActions>
+            <Button type="button" onClick={handleClose}>
+              취소
+            </Button>
+            <Button type="submit" form="todo-detail-form" $variant="primary">
+              저장
+            </Button>
+          </PanelFooterActions>
         </PanelFooter>
       </Panel>
 
@@ -369,6 +417,21 @@ const TodoDetail = () => {
         confirmDisabled={useEditRecurringSeries.isPending}
         onConfirm={handleConfirmSeriesEdit}
         onCancel={closeSeriesConfirm}
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        title="할 일 삭제"
+        message={
+          todo.recurrenceId
+            ? `"${todo.title}"은(는) 반복 일정입니다.\n\n삭제하면 이 반복 시리즈의 모든 일정이 함께 삭제됩니다.`
+            : `"${todo.title}"을(를) 삭제하시겠습니까?`
+        }
+        confirmText="삭제"
+        cancelText="취소"
+        confirmDisabled={useDeleteTodo.isPending || useDeleteRecurringSeries.isPending}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setIsDeleteConfirmOpen(false)}
       />
     </>
   );

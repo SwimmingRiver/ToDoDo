@@ -213,23 +213,35 @@ const InfoValue = styled.span`
 
 const PanelFooter = styled.div`
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid ${colors.border.tertiary};
 
   ${media.mobile} {
     padding: 12px 16px;
-    flex-direction: column-reverse;
   }
 `;
 
-const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
+const PanelFooterActions = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+
+  ${media.mobile} {
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+`;
+
+const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
   border-radius: 8px;
   cursor: pointer;
+  min-height: 44px;
   transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 
   &:focus-visible {
@@ -255,7 +267,24 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
       box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
     }
   `
-      : `
+      : $variant === "danger"
+        ? `
+    background-color: white;
+    color: ${colors.danger.text};
+    border: 1px solid ${colors.border.danger};
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    &:hover {
+      background-color: ${colors.danger.background};
+    }
+
+    &:active {
+      background-color: ${colors.danger.subtle};
+    }
+  `
+        : `
     background-color: white;
     color: ${colors.text.secondary};
     border: 1px solid ${colors.border.secondary};
@@ -334,6 +363,7 @@ export {
   InfoLabel,
   InfoValue,
   PanelFooter,
+  PanelFooterActions,
   Button,
   StatusBadge,
   PriorityBadge,
