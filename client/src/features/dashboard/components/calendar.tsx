@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTodo, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
-import type { EventInput, EventClickArg, EventContentArg } from "@fullcalendar/core/index.js";
+import type { EventInput, EventClickArg, EventContentArg, MoreLinkArg } from "@fullcalendar/core/index.js";
 import type { DateClickArg } from "@fullcalendar/interaction";
 import type { EventDropArg } from "@fullcalendar/core";
 import {
@@ -131,6 +131,16 @@ const Calendar = () => {
   const handleDateClick = useCallback((info: DateClickArg) => {
     setSelectedDate(info.dateStr);
     setIsBottomSheetOpen(true);
+  }, []);
+
+  const handleMoreLinkClick = useCallback((info: MoreLinkArg) => {
+    // FC 마커 날짜는 UTC 필드에 달력 날짜를 담고 있으므로 UTC로 읽어야
+    // 사용자 타임존과 무관하게 올바른 날짜가 된다
+    setSelectedDate(info.date.toISOString().slice(0, 10));
+    setIsBottomSheetOpen(true);
+    // void 반환 시 FC 기본 팝오버가, 뷰 이름 문자열 반환 시 뷰 전환(zoomTo)이
+    // 일어난다. 둘 다 막는 공식 반환값이 없어 truthy 비문자열을 반환한다
+    return true as unknown as string;
   }, []);
 
   const handleEventClick = useCallback((info: EventClickArg) => {
@@ -260,6 +270,10 @@ const Calendar = () => {
           displayEventTime={false}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
+          dayMaxEvents={true}
+          moreLinkContent={(arg) => `+${arg.num}개`}
+          moreLinkClick={handleMoreLinkClick}
+          moreLinkHint={(num) => `할 일 ${num}개 더 보기`}
           eventContent={renderEventContent}
           editable={true}
           eventDrop={handleEventDrop}

@@ -35,7 +35,8 @@ const CalendarContainer = styled.div`
 
   .fc-daygrid-more-link {
     font-size: 11px;
-    color: #666;
+    font-weight: 600;
+    color: #5f6368;
   }
 
   /* 날짜 셀 클릭 가능하도록 */
@@ -80,8 +81,10 @@ const CalendarContainer = styled.div`
       display: none !important;
     }
 
+    /* 모바일: 얇은 바만으로는 건수 구분이 안 되므로 "+N개"로 개수를 알린다 */
     .fc-daygrid-more-link {
-      display: none !important;
+      font-size: 10px;
+      padding: 0 2px;
     }
   }
 `;
