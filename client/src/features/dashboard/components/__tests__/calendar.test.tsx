@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import Calendar from '../calendar'
@@ -82,5 +82,48 @@ describe('Calendar 하루 다건 "+N개" 표시', () => {
     expect(screen.getAllByText(/마감:/).length).toBeGreaterThan(0)
     // FullCalendar 기본 팝오버는 열리지 않아야 한다
     expect(document.querySelector('.fc-popover')).toBeNull()
+  })
+})
+
+// dueAt은 UTC Z 문자열로 저장되므로(todoForm이 toISOString 사용), KST에서
+// 자정~오전 9시 마감은 UTC 날짜가 전날이 된다. 캘린더가 UTC 기준으로 날짜를
+// 뽑으면 마감일 전날 셀에 표시되는 회귀를 막는다. CI는 UTC라서 TZ를 비-UTC로
+// 고정해야 실제로 검증된다.
+describe('Calendar 타임존: 자정 마감 할 일', () => {
+  let originalTz: string | undefined
+  let savedTodos: (typeof mockTodos)[number][]
+
+  beforeAll(() => {
+    originalTz = process.env.TZ
+    process.env.TZ = 'Asia/Seoul'
+    savedTodos = [...mockTodos]
+  })
+
+  afterAll(() => {
+    process.env.TZ = originalTz
+    mockTodos.splice(0, mockTodos.length, ...savedTodos)
+  })
+
+  it('KST 자정 마감(UTC로는 전날) 할 일이 마감일 셀에 표시된다', async () => {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = now.getMonth()
+    const d = now.getDate()
+    const kstMidnight = new Date(y, m, d, 0, 0) // KST 자정
+    const dueDateKey = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+
+    mockTodos.splice(0, mockTodos.length, {
+      ...savedTodos[0],
+      id: 'midnight-todo',
+      title: '자정 마감 할 일',
+      startAt: null,
+      dueAt: kstMidnight.toISOString(), // 전날 15:00Z
+    })
+
+    renderCalendar()
+    await screen.findByText('자정 마감 할 일')
+
+    const dueCell = document.querySelector(`[data-date="${dueDateKey}"]`)
+    expect(dueCell?.textContent).toContain('자정 마감 할 일')
   })
 })

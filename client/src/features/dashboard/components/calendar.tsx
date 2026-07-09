@@ -44,6 +44,18 @@ function toLocalDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * datetime 문자열 → 로컬 타임존 기준 "YYYY-MM-DD".
+ * dueAt/startAt은 UTC Z 문자열로 저장되므로(todoForm이 toISOString 사용)
+ * split("T")로 자르면 UTC 날짜가 나온다 — KST에서 자정~오전 9시 마감이
+ * 전날로 밀리는 원인. 반드시 로컬 타임존으로 변환해서 날짜를 뽑는다.
+ * "T"가 없는 date-only 문자열은 이미 달력 날짜이므로 그대로 반환한다.
+ */
+function toLocalDateOnly(dateTimeStr: string): string {
+  if (!dateTimeStr.includes("T")) return dateTimeStr;
+  return toLocalDateStr(new Date(dateTimeStr));
+}
+
 const Calendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,10 +82,11 @@ const Calendar = () => {
 
         // FullCalendar all-day 형식 (date-only 문자열)
         // end는 배타적이므로 dueAt 다음 날로 설정해야 dueAt 당일이 표시됨
-        const startDate = (todo.startAt ?? todo.dueAt ?? null)?.split("T")[0] ?? null;
+        const startSrc = todo.startAt ?? todo.dueAt ?? null;
+        const startDate = startSrc ? toLocalDateOnly(startSrc) : null;
         let endDate: string | null = null;
         if (todo.startAt && todo.dueAt) {
-          const [y, mo, d] = todo.dueAt.split("T")[0].split("-").map(Number);
+          const [y, mo, d] = toLocalDateOnly(todo.dueAt).split("-").map(Number);
           endDate = toLocalDateStr(new Date(y, mo - 1, d + 1));
         }
 
@@ -109,20 +122,22 @@ const Calendar = () => {
 
   const selectedDateTodos = useMemo(() => {
     if (!selectedDate || !todos) return [];
-    const selected = new Date(selectedDate);
 
+    // selectedDate는 "YYYY-MM-DD" — 같은 형식의 로컬 날짜 문자열끼리 비교한다
+    // (사전순 비교가 날짜순과 일치). 격자(events)와 동일한 로컬 기준이어야
+    // 셀에 보이는 항목과 바텀시트 목록이 어긋나지 않는다.
     return todos.filter((todo: Todo) => {
       if (!todo.startAt && !todo.dueAt) return false;
 
-      const start = todo.startAt ? new Date(todo.startAt.split("T")[0]) : null;
-      const end = todo.dueAt ? new Date(todo.dueAt.split("T")[0]) : null;
+      const start = todo.startAt ? toLocalDateOnly(todo.startAt) : null;
+      const end = todo.dueAt ? toLocalDateOnly(todo.dueAt) : null;
 
       // 시작일만 있는 경우
-      if (start && !end) return start.getTime() === selected.getTime();
+      if (start && !end) return start === selectedDate;
       // 종료일만 있는 경우
-      if (!start && end) return end.getTime() === selected.getTime();
+      if (!start && end) return end === selectedDate;
       // 둘 다 있는 경우: 시작일 <= 선택일 <= 종료일
-      if (start && end) return selected >= start && selected <= end;
+      if (start && end) return selectedDate >= start && selectedDate <= end;
 
       return false;
     });
