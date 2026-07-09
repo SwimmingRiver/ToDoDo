@@ -20,6 +20,8 @@ interface KanbanColumnProps {
   todos: Todo[];
   allTodos: Todo[];
   onNavigate: (id: string) => void;
+  isMobile?: boolean;
+  onStatusChange?: (todo: Todo, status: Status) => void;
 }
 
 const getEmptyMessage = (status: Status) => {
@@ -50,6 +52,8 @@ const KanbanColumn = ({
   todos,
   allTodos,
   onNavigate,
+  isMobile = false,
+  onStatusChange,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
@@ -86,6 +90,8 @@ const KanbanColumn = ({
                 todo={todo}
                 parentTitle={getParentTitle(todo.parentId)}
                 onNavigate={onNavigate}
+                isMobile={isMobile}
+                onStatusChange={onStatusChange}
               />
             ))
           )}

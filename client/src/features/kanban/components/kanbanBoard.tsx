@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
-import { useTodo } from "@/features/todo";
+import { useTodo, type Todo } from "@/features/todo";
 import { useMediaQuery, KanbanSkeleton } from "@/shared";
-import KanbanColumn from "./kanbanColumn";
+import KanbanColumn, { type Status } from "./kanbanColumn";
 import { useKanbanDrag } from "../hooks/useKanbanDrag";
 import { isVisibleInKanban } from "../utils/kanbanFilters";
 import { collapseRecurringInstances } from "@/features/todo";
@@ -69,39 +69,33 @@ const KanbanBoard = () => {
     }
   };
 
+  // 모바일(태블릿 이하)에서는 활성 탭 컬럼 1개만 DOM에 존재해 dnd-kit 드래그로
+  // 다른 상태로 옮길 수 없다. 카드의 "..." 액션시트에서 상태를 선택하면 기존
+  // 드래그와 동일한 useUpdateTodo mutation을 재사용해 상태를 변경한다.
+  const handleStatusChange = (todo: Todo, status: Status) => {
+    if (todo.status === status) return;
+    useUpdateTodo.mutate({ ...todo, status });
+  };
+
+  const tabColumnMap: Record<KanbanTab, { title: string; todos: Todo[] }> = {
+    todo: { title: "To Do", todos: todoList },
+    doing: { title: "Doing", todos: doingList },
+    done: { title: "Done", todos: doneList },
+  };
+
   const renderActiveColumn = () => {
-    switch (activeTab) {
-      case "todo":
-        return (
-          <KanbanColumn
-            title="To Do"
-            status="todo"
-            todos={todoList}
-            allTodos={todos ?? []}
-            onNavigate={handleNavigate}
-          />
-        );
-      case "doing":
-        return (
-          <KanbanColumn
-            title="Doing"
-            status="doing"
-            todos={doingList}
-            allTodos={todos ?? []}
-            onNavigate={handleNavigate}
-          />
-        );
-      case "done":
-        return (
-          <KanbanColumn
-            title="Done"
-            status="done"
-            todos={doneList}
-            allTodos={todos ?? []}
-            onNavigate={handleNavigate}
-          />
-        );
-    }
+    const { title, todos: activeTodos } = tabColumnMap[activeTab];
+    return (
+      <KanbanColumn
+        title={title}
+        status={activeTab}
+        todos={activeTodos}
+        allTodos={todos ?? []}
+        onNavigate={handleNavigate}
+        isMobile={isTablet}
+        onStatusChange={handleStatusChange}
+      />
+    );
   };
 
   if (isLoading) {
