@@ -270,7 +270,12 @@ const Calendar = () => {
           displayEventTime={false}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
-          dayMaxEvents={true}
+          /* 높이 기반 자동(true)은 이벤트 바가 압축된 이 앱(특히 모바일 6px 바)에서는
+             현실적인 건수(3~6건)로 임계치에 닿지 않아 +N개가 표시되지 않는다.
+             디자인 스펙(최대 3개 + +N)대로 고정 상한을 사용한다.
+             주간 뷰는 세로 공간이 충분하므로 높이 기반 자동을 유지한다. */
+          dayMaxEvents={3}
+          views={{ dayGridWeek: { dayMaxEvents: true } }}
           moreLinkContent={(arg) => `+${arg.num}개`}
           moreLinkClick={handleMoreLinkClick}
           moreLinkHint={(num) => `할 일 ${num}개 더 보기`}
