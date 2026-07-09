@@ -276,6 +276,10 @@ const Calendar = () => {
              주간 뷰는 세로 공간이 충분하므로 높이 기반 자동을 유지한다. */
           dayMaxEvents={3}
           views={{ dayGridWeek: { dayMaxEvents: true } }}
+          /* 기본 정렬(긴 이벤트 우선)은 기간 바가 상단 3개 슬롯을 독점해
+             마감일만 있는 단일일 할 일이 전부 +N개 뒤로 숨는다.
+             짧은 이벤트 우선으로 마감일 항목이 항상 해당 날짜에 노출되게 한다. */
+          eventOrder="duration,start,title"
           moreLinkContent={(arg) => `+${arg.num}개`}
           moreLinkClick={handleMoreLinkClick}
           moreLinkHint={(num) => `할 일 ${num}개 더 보기`}
