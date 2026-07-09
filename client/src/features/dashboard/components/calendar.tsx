@@ -73,7 +73,7 @@ const Calendar = () => {
     today.setHours(0, 0, 0, 0);
 
     return todos
-      ?.filter((todo: Todo) => todo.startAt !== null || todo.dueAt !== null)
+      ?.filter((todo: Todo) => !!todo.startAt || !!todo.dueAt)
       .map((todo: Todo) => {
         const overdue =
           todo.dueAt !== null &&
@@ -82,7 +82,10 @@ const Calendar = () => {
 
         // FullCalendar all-day 형식 (date-only 문자열)
         // end는 배타적이므로 dueAt 다음 날로 설정해야 dueAt 당일이 표시됨
-        const startSrc = todo.startAt ?? todo.dueAt ?? null;
+        // 구버전 생성 경로가 시작일 미입력을 null이 아닌 ""로 저장한 문서가 있어
+        // ??(null만 거름) 대신 ||로 falsy를 함께 걸러야 한다. ""가 시작일로
+        // 넘어가면 FC가 이벤트를 통째로 버려 캘린더에서 사라진다.
+        const startSrc = todo.startAt || todo.dueAt || null;
         const startDate = startSrc ? toLocalDateOnly(startSrc) : null;
         let endDate: string | null = null;
         if (todo.startAt && todo.dueAt) {

@@ -85,6 +85,42 @@ describe('Calendar 하루 다건 "+N개" 표시', () => {
   })
 })
 
+// 구버전 생성 경로(일반/하위 할 일)는 폼 값을 정규화 없이 저장해서 시작일을
+// 비워두면 startAt이 null이 아니라 ""(빈 문자열)로 저장됐다. 캘린더가 ??로
+// null만 거르면 ""가 이벤트 시작일이 되어 FC가 이벤트를 통째로 버린다.
+describe('Calendar 빈 문자열 startAt 방어', () => {
+  let saved: (typeof mockTodos)[number][]
+
+  beforeAll(() => {
+    saved = [...mockTodos]
+  })
+
+  afterAll(() => {
+    mockTodos.splice(0, mockTodos.length, ...saved)
+  })
+
+  it('startAt이 ""로 저장된 마감일 전용 할 일이 마감일 셀에 표시된다', async () => {
+    const d = new Date()
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`
+
+    mockTodos.splice(0, mockTodos.length, {
+      ...saved[0],
+      id: 'empty-start-todo',
+      title: '빈 시작일 할 일',
+      startAt: '',
+      dueAt: `${key}T00:00`, // 구버전 생성 경로의 raw datetime-local 형식
+    } as unknown as (typeof mockTodos)[number])
+
+    renderCalendar()
+    await screen.findByText('빈 시작일 할 일')
+
+    const dueCell = document.querySelector(`[data-date="${key}"]`)
+    expect(dueCell?.textContent).toContain('빈 시작일 할 일')
+  })
+})
+
 // dueAt은 UTC Z 문자열로 저장되므로(todoForm이 toISOString 사용), KST에서
 // 자정~오전 9시 마감은 UTC 날짜가 전날이 된다. 캘린더가 UTC 기준으로 날짜를
 // 뽑으면 마감일 전날 셀에 표시되는 회귀를 막는다. CI는 UTC라서 TZ를 비-UTC로
