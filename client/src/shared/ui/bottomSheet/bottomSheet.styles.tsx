@@ -48,6 +48,8 @@ const Container = styled.div<{ $isClosing: boolean }>`
   display: flex;
   flex-direction: column;
   animation: ${({ $isClosing }) => ($isClosing ? slideDown : slideUp)} 0.3s ease forwards;
+  /* 닫힘 애니메이션 중 옵션을 연타해서 onSelect가 중복 호출되지 않도록 방지 */
+  pointer-events: ${({ $isClosing }) => ($isClosing ? "none" : "auto")};
 
   @media (min-width: 481px) {
     width: 400px;

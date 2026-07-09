@@ -3,29 +3,18 @@ import { Circle, Loader, CheckCircle, ChevronDown } from "lucide-react";
 import { BottomSheet, type BottomSheetOption } from "@/shared";
 import { StatusButton, StatusIcon, StatusLabel } from "./statusSelect.styles";
 import { statusColors, type Status } from "../../../../styles/statusColors";
+import { statusMeta, ALL_STATUSES } from "../../../../styles/statusMeta";
 
 interface StatusSelectProps {
   value: Status;
   onChange: (value: Status) => void;
 }
 
-const statusOptions: BottomSheetOption<Status>[] = [
-  {
-    value: "todo",
-    label: "할 일",
-    icon: <Circle size={18} color={statusColors.todo.main} />,
-  },
-  {
-    value: "doing",
-    label: "진행 중",
-    icon: <Loader size={18} color={statusColors.doing.main} />,
-  },
-  {
-    value: "done",
-    label: "완료",
-    icon: <CheckCircle size={18} color={statusColors.done.main} />,
-  },
-];
+const statusOptions: BottomSheetOption<Status>[] = ALL_STATUSES.map((status) => ({
+  value: status,
+  label: statusMeta[status].label,
+  icon: statusMeta[status].icon,
+}));
 
 const getStatusInfo = (status: Status) => {
   const colors = statusColors[status];

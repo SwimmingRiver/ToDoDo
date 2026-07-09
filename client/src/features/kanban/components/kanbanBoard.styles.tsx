@@ -79,6 +79,15 @@ const ItemTitleRow = styled.div`
   gap: 6px;
 `;
 
+// 제목/배지 영역과 모바일 전용 "..." 액션시트 버튼을 한 줄에 배치한다.
+// 버튼은 항상 우측 상단에 고정되도록 align-items: flex-start.
+const ItemContentRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+`;
+
 const DragOverlayItem = styled.div`
   background: #fff;
   border-radius: 8px;
@@ -156,6 +165,7 @@ export {
   ParentLabel,
   ItemTitle,
   ItemTitleRow,
+  ItemContentRow,
   DragOverlayItem,
   MobileTabContainer,
   MobileTabButton,
