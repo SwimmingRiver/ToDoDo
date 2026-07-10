@@ -206,10 +206,16 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
       });
     } else if (parentId) {
       // 자식 todo 생성 (반복 설정 대상 아님)
+      // 빈 datetime-local 값은 null이 아닌 ""라서 그대로 저장하면 캘린더 등
+      // ?? 기반 소비처가 오동작한다 — 다른 경로처럼 ISO/null로 정규화한다
       useCreateChildTodo.mutate(
         {
           parentId,
-          todo: data,
+          todo: {
+            ...data,
+            startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
+            dueAt: dueAtIso,
+          },
         },
         {
           onSuccess: () => {
@@ -242,8 +248,13 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
         }
       );
     } else {
-      // 일반 todo 생성
-      useCreateTodo.mutate(data as Todo, {
+      // 일반 todo 생성 — 빈 datetime-local 값("")을 null로, 값은 ISO로 정규화
+      useCreateTodo.mutate(
+        {
+          ...data,
+          startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
+          dueAt: dueAtIso,
+        } as Todo, {
         onSuccess: () => {
           toast.success("추가 완료", `"${data.title}" 할 일이 추가되었습니다`);
           onClose?.();

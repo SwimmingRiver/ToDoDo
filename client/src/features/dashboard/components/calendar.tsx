@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTodo, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
-import type { EventInput, EventClickArg, EventContentArg } from "@fullcalendar/core/index.js";
+import type { EventInput, EventClickArg, EventContentArg, MoreLinkArg } from "@fullcalendar/core/index.js";
 import type { DateClickArg } from "@fullcalendar/interaction";
 import type { EventDropArg } from "@fullcalendar/core";
 import {
@@ -44,6 +44,18 @@ function toLocalDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * datetime 문자열 → 로컬 타임존 기준 "YYYY-MM-DD".
+ * dueAt/startAt은 UTC Z 문자열로 저장되므로(todoForm이 toISOString 사용)
+ * split("T")로 자르면 UTC 날짜가 나온다 — KST에서 자정~오전 9시 마감이
+ * 전날로 밀리는 원인. 반드시 로컬 타임존으로 변환해서 날짜를 뽑는다.
+ * "T"가 없는 date-only 문자열은 이미 달력 날짜이므로 그대로 반환한다.
+ */
+function toLocalDateOnly(dateTimeStr: string): string {
+  if (!dateTimeStr.includes("T")) return dateTimeStr;
+  return toLocalDateStr(new Date(dateTimeStr));
+}
+
 const Calendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +73,7 @@ const Calendar = () => {
     today.setHours(0, 0, 0, 0);
 
     return todos
-      ?.filter((todo: Todo) => todo.startAt !== null || todo.dueAt !== null)
+      ?.filter((todo: Todo) => !!todo.startAt || !!todo.dueAt)
       .map((todo: Todo) => {
         const overdue =
           todo.dueAt !== null &&
@@ -70,10 +82,14 @@ const Calendar = () => {
 
         // FullCalendar all-day 형식 (date-only 문자열)
         // end는 배타적이므로 dueAt 다음 날로 설정해야 dueAt 당일이 표시됨
-        const startDate = (todo.startAt ?? todo.dueAt ?? null)?.split("T")[0] ?? null;
+        // 구버전 생성 경로가 시작일 미입력을 null이 아닌 ""로 저장한 문서가 있어
+        // ??(null만 거름) 대신 ||로 falsy를 함께 걸러야 한다. ""가 시작일로
+        // 넘어가면 FC가 이벤트를 통째로 버려 캘린더에서 사라진다.
+        const startSrc = todo.startAt || todo.dueAt || null;
+        const startDate = startSrc ? toLocalDateOnly(startSrc) : null;
         let endDate: string | null = null;
         if (todo.startAt && todo.dueAt) {
-          const [y, mo, d] = todo.dueAt.split("T")[0].split("-").map(Number);
+          const [y, mo, d] = toLocalDateOnly(todo.dueAt).split("-").map(Number);
           endDate = toLocalDateStr(new Date(y, mo - 1, d + 1));
         }
 
@@ -109,20 +125,22 @@ const Calendar = () => {
 
   const selectedDateTodos = useMemo(() => {
     if (!selectedDate || !todos) return [];
-    const selected = new Date(selectedDate);
 
+    // selectedDate는 "YYYY-MM-DD" — 같은 형식의 로컬 날짜 문자열끼리 비교한다
+    // (사전순 비교가 날짜순과 일치). 격자(events)와 동일한 로컬 기준이어야
+    // 셀에 보이는 항목과 바텀시트 목록이 어긋나지 않는다.
     return todos.filter((todo: Todo) => {
       if (!todo.startAt && !todo.dueAt) return false;
 
-      const start = todo.startAt ? new Date(todo.startAt.split("T")[0]) : null;
-      const end = todo.dueAt ? new Date(todo.dueAt.split("T")[0]) : null;
+      const start = todo.startAt ? toLocalDateOnly(todo.startAt) : null;
+      const end = todo.dueAt ? toLocalDateOnly(todo.dueAt) : null;
 
       // 시작일만 있는 경우
-      if (start && !end) return start.getTime() === selected.getTime();
+      if (start && !end) return start === selectedDate;
       // 종료일만 있는 경우
-      if (!start && end) return end.getTime() === selected.getTime();
+      if (!start && end) return end === selectedDate;
       // 둘 다 있는 경우: 시작일 <= 선택일 <= 종료일
-      if (start && end) return selected >= start && selected <= end;
+      if (start && end) return selectedDate >= start && selectedDate <= end;
 
       return false;
     });
@@ -131,6 +149,16 @@ const Calendar = () => {
   const handleDateClick = useCallback((info: DateClickArg) => {
     setSelectedDate(info.dateStr);
     setIsBottomSheetOpen(true);
+  }, []);
+
+  const handleMoreLinkClick = useCallback((info: MoreLinkArg) => {
+    // FC 마커 날짜는 UTC 필드에 달력 날짜를 담고 있으므로 UTC로 읽어야
+    // 사용자 타임존과 무관하게 올바른 날짜가 된다
+    setSelectedDate(info.date.toISOString().slice(0, 10));
+    setIsBottomSheetOpen(true);
+    // void 반환 시 FC 기본 팝오버가, 뷰 이름 문자열 반환 시 뷰 전환(zoomTo)이
+    // 일어난다. 둘 다 막는 공식 반환값이 없어 truthy 비문자열을 반환한다
+    return true as unknown as string;
   }, []);
 
   const handleEventClick = useCallback((info: EventClickArg) => {
@@ -260,6 +288,19 @@ const Calendar = () => {
           displayEventTime={false}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
+          /* 높이 기반 자동(true)은 이벤트 바가 압축된 이 앱(특히 모바일 6px 바)에서는
+             현실적인 건수(3~6건)로 임계치에 닿지 않아 +N개가 표시되지 않는다.
+             디자인 스펙(최대 3개 + +N)대로 고정 상한을 사용한다.
+             주간 뷰는 세로 공간이 충분하므로 높이 기반 자동을 유지한다. */
+          dayMaxEvents={3}
+          views={{ dayGridWeek: { dayMaxEvents: true } }}
+          /* 기본 정렬(긴 이벤트 우선)은 기간 바가 상단 3개 슬롯을 독점해
+             마감일만 있는 단일일 할 일이 전부 +N개 뒤로 숨는다.
+             짧은 이벤트 우선으로 마감일 항목이 항상 해당 날짜에 노출되게 한다. */
+          eventOrder="duration,start,title"
+          moreLinkContent={(arg) => `+${arg.num}개`}
+          moreLinkClick={handleMoreLinkClick}
+          moreLinkHint={(num) => `할 일 ${num}개 더 보기`}
           eventContent={renderEventContent}
           editable={true}
           eventDrop={handleEventDrop}
