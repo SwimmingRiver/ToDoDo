@@ -27,7 +27,7 @@ import { BottomSheet, EmptyState, Modal, RecurrenceBadge, useToast } from "@/sha
 import { AlertCircle, Plus, Repeat } from "lucide-react";
 import styled, { keyframes } from "styled-components";
 import { colors } from "@/styles/colors";
-import { isOverdue } from "../utils/calendarUtils";
+import { isOverdue, getDropDates } from "../utils/calendarUtils";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
 
 const statusLabels: Record<Status, string> = {
@@ -184,21 +184,11 @@ const Calendar = () => {
       return;
     }
 
-    // FC end는 배타적(+1일)이므로 실제 dueAt은 하루 전
-    let newDueAt: string | null = null;
-    if (info.event.end) {
-      const d = new Date(info.event.end);
-      d.setDate(d.getDate() - 1);
-      newDueAt = `${toLocalDateStr(d)}T00:00`;
-    } else if (info.event.start) {
-      newDueAt = `${toLocalDateStr(info.event.start)}T00:00`;
-    }
-
-    // startAt이 있는 다중일 이벤트 드래그 시 startAt도 함께 갱신
-    let newStartAt: string | null | undefined = undefined;
-    if (todo.startAt && info.event.start) {
-      newStartAt = `${toLocalDateStr(info.event.start)}T00:00`;
-    }
+    const { newDueAt, newStartAt } = getDropDates(
+      info.event.start,
+      info.event.end,
+      todo.startAt,
+    );
 
     useUpdateTodoDueAt.mutate(
       { id: todo.id, dueAt: newDueAt, startAt: newStartAt },
