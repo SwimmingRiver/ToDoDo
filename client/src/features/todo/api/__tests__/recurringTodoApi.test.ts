@@ -1,5 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Todo, RecurrenceRule } from "../../types/todo.type";
+
+// 이 파일의 fixture들은 2026-07 초중순을 기준으로 한 절대 날짜를 쓴다.
+// 실제 시스템 시간으로 실행하면 그 날짜가 지날 때마다 호라이즌 계산이 깨지므로
+// "오늘"을 fixture 범위 안의 고정 시점으로 못박아 시간 경과와 무관하게 만든다.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-07-10T00:00:00"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 // Firebase 모킹 - 실제 Firebase에 연결하지 않도록 처리
 vi.mock("@/shared/lib/firebase", () => ({

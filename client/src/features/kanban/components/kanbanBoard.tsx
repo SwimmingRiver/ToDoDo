@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import { useTodo, type Todo } from "@/features/todo";
-import { useMediaQuery, KanbanSkeleton } from "@/shared";
+import { useMediaQuery, KanbanSkeleton, EmptyState } from "@/shared";
 import KanbanColumn, { type Status } from "./kanbanColumn";
 import { useKanbanDrag } from "../hooks/useKanbanDrag";
 import { isVisibleInKanban } from "../utils/kanbanFilters";
 import { collapseRecurringInstances } from "@/features/todo";
-import { Circle, Loader, CheckCircle } from "lucide-react";
+import { Circle, Loader, CheckCircle, AlertCircle } from "lucide-react";
 import {
   KanbanBoardContainer,
   DragOverlayItem,
@@ -23,7 +23,7 @@ type KanbanTab = "todo" | "doing" | "done";
 const KanbanBoard = () => {
   const navigate = useNavigate();
   const { useGetTodos, useUpdateTodo } = useTodo();
-  const { data: todos, isLoading } = useGetTodos;
+  const { data: todos, isLoading, isError } = useGetTodos;
   const [activeTab, setActiveTab] = useState<KanbanTab>("todo");
   const isTablet = useMediaQuery("tablet");
 
@@ -100,6 +100,16 @@ const KanbanBoard = () => {
 
   if (isLoading) {
     return <KanbanSkeleton mobile={isTablet} />;
+  }
+
+  if (isError) {
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="칸반 보드를 불러오지 못했습니다"
+        description="네트워크 연결을 확인하고 다시 시도해주세요"
+      />
+    );
   }
 
   return (

@@ -57,6 +57,19 @@ const KanbanItem = ({
     [onStatusChange, todo],
   );
 
+  // dnd-kit 키보드 센서는 Space만 드래그 시작/이동/종료로 처리하도록 좁혀져 있다
+  // (useKanbanDrag.ts). Enter는 드래그와 무관하게 카드 열기(상세 이동)로 쓴다.
+  // dragListeners.onKeyDown을 먼저 호출해 Space 기반 키보드 드래그를 보존한 뒤
+  // Enter만 별도로 처리한다. div는 button과 달리 Enter/Space를 자동으로 click으로
+  // 바꿔주지 않으므로 명시적 핸들러가 필요하다.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    dragListeners?.onKeyDown?.(event);
+
+    if (event.key === "Enter") {
+      onNavigate(todo.id);
+    }
+  };
+
   return (
     <KanbanItemStyled
       ref={setNodeRef}
@@ -65,6 +78,9 @@ const KanbanItem = ({
       {...attributes}
       {...dragListeners}
       onClick={() => onNavigate(todo.id)}
+      tabIndex={0}
+      role="button"
+      onKeyDown={handleKeyDown}
     >
       {parentTitle && <ParentLabel>{parentTitle}</ParentLabel>}
       <ItemContentRow>
