@@ -4,9 +4,12 @@ import {
   useSensors,
   PointerSensor,
   TouchSensor,
+  KeyboardSensor,
+  KeyboardCode,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Todo } from "@/features/todo";
 import type { Status } from "../components/kanbanColumn";
 
@@ -28,6 +31,14 @@ export const useKanbanDrag = ({ todos, onUpdateTodo }: UseKanbanDragProps) => {
       activationConstraint: {
         delay: 200,
         tolerance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: {
+        start: [KeyboardCode.Space],
+        cancel: [KeyboardCode.Esc],
+        end: [KeyboardCode.Space],
       },
     })
   );
