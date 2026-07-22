@@ -40,9 +40,23 @@ test.describe('로그인 페이지 UI', () => {
     })
   })
 
-  test('로그인 페이지에서 뒤로가기 해도 /login을 유지해야 한다', async ({ page }) => {
+  test('로그인 페이지에서 뒤로가기 하면 랜딩 페이지로 이동해야 한다', async ({
+    page,
+  }) => {
+    // 랜딩 페이지 → 로그인 페이지로 이동한 이력을 만든다
     await page.goto('/')
-    // 미인증 상태이므로 /login으로 리다이렉트
-    await expect(page).toHaveURL(/\/login/, { timeout: 10000 })
+    await expect(
+      page.getByRole('heading', { level: 1, name: /해야 할 일/ })
+    ).toBeVisible({ timeout: 10000 })
+
+    await page.goto('/login')
+    await expect(page).toHaveURL(/\/login/)
+
+    // 브라우저 뒤로가기 시 이전 히스토리인 랜딩 페이지로 돌아가야 한다
+    await page.goBack()
+    await expect(page).not.toHaveURL(/\/login/)
+    await expect(
+      page.getByRole('heading', { level: 1, name: /해야 할 일/ })
+    ).toBeVisible({ timeout: 10000 })
   })
 })

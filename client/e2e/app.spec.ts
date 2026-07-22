@@ -12,12 +12,15 @@ test.describe('App E2E Tests', () => {
     await expect(page).toHaveTitle(/tododo/i)
   })
 
-  test('미인증 상태에서 루트 경로는 /login으로 리다이렉트되어야 한다', async ({
+  test('미인증 상태에서 루트 경로는 랜딩 페이지를 보여줘야 한다', async ({
     page,
   }) => {
     await page.goto('/')
-    // ProtectedRoute가 Firebase Auth 로딩 완료 후 /login으로 리다이렉트
-    await expect(page).toHaveURL(/\/login/, { timeout: 10000 })
+    // RootGate가 Firebase Auth 로딩 완료 후 비로그인 상태면 랜딩 페이지를 노출
+    await expect(page).toHaveURL('/')
+    await expect(
+      page.getByRole('heading', { level: 1, name: /해야 할 일/ })
+    ).toBeVisible({ timeout: 10000 })
   })
 
   test('로그인 페이지가 정상 로드되어야 한다', async ({ page }) => {
