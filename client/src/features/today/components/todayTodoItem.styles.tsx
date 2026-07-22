@@ -104,6 +104,26 @@ const OverdueBadge = styled.span`
   color: ${colors.danger.text};
 `;
 
+const DeleteButton = styled.button`
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -13px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: ${colors.text.tertiary};
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: ${colors.danger.main};
+  }
+`;
+
 export {
   Row,
   Checkbox,
@@ -113,4 +133,5 @@ export {
   Description,
   TimeLabel,
   OverdueBadge,
+  DeleteButton,
 };
