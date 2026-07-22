@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import App from "@/App";
 import TodoListPage from "@/features/todo/pages/todoListPage";
 import CalendarPage from "@/features/dashboard/Pages/calendarPage";
@@ -6,7 +6,9 @@ import KanbanPage from "@/features/kanban/pages/kanbanPage";
 import { TodoDetail } from "@/features/todo";
 import LoginPage from "@/features/auth/pages/loginPage";
 import ProtectedRoute from "@/features/auth/components/protectedRoute";
+import RootGate from "@/features/auth/components/rootGate";
 import TodayPage from "@/features/today/pages/todayPage";
+import GuestTodayPage from "@/features/guest/pages/guestTodayPage";
 
 export const router = createBrowserRouter([
   {
@@ -15,16 +17,19 @@ export const router = createBrowserRouter([
   },
   {
     path: "/",
+    element: <RootGate />,
+  },
+  {
+    path: "/guest",
+    element: <GuestTodayPage />,
+  },
+  {
     element: (
       <ProtectedRoute>
         <App />
       </ProtectedRoute>
     ),
     children: [
-      {
-        index: true,
-        element: <Navigate to="/today" replace />,
-      },
       {
         path: "today",
         element: <TodayPage />,
