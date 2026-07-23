@@ -136,7 +136,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       childTodos: rootTodo.childTodos,
       progress: getProjectProgress(todos, rootTodo.id),
       subtaskInfo: getProjectSubtaskInfo(todos, rootTodo.id),
-      overdueInfo: getProjectOverdue(todos, rootTodo.id),
+      overdueInfo: getProjectOverdue(todos, rootTodo),
       isExpanded: expandedProjectIds.has(rootTodo.id),
     }));
   }, [todoTree, todos, expandedProjectIds]);
@@ -228,7 +228,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
                   childTodos: todo.childTodos,
                   progress: getProjectProgress(todos, todo.id),
                   subtaskInfo: getProjectSubtaskInfo(todos, todo.id),
-                  overdueInfo: getProjectOverdue(todos, todo.id),
+                  overdueInfo: getProjectOverdue(todos, todo),
                   isExpanded: expandedProjectIds.has(todo.id),
                 };
                 return (
