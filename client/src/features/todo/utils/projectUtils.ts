@@ -82,34 +82,34 @@ export function getProjectSubtaskInfo(
   return { total, statusText };
 }
 
-// 서브태스크 중 dueAt이 오늘보다 이전인 것 감지
-// 가장 오래된 초과 서브태스크 기준으로 daysOver 계산
+// 루트 투두 자신 또는 서브태스크 중 dueAt이 오늘보다 이전인 것 감지
+// 가장 오래된 초과 건(루트 자신 포함) 기준으로 daysOver 계산
 export function getProjectOverdue(
   allTodos: Todo[],
-  projectId: string
+  project: Todo
 ): { isOverdue: boolean; daysOver: number } {
-  const subtasks = allTodos.filter((t) => t.parentId === projectId);
-
-  if (subtasks.length === 0) {
-    return { isOverdue: false, daysOver: 0 };
-  }
+  const subtasks = allTodos.filter((t) => t.parentId === project.id);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const overdueSubtasks = subtasks.filter((t) => {
+  const isOverdueCandidate = (t: Todo) => {
     if (!t.dueAt || t.status === "done") return false;
     const dueDate = new Date(t.dueAt);
     dueDate.setHours(0, 0, 0, 0);
     return dueDate < today;
-  });
+  };
 
-  if (overdueSubtasks.length === 0) {
+  // 루트 투두 자신도 후보에 포함시켜, 하위 투두가 없거나 아직 지나지 않았더라도
+  // 루트 자신의 dueAt이 지났으면 초과로 판정되도록 한다.
+  const overdueCandidates = [project, ...subtasks].filter(isOverdueCandidate);
+
+  if (overdueCandidates.length === 0) {
     return { isOverdue: false, daysOver: 0 };
   }
 
-  // 가장 오래된 초과 서브태스크 기준
-  const oldestDue = overdueSubtasks.reduce((oldest, t) => {
+  // 가장 오래된 초과 건 기준
+  const oldestDue = overdueCandidates.reduce((oldest, t) => {
     const tDate = new Date(t.dueAt!);
     const oldestDate = new Date(oldest.dueAt!);
     return tDate < oldestDate ? t : oldest;
