@@ -171,11 +171,16 @@ export const useTodo = () => {
 
   // 앱 진입 시 1회 호출해 무기한 반복 시리즈들의 남은 인스턴스를 오늘 기준으로
   // 이어서 채운다(App.tsx). 사용자 액션이 아니라 백그라운드 유지보수 성격이라
-  // 실패해도 조용히 넘어가고(다음 접속 때 다시 시도됨) 성공 시에만 목록을 갱신한다.
+  // 사용자에게는 조용히 넘어가고(다음 접속 때 다시 시도됨) 성공 시에만 목록을 갱신한다.
+  // 다만 실패 자체를 아무도 알 수 없으면 운영 중 문제(예: permission-denied)를
+  // 감지할 수 없으므로 최소한 콘솔에는 남긴다.
   const useExtendIndefiniteRecurringSeries = useMutation({
     mutationFn: () => extendIndefiniteRecurringSeries(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+    onError: (error) => {
+      console.error("반복 할 일 호라이즌 확장 실패:", error);
     },
   });
 
