@@ -348,6 +348,36 @@ describe('useTodo 훅', () => {
 
       expect(vi.mocked(extendIndefiniteRecurringSeries)).toHaveBeenCalled()
     })
+
+    it('실패 시 사용자에게는 알리지 않되 콘솔에는 에러를 남겨야 한다', async () => {
+      const { getTodos, extendIndefiniteRecurringSeries } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      const error = new Error('permission-denied')
+      vi.mocked(extendIndefiniteRecurringSeries).mockRejectedValueOnce(error)
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useExtendIndefiniteRecurringSeries.mutate()
+
+      await waitFor(() => {
+        expect(result.current.useExtendIndefiniteRecurringSeries.isError).toBe(true)
+      })
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('반복 할 일 호라이즌 확장 실패'),
+        error,
+      )
+
+      consoleErrorSpy.mockRestore()
+    })
   })
 })
 

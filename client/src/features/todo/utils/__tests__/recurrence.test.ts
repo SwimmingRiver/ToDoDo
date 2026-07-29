@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   generateRecurringDueDates,
   getDefaultHorizonEnd,
@@ -107,6 +107,80 @@ describe("generateRecurringDueDates", () => {
     ]);
   });
 
+  it("monthly: 윤년에는 2월 29일까지 클램핑한다 (평년 28일과 구분)", () => {
+    const rule: RecurrenceRule = { type: "monthly", endType: "indefinite" };
+    const base = "2028-01-31T09:00:00"; // 2028년은 윤년 → 2월은 29일까지 존재
+    const horizonEnd = new Date("2028-04-30T00:00:00");
+
+    const result = generateRecurringDueDates(base, rule, horizonEnd);
+
+    expect(result.map(toDateKey)).toEqual([
+      "2028-01-31",
+      "2028-02-29", // 평년이었다면 28일로 클램핑되었을 자리
+      "2028-03-31",
+      "2028-04-30",
+    ]);
+  });
+
+  it("monthly: 윤년 2월 29일 기준으로 반복하면 이듬해(평년) 2월은 28일로 클램핑된다", () => {
+    const rule: RecurrenceRule = { type: "monthly", endType: "indefinite" };
+    const base = "2028-02-29T09:00:00"; // 2028년 윤년의 2월 29일
+    const horizonEnd = new Date("2029-02-28T23:59:59");
+
+    const result = generateRecurringDueDates(base, rule, horizonEnd);
+    const keys = result.map(toDateKey);
+
+    // 2028-02(29일) ~ 2029-02(평년, 28일로 클램핑)까지 매월 하나씩 총 13건
+    expect(keys).toHaveLength(13);
+    expect(keys[0]).toBe("2028-02-29");
+    expect(keys[keys.length - 1]).toBe("2029-02-28");
+  });
+
+  it("daily: horizonEnd 당일이면 시각과 무관하게 그 날의 인스턴스까지 포함한다 (등호 경계)", () => {
+    const rule: RecurrenceRule = { type: "daily", endType: "indefinite" };
+    const base = "2026-07-10T18:00:00";
+    // horizonEnd가 그 날의 이른 시각이어도 그 날 전체(23:59:59.999)로 확장되어 포함되어야 한다.
+    const horizonEnd = new Date("2026-07-12T00:00:01");
+
+    const result = generateRecurringDueDates(base, rule, horizonEnd);
+
+    expect(result.map(toDateKey)).toEqual([
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+    ]);
+  });
+
+  it("daily: horizonEnd가 하루 전 23:59:59.999(자정 1ms 전)이면 다음날 인스턴스는 제외된다 (off-by-one 경계)", () => {
+    const rule: RecurrenceRule = { type: "daily", endType: "indefinite" };
+    const base = "2026-07-10T18:00:00";
+    const horizonEnd = new Date("2026-07-11T23:59:59.999");
+
+    const result = generateRecurringDueDates(base, rule, horizonEnd);
+
+    expect(result.map(toDateKey)).toEqual(["2026-07-10", "2026-07-11"]);
+  });
+
+  it("monthly: horizonEnd가 클램핑된 말일과 정확히 같으면 포함된다 (등호 경계)", () => {
+    const rule: RecurrenceRule = { type: "monthly", endType: "indefinite" };
+    const base = "2026-01-31T09:00:00";
+    const horizonEnd = new Date("2026-02-28T00:00:00"); // 2026년은 평년 → 2월 마지막 날은 28일
+
+    const result = generateRecurringDueDates(base, rule, horizonEnd);
+
+    expect(result.map(toDateKey)).toEqual(["2026-01-31", "2026-02-28"]);
+  });
+
+  it("monthly: horizonEnd가 클램핑된 말일 하루 전이면 그 달의 인스턴스는 제외된다 (off-by-one 경계)", () => {
+    const rule: RecurrenceRule = { type: "monthly", endType: "indefinite" };
+    const base = "2026-01-31T09:00:00";
+    const horizonEnd = new Date("2026-02-27T00:00:00"); // 2월 마지막 날(28일) 하루 전까지만 허용
+
+    const result = generateRecurringDueDates(base, rule, horizonEnd);
+
+    expect(result.map(toDateKey)).toEqual(["2026-01-31"]);
+  });
+
   it("endType이 untilDate이면 endDate와 horizonEnd 중 더 이른 날짜까지만 생성한다 (endDate가 더 이른 경우)", () => {
     const rule: RecurrenceRule = {
       type: "daily",
@@ -182,6 +256,25 @@ describe("generateRecurringDueDates", () => {
       process.env.TZ = originalTz;
     }
   });
+
+  // monthly 말일 클램핑과 horizonEnd 경계 비교는 모두 로컬 Date getter/setter(getDate,
+  // new Date(y, m, d) 등)로만 계산되지만, CI가 UTC라 타임존 버그가 있어도 통과해버릴 수
+  // 있다. UTC보다 느린 타임존에서도 윤년 클램핑과 등호 경계가 동일하게 성립하는지 확인한다.
+  it("UTC보다 시간이 느린 타임존에서도 윤년 2월 29일 클램핑과 horizonEnd 등호 경계가 유지된다", () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      const rule: RecurrenceRule = { type: "monthly", endType: "indefinite" };
+      const base = "2028-01-31T09:00:00";
+      const horizonEnd = new Date("2028-02-29T00:00:00"); // 클램핑된 말일과 정확히 같은 날
+
+      const result = generateRecurringDueDates(base, rule, horizonEnd);
+
+      expect(result.map(toDateKey)).toEqual(["2028-01-31", "2028-02-29"]);
+    } finally {
+      process.env.TZ = originalTz;
+    }
+  });
 });
 
 describe("getDefaultHorizonEnd", () => {
@@ -192,5 +285,22 @@ describe("getDefaultHorizonEnd", () => {
       (result.getTime() - from.getTime()) / (1000 * 60 * 60 * 24),
     );
     expect(diffDays).toBe(RECURRENCE_HORIZON_WEEKS * 7);
+  });
+
+  // from을 생략하면 내부에서 new Date()(현재 시스템 시각)를 기준으로 삼는다. 이 기본값
+  // 경로는 시스템 시간을 고정하지 않으면 검증할 수 없으므로 fake timer로 "오늘"을 고정한다.
+  it("from을 생략하면 현재 시스템 시각 기준 4주 뒤를 반환한다", () => {
+    const anchor = new Date("2026-07-03T10:00:00");
+    vi.useFakeTimers();
+    vi.setSystemTime(anchor);
+    try {
+      const result = getDefaultHorizonEnd();
+      const diffDays = Math.round(
+        (result.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      expect(diffDays).toBe(RECURRENCE_HORIZON_WEEKS * 7);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
