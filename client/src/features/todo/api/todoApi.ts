@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "@/shared/lib/firebase";
 import { toDateKeyFromISO } from "@/shared/utils/date";
-import type { RecurrenceRule, Todo } from "../types/todo.type";
+import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
 import { generateRecurringDueDates, getDefaultHorizonEnd } from "../utils/recurrence";
 
 const todosRef = collection(db, "todos");
@@ -24,6 +24,18 @@ const getUserId = () => {
 
 const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
   ({ id, ...data }) as Todo;
+
+/**
+ * order 필드가 도입되기 전에 만들어진 레거시 문서는 order가 아예 없다(undefined).
+ * `a.order - b.order`에 undefined가 섞이면 NaN을 반환하는데, sort 비교 함수가 NaN을
+ * 반환하면 그 비교뿐 아니라 배열 전체의 정렬 결과가 신뢰할 수 없어진다(V8 정렬
+ * 알고리즘이 비교 결과의 일관성을 전제하므로, 일부 쌍이 NaN이면 관련 없는 다른
+ * 요소들의 상대 순서까지 흐트러질 수 있다) — 실제로 이 상태에서 정상 order를 가진
+ * 문서들끼리도 전혀 정렬되지 않는 것을 확인했다. order 없는 문서를 맨 뒤로 보내
+ * 비교가 항상 유효한 숫자를 반환하도록 방어한다.
+ */
+const normalizeOrder = (order: number | undefined): number =>
+  typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
 
 /**
  * 반복 인스턴스 문서 ID를 {recurrenceId}_{YYYY-MM-DD}로 결정론적으로 만든다(로컬 타임존
@@ -84,7 +96,7 @@ export const getTodos = async () => {
   const snapshot = await getDocs(q);
   return snapshot.docs
     .map((doc) => mapDocToTodo(doc.id, doc.data()))
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => normalizeOrder(a.order) - normalizeOrder(b.order));
 };
 
 export const getTodoDetail = async (id: string) => {
@@ -268,6 +280,37 @@ export const updateTodoDueAt = async (
     updates.startAt = startAt;
   }
   await updateDoc(docRef, updates);
+};
+
+/**
+ * 칸반 보드 같은 컬럼(status) 내 드래그 재정렬 시 여러 문서의 order를 한 번에 반영한다.
+ * 호출부(useKanbanDrag)가 이미 변경된 문서만 diff해서 넘기므로, 여기서는 추가 필터링 없이
+ * 그대로 batch write한다. 개별 getDoc 소유권 재검증은 생략한다 — id 목록은 항상 호출자가
+ * getTodos()(userId 필터링됨)로 이미 받아둔 자신의 캐시에서만 나오고, 최종 방어선은
+ * firestore.rules의 `resource.data.userId == request.auth.uid`(update 규칙)이므로 카드
+ * 수만큼 getDoc 왕복을 추가하는 비용이 정당화되지 않는다. writeBatch는 원자적이라 그
+ * 전제가 깨지는 경우(예: 다른 탭에서 그 사이 삭제된 문서)에도 부분 쓰기로 데이터가
+ * 어긋나진 않는다 — 다만 이때 에러는 다른 함수들의 "Forbidden"/"Todo not found"가 아니라
+ * Firestore의 raw permission-denied로 표면화된다.
+ *
+ * 읽기 없이 절대 order 값을 그대로 덮어쓰므로, 두 탭/기기에서 같은 컬럼을 거의 동시에
+ * 재정렬하면 나중에 commit된 batch가 이긴다(last-write-wins). 값이 사라지는 데이터
+ * 유실은 아니고 "방금 옮긴 순서가 다른 기기의 조작에 덮어써질 수 있다" 정도라, 이
+ * 코드베이스가 반복 시리즈 등에서 이미 택한 "완전한 원자성 대신 최종 수렴" 철학과
+ * 일치하는 트레이드오프로 판단해 트랜잭션을 쓰지 않았다.
+ */
+export const reorderTodos = async (
+  updates: TodoReorderUpdate[],
+): Promise<void> => {
+  getUserId();
+  if (updates.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+  updates.forEach(({ id, order }) => {
+    batch.update(doc(db, "todos", id), { order, updatedAt: now });
+  });
+  await batch.commit();
 };
 
 export const createChildTodo = async (

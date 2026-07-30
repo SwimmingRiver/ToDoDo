@@ -20,6 +20,7 @@ vi.mock('firebase/firestore', () => ({
   query: vi.fn(),
   where: vi.fn(),
   getDoc: vi.fn(),
+  writeBatch: vi.fn(),
 }))
 
 // 테스트용 Todo 팩토리
@@ -62,6 +63,31 @@ describe('todoApi', () => {
 
       expect(result[0].order).toBe(0)
       expect(result[1].order).toBe(1)
+    })
+
+    it('order 필드가 없는(undefined) 레거시 문서가 섞여 있어도 나머지 문서는 정상적으로 order 순 정렬되어야 한다', async () => {
+      // 비교 함수가 undefined - number = NaN을 반환하면 정렬 전체가 깨지는 회귀
+      // 버그가 있었다(order가 있는 문서끼리도 전혀 정렬되지 않음).
+      const { getDocs, query, where } = await import('firebase/firestore')
+      const { getTodos } = await import('../todoApi')
+
+      const legacyDone = { ...makeTodo({ title: '레거시', status: 'done' }), id: undefined, order: undefined }
+      const mockDocs = [
+        { id: 'todo-3', data: () => ({ ...makeTodo({ title: '셋', order: 2 }), id: undefined }) },
+        { id: 'legacy-done', data: () => legacyDone },
+        { id: 'todo-1', data: () => ({ ...makeTodo({ title: '하나', order: 0 }), id: undefined }) },
+        { id: 'todo-2', data: () => ({ ...makeTodo({ title: '둘', order: 1 }), id: undefined }) },
+      ]
+
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: mockDocs,
+      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+
+      const result = await getTodos()
+
+      expect(result.map((t) => t.title)).toEqual(['하나', '둘', '셋', '레거시'])
     })
 
     it('인증되지 않은 경우 에러를 던져야 한다', async () => {
@@ -130,6 +156,66 @@ describe('todoApi', () => {
       const result = await getSearchTodoList('react')
 
       expect(result).toHaveLength(2)
+    })
+  })
+
+  describe('reorderTodos', () => {
+    const makeBatch = () => ({
+      set: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue(undefined),
+    })
+
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const firebase = await import('@/shared/lib/firebase')
+      Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
+    })
+
+    it('전달받은 id/order 쌍마다 batch.update를 호출하고 한 번에 commit해야 한다', async () => {
+      const { doc, writeBatch } = await import('firebase/firestore')
+      const { reorderTodos } = await import('../todoApi')
+
+      const batch = makeBatch()
+      vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>)
+      vi.mocked(doc).mockImplementation((...args: unknown[]) => ({ id: args[2] }) as ReturnType<typeof doc>)
+
+      await reorderTodos([
+        { id: 'todo-1', order: 0 },
+        { id: 'todo-2', order: 1 },
+      ])
+
+      expect(batch.update).toHaveBeenCalledTimes(2)
+      expect(batch.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'todo-1' }),
+        expect.objectContaining({ order: 0 }),
+      )
+      expect(batch.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'todo-2' }),
+        expect.objectContaining({ order: 1 }),
+      )
+      expect(batch.commit).toHaveBeenCalledTimes(1)
+    })
+
+    it('빈 배열이 전달되면 batch를 생성하지 않고 아무 것도 쓰지 않아야 한다', async () => {
+      const { writeBatch } = await import('firebase/firestore')
+      const { reorderTodos } = await import('../todoApi')
+
+      await reorderTodos([])
+
+      expect(writeBatch).not.toHaveBeenCalled()
+    })
+
+    it('인증되지 않은 경우 에러를 던져야 한다', async () => {
+      const firebase = await import('@/shared/lib/firebase')
+      Object.defineProperty(firebase.auth, 'currentUser', { value: null, configurable: true })
+
+      const { reorderTodos } = await import('../todoApi')
+
+      await expect(reorderTodos([{ id: 'todo-1', order: 0 }])).rejects.toThrow('Not authenticated')
+
+      Object.defineProperty(firebase.auth, 'currentUser', { value: { uid: 'test-user-id' }, configurable: true })
     })
   })
 })

@@ -9,16 +9,26 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import type { Todo } from "@/features/todo";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import type { Todo, TodoReorderUpdate } from "@/features/todo";
 import type { Status } from "../components/kanbanColumn";
 
 interface UseKanbanDragProps {
   todos: Todo[] | undefined;
   onUpdateTodo: (todo: Todo) => void;
+  onReorderTodos: (updates: TodoReorderUpdate[]) => void;
 }
 
-export const useKanbanDrag = ({ todos, onUpdateTodo }: UseKanbanDragProps) => {
+/** order 필드가 없는(undefined) 레거시 문서를 만나도 비교 함수가 NaN을 반환해 정렬
+ * 전체가 깨지지 않도록, 없는 값은 맨 뒤로 보낸다(todoApi.ts의 getTodos와 동일한 이유). */
+const normalizeOrder = (order: number | undefined): number =>
+  typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
+
+export const useKanbanDrag = ({
+  todos,
+  onUpdateTodo,
+  onReorderTodos,
+}: UseKanbanDragProps) => {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -67,11 +77,45 @@ export const useKanbanDrag = ({ todos, onUpdateTodo }: UseKanbanDragProps) => {
       targetStatus = over.id as Status;
     }
 
-    if (targetStatus && draggedTodo.status !== targetStatus) {
+    if (!targetStatus) return;
+
+    if (draggedTodo.status !== targetStatus) {
       onUpdateTodo({
         ...draggedTodo,
         status: targetStatus,
       });
+      return;
+    }
+
+    // 같은 컬럼(status) 내 재정렬. todos(allTodos, collapse/가시성 필터 적용 전)에서
+    // 같은 status를 가진 문서 전체를 order 기준으로 정렬해 기준 배열로 삼는다 —
+    // collapseRecurringInstances가 화면에서 숨긴 반복 인스턴스 형제도 여기 포함되므로,
+    // 나중에 그 형제가 대표로 떠오르더라도 상대 순서가 어긋나지 않는다.
+    // order가 없는(undefined) 레거시 문서가 섞여 있으면 비교 함수가 NaN을 반환해
+    // 전체 정렬이 깨지므로(getTodos()와 동일한 이유), 없는 값은 맨 뒤로 보낸다.
+    const allStatusTodos = (todos ?? [])
+      .filter((t) => t.status === draggedTodo.status)
+      .sort((a, b) => normalizeOrder(a.order) - normalizeOrder(b.order));
+
+    const oldIndex = allStatusTodos.findIndex((t) => t.id === draggedTodo.id);
+    if (oldIndex === -1) return;
+
+    // overTodo가 없으면 컬럼의 빈 영역(컬럼 자체가 드롭 대상)에 드롭된 것이므로
+    // 맨 끝으로 이동한 것으로 간주한다.
+    const newIndex = overTodo
+      ? allStatusTodos.findIndex((t) => t.id === overTodo.id)
+      : allStatusTodos.length - 1;
+    if (newIndex === -1) return;
+
+    const reordered = arrayMove(allStatusTodos, oldIndex, newIndex);
+
+    const originalOrderById = new Map(allStatusTodos.map((t) => [t.id, t.order]));
+    const updates = reordered
+      .map((t, index) => ({ id: t.id, order: index }))
+      .filter((u) => originalOrderById.get(u.id) !== u.order);
+
+    if (updates.length > 0) {
+      onReorderTodos(updates);
     }
   };
 

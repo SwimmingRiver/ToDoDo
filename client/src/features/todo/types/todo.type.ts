@@ -33,4 +33,10 @@ interface Todo {
   recurrenceId: string | null;
 }
 
-export type { Todo, RecurrenceRule };
+/** 칸반 같은 컬럼 내 드래그 재정렬 시 bulk write할 order 변경분. */
+interface TodoReorderUpdate {
+  id: string;
+  order: number;
+}
+
+export type { Todo, RecurrenceRule, TodoReorderUpdate };

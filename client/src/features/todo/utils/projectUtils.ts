@@ -8,31 +8,32 @@ import type { Todo } from "../types";
  */
 export function collapseRecurringInstances(todos: Todo[]): Todo[] {
   const representativeByRecurrenceId = new Map<string, Todo>();
-  const result: Todo[] = [];
 
   for (const todo of todos) {
-    if (!todo.recurrenceId) {
-      result.push(todo);
-      continue;
-    }
+    if (!todo.recurrenceId) continue;
 
     const existing = representativeByRecurrenceId.get(todo.recurrenceId);
     if (!existing) {
       representativeByRecurrenceId.set(todo.recurrenceId, todo);
-      result.push(todo);
       continue;
     }
 
     const existingDue = existing.dueAt ? new Date(existing.dueAt).getTime() : Infinity;
     const currentDue = todo.dueAt ? new Date(todo.dueAt).getTime() : Infinity;
     if (currentDue < existingDue) {
-      const index = result.indexOf(existing);
-      result[index] = todo;
       representativeByRecurrenceId.set(todo.recurrenceId, todo);
     }
   }
 
-  return result;
+  // 대표를 처음 만난 인스턴스의 자리에 끼워넣지 않고, 대표 인스턴스 자신이 원래
+  // todos 배열에서 차지하는 위치(=order 순위)에 그대로 남긴다. 그러지 않으면(과거
+  // result[index] = todo로 첫 인스턴스 자리를 덮어쓰던 방식) 화면에 보이는 카드의
+  // 위치가 실제 order 값과 어긋나, 칸반 드래그 재정렬(useKanbanDrag)이 이 카드의
+  // over.id를 실제 order(대표의 order)로 찾는데 화면상 위치는 첫 인스턴스의 order
+  // 근처로 보여 사용자가 드롭한 자리와 전혀 다른 위치로 카드가 이동하는 버그가 있었다.
+  return todos.filter(
+    (todo) => !todo.recurrenceId || representativeByRecurrenceId.get(todo.recurrenceId) === todo,
+  );
 }
 
 export interface ProjectCardData {
