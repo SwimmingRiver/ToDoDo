@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCorners } from "@dnd-kit/core";
 import { useTodo, type Todo } from "@/features/todo";
 import { useMediaQuery, KanbanSkeleton, EmptyState } from "@/shared";
 import KanbanColumn, { type Status } from "./kanbanColumn";
@@ -116,7 +116,7 @@ const KanbanBoard = () => {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >

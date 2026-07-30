@@ -19,6 +19,11 @@ interface UseKanbanDragProps {
   onReorderTodos: (updates: TodoReorderUpdate[]) => void;
 }
 
+/** order 필드가 없는(undefined) 레거시 문서를 만나도 비교 함수가 NaN을 반환해 정렬
+ * 전체가 깨지지 않도록, 없는 값은 맨 뒤로 보낸다(todoApi.ts의 getTodos와 동일한 이유). */
+const normalizeOrder = (order: number | undefined): number =>
+  typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
+
 export const useKanbanDrag = ({
   todos,
   onUpdateTodo,
@@ -86,9 +91,11 @@ export const useKanbanDrag = ({
     // 같은 status를 가진 문서 전체를 order 기준으로 정렬해 기준 배열로 삼는다 —
     // collapseRecurringInstances가 화면에서 숨긴 반복 인스턴스 형제도 여기 포함되므로,
     // 나중에 그 형제가 대표로 떠오르더라도 상대 순서가 어긋나지 않는다.
+    // order가 없는(undefined) 레거시 문서가 섞여 있으면 비교 함수가 NaN을 반환해
+    // 전체 정렬이 깨지므로(getTodos()와 동일한 이유), 없는 값은 맨 뒤로 보낸다.
     const allStatusTodos = (todos ?? [])
       .filter((t) => t.status === draggedTodo.status)
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => normalizeOrder(a.order) - normalizeOrder(b.order));
 
     const oldIndex = allStatusTodos.findIndex((t) => t.id === draggedTodo.id);
     if (oldIndex === -1) return;

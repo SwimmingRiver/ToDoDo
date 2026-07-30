@@ -26,6 +26,18 @@ const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
   ({ id, ...data }) as Todo;
 
 /**
+ * order 필드가 도입되기 전에 만들어진 레거시 문서는 order가 아예 없다(undefined).
+ * `a.order - b.order`에 undefined가 섞이면 NaN을 반환하는데, sort 비교 함수가 NaN을
+ * 반환하면 그 비교뿐 아니라 배열 전체의 정렬 결과가 신뢰할 수 없어진다(V8 정렬
+ * 알고리즘이 비교 결과의 일관성을 전제하므로, 일부 쌍이 NaN이면 관련 없는 다른
+ * 요소들의 상대 순서까지 흐트러질 수 있다) — 실제로 이 상태에서 정상 order를 가진
+ * 문서들끼리도 전혀 정렬되지 않는 것을 확인했다. order 없는 문서를 맨 뒤로 보내
+ * 비교가 항상 유효한 숫자를 반환하도록 방어한다.
+ */
+const normalizeOrder = (order: number | undefined): number =>
+  typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
+
+/**
  * 반복 인스턴스 문서 ID를 {recurrenceId}_{YYYY-MM-DD}로 결정론적으로 만든다(로컬 타임존
  * 기준 연-월-일 — 코드베이스 전반의 toDateString() 기반 "같은 날짜" 판정과 동일 기준).
  *
@@ -84,7 +96,7 @@ export const getTodos = async () => {
   const snapshot = await getDocs(q);
   return snapshot.docs
     .map((doc) => mapDocToTodo(doc.id, doc.data()))
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => normalizeOrder(a.order) - normalizeOrder(b.order));
 };
 
 export const getTodoDetail = async (id: string) => {

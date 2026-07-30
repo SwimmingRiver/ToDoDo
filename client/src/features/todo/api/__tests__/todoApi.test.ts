@@ -65,6 +65,31 @@ describe('todoApi', () => {
       expect(result[1].order).toBe(1)
     })
 
+    it('order 필드가 없는(undefined) 레거시 문서가 섞여 있어도 나머지 문서는 정상적으로 order 순 정렬되어야 한다', async () => {
+      // 비교 함수가 undefined - number = NaN을 반환하면 정렬 전체가 깨지는 회귀
+      // 버그가 있었다(order가 있는 문서끼리도 전혀 정렬되지 않음).
+      const { getDocs, query, where } = await import('firebase/firestore')
+      const { getTodos } = await import('../todoApi')
+
+      const legacyDone = { ...makeTodo({ title: '레거시', status: 'done' }), id: undefined, order: undefined }
+      const mockDocs = [
+        { id: 'todo-3', data: () => ({ ...makeTodo({ title: '셋', order: 2 }), id: undefined }) },
+        { id: 'legacy-done', data: () => legacyDone },
+        { id: 'todo-1', data: () => ({ ...makeTodo({ title: '하나', order: 0 }), id: undefined }) },
+        { id: 'todo-2', data: () => ({ ...makeTodo({ title: '둘', order: 1 }), id: undefined }) },
+      ]
+
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: mockDocs,
+      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+
+      const result = await getTodos()
+
+      expect(result.map((t) => t.title)).toEqual(['하나', '둘', '셋', '레거시'])
+    })
+
     it('인증되지 않은 경우 에러를 던져야 한다', async () => {
       const firebase = await import('@/shared/lib/firebase')
       Object.defineProperty(firebase.auth, 'currentUser', { value: null, configurable: true })
