@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/setupUser'
 import StatusSelect from '../statusSelect'
 
 describe('StatusSelect 컴포넌트', () => {
@@ -20,7 +20,7 @@ describe('StatusSelect 컴포넌트', () => {
   })
 
   it('버튼 클릭 시 바텀시트가 열려야 한다', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     render(<StatusSelect value="todo" onChange={vi.fn()} />)
 
     await user.click(screen.getByText('할 일'))
@@ -31,7 +31,7 @@ describe('StatusSelect 컴포넌트', () => {
 
   it('바텀시트에서 상태 선택 시 onChange가 호출되어야 한다', async () => {
     const onChange = vi.fn()
-    const user = userEvent.setup()
+    const user = setupUser()
 
     render(<StatusSelect value="todo" onChange={onChange} />)
 
@@ -46,7 +46,7 @@ describe('StatusSelect 컴포넌트', () => {
 
   it('바텀시트에서 "완료" 선택 시 onChange("done")이 호출되어야 한다', async () => {
     const onChange = vi.fn()
-    const user = userEvent.setup()
+    const user = setupUser()
 
     render(<StatusSelect value="todo" onChange={onChange} />)
 
