@@ -68,7 +68,7 @@ const KanbanColumn = ({
   const StatusIcon = getStatusIcon(status);
 
   return (
-    <KanbanColumnStyled>
+    <KanbanColumnStyled data-testid={`kanban-column-${status}`}>
       <ColumnTitle>{title}</ColumnTitle>
       <SortableContext
         items={todos.map((t) => t.id)}
