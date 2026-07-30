@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "@/shared/lib/firebase";
 import { toDateKeyFromISO } from "@/shared/utils/date";
-import type { RecurrenceRule, Todo } from "../types/todo.type";
+import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
 import { generateRecurringDueDates, getDefaultHorizonEnd } from "../utils/recurrence";
 
 const todosRef = collection(db, "todos");
@@ -268,6 +268,37 @@ export const updateTodoDueAt = async (
     updates.startAt = startAt;
   }
   await updateDoc(docRef, updates);
+};
+
+/**
+ * 칸반 보드 같은 컬럼(status) 내 드래그 재정렬 시 여러 문서의 order를 한 번에 반영한다.
+ * 호출부(useKanbanDrag)가 이미 변경된 문서만 diff해서 넘기므로, 여기서는 추가 필터링 없이
+ * 그대로 batch write한다. 개별 getDoc 소유권 재검증은 생략한다 — id 목록은 항상 호출자가
+ * getTodos()(userId 필터링됨)로 이미 받아둔 자신의 캐시에서만 나오고, 최종 방어선은
+ * firestore.rules의 `resource.data.userId == request.auth.uid`(update 규칙)이므로 카드
+ * 수만큼 getDoc 왕복을 추가하는 비용이 정당화되지 않는다. writeBatch는 원자적이라 그
+ * 전제가 깨지는 경우(예: 다른 탭에서 그 사이 삭제된 문서)에도 부분 쓰기로 데이터가
+ * 어긋나진 않는다 — 다만 이때 에러는 다른 함수들의 "Forbidden"/"Todo not found"가 아니라
+ * Firestore의 raw permission-denied로 표면화된다.
+ *
+ * 읽기 없이 절대 order 값을 그대로 덮어쓰므로, 두 탭/기기에서 같은 컬럼을 거의 동시에
+ * 재정렬하면 나중에 commit된 batch가 이긴다(last-write-wins). 값이 사라지는 데이터
+ * 유실은 아니고 "방금 옮긴 순서가 다른 기기의 조작에 덮어써질 수 있다" 정도라, 이
+ * 코드베이스가 반복 시리즈 등에서 이미 택한 "완전한 원자성 대신 최종 수렴" 철학과
+ * 일치하는 트레이드오프로 판단해 트랜잭션을 쓰지 않았다.
+ */
+export const reorderTodos = async (
+  updates: TodoReorderUpdate[],
+): Promise<void> => {
+  getUserId();
+  if (updates.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+  updates.forEach(({ id, order }) => {
+    batch.update(doc(db, "todos", id), { order, updatedAt: now });
+  });
+  await batch.commit();
 };
 
 export const createChildTodo = async (

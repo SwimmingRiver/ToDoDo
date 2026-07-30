@@ -28,6 +28,7 @@ vi.mock('../../api', () => ({
   editRecurringSeries: vi.fn(),
   deleteRecurringSeries: vi.fn(),
   extendIndefiniteRecurringSeries: vi.fn(),
+  reorderTodos: vi.fn(),
 }))
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
@@ -313,6 +314,134 @@ describe('useTodo 훅', () => {
       })
 
       expect(vi.mocked(deleteRecurringSeries)).toHaveBeenCalledWith('series-1')
+    })
+  })
+
+  describe('useReorderTodos', () => {
+    // onMutate 중간 상태(캐시가 낙관적으로 갱신됐는지)와 onError 롤백을 검증하려면
+    // 내부 QueryClient에 직접 접근해야 해서, createWrapper()와 별도로 QueryClient를
+    // 함께 반환하는 헬퍼를 이 describe 블록 안에서만 사용한다.
+    const createWrapperWithClient = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: 0 },
+          mutations: { retry: false },
+        },
+      })
+      const Wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+      return { Wrapper, queryClient }
+    }
+
+    it('재정렬 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useReorderTodos).toBeDefined()
+      expect(typeof result.current.useReorderTodos.mutate).toBe('function')
+    })
+
+    it('성공 시 reorderTodos를 호출하고 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, reorderTodos } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([
+        makeTodo({ id: 'todo-1', order: 0 }),
+        makeTodo({ id: 'todo-2', order: 1 }),
+      ])
+      vi.mocked(reorderTodos).mockResolvedValueOnce(undefined)
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      const updates = [
+        { id: 'todo-1', order: 1 },
+        { id: 'todo-2', order: 0 },
+      ]
+      result.current.useReorderTodos.mutate(updates)
+
+      await waitFor(() => {
+        expect(result.current.useReorderTodos.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(reorderTodos)).toHaveBeenCalledWith(updates)
+    })
+
+    it('mutate 호출 즉시(서버 응답 전) 캐시에 새 order를 낙관적으로 반영해야 한다', async () => {
+      const { getTodos, reorderTodos } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([
+        makeTodo({ id: 'todo-1', order: 0 }),
+        makeTodo({ id: 'todo-2', order: 1 }),
+      ])
+
+      // 서버 응답을 인위적으로 지연시켜, 응답 전 캐시 상태(낙관적 갱신 결과)를 검증한다.
+      let resolveReorder: () => void = () => {}
+      vi.mocked(reorderTodos).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveReorder = () => resolve(undefined)
+          }),
+      )
+
+      const { Wrapper, queryClient } = createWrapperWithClient()
+      const { result } = renderHook(() => useTodo(), { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useReorderTodos.mutate([
+        { id: 'todo-1', order: 1 },
+        { id: 'todo-2', order: 0 },
+      ])
+
+      await waitFor(() => {
+        const cached = queryClient.getQueryData<Todo[]>(['todos'])
+        expect(cached?.find((t) => t.id === 'todo-1')?.order).toBe(1)
+        expect(cached?.find((t) => t.id === 'todo-2')?.order).toBe(0)
+      })
+
+      resolveReorder()
+      await waitFor(() => {
+        expect(result.current.useReorderTodos.isSuccess).toBe(true)
+      })
+    })
+
+    it('실패 시 재정렬 이전 캐시 상태로 롤백해야 한다', async () => {
+      const { getTodos, reorderTodos } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([
+        makeTodo({ id: 'todo-1', order: 0 }),
+        makeTodo({ id: 'todo-2', order: 1 }),
+      ])
+      vi.mocked(reorderTodos).mockRejectedValueOnce(new Error('네트워크 오류'))
+
+      const { Wrapper, queryClient } = createWrapperWithClient()
+      const { result } = renderHook(() => useTodo(), { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useReorderTodos.mutate([
+        { id: 'todo-1', order: 1 },
+        { id: 'todo-2', order: 0 },
+      ])
+
+      await waitFor(() => {
+        expect(result.current.useReorderTodos.isError).toBe(true)
+      })
+
+      const cached = queryClient.getQueryData<Todo[]>(['todos'])
+      expect(cached?.find((t) => t.id === 'todo-1')?.order).toBe(0)
+      expect(cached?.find((t) => t.id === 'todo-2')?.order).toBe(1)
     })
   })
 

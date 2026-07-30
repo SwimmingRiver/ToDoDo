@@ -22,7 +22,7 @@ type KanbanTab = "todo" | "doing" | "done";
 
 const KanbanBoard = () => {
   const navigate = useNavigate();
-  const { useGetTodos, useUpdateTodo } = useTodo();
+  const { useGetTodos, useUpdateTodo, useReorderTodos } = useTodo();
   const { data: todos, isLoading, isError } = useGetTodos;
   const [activeTab, setActiveTab] = useState<KanbanTab>("todo");
   const isTablet = useMediaQuery("tablet");
@@ -31,6 +31,7 @@ const KanbanBoard = () => {
     useKanbanDrag({
       todos,
       onUpdateTodo: (todo) => useUpdateTodo.mutate(todo),
+      onReorderTodos: (updates) => useReorderTodos.mutate(updates),
     });
 
   // 반복 인스턴스는 며칠 방치되면 같은 recurrenceId의 인스턴스가 여러 개 노출 조건을

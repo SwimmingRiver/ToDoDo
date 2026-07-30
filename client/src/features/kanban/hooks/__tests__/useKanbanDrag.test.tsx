@@ -48,7 +48,7 @@ describe("useKanbanDrag", () => {
     it("드래그 시작 시 activeId와 activeTodo가 설정된다", () => {
       const todos = [makeTodo({ id: "todo-1" }), makeTodo({ id: "todo-2" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragStart(makeDragStartEvent("todo-1"));
@@ -61,7 +61,7 @@ describe("useKanbanDrag", () => {
     it("드래그 종료 시 activeId가 null로 초기화된다", () => {
       const todos = [makeTodo({ id: "todo-1", status: "todo" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragStart(makeDragStartEvent("todo-1"));
@@ -83,7 +83,7 @@ describe("useKanbanDrag", () => {
       // 자체를 over로 준다 — over.id가 곧 컬럼의 status 값이다.
       const todos = [makeTodo({ id: "todo-1", status: "todo" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "doing"));
@@ -102,7 +102,7 @@ describe("useKanbanDrag", () => {
         makeTodo({ id: "todo-2", status: "doing" }),
       ];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo-2"));
@@ -116,7 +116,7 @@ describe("useKanbanDrag", () => {
     it("doing 카드를 done 컬럼으로 옮기면 status가 done으로 바뀐다", () => {
       const todos = [makeTodo({ id: "todo-1", status: "doing" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "done"));
@@ -130,7 +130,7 @@ describe("useKanbanDrag", () => {
     it("done 카드를 todo 컬럼으로 되돌리면 status가 todo로 바뀐다", () => {
       const todos = [makeTodo({ id: "todo-1", status: "done" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo"));
@@ -151,7 +151,7 @@ describe("useKanbanDrag", () => {
       });
       const onUpdateTodo = vi.fn();
       const { result } = renderHook(() =>
-        useKanbanDrag({ todos: [original], onUpdateTodo }),
+        useKanbanDrag({ todos: [original], onUpdateTodo, onReorderTodos: vi.fn() }),
       );
 
       act(() => {
@@ -166,35 +166,156 @@ describe("useKanbanDrag", () => {
   });
 
   describe("같은 컬럼 내 재정렬(같은 status로 드롭)", () => {
-    it("같은 컬럼 안의 다른 카드 위에 드롭하면(status 변화 없음) onUpdateTodo가 호출되지 않는다", () => {
-      // useKanbanDrag는 카드 순서(order)를 재계산하지 않고 컬럼 간 status 전이만
-      // 처리한다. 드롭 대상 카드의 status가 드래그한 카드와 같으면(=같은 컬럼 내
-      // 재정렬) 아무 것도 변경하지 않는다 — 현재 구현에서는 같은 컬럼 내 순서가
-      // 서버에 반영되지 않는다.
+    // onReorderTodos는 allTodos(status 풀 전체, 반복 인스턴스로 숨겨진 형제 포함)를
+    // 기준으로 arrayMove 후 order가 실제로 바뀐 문서만 diff해서 전달한다 — 컬럼 전체를
+    // 매번 다시 쓰지 않는다(비용 검토 결과 반영).
+    it("같은 컬럼 안의 다른 카드 위에 드롭하면 onUpdateTodo는 호출되지 않고, 두 카드의 order만 바뀐 diff로 onReorderTodos가 호출된다", () => {
       const todos = [
         makeTodo({ id: "todo-1", status: "todo", order: 0 }),
         makeTodo({ id: "todo-2", status: "todo", order: 1 }),
       ];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos }),
+      );
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo-2"));
       });
 
       expect(onUpdateTodo).not.toHaveBeenCalled();
+      expect(onReorderTodos).toHaveBeenCalledTimes(1);
+      const updates = onReorderTodos.mock.calls[0][0];
+      expect(updates).toHaveLength(2);
+      expect(updates).toEqual(
+        expect.arrayContaining([
+          { id: "todo-1", order: 1 },
+          { id: "todo-2", order: 0 },
+        ]),
+      );
     });
 
-    it("같은 컬럼(빈 자리 포함)에 드롭해도 status가 같으면 onUpdateTodo가 호출되지 않는다", () => {
-      const todos = [makeTodo({ id: "todo-1", status: "todo" })];
+    it("같은 카드 위에 그대로 드롭하면(순서 변화 없음) onReorderTodos가 호출되지 않는다", () => {
+      const todos = [
+        makeTodo({ id: "todo-1", status: "todo", order: 0 }),
+        makeTodo({ id: "todo-2", status: "todo", order: 1 }),
+      ];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos }),
+      );
+
+      act(() => {
+        result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo-1"));
+      });
+
+      expect(onUpdateTodo).not.toHaveBeenCalled();
+      expect(onReorderTodos).not.toHaveBeenCalled();
+    });
+
+    it("카드가 하나뿐인 컬럼의 빈 영역(컬럼 자체 id)에 드롭해도 순서 변화가 없으므로 onReorderTodos가 호출되지 않는다", () => {
+      const todos = [makeTodo({ id: "todo-1", status: "todo", order: 0 })];
+      const onUpdateTodo = vi.fn();
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos }),
+      );
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo"));
       });
 
       expect(onUpdateTodo).not.toHaveBeenCalled();
+      expect(onReorderTodos).not.toHaveBeenCalled();
+    });
+
+    it("컬럼 빈 영역(컬럼 자체 id)에 드롭하면 맨 끝으로 이동한 것으로 간주해 order를 재계산한다", () => {
+      const todos = [
+        makeTodo({ id: "todo-1", status: "todo", order: 0 }),
+        makeTodo({ id: "todo-2", status: "todo", order: 1 }),
+        makeTodo({ id: "todo-3", status: "todo", order: 2 }),
+      ];
+      const onUpdateTodo = vi.fn();
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos }),
+      );
+
+      // todo-1을 컬럼 빈 영역(over.id === "todo" 상태 id)에 드롭 → 맨 끝으로 이동
+      act(() => {
+        result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo"));
+      });
+
+      const updates = onReorderTodos.mock.calls[0][0];
+      expect(updates).toHaveLength(3);
+      expect(updates).toEqual(
+        expect.arrayContaining([
+          { id: "todo-1", order: 2 },
+          { id: "todo-2", order: 0 },
+          { id: "todo-3", order: 1 },
+        ]),
+      );
+    });
+
+    it("다른 컬럼(status)에 드롭하면 재정렬이 아니라 기존 status 전이(onUpdateTodo)로만 처리된다", () => {
+      const todos = [
+        makeTodo({ id: "todo-1", status: "todo", order: 0 }),
+        makeTodo({ id: "todo-2", status: "doing", order: 0 }),
+      ];
+      const onUpdateTodo = vi.fn();
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos }),
+      );
+
+      act(() => {
+        result.current.handleDragEnd(makeDragEndEvent("todo-1", "todo-2"));
+      });
+
+      expect(onUpdateTodo).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "todo-1", status: "doing" }),
+      );
+      expect(onReorderTodos).not.toHaveBeenCalled();
+    });
+
+    it("화면에 숨겨진 반복 인스턴스 형제(같은 status, 다른 recurrenceId 인스턴스)가 있어도 allTodos 기준으로 order를 재계산해 형제와의 상대 순서를 보존한다", () => {
+      // 시나리오: 같은 recurrenceId를 가진 반복 인스턴스 두 개(overdue-1, overdue-2)가
+      // 둘 다 status:"todo"라서 collapseRecurringInstances가 dueAt이 이른 overdue-1만
+      // 대표로 노출하고 overdue-2는 화면에서 숨긴다. useKanbanDrag는 컬럼에 실제로
+      // 렌더링되는 대표 카드만이 아니라 allTodos(todos prop, 숨은 형제 포함)를 기준으로
+      // 재인덱싱해야 overdue-2가 나중에 대표로 떠오를 때도 상대 순서가 어긋나지 않는다.
+      const todos = [
+        makeTodo({ id: "overdue-1", status: "todo", order: 0, recurrenceId: "series-1", dueAt: "2026-07-28T00:00:00.000Z" }),
+        makeTodo({ id: "overdue-2", status: "todo", order: 1, recurrenceId: "series-1", dueAt: "2026-07-29T00:00:00.000Z" }),
+        makeTodo({ id: "todo-solo", status: "todo", order: 2 }),
+      ];
+      const onUpdateTodo = vi.fn();
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos }),
+      );
+
+      // 화면에는 overdue-1(대표)과 todo-solo만 카드로 보이고, 사용자가 todo-solo를
+      // overdue-1 앞으로 드래그했다고 가정 — over는 여전히 실제 문서 id(overdue-1)다.
+      act(() => {
+        result.current.handleDragEnd(makeDragEndEvent("todo-solo", "overdue-1"));
+      });
+
+      // allTodos 기준 배열 [overdue-1(0), overdue-2(1), todo-solo(2)]에서
+      // todo-solo(index 2)를 overdue-1(index 0) 위치로 옮기면
+      // [todo-solo, overdue-1, overdue-2] → order 0,1,2로 재부여된다.
+      // 숨겨진 overdue-2도 함께 재번호되어(1→2) 상대 순서(overdue-1 다음)가 보존된다.
+      const updates = onReorderTodos.mock.calls[0][0];
+      expect(updates).toHaveLength(3);
+      expect(updates).toEqual(
+        expect.arrayContaining([
+          { id: "todo-solo", order: 0 },
+          { id: "overdue-1", order: 1 },
+          { id: "overdue-2", order: 2 },
+        ]),
+      );
     });
   });
 
@@ -202,7 +323,7 @@ describe("useKanbanDrag", () => {
     it("드롭 가능한 영역 밖(over === null)에 놓으면 아무 것도 변경되지 않는다", () => {
       const todos = [makeTodo({ id: "todo-1", status: "todo" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", null));
@@ -215,7 +336,7 @@ describe("useKanbanDrag", () => {
     it("todos가 undefined(로딩 중)여도 에러 없이 처리되고 onUpdateTodo가 호출되지 않는다", () => {
       const onUpdateTodo = vi.fn();
       const { result } = renderHook(() =>
-        useKanbanDrag({ todos: undefined, onUpdateTodo }),
+        useKanbanDrag({ todos: undefined, onUpdateTodo, onReorderTodos: vi.fn() }),
       );
 
       expect(() => {
@@ -230,7 +351,7 @@ describe("useKanbanDrag", () => {
     it("드래그 시작 후 목록에서 사라진 카드(낙관적 업데이트 등)를 드롭해도 안전하게 무시된다", () => {
       const onUpdateTodo = vi.fn();
       const { result, rerender } = renderHook(
-        ({ todos }) => useKanbanDrag({ todos, onUpdateTodo }),
+        ({ todos }) => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }),
         { initialProps: { todos: [makeTodo({ id: "todo-1", status: "todo" })] } },
       );
 
@@ -257,7 +378,7 @@ describe("useKanbanDrag", () => {
         // done 컬럼은 비어 있음
       ];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("todo-1", "done"));
@@ -271,7 +392,7 @@ describe("useKanbanDrag", () => {
     it("존재하지 않는 카드 id로 드래그 종료가 발생해도 안전하게 무시된다", () => {
       const todos = [makeTodo({ id: "todo-1", status: "todo" })];
       const onUpdateTodo = vi.fn();
-      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo }));
+      const { result } = renderHook(() => useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn() }));
 
       act(() => {
         result.current.handleDragEnd(makeDragEndEvent("nonexistent-id", "doing"));
@@ -284,7 +405,7 @@ describe("useKanbanDrag", () => {
   describe("센서 구성", () => {
     it("PointerSensor, TouchSensor, KeyboardSensor 3개의 센서가 구성된다", () => {
       const { result } = renderHook(() =>
-        useKanbanDrag({ todos: [], onUpdateTodo: vi.fn() }),
+        useKanbanDrag({ todos: [], onUpdateTodo: vi.fn(), onReorderTodos: vi.fn() }),
       );
 
       expect(result.current.sensors).toHaveLength(3);

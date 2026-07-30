@@ -20,6 +20,7 @@ vi.mock('firebase/firestore', () => ({
   query: vi.fn(),
   where: vi.fn(),
   getDoc: vi.fn(),
+  writeBatch: vi.fn(),
 }))
 
 // 테스트용 Todo 팩토리
@@ -130,6 +131,66 @@ describe('todoApi', () => {
       const result = await getSearchTodoList('react')
 
       expect(result).toHaveLength(2)
+    })
+  })
+
+  describe('reorderTodos', () => {
+    const makeBatch = () => ({
+      set: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue(undefined),
+    })
+
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const firebase = await import('@/shared/lib/firebase')
+      Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
+    })
+
+    it('전달받은 id/order 쌍마다 batch.update를 호출하고 한 번에 commit해야 한다', async () => {
+      const { doc, writeBatch } = await import('firebase/firestore')
+      const { reorderTodos } = await import('../todoApi')
+
+      const batch = makeBatch()
+      vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>)
+      vi.mocked(doc).mockImplementation((...args: unknown[]) => ({ id: args[2] }) as ReturnType<typeof doc>)
+
+      await reorderTodos([
+        { id: 'todo-1', order: 0 },
+        { id: 'todo-2', order: 1 },
+      ])
+
+      expect(batch.update).toHaveBeenCalledTimes(2)
+      expect(batch.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'todo-1' }),
+        expect.objectContaining({ order: 0 }),
+      )
+      expect(batch.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'todo-2' }),
+        expect.objectContaining({ order: 1 }),
+      )
+      expect(batch.commit).toHaveBeenCalledTimes(1)
+    })
+
+    it('빈 배열이 전달되면 batch를 생성하지 않고 아무 것도 쓰지 않아야 한다', async () => {
+      const { writeBatch } = await import('firebase/firestore')
+      const { reorderTodos } = await import('../todoApi')
+
+      await reorderTodos([])
+
+      expect(writeBatch).not.toHaveBeenCalled()
+    })
+
+    it('인증되지 않은 경우 에러를 던져야 한다', async () => {
+      const firebase = await import('@/shared/lib/firebase')
+      Object.defineProperty(firebase.auth, 'currentUser', { value: null, configurable: true })
+
+      const { reorderTodos } = await import('../todoApi')
+
+      await expect(reorderTodos([{ id: 'todo-1', order: 0 }])).rejects.toThrow('Not authenticated')
+
+      Object.defineProperty(firebase.auth, 'currentUser', { value: { uid: 'test-user-id' }, configurable: true })
     })
   })
 })
