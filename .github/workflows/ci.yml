@@ -95,6 +95,15 @@ jobs:
         with:
           node-version: '20'
 
+      # Firestore 에뮬레이터(firebase-tools)가 Java 21 이상을 요구한다. 로그인
+      # 이후 플로우 E2E(playwright.config.ts webServer)가 로컬 Auth/Firestore
+      # 에뮬레이터에 의존하므로 필요하다.
+      - name: Setup Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       - name: Cache node_modules
         uses: actions/cache@v4
         id: cache-client-npm
@@ -125,15 +134,19 @@ jobs:
         if: steps.cache-playwright.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      # Firestore 에뮬레이터 jar(~100MB)를 매 실행마다 새로 받지 않도록 캐시한다.
+      - name: Cache Firebase emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-firebase-emulators-${{ hashFiles('client/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-firebase-emulators-
+
+      # 로그인 이후 플로우는 playwright.config.ts가 띄우는 로컬 Firebase
+      # Auth/Firestore 에뮬레이터("demo-" 프로젝트)로 인증한다. 실제 운영
+      # Firebase 프로젝트(시크릿)와는 무관하므로 여기서는 시크릿을 넘기지 않는다.
       - name: E2E Test
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run test:e2e
 
       - name: Upload Playwright report
