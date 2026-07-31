@@ -22,9 +22,10 @@ vi.mock('@/features/todo/hooks', () => ({
 }))
 
 vi.mock('@/features/todo/components/todoForm/todoForm', () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
+  default: ({ initialDueAt, onClose }: { initialDueAt?: string; onClose: () => void }) => (
     <div>
       <span>할 일 폼</span>
+      <span>초기 마감일: {initialDueAt ?? '없음'}</span>
       <button onClick={onClose}>폼 닫기</button>
     </div>
   ),
@@ -130,23 +131,89 @@ describe('TodayPage 컴포넌트', () => {
     renderPage()
 
     expect(screen.getByText('오늘 할 일이 없습니다')).toBeInTheDocument()
-    expect(screen.getByText('새 할 일 추가')).toBeInTheDocument()
   })
 
-  it('빈 상태에서 "새 할 일 추가" 클릭 시 할 일 추가 모달이 열려야 한다', () => {
+  it('할 일이 없을 때 EmptyState 자체에는 더 이상 액션 버튼이 없어야 한다', () => {
     vi.mocked(useTodayTodos).mockReturnValue(makeTodayTodosResult())
 
     renderPage()
-    fireEvent.click(screen.getByText('새 할 일 추가'))
+
+    expect(screen.queryByText('새 할 일 추가')).not.toBeInTheDocument()
+  })
+
+  it('할 일이 없어도 하단 고정 추가 버튼은 노출되어야 한다', () => {
+    vi.mocked(useTodayTodos).mockReturnValue(makeTodayTodosResult())
+
+    renderPage()
+
+    expect(screen.getByText('새 할일')).toBeInTheDocument()
+  })
+
+  it('할 일이 있어도 하단 고정 추가 버튼이 계속 노출되어야 한다', () => {
+    const inProgress = makeTodo({ id: 'p1', title: '진행 중 할 일' })
+    vi.mocked(useTodayTodos).mockReturnValue(
+      makeTodayTodosResult({ inProgressTodos: [inProgress], totalCount: 1 }),
+    )
+
+    renderPage()
+
+    expect(screen.getByText('진행 중 할 일')).toBeInTheDocument()
+    expect(screen.getByText('새 할일')).toBeInTheDocument()
+  })
+
+  it('로딩 중에도 하단 고정 추가 버튼은 노출되어야 한다', () => {
+    vi.mocked(useTodayTodos).mockReturnValue(
+      makeTodayTodosResult({ isLoading: true }),
+    )
+
+    renderPage()
+
+    expect(screen.getByText('새 할일')).toBeInTheDocument()
+  })
+
+  it('에러 상태에서도 하단 고정 추가 버튼은 노출되어야 한다', () => {
+    vi.mocked(useTodayTodos).mockReturnValue(
+      makeTodayTodosResult({ isError: true }),
+    )
+
+    renderPage()
+
+    expect(screen.getByText('새 할일')).toBeInTheDocument()
+  })
+
+  it('하단 고정 추가 버튼 클릭 시 할 일 추가 모달이 열려야 한다', () => {
+    vi.mocked(useTodayTodos).mockReturnValue(makeTodayTodosResult())
+
+    renderPage()
+    fireEvent.click(screen.getByText('새 할일'))
 
     expect(screen.getByText('할 일 폼')).toBeInTheDocument()
+  })
+
+  it('하단 고정 추가 버튼 클릭 시 현재 선택된 날짜가 초기 마감일로 전달되어야 한다', () => {
+    vi.mocked(useTodayTodos).mockReturnValue(makeTodayTodosResult())
+
+    renderPage()
+    fireEvent.click(screen.getByText('새 할일'))
+
+    expect(screen.getByText('초기 마감일: 2026-07-31T00:00')).toBeInTheDocument()
+  })
+
+  it('날짜 셀 클릭 후 하단 추가 버튼을 누르면 새로 선택된 날짜가 초기 마감일로 전달되어야 한다', () => {
+    vi.mocked(useTodayTodos).mockReturnValue(makeTodayTodosResult())
+
+    renderPage()
+    fireEvent.click(screen.getByLabelText('8월 1일 토요일, 일정 없음'))
+    fireEvent.click(screen.getByText('새 할일'))
+
+    expect(screen.getByText('초기 마감일: 2026-08-01T00:00')).toBeInTheDocument()
   })
 
   it('모달의 닫기 콜백 호출 시 모달이 닫혀야 한다', () => {
     vi.mocked(useTodayTodos).mockReturnValue(makeTodayTodosResult())
 
     renderPage()
-    fireEvent.click(screen.getByText('새 할 일 추가'))
+    fireEvent.click(screen.getByText('새 할일'))
     expect(screen.getByText('할 일 폼')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('폼 닫기'))

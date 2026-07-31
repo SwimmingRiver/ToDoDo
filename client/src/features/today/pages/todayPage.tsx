@@ -10,7 +10,7 @@ import WeekStrip from "../components/weekStrip";
 import DailyProgress from "../components/dailyProgress";
 import TodaySection from "../components/todaySection";
 import TodayTodoItem from "../components/todayTodoItem";
-import { Container, List } from "./todayPage.styles";
+import { Container, ScrollArea, List, AddButton } from "./todayPage.styles";
 
 const TodayPage = () => {
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
@@ -62,67 +62,76 @@ const TodayPage = () => {
         totalCount={totalCount}
       />
 
-      {isLoading && <TodayItemSkeleton />}
+      <ScrollArea>
+        {isLoading && <TodayItemSkeleton />}
 
-      {!isLoading && isError && (
-        <EmptyState
-          icon={Sun}
-          title="할 일을 불러오지 못했습니다"
-          description="잠시 후 다시 시도해주세요"
-          actionLabel="다시 시도"
-          onAction={() => useGetTodos.refetch()}
-        />
-      )}
+        {!isLoading && isError && (
+          <EmptyState
+            icon={Sun}
+            title="할 일을 불러오지 못했습니다"
+            description="잠시 후 다시 시도해주세요"
+            actionLabel="다시 시도"
+            onAction={() => useGetTodos.refetch()}
+          />
+        )}
 
-      {!isLoading && !isError && !hasTodos && (
-        <EmptyState
-          icon={Sun}
-          title="오늘 할 일이 없습니다"
-          description="여유로운 하루네요. 새로운 할 일을 추가해보세요"
-          actionLabel="새 할 일 추가"
-          actionIcon={Plus}
-          onAction={() => setIsAddOpen(true)}
-        />
-      )}
+        {!isLoading && !isError && !hasTodos && (
+          <EmptyState
+            icon={Sun}
+            title="오늘 할 일이 없습니다"
+            description="여유로운 하루네요. 새로운 할 일을 추가해보세요"
+          />
+        )}
 
-      {!isLoading && !isError && hasTodos && (
-        <>
-          {inProgressTodos.length > 0 && (
-            <TodaySection title="진행 중">
-              <List>
-                {inProgressTodos.map((todo) => (
-                  <TodayTodoItem
-                    key={todo.id}
-                    todo={todo}
-                    selectedDate={selectedDate}
-                    onToggleDone={toggleDone}
-                  />
-                ))}
-              </List>
-            </TodaySection>
-          )}
+        {!isLoading && !isError && hasTodos && (
+          <>
+            {inProgressTodos.length > 0 && (
+              <TodaySection title="진행 중">
+                <List>
+                  {inProgressTodos.map((todo) => (
+                    <TodayTodoItem
+                      key={todo.id}
+                      todo={todo}
+                      selectedDate={selectedDate}
+                      onToggleDone={toggleDone}
+                    />
+                  ))}
+                </List>
+              </TodaySection>
+            )}
 
-          {doneTodos.length > 0 && (
-            <TodaySection title="완료">
-              <List>
-                {doneTodos.map((todo) => (
-                  <TodayTodoItem
-                    key={todo.id}
-                    todo={todo}
-                    selectedDate={selectedDate}
-                    onToggleDone={toggleDone}
-                  />
-                ))}
-              </List>
-            </TodaySection>
-          )}
-        </>
-      )}
+            {doneTodos.length > 0 && (
+              <TodaySection title="완료">
+                <List>
+                  {doneTodos.map((todo) => (
+                    <TodayTodoItem
+                      key={todo.id}
+                      todo={todo}
+                      selectedDate={selectedDate}
+                      onToggleDone={toggleDone}
+                    />
+                  ))}
+                </List>
+              </TodaySection>
+            )}
+          </>
+        )}
+      </ScrollArea>
+
+      <AddButton onClick={() => setIsAddOpen(true)}>
+        <Plus size={16} />
+        새 할일
+      </AddButton>
 
       <Modal
         isOpen={isAddOpen}
         setIsOpen={setIsAddOpen}
-        children={<TodoForm onClose={() => setIsAddOpen(false)} />}
+        children={
+          <TodoForm
+            initialDueAt={`${selectedDate}T00:00`}
+            onClose={() => setIsAddOpen(false)}
+          />
+        }
       />
     </Container>
   );
