@@ -1,4 +1,5 @@
-export { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel } from "./due";
+export { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel, getUrgency } from "./due";
+export type { Urgency } from "./due";
 export { formatTodayLabel, formatDueTime } from "./formatToday";
 export {
   parseLocalDateOnly,
@@ -8,3 +9,5 @@ export {
   isSameLocalDay,
   getWeekDates,
 } from "./date";
+export { isDateInTodoRange, getPeriodProgress } from "./dateRange";
+export type { TodoRangeLike, PeriodProgress } from "./dateRange";

@@ -2,8 +2,11 @@ import { Check, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Todo } from "@/features/todo/types";
 import { RecurrenceBadge } from "@/shared";
-import { getDaysLeft, getDueBadgeLabel } from "@/shared/utils/due";
+import { getDaysLeft, getDueBadgeLabel, getUrgency } from "@/shared/utils/due";
+import { getPeriodProgress } from "@/shared/utils/dateRange";
+import { toDateKey } from "@/shared/utils/date";
 import { formatDueTime } from "@/shared/utils/formatToday";
+import PeriodBadge from "./periodBadge";
 import {
   Row,
   Checkbox,
@@ -13,12 +16,15 @@ import {
   Description,
   TimeLabel,
   OverdueBadge,
+  DueSoonBadge,
   DeleteButton,
 } from "./todayTodoItem.styles";
 
 interface TodayTodoItemProps {
   todo: Todo;
   onToggleDone: (todo: Todo) => void;
+  /** 기간(startAt~dueAt) 진행률 배지("n/총일 일차") 계산 기준 날짜(로컬 yyyy-MM-dd). 기본값: 오늘. */
+  selectedDate?: string;
   /** 기본값: 기존처럼 navigate(`/todo/${todo.id}`). 상세 라우트가 없는 컨텍스트(게스트 등)에서 오버라이드용. */
   onItemClick?: (todo: Todo) => void;
   /** 전달된 경우에만 우측 삭제 아이콘(44px 터치 타겟) 노출. 기존 호출부는 미전달 → 기존 동작 100% 유지. */
@@ -28,14 +34,23 @@ interface TodayTodoItemProps {
 const TodayTodoItem = ({
   todo,
   onToggleDone,
+  selectedDate,
   onItemClick,
   onDelete,
 }: TodayTodoItemProps) => {
   const navigate = useNavigate();
   const isDone = todo.status === "done";
+  const dateKey = selectedDate ?? toDateKey(new Date());
   const daysLeft = todo.dueAt ? getDaysLeft(todo.dueAt) : null;
-  const isOverdue = !isDone && daysLeft !== null && daysLeft < 0;
+  const urgency = daysLeft !== null ? getUrgency(daysLeft) : "normal";
   const dueTime = todo.dueAt ? formatDueTime(todo.dueAt) : null;
+  const periodProgress = !isDone ? getPeriodProgress(dateKey, todo) : null;
+  // 기간 항목의 마지막 날(=마감일 당일)에는 기존처럼 시각(dueTime)을, 그 이전
+  // 진행 중인 날에는 "며칠 남았는지"가 더 유효한 정보이므로 D-n 텍스트를 보여준다.
+  // 단일 마감일 항목(periodProgress === null)은 항상 마지막 날 취급.
+  const isLastDayOfPeriod = periodProgress
+    ? periodProgress.dayIndex === periodProgress.totalDays
+    : true;
 
   const handleItemClick = () =>
     onItemClick ? onItemClick(todo) : navigate(`/todo/${todo.id}`);
@@ -47,7 +62,7 @@ const TodayTodoItem = ({
         aria-checked={isDone}
         aria-label={`${todo.title} 완료 처리`}
         $isDone={isDone}
-        $isDanger={isOverdue}
+        $urgency={isDone ? "none" : urgency === "normal" ? "none" : urgency}
         onClick={(e) => {
           e.stopPropagation();
           onToggleDone(todo);
@@ -57,15 +72,29 @@ const TodayTodoItem = ({
       </Checkbox>
       <Content onClick={handleItemClick}>
         <TitleRow>
+          {periodProgress && (
+            <PeriodBadge
+              dayIndex={periodProgress.dayIndex}
+              totalDays={periodProgress.totalDays}
+            />
+          )}
           <Title $isDone={isDone}>{todo.title}</Title>
           {todo.recurrenceId != null && <RecurrenceBadge compact />}
         </TitleRow>
         {todo.description && <Description>{todo.description}</Description>}
       </Content>
-      {!isDone && isOverdue && daysLeft !== null ? (
+      {!isDone && daysLeft !== null && urgency === "danger" && (
         <OverdueBadge>{getDueBadgeLabel(daysLeft)}</OverdueBadge>
-      ) : (
-        !isDone && dueTime && <TimeLabel>{dueTime}</TimeLabel>
+      )}
+      {!isDone && daysLeft !== null && urgency === "soon" && (
+        <DueSoonBadge>{getDueBadgeLabel(daysLeft)}</DueSoonBadge>
+      )}
+      {!isDone && urgency === "normal" && (
+        <>
+          {isLastDayOfPeriod
+            ? dueTime && <TimeLabel>{dueTime}</TimeLabel>
+            : daysLeft !== null && <TimeLabel>{getDueBadgeLabel(daysLeft)}</TimeLabel>}
+        </>
       )}
       {onDelete && (
         <DeleteButton

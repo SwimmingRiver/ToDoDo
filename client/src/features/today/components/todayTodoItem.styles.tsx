@@ -1,6 +1,11 @@
 import { styled } from "styled-components";
 import { colors } from "@/styles/colors";
 import { radius } from "@/styles/radius";
+import { urgencyColors } from "@/styles/urgencyColors";
+import type { Urgency } from "@/shared/utils/due";
+
+/** Checkbox 링 색상용 2단계(+없음) — Urgency의 "normal"은 체크박스에서 "none"과 동일하게 취급한다. */
+type CheckboxUrgency = Extract<Urgency, "soon" | "danger"> | "none";
 
 const Row = styled.div`
   display: flex;
@@ -15,7 +20,7 @@ const Row = styled.div`
   }
 `;
 
-const Checkbox = styled.button<{ $isDone: boolean; $isDanger: boolean }>`
+const Checkbox = styled.button<{ $isDone: boolean; $urgency: CheckboxUrgency }>`
   position: relative;
   flex-shrink: 0;
   width: 44px;
@@ -37,12 +42,12 @@ const Checkbox = styled.button<{ $isDone: boolean; $isDanger: boolean }>`
     border-radius: ${radius.full};
     box-sizing: border-box;
     border: 1.5px solid
-      ${({ $isDone, $isDanger }) =>
-        $isDone
-          ? "transparent"
-          : $isDanger
-            ? colors.border.danger
-            : colors.border.secondary};
+      ${({ $isDone, $urgency }) => {
+        if ($isDone) return "transparent";
+        if ($urgency === "danger") return colors.border.danger;
+        if ($urgency === "soon") return urgencyColors.soon.main;
+        return colors.border.secondary;
+      }};
     background-color: ${({ $isDone }) =>
       $isDone ? colors.brand.secondary : "transparent"};
     transition: background-color 0.15s ease;
@@ -104,6 +109,16 @@ const OverdueBadge = styled.span`
   color: ${colors.danger.text};
 `;
 
+const DueSoonBadge = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background-color: ${urgencyColors.soon.background};
+  color: ${urgencyColors.soon.text};
+`;
+
 const DeleteButton = styled.button`
   flex-shrink: 0;
   width: 44px;
@@ -133,5 +148,7 @@ export {
   Description,
   TimeLabel,
   OverdueBadge,
+  DueSoonBadge,
   DeleteButton,
 };
+export type { CheckboxUrgency };

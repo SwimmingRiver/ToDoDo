@@ -94,6 +94,7 @@ const TodayPage = () => {
                   <TodayTodoItem
                     key={todo.id}
                     todo={todo}
+                    selectedDate={selectedDate}
                     onToggleDone={toggleDone}
                   />
                 ))}
@@ -108,6 +109,7 @@ const TodayPage = () => {
                   <TodayTodoItem
                     key={todo.id}
                     todo={todo}
+                    selectedDate={selectedDate}
                     onToggleDone={toggleDone}
                   />
                 ))}

@@ -29,32 +29,14 @@ import styled, { keyframes } from "styled-components";
 import { colors } from "@/styles/colors";
 import { isOverdue, getDropDates } from "../utils/calendarUtils";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
+import { toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
+import { isDateInTodoRange } from "@/shared/utils/dateRange";
 
 const statusLabels: Record<Status, string> = {
   todo: "할 일",
   doing: "진행 중",
   done: "완료",
 };
-
-/** Date → "YYYY-MM-DD" 로컬 날짜 문자열 변환 (UTC 변환 없음) */
-function toLocalDateStr(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/**
- * datetime 문자열 → 로컬 타임존 기준 "YYYY-MM-DD".
- * dueAt/startAt은 UTC Z 문자열로 저장되므로(todoForm이 toISOString 사용)
- * split("T")로 자르면 UTC 날짜가 나온다 — KST에서 자정~오전 9시 마감이
- * 전날로 밀리는 원인. 반드시 로컬 타임존으로 변환해서 날짜를 뽑는다.
- * "T"가 없는 date-only 문자열은 이미 달력 날짜이므로 그대로 반환한다.
- */
-function toLocalDateOnly(dateTimeStr: string): string {
-  if (!dateTimeStr.includes("T")) return dateTimeStr;
-  return toLocalDateStr(new Date(dateTimeStr));
-}
 
 const Calendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
@@ -86,11 +68,11 @@ const Calendar = () => {
         // ??(null만 거름) 대신 ||로 falsy를 함께 걸러야 한다. ""가 시작일로
         // 넘어가면 FC가 이벤트를 통째로 버려 캘린더에서 사라진다.
         const startSrc = todo.startAt || todo.dueAt || null;
-        const startDate = startSrc ? toLocalDateOnly(startSrc) : null;
+        const startDate = startSrc ? toDateKeyFromISO(startSrc) : null;
         let endDate: string | null = null;
         if (todo.startAt && todo.dueAt) {
-          const [y, mo, d] = toLocalDateOnly(todo.dueAt).split("-").map(Number);
-          endDate = toLocalDateStr(new Date(y, mo - 1, d + 1));
+          const [y, mo, d] = toDateKeyFromISO(todo.dueAt).split("-").map(Number);
+          endDate = toDateKey(new Date(y, mo - 1, d + 1));
         }
 
         return {
@@ -126,24 +108,10 @@ const Calendar = () => {
   const selectedDateTodos = useMemo(() => {
     if (!selectedDate || !todos) return [];
 
-    // selectedDate는 "YYYY-MM-DD" — 같은 형식의 로컬 날짜 문자열끼리 비교한다
-    // (사전순 비교가 날짜순과 일치). 격자(events)와 동일한 로컬 기준이어야
-    // 셀에 보이는 항목과 바텀시트 목록이 어긋나지 않는다.
-    return todos.filter((todo: Todo) => {
-      if (!todo.startAt && !todo.dueAt) return false;
-
-      const start = todo.startAt ? toLocalDateOnly(todo.startAt) : null;
-      const end = todo.dueAt ? toLocalDateOnly(todo.dueAt) : null;
-
-      // 시작일만 있는 경우
-      if (start && !end) return start === selectedDate;
-      // 종료일만 있는 경우
-      if (!start && end) return end === selectedDate;
-      // 둘 다 있는 경우: 시작일 <= 선택일 <= 종료일
-      if (start && end) return selectedDate >= start && selectedDate <= end;
-
-      return false;
-    });
+    // selectedDate는 "YYYY-MM-DD" — 격자(events)와 동일한 range 포함 판정
+    // (`isDateInTodoRange`, today 화면과 공유)을 써야 셀에 보이는 항목과 바텀시트
+    // 목록이 어긋나지 않는다.
+    return todos.filter((todo: Todo) => isDateInTodoRange(selectedDate, todo));
   }, [selectedDate, todos]);
 
   const handleDateClick = useCallback((info: DateClickArg) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { getDaysLeft, getDueBadgeLabel, DUE_SOON_DAYS } from '../due'
+import { getDaysLeft, getDueBadgeLabel, getUrgency, DUE_SOON_DAYS } from '../due'
 
 describe('due 유틸 함수', () => {
   beforeEach(() => {
@@ -66,6 +66,28 @@ describe('due 유틸 함수', () => {
       expect(getDueBadgeLabel(-1)).toBe('1일 초과')
       expect(getDueBadgeLabel(-3)).toBe('3일 초과')
       expect(getDueBadgeLabel(-10)).toBe('10일 초과')
+    })
+  })
+
+  describe('getUrgency', () => {
+    it('daysLeft가 음수(지남)이면 "danger"를 반환해야 한다', () => {
+      expect(getUrgency(-1)).toBe('danger')
+      expect(getUrgency(-10)).toBe('danger')
+    })
+
+    it('daysLeft가 0(D-day)이면 "danger"를 반환해야 한다', () => {
+      expect(getUrgency(0)).toBe('danger')
+    })
+
+    it('daysLeft가 1~DUE_SOON_DAYS(3)이면 "soon"을 반환해야 한다', () => {
+      expect(getUrgency(1)).toBe('soon')
+      expect(getUrgency(2)).toBe('soon')
+      expect(getUrgency(DUE_SOON_DAYS)).toBe('soon')
+    })
+
+    it('daysLeft가 DUE_SOON_DAYS(3)보다 크면 "normal"을 반환해야 한다', () => {
+      expect(getUrgency(DUE_SOON_DAYS + 1)).toBe('normal')
+      expect(getUrgency(10)).toBe('normal')
     })
   })
 })
