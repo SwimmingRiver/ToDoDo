@@ -3,6 +3,7 @@ import { useTodo } from "@/features/todo/hooks";
 import type { Todo } from "@/features/todo/types";
 import { getDaysLeft } from "@/shared/utils/due";
 import { getStripDates, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
+import { isDateInTodoRange } from "@/shared/utils/dateRange";
 
 export type DayMarker = "none" | "normal" | "danger";
 
@@ -18,8 +19,9 @@ export interface UseTodayTodosResult {
 }
 
 /**
- * 선택된 날짜(dueAt 기준)에 해당하는 todo를 진행중/완료로 분리하고,
- * 주간 스트립용 마커와 완료율을 계산한다.
+ * 선택된 날짜가 startAt~dueAt 구간에 포함되는 todo(캘린더와 동일한 range 포함
+ * 판정, `isDateInTodoRange` 참고)를 진행중/완료로 분리하고, 주간 스트립용 마커와
+ * 완료율을 계산한다.
  */
 export const useTodayTodos = (selectedDate: string, windowStart: string): UseTodayTodosResult => {
   const { useGetTodos, useUpdateTodo } = useTodo();
@@ -28,9 +30,9 @@ export const useTodayTodos = (selectedDate: string, windowStart: string): UseTod
 
   const todosForSelectedDate = useMemo(() => {
     if (!todos) return [];
-    return todos.filter(
-      (todo) => todo.dueAt && toDateKeyFromISO(todo.dueAt) === selectedDate,
-    );
+    // 기간(startAt~dueAt) 항목은 캘린더 화면과 동일한 정책으로 시작일~마감일 매일
+    // 노출한다(dueAt 단독 비교였던 기존 필터를 range 포함 판정으로 교체).
+    return todos.filter((todo) => isDateInTodoRange(selectedDate, todo));
   }, [todos, selectedDate]);
 
   const inProgressTodos = useMemo(
@@ -50,6 +52,13 @@ export const useTodayTodos = (selectedDate: string, windowStart: string): UseTod
     [todosForSelectedDate],
   );
 
+  // 주간 스트립 마커는 의도적으로 dueAt 단독 기준을 유지한다(리스트 필터와 달리
+  // range 포함으로 확장하지 않음). "마감 임박(빨간 점)"이라는 마커의 의미가 여전히
+  // dueAt 기준 위험도 신호이고, 기간 항목을 진행 중인 모든 날짜에 점을 찍으면
+  // "이 날 마감"과 "이 날 진행 중"이 시각적으로 구분되지 않아 주간 스트립 자체의
+  // 정보 가치가 흐려진다. 이 확장 여부는 별도 논의로 미뤄졌다(spec.md 참고) —
+  // 필터와 마커의 기준이 달라졌다는 사실 자체는 위 docstring/isDateInTodoRange로
+  // 명시해 둔다.
   const markers = useMemo(() => {
     const stripDateKeys = getStripDates(windowStart).map(toDateKey);
     const result: Record<string, DayMarker> = {};

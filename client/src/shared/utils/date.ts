@@ -16,8 +16,16 @@ export const toDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-/** ISO 문자열을 로컬 타임존 기준 "yyyy-MM-dd" 키로 변환한다. */
-export const toDateKeyFromISO = (iso: string): string => toDateKey(new Date(iso));
+/**
+ * ISO(또는 date-only) 문자열을 로컬 타임존 기준 "yyyy-MM-dd" 키로 변환한다.
+ * dueAt/startAt은 보통 UTC Z ISO 문자열로 저장되므로 `new Date(iso)`로 파싱한 뒤
+ * 로컬 게터로 날짜를 뽑아야 한다. "T"가 없는 순수 date-only 문자열("yyyy-MM-dd")은
+ * 이미 로컬 달력 날짜이므로 파싱 없이 그대로 반환한다 — `new Date("yyyy-MM-dd")`는
+ * UTC 자정으로 해석되어 UTC보다 느린(음수 오프셋) 타임존에서 하루 당겨지는 버그가
+ * 있다(구 `calendar.tsx`의 `toLocalDateOnly`와 동일 원칙을 통합).
+ */
+export const toDateKeyFromISO = (iso: string): string =>
+  iso.includes("T") ? toDateKey(new Date(iso)) : iso;
 
 /**
  * ISO 문자열을 <input type="datetime-local">에 넣을 로컬 타임존 기준
