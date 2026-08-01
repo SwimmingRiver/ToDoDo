@@ -345,6 +345,65 @@ export const sweepArchivedTodos = async (cutoffDays: number = 30): Promise<void>
   await commitPending();
 };
 
+/**
+ * 지난 미완료(overdue) 반복 투두 인스턴스를 archived 처리한다. status가 "todo"이고
+ * recurrenceId가 있으며 dueAt이 오늘(로컬 자정 기준) 이전인 인스턴스가 대상이다.
+ * Firestore 문서 자체는 지우지 않고 `overdueArchived: true` 플래그만 세워, 목록/칸반의
+ * 대표 노출(collapseRecurringInstances)에서만 제외한다.
+ *
+ * sweepArchivedTodos(완료 프로젝트 archived)와 별개 필드(overdueArchived)를 사용한다 —
+ * getTodos()의 Firestore 쿼리는 `archived` 필드만 걸러내므로(`where("archived", "==",
+ * false)`), 이 정책에 `archived`를 그대로 재사용하면 캘린더(이 정책 대상에서 제외되어야
+ * 함)도 getTodos() 결과에서 함께 사라진다. overdueArchived는 애플리케이션 레이어
+ * (collapseRecurringInstances)에서만 걸러지므로 캘린더 코드를 전혀 건드리지 않아도 기존
+ * 그대로 렌더링된다.
+ *
+ * editRecurringSeriesImpl의 "done/doing/overdue 인스턴스는 삭제하지 않고 그대로 보존한다"
+ * 계약은 문서 자체를 지우지 않는 것으로 이미 충족되므로(오직 플래그만 세팅), 이 스윕이
+ * 병행 실행돼도 그 계약을 깨지 않는다.
+ *
+ * overdueArchived는 Firestore 쿼리 등호 조건에 쓰지 않는다(기존 문서엔 필드가 아예 없을
+ * 수 있어 `where("overdueArchived", "==", false)`가 그 문서들을 걸러버릴 수 있음 — 별도
+ * 백필 없이도 안전하도록 userId+status만 쿼리하고 나머지는 클라이언트에서 판별한다).
+ *
+ * 반복 인스턴스는 하위 할 일을 가질 수 없다는 상호 배제 원칙(parentId는 항상 null)이라
+ * sweepArchivedTodos처럼 루트+자식을 그룹으로 묶어 청크를 나눌 필요가 없다. 다만 오래
+ * 방치된 계정은 대상 문서 수가 많을 수 있으므로 동일한 SWEEP_BATCH_SIZE 청크 분할
+ * 패턴은 그대로 적용한다.
+ */
+export const sweepOverdueRecurringTodos = async (): Promise<void> => {
+  const userId = getUserId();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const snapshot = await getDocs(
+    query(todosRef, where("userId", "==", userId), where("status", "==", "todo")),
+  );
+
+  const targets = snapshot.docs.filter((d) => {
+    const data = d.data();
+    if (!data.recurrenceId) return false;
+    if (data.overdueArchived === true) return false;
+    if (!data.dueAt) return false;
+    const due = new Date(data.dueAt as string);
+    due.setHours(0, 0, 0, 0);
+    return due.getTime() < todayStart.getTime();
+  });
+
+  if (targets.length === 0) return;
+
+  const now = new Date().toISOString();
+
+  for (let i = 0; i < targets.length; i += SWEEP_BATCH_SIZE) {
+    const chunk = targets.slice(i, i + SWEEP_BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((d) => {
+      batch.update(d.ref, { overdueArchived: true, updatedAt: now });
+    });
+    await batch.commit();
+  }
+};
+
 export const updateTodoDueAt = async (
   id: string,
   dueAt: string | null,

@@ -66,4 +66,74 @@ describe("collapseRecurringInstances", () => {
     const result = collapseRecurringInstances(todos);
     expect(result.map((t) => t.id)).toEqual(["other-1", "other-2", "other-3", "true-representative"]);
   });
+
+  it("overdue 인스턴스가 overdueArchived: true가 되면 대표 후보에서 제외되고, 아직 archived 안 된 미래 인스턴스가 새 대표로 뜬다", () => {
+    const todos = [
+      makeTodo({
+        id: "overdue-archived",
+        recurrenceId: "series-1",
+        dueAt: "2026-07-01T00:00:00.000Z",
+        overdueArchived: true,
+      }),
+      makeTodo({
+        id: "future-1",
+        recurrenceId: "series-1",
+        dueAt: "2026-07-20T00:00:00.000Z",
+      }),
+      makeTodo({
+        id: "future-2-nearer",
+        recurrenceId: "series-1",
+        dueAt: "2026-07-15T00:00:00.000Z",
+      }),
+    ];
+    const result = collapseRecurringInstances(todos);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("future-2-nearer");
+  });
+
+  it("시리즈 내 모든 인스턴스가 overdueArchived 상태면 해당 시리즈는 대표가 없어 결과에서 완전히 빠진다", () => {
+    const todos = [
+      makeTodo({
+        id: "other-series",
+        recurrenceId: "series-b",
+        dueAt: "2026-07-05T00:00:00.000Z",
+      }),
+      makeTodo({
+        id: "all-archived-1",
+        recurrenceId: "series-a",
+        dueAt: "2026-07-01T00:00:00.000Z",
+        overdueArchived: true,
+      }),
+      makeTodo({
+        id: "all-archived-2",
+        recurrenceId: "series-a",
+        dueAt: "2026-07-02T00:00:00.000Z",
+        overdueArchived: true,
+      }),
+    ];
+    const result = collapseRecurringInstances(todos);
+    expect(result.map((t) => t.id)).toEqual(["other-series"]);
+  });
+
+  it("done 상태 인스턴스는 overdueArchived 정책과 무관하게 기존처럼 그대로 대표 후보로 노출된다 (회귀 확인)", () => {
+    // overdueArchived는 sweepOverdueRecurringTodos가 status:"todo"인 문서만 대상으로 세팅하므로
+    // done 인스턴스에는 애초에 붙지 않지만, collapseRecurringInstances 자체가 status를 보고
+    // 분기하지 않는다는 점(overdueArchived 필드 유무만 본다)을 명시적으로 회귀 확인한다.
+    const todos = [
+      makeTodo({
+        id: "done-1",
+        status: "done",
+        recurrenceId: "series-1",
+        dueAt: "2026-07-01T00:00:00.000Z",
+      }),
+      makeTodo({
+        id: "future-1",
+        recurrenceId: "series-1",
+        dueAt: "2026-07-20T00:00:00.000Z",
+      }),
+    ];
+    const result = collapseRecurringInstances(todos);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("done-1");
+  });
 });
