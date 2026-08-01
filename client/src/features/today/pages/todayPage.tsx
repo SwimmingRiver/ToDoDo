@@ -10,7 +10,7 @@ import WeekStrip from "../components/weekStrip";
 import DailyProgress from "../components/dailyProgress";
 import TodaySection from "../components/todaySection";
 import TodayTodoItem from "../components/todayTodoItem";
-import { Container, ScrollArea, List, AddButton } from "./todayPage.styles";
+import { Container, ScrollArea, List, Fab } from "./todayPage.styles";
 
 const TodayPage = () => {
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
@@ -118,10 +118,10 @@ const TodayPage = () => {
         )}
       </ScrollArea>
 
-      <AddButton onClick={() => setIsAddOpen(true)}>
-        <Plus size={16} />
+      <Fab onClick={() => setIsAddOpen(true)}>
+        <Plus size={16} aria-hidden="true" />
         새 할일
-      </AddButton>
+      </Fab>
 
       <Modal
         isOpen={isAddOpen}

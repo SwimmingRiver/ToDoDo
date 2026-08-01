@@ -3,6 +3,7 @@ import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
 
 const Container = styled.div`
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -13,6 +14,7 @@ const ScrollArea = styled.div`
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  padding-bottom: 88px;
 `;
 
 const List = styled.div`
@@ -20,30 +22,51 @@ const List = styled.div`
   flex-direction: column;
 `;
 
-const AddButton = styled.button`
-  width: 100%;
+const Fab = styled.button`
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2;
+
   height: 48px;
-  flex-shrink: 0;
+  padding: 0 20px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background-color: ${colors.brand.primary};
   color: white;
   font-size: 14px;
   font-weight: 500;
   border: none;
-  border-radius: var(--border-radius-lg, 10px);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: background-color 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
 
   &:hover {
     background-color: #0d5e49;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.97);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.secondary};
+    outline-offset: 2px;
   }
 
   ${media.mobile} {
-    height: 44px;
+    bottom: 16px;
+    right: 16px;
   }
 `;
 
-export { Container, ScrollArea, List, AddButton };
+export { Container, ScrollArea, List, Fab };
