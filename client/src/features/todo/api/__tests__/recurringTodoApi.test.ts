@@ -174,7 +174,9 @@ describe("createRecurringTodo", () => {
 
   it("생성한 각 인스턴스에 archived: false를 명시적으로 채운다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
-    vi.mocked(getDocs).mockResolvedValueOnce(emptyDocsSnapshot);
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
     const batch = makeBatch();
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 
@@ -503,8 +505,12 @@ describe("editRecurringSeries", () => {
   it("재생성한 인스턴스에 archived: false를 명시적으로 채운다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     vi.mocked(getDocs)
-      .mockResolvedValueOnce(emptyDocsSnapshot) // 시리즈 조회 결과 없음 → 전부 재생성
-      .mockResolvedValueOnce(emptyDocsSnapshot); // getNextRootOrder
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      ) // 시리즈 조회 결과 없음 → 전부 재생성
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      ); // getNextRootOrder
     const batch = makeBatch();
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 

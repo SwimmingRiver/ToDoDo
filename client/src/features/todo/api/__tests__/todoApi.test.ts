@@ -138,7 +138,7 @@ describe('todoApi', () => {
       const { createTodo } = await import('../todoApi')
 
       vi.mocked(getDocs).mockResolvedValueOnce({
-        docs: [],
+        docs: [] as { id: string; data: () => Record<string, unknown> }[],
       } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
       vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
       vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
