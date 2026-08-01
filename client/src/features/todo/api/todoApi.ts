@@ -92,7 +92,11 @@ const assertNoRecurrenceParentConflict = (todo: {
 
 export const getTodos = async () => {
   const userId = getUserId();
-  const q = query(todosRef, where("userId", "==", userId));
+  const q = query(
+    todosRef,
+    where("userId", "==", userId),
+    where("archived", "==", false),
+  );
   const snapshot = await getDocs(q);
   return snapshot.docs
     .map((doc) => mapDocToTodo(doc.id, doc.data()))

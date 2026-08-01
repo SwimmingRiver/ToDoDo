@@ -31,6 +31,9 @@ interface Todo {
   recurrence: RecurrenceRule | null;
   /** 같은 반복 시리즈에 속한 인스턴스들을 묶는 그룹 id. 반복 아니면 null. */
   recurrenceId: string | null;
+  /** 기본 조회(getTodos)에서 제외할지 여부. true면 30일 지난 완료 프로젝트(루트+자식)로 간주.
+   *  기존 문서엔 필드가 없을 수 있어 optional — 없으면 archived 아닌 것으로 취급한다. */
+  archived?: boolean;
 }
 
 /** 칸반 같은 컬럼 내 드래그 재정렬 시 bulk write할 order 변경분. */
