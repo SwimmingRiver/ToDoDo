@@ -18,9 +18,14 @@ const App = () => {
   const [isopen, setIsOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isMobile = useMediaQuery("tablet");
-  const { useExtendIndefiniteRecurringSeries, useSweepArchivedTodos } = useTodo();
+  const {
+    useExtendIndefiniteRecurringSeries,
+    useSweepArchivedTodos,
+    useSweepOverdueRecurringTodos,
+  } = useTodo();
   const hasExtendedRef = useRef(false);
   const hasSweptRef = useRef(false);
+  const hasSweptOverdueRecurringRef = useRef(false);
 
   // 인증된 레이아웃(App) 마운트 시 1회, 무기한 반복 시리즈들의 남은 인스턴스를
   // 오늘 기준으로 이어서 채운다. 세션 중 재마운트되어도 다시 실행되지 않도록
@@ -33,6 +38,10 @@ const App = () => {
     if (!hasSweptRef.current) {
       hasSweptRef.current = true;
       useSweepArchivedTodos.mutate();
+    }
+    if (!hasSweptOverdueRecurringRef.current) {
+      hasSweptOverdueRecurringRef.current = true;
+      useSweepOverdueRecurringTodos.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -5,12 +5,20 @@ import type { Todo } from "../types";
  * 있으면 그것, 없으면 다음 예정 건) 하나만 남기고 나머지는 목록에서 숨긴다. 반복 아닌
  * 할 일(recurrenceId === null)은 그대로 통과시킨다. 다른 문서를 지우는 게 아니라 이
  * 목록에 렌더링할 대표만 고르는 순수 함수다 — 실제 삭제는 useDeleteRecurringSeries가 담당.
+ *
+ * overdueArchived: true인 인스턴스(sweepOverdueRecurringTodos가 dueAt이 지나 archived
+ * 처리한 지난 미완료 회차)는 대표 후보에서 완전히 제외한다. 그러지 않으면 방치된 overdue
+ * 인스턴스가 영구히 "대표"로 노출되는 문제(이번 정책의 발단)가 그대로 재현된다 — archived된
+ * 회차를 건너뛰면 남은 인스턴스 중 다음으로 이른 것(미래 예정 건 포함)이 자연스럽게 새
+ * 대표가 된다. 이 필드는 캘린더(dashboard)에는 영향을 주지 않는다 — 캘린더는
+ * collapseRecurringInstances를 거치지 않고 getTodos() 원본을 그대로 렌더링한다.
  */
 export function collapseRecurringInstances(todos: Todo[]): Todo[] {
   const representativeByRecurrenceId = new Map<string, Todo>();
 
   for (const todo of todos) {
     if (!todo.recurrenceId) continue;
+    if (todo.overdueArchived) continue;
 
     const existing = representativeByRecurrenceId.get(todo.recurrenceId);
     if (!existing) {
@@ -31,8 +39,14 @@ export function collapseRecurringInstances(todos: Todo[]): Todo[] {
   // 위치가 실제 order 값과 어긋나, 칸반 드래그 재정렬(useKanbanDrag)이 이 카드의
   // over.id를 실제 order(대표의 order)로 찾는데 화면상 위치는 첫 인스턴스의 order
   // 근처로 보여 사용자가 드롭한 자리와 전혀 다른 위치로 카드가 이동하는 버그가 있었다.
+  //
+  // overdueArchived된 인스턴스는 위 루프에서 대표 후보로 고려되지 않았으므로
+  // representativeByRecurrenceId에 값으로 들어있을 수 없다 — 그래서 아래 조건만으로도
+  // 자동으로 걸러지지만, 의도를 명시적으로 드러내기 위해 한 번 더 확인한다.
   return todos.filter(
-    (todo) => !todo.recurrenceId || representativeByRecurrenceId.get(todo.recurrenceId) === todo,
+    (todo) =>
+      !todo.recurrenceId ||
+      (!todo.overdueArchived && representativeByRecurrenceId.get(todo.recurrenceId) === todo),
   );
 }
 
@@ -42,6 +56,7 @@ export interface ProjectCardData {
   progress: number;
   subtaskInfo: { total: number; statusText: string };
   overdueInfo: { isOverdue: boolean; daysOver: number };
+  recurringMissedCount: number;
   isExpanded: boolean;
 }
 
@@ -123,4 +138,20 @@ export function getProjectOverdue(
   );
 
   return { isOverdue: true, daysOver };
+}
+
+// 같은 recurrenceId를 가진 형제 인스턴스 중 overdueArchived === true로 조용히 대표
+// 후보에서 제외된 건수를 센다. collapseRecurringInstances가 화면에는 대표 1건만
+// 남기고 나머지는 숨기기 때문에, 사용자에게 "몇 회차가 밀렸는지" 알려줄 유일한
+// 신호가 이 카운트다 — 일반 투두의 getProjectOverdue(마감 초과 배지)와 같은 목적의
+// 반복 투두 버전. recurrenceId가 없는(반복 아닌) 할 일에는 0을 반환한다.
+export function getRecurringMissedCount(
+  allTodos: Todo[],
+  todo: Todo
+): number {
+  if (!todo.recurrenceId) return 0;
+
+  return allTodos.filter(
+    (t) => t.recurrenceId === todo.recurrenceId && t.overdueArchived === true
+  ).length;
 }

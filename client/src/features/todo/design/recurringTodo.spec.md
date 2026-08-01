@@ -16,6 +16,7 @@
 | 자연어 입력 | 스코프 아웃 |
 | 하위 할 일 상호 배제 | 반복 ON ↔ 하위 할 일 기능 비활성 (양방향) |
 | kanban 노출 | 반복 인스턴스는 `dueAt <= 오늘`인 것만 노출, 미래는 캘린더 전용 |
+| 지난 미완료(overdue) 인스턴스 archived 처리 (2026-08-01 개정) | dueAt이 지나도록 완료되지 않은 반복 인스턴스는 하드 삭제하지 않고 archived 처리해 목록/칸반의 대표 노출에서 제외. 캘린더는 이 정책 대상에서 제외(archived 여부와 무관하게 그대로 렌더링). 4-7절 참고 |
 
 필드명(`recurrence`, `recurrenceId` 등)은 아직 미확정이므로 본 스펙은 필드 스키마를 가정하지 않고 **폼 인터랙션 / 모달 / 배지 / 캘린더 표현**에만 집중한다. 아래 의사코드의 `todo.isRecurring`, `todo.recurrenceSummary` 등은 실제 필드명이 아니라 UI 설계 편의상 사용하는 placeholder 표현이다.
 
@@ -414,6 +415,37 @@ kanban에 노출된 각 반복 인스턴스 카드
   → 기한 초과 표시(기존 $overdue 로직)와 독립적으로 동시 표시 가능
     예: 기한 초과 + 반복 인스턴스인 경우 → 빨간 좌측 보더(기존) + RecurrenceBadge(신규) 동시 노출
 ```
+
+### 4-7. 지난 미완료(overdue) 반복 인스턴스 archived 처리 (2026-08-01 개정)
+
+**배경**: 반복 투두 중 완료하지 않은 회차가 dueAt이 지나도 목록/칸반에 계속 "대표"로 노출되는 문제가 있었다(같은 recurrenceId의 인스턴스 중 dueAt이 가장 이른 것을 대표로 고르는 `collapseRecurringInstances`의 특성상, 완료하지 않고 방치하면 그 지난 회차가 영구히 대표 자리를 차지). PM 검토 결과, 하드 삭제(문서 삭제)가 아니라 **archived 처리**로 목록/칸반의 "대표 노출" 후보에서만 제외하는 정책으로 확정되었다(통계/복원 가능성 보존 목적 — Firestore 문서 자체는 절대 삭제하지 않는다).
+
+```
+반복 인스턴스 dueAt이 지남 (오늘 로컬 자정 기준) + status가 여전히 "todo"
+  ↓
+(앱 진입 시 1회, sweepOverdueRecurringTodos — 기존 sweepArchivedTodos/
+ extendIndefiniteRecurringSeries와 같은 자리, App.tsx)
+  ↓
+해당 인스턴스 문서에 overdueArchived: true 플래그 세팅 (문서 삭제 아님)
+  ↓
+collapseRecurringInstances가 이 인스턴스를 대표 후보에서 제외
+  ↓
+같은 시리즈의 다음으로 이른 인스턴스(미래 예정 건 포함)가 새 대표로 노출
+  ↓
+목록(todoList)/칸반(kanbanBoard) 양쪽 모두 새 대표만 카드로 표시
+```
+
+**적용 범위**:
+
+| 화면 | 영향 |
+|---|---|
+| 할 일 목록(`todoList.tsx`) | `collapseRecurringInstances`가 archived된 지난 회차를 제외하고 다음 대표를 노출 |
+| 칸반(`kanbanBoard.tsx`) | 동일하게 `collapseRecurringInstances`를 거치므로 자동 적용. 칸반 전용 노출 필터(`isVisibleInKanban`, dueAt <= 오늘)는 변경 없음 — 이미 지난 인스턴스는 그 필터를 통과하지만, 이후 `collapseRecurringInstances`에서 대표 후보 탈락으로 최종 제외됨 |
+| **캘린더(`dashboard`, FullCalendar)** | **이 정책 대상에서 제외.** 캘린더는 `collapseRecurringInstances`를 거치지 않고 `getTodos()` 원본을 그대로 렌더링하므로, archived 여부와 무관하게 과거/미래 인스턴스가 기존처럼 전부 표시된다 |
+
+**"done 프로젝트 archived"와의 구분**: 완료된 지 30일 지난 프로젝트를 대상으로 하는 기존 `archived` 필드(`sweepArchivedTodos`)와는 다른 필드(`overdueArchived`)를 쓴다. `archived`는 `getTodos()`의 Firestore 쿼리 단계(`where("archived", "==", false)`)에서 걸러지므로 캘린더를 포함한 모든 화면에서 사라지지만, `overdueArchived`는 쿼리 단계에서 걸러지지 않고 `collapseRecurringInstances`(애플리케이션 레이어)에서만 걸러진다 — 그래야 캘린더가 이 정책의 영향을 받지 않을 수 있다.
+
+**기존 계약과의 관계**: `editRecurringSeriesImpl`의 "done/doing/지난 미완료(overdue) 인스턴스는 삭제하지 않고 그대로 보존한다"는 계약(1-2절 확인 모달 카피 "진행 중이거나 완료된 일정, 이미 지난 미완료 일정은 그대로 유지됩니다"와 동일)은 이 정책으로 변경되지 않는다. `overdueArchived`는 표시 여부만 바꾸는 플래그이고 문서 자체는 여전히 보존되므로, 시리즈 수정 시 지난 미완료 인스턴스가 삭제되지 않는다는 기존 보장은 그대로 유지된다.
 
 ---
 

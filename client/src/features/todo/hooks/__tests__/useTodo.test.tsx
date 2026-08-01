@@ -29,6 +29,7 @@ vi.mock('../../api', () => ({
   deleteRecurringSeries: vi.fn(),
   extendIndefiniteRecurringSeries: vi.fn(),
   sweepArchivedTodos: vi.fn(),
+  sweepOverdueRecurringTodos: vi.fn(),
   reorderTodos: vi.fn(),
 }))
 
@@ -567,6 +568,70 @@ describe('useTodo 훅', () => {
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining('done 아카이빙 스윕 실패'),
+        error,
+      )
+
+      consoleErrorSpy.mockRestore()
+    })
+  })
+
+  describe('useSweepOverdueRecurringTodos', () => {
+    it('반복 할 일 지난 미완료 아카이빙 스윕 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useSweepOverdueRecurringTodos).toBeDefined()
+      expect(typeof result.current.useSweepOverdueRecurringTodos.mutate).toBe('function')
+    })
+
+    it('성공 시 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, sweepOverdueRecurringTodos } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      vi.mocked(sweepOverdueRecurringTodos).mockResolvedValueOnce(undefined)
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useSweepOverdueRecurringTodos.mutate()
+
+      await waitFor(() => {
+        expect(result.current.useSweepOverdueRecurringTodos.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(sweepOverdueRecurringTodos)).toHaveBeenCalled()
+    })
+
+    it('실패 시 사용자에게는 알리지 않되 콘솔에는 에러를 남겨야 한다', async () => {
+      const { getTodos, sweepOverdueRecurringTodos } = await import('../../api')
+
+      vi.mocked(getTodos).mockResolvedValue([])
+      const error = new Error('permission-denied')
+      vi.mocked(sweepOverdueRecurringTodos).mockRejectedValueOnce(error)
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useSweepOverdueRecurringTodos.mutate()
+
+      await waitFor(() => {
+        expect(result.current.useSweepOverdueRecurringTodos.isError).toBe(true)
+      })
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('반복 할 일 지난 미완료 아카이빙 스윕 실패'),
         error,
       )
 

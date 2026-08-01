@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Todo } from "@/features/todo";
-import { RecurrenceBadge } from "@/shared";
+import { RecurrenceBadge, RecurrenceMissedBadge } from "@/shared";
 import KanbanCardMenu from "./kanbanCardMenu";
 import type { Status } from "./kanbanColumn";
 import {
@@ -16,6 +16,7 @@ import {
 interface KanbanItemProps {
   todo: Todo;
   parentTitle?: string;
+  recurringMissedCount?: number;
   onNavigate: (id: string) => void;
   isMobile?: boolean;
   onStatusChange?: (todo: Todo, status: Status) => void;
@@ -24,6 +25,7 @@ interface KanbanItemProps {
 const KanbanItem = ({
   todo,
   parentTitle,
+  recurringMissedCount = 0,
   onNavigate,
   isMobile = false,
   onStatusChange,
@@ -87,6 +89,9 @@ const KanbanItem = ({
         <ItemTitleRow>
           <ItemTitle>{todo.title}</ItemTitle>
           {todo.recurrenceId != null && <RecurrenceBadge />}
+          {todo.recurrenceId != null && (
+            <RecurrenceMissedBadge count={recurringMissedCount} />
+          )}
         </ItemTitleRow>
         {isMobile && onStatusChange && (
           <KanbanCardMenu status={todo.status} onSelect={handleStatusSelect} />

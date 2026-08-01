@@ -14,6 +14,7 @@ import {
   deleteRecurringSeries,
   extendIndefiniteRecurringSeries,
   sweepArchivedTodos,
+  sweepOverdueRecurringTodos,
   reorderTodos,
 } from "../api";
 
@@ -228,6 +229,19 @@ export const useTodo = () => {
     },
   });
 
+  // 앱 진입 시 1회 호출해 지난 미완료(overdue) 반복 투두 인스턴스를 archived 처리한다
+  // (App.tsx). useSweepArchivedTodos와 동일한 이유로 사용자 액션이 아닌 백그라운드
+  // 유지보수이므로 조용히 넘어가고, 실패는 콘솔에만 남긴다.
+  const useSweepOverdueRecurringTodos = useMutation({
+    mutationFn: () => sweepOverdueRecurringTodos(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+    onError: (error) => {
+      console.error("반복 할 일 지난 미완료 아카이빙 스윕 실패:", error);
+    },
+  });
+
   return {
     useCreateTodo,
     useUpdateTodo,
@@ -242,6 +256,7 @@ export const useTodo = () => {
     useDeleteRecurringSeries,
     useExtendIndefiniteRecurringSeries,
     useSweepArchivedTodos,
+    useSweepOverdueRecurringTodos,
   };
 };
 

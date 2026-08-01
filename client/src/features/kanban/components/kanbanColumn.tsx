@@ -1,6 +1,7 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import type { Todo } from "@/features/todo";
+import { getRecurringMissedCount } from "@/features/todo";
 import KanbanItem from "./kanbanItem";
 import {
   KanbanColumn as KanbanColumnStyled,
@@ -89,6 +90,7 @@ const KanbanColumn = ({
                 key={todo.id}
                 todo={todo}
                 parentTitle={getParentTitle(todo.parentId)}
+                recurringMissedCount={getRecurringMissedCount(allTodos, todo)}
                 onNavigate={onNavigate}
                 isMobile={isMobile}
                 onStatusChange={onStatusChange}

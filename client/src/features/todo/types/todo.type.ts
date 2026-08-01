@@ -34,6 +34,16 @@ interface Todo {
   /** 기본 조회(getTodos)에서 제외할지 여부. true면 30일 지난 완료 프로젝트(루트+자식)로 간주.
    *  기존 문서엔 필드가 없을 수 있어 optional — 없으면 archived 아닌 것으로 취급한다. */
   archived?: boolean;
+  /** 지난 미완료(overdue) 반복 투두 인스턴스가 archived 처리되었는지 여부. true면
+   *  목록/칸반의 대표 노출(collapseRecurringInstances) 후보에서 제외된다.
+   *  위 `archived`와 의도적으로 분리된 별도 필드다 — `archived`는 getTodos()의 Firestore
+   *  쿼리(`where("archived", "==", false)`) 단계에서 걸러지므로, 이 정책에 그대로 재사용하면
+   *  캘린더(이 정책 대상에서 제외되어야 함)도 getTodos() 결과에서 함께 사라져 버린다.
+   *  overdueArchived는 Firestore 쿼리에서는 걸러지지 않고 애플리케이션 레이어
+   *  (collapseRecurringInstances)에서만 걸러지므로, 캘린더는 손대지 않아도 계속 그대로
+   *  렌더링된다. 기존 문서엔 필드가 없을 수 있어 optional — 없으면 archived 아닌 것으로
+   *  취급한다. */
+  overdueArchived?: boolean;
 }
 
 /** 칸반 같은 컬럼 내 드래그 재정렬 시 bulk write할 order 변경분. */

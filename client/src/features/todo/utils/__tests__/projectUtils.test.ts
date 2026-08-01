@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { getProjectOverdue } from '../projectUtils'
+import { getProjectOverdue, getRecurringMissedCount } from '../projectUtils'
 import type { Todo } from '../../types/todo.type'
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
@@ -132,5 +132,63 @@ describe('getProjectOverdue', () => {
     const result = getProjectOverdue([project], project)
 
     expect(result).toEqual({ isOverdue: false, daysOver: 0 })
+  })
+})
+
+describe('getRecurringMissedCount', () => {
+  it('recurrenceId가 없는(반복 아닌) 할 일이면 0을 반환해야 한다', () => {
+    const todo = makeTodo({ id: 'todo-1', recurrenceId: null })
+
+    expect(getRecurringMissedCount([todo], todo)).toBe(0)
+  })
+
+  it('같은 recurrenceId를 가진 형제 중 overdueArchived === true인 것만 센다', () => {
+    const representative = makeTodo({ id: 'rep', recurrenceId: 'series-1' })
+    const missed1 = makeTodo({
+      id: 'missed-1',
+      recurrenceId: 'series-1',
+      overdueArchived: true,
+    })
+    const missed2 = makeTodo({
+      id: 'missed-2',
+      recurrenceId: 'series-1',
+      overdueArchived: true,
+    })
+    const notArchived = makeTodo({
+      id: 'future',
+      recurrenceId: 'series-1',
+      overdueArchived: false,
+    })
+
+    const result = getRecurringMissedCount(
+      [representative, missed1, missed2, notArchived],
+      representative,
+    )
+
+    expect(result).toBe(2)
+  })
+
+  it('overdueArchived된 형제가 하나도 없으면 0을 반환해야 한다', () => {
+    const representative = makeTodo({ id: 'rep', recurrenceId: 'series-1' })
+    const future = makeTodo({
+      id: 'future',
+      recurrenceId: 'series-1',
+      overdueArchived: false,
+    })
+
+    expect(getRecurringMissedCount([representative, future], representative)).toBe(0)
+  })
+
+  it('다른 recurrenceId를 가진 형제는 세지 않는다', () => {
+    const representative = makeTodo({ id: 'rep', recurrenceId: 'series-1' })
+    const otherSeriesMissed = makeTodo({
+      id: 'other',
+      recurrenceId: 'series-2',
+      overdueArchived: true,
+    })
+
+    expect(
+      getRecurringMissedCount([representative, otherSeriesMissed], representative),
+    ).toBe(0)
   })
 })
