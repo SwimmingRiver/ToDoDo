@@ -205,6 +205,36 @@ describe("deleteTodo 연쇄 삭제 (고아 문서/부모 상태 정합성)", () 
     expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 
+  // done 아카이빙(archived 플래그) 도입 회귀 테스트: deleteTodo는 archived 여부를
+  // 전혀 조회/필터링하지 않고 userId+parentId만으로 동작하므로, 이미 archived: true로
+  // 처리된(30일 지난 완료 프로젝트) 문서라도 삭제 요청이 오면 하위까지 그대로 연쇄
+  // 삭제되어야 한다. archived 필터는 getTodos() 조회에만 적용되고 delete 경로에는
+  // 영향이 없어야 한다는 설계 전제(스펙 7절)를 지킨다.
+  it("archived: true로 아카이빙된 루트도 archived가 아닌 문서와 동일하게 하위까지 연쇄 삭제된다", async () => {
+    const { getDoc, getDocs, writeBatch } = await import("firebase/firestore");
+
+    vi.mocked(getDoc).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ userId: "test-user-id", parentId: null, archived: true }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+
+    const children = [
+      makeTodo({ id: "child-1", parentId: "archived-root-1", status: "done" }),
+      makeTodo({ id: "child-2", parentId: "archived-root-1", status: "done" }),
+    ];
+    vi.mocked(getDocs).mockResolvedValueOnce(toDocSnapshot(children) as GetDocsResult);
+
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { deleteTodo } = await import("../todoApi");
+
+    await deleteTodo("archived-root-1");
+
+    expect(batch.delete).toHaveBeenCalledTimes(3);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
   it("하위 삭제 시 남은 형제 기준으로 부모 상태를 같은 batch에서 재계산한다", async () => {
     const { getDoc, getDocs, writeBatch } = await import("firebase/firestore");
 

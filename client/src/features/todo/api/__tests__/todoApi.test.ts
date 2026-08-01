@@ -65,6 +65,29 @@ describe('todoApi', () => {
       expect(result[1].order).toBe(1)
     })
 
+    it('archived: true인 문서는 결과에서 제외해야 한다', async () => {
+      const { getDocs, query, where } = await import('firebase/firestore')
+      const { getTodos } = await import('../todoApi')
+
+      const mockDocs = [
+        { id: 'active-1', data: () => ({ ...makeTodo({ order: 0 }), id: undefined, archived: false }) },
+        { id: 'archived-1', data: () => ({ ...makeTodo({ order: 1, status: 'done' }), id: undefined, archived: true }) },
+      ]
+
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: mockDocs,
+      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+
+      await getTodos()
+
+      // getTodos는 archived 필터링을 클라이언트가 아니라 Firestore 쿼리 조건으로 위임한다
+      // (where("archived","==",false)) — mock에서는 Firestore가 실제로 필터링하지 않으므로
+      // "쿼리에 그 조건이 들어갔는지"를 검증한다.
+      expect(where).toHaveBeenCalledWith('archived', '==', false)
+    })
+
     it('order 필드가 없는(undefined) 레거시 문서가 섞여 있어도 나머지 문서는 정상적으로 order 순 정렬되어야 한다', async () => {
       // 비교 함수가 undefined - number = NaN을 반환하면 정렬 전체가 깨지는 회귀
       // 버그가 있었다(order가 있는 문서끼리도 전혀 정렬되지 않음).
@@ -100,6 +123,56 @@ describe('todoApi', () => {
 
       // 복원
       Object.defineProperty(firebase.auth, 'currentUser', { value: { uid: 'test-user-id' }, configurable: true })
+    })
+  })
+
+  describe('createTodo', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const firebase = await import('@/shared/lib/firebase')
+      Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
+    })
+
+    it('생성한 문서에 archived: false를 명시적으로 채워야 한다', async () => {
+      const { getDocs, addDoc, query, where } = await import('firebase/firestore')
+      const { createTodo } = await import('../todoApi')
+
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [] as { id: string; data: () => Record<string, unknown> }[],
+      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+      vi.mocked(addDoc).mockResolvedValueOnce({ id: 'new-1' } as Awaited<ReturnType<typeof addDoc>>)
+
+      await createTodo(makeTodo({ title: '새 할일' }))
+
+      expect(addDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ archived: false }),
+      )
+    })
+  })
+
+  describe('createChildTodo', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const firebase = await import('@/shared/lib/firebase')
+      Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
+    })
+
+    it('생성한 하위 할 일에 archived: false를 명시적으로 채워야 한다', async () => {
+      const { addDoc, updateDoc } = await import('firebase/firestore')
+      const { createChildTodo } = await import('../todoApi')
+
+      vi.mocked(addDoc).mockResolvedValueOnce({ id: 'child-1' } as Awaited<ReturnType<typeof addDoc>>)
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined)
+
+      await createChildTodo('parent-1', { title: '하위 할일' }, [])
+
+      expect(addDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ archived: false }),
+      )
     })
   })
 

@@ -13,6 +13,7 @@ import {
   editRecurringSeries,
   deleteRecurringSeries,
   extendIndefiniteRecurringSeries,
+  sweepArchivedTodos,
   reorderTodos,
 } from "../api";
 
@@ -214,6 +215,19 @@ export const useTodo = () => {
     },
   });
 
+  // 앱 진입 시 1회 호출해 30일 지난 완료 프로젝트를 archived 처리한다(App.tsx).
+  // extendIndefiniteRecurringSeries와 동일한 이유로 사용자 액션이 아닌 백그라운드
+  // 유지보수이므로 조용히 넘어가고, 실패는 콘솔에만 남긴다.
+  const useSweepArchivedTodos = useMutation({
+    mutationFn: () => sweepArchivedTodos(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+    onError: (error) => {
+      console.error("done 아카이빙 스윕 실패:", error);
+    },
+  });
+
   return {
     useCreateTodo,
     useUpdateTodo,
@@ -227,6 +241,7 @@ export const useTodo = () => {
     useEditRecurringSeries,
     useDeleteRecurringSeries,
     useExtendIndefiniteRecurringSeries,
+    useSweepArchivedTodos,
   };
 };
 

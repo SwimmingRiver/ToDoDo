@@ -92,7 +92,11 @@ const assertNoRecurrenceParentConflict = (todo: {
 
 export const getTodos = async () => {
   const userId = getUserId();
-  const q = query(todosRef, where("userId", "==", userId));
+  const q = query(
+    todosRef,
+    where("userId", "==", userId),
+    where("archived", "==", false),
+  );
   const snapshot = await getDocs(q);
   return snapshot.docs
     .map((doc) => mapDocToTodo(doc.id, doc.data()))
@@ -137,6 +141,7 @@ export const createTodo = async (todo: Todo) => {
     parentId: null,
     status: "todo",
     order: maxOrder + 1,
+    archived: false,
   });
   return { ...todo, id: docRef.id };
 };
@@ -261,6 +266,85 @@ export const updateToDone = async (id: string) => {
   return mapDocToTodo(docRef.id, { ...existing.data(), status: "done", doneAt: now, updatedAt: now });
 };
 
+/**
+ * 완료된 지 오래된 프로젝트를 기본 조회(getTodos)에서 제외되도록 archived 처리한다.
+ * 앱 진입 시 1회 실행(App.tsx)되는 지연 스윕 — extendIndefiniteRecurringSeries와 같은 자리.
+ *
+ * 판단 기준은 개별 항목의 doneAt이 아니라 **루트(parentId===null)의 doneAt**이다.
+ * 형제 서브태스크가 있는 프로젝트는 하나가 먼저 오래전에 done되고 나머지는 진행
+ * 중일 수 있는데, 그 개별 항목만 먼저 archived되면 getProjectProgress가 참조하는
+ * allTodos에서 조용히 빠져 진행률 계산이 틀어진다. calcParentStatus 불변식상 루트가
+ * done이라는 것은 이미 모든 자식이 done이라는 뜻이므로, 루트가 done된 시점(=전체
+ * 완료 시점)을 기준으로 루트+자식 전체를 한 번에 묶어 archived 처리한다.
+ */
+// Firestore writeBatch는 1건당 최대 500 write까지 허용한다. 신규 기능이 아니라 기존
+// 서비스에 소급 적용되는 스윕이라 배포 시점에 이미 30일 넘은 완료 프로젝트가 다수
+// 누적돼 있을 수 있으므로, 상한 근처까지 채우지 않고 여유를 둔다(backfillArchivedField.ts
+// 스크립트와 동일한 값).
+const SWEEP_BATCH_SIZE = 400;
+
+export const sweepArchivedTodos = async (cutoffDays: number = 30): Promise<void> => {
+  const userId = getUserId();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - cutoffDays);
+  const cutoffISO = cutoff.toISOString();
+
+  const rootsSnapshot = await getDocs(
+    query(
+      todosRef,
+      where("userId", "==", userId),
+      where("parentId", "==", null),
+      where("status", "==", "done"),
+      where("archived", "==", false),
+      where("doneAt", "<", cutoffISO),
+    ),
+  );
+
+  if (rootsSnapshot.docs.length === 0) return;
+
+  const now = new Date().toISOString();
+
+  // 루트 하나 + 그 자식 전체를 하나의 논리적 그룹으로 취급해 청크를 나눈다. 그룹을
+  // 쪼개면 한 프로젝트의 자식 일부만 archived되고 나머지는 안 되는 상태가 생길 수
+  // 있으므로, 그룹 도중에는 절대 commit하지 않고 그룹과 그룹 사이에서만 나눈다.
+  let batch: ReturnType<typeof writeBatch> | null = null;
+  let pendingWrites = 0;
+
+  const commitPending = async () => {
+    if (batch && pendingWrites > 0) {
+      await batch.commit();
+    }
+    batch = null;
+    pendingWrites = 0;
+  };
+
+  for (const rootDoc of rootsSnapshot.docs) {
+    const childrenSnapshot = await getDocs(
+      query(todosRef, where("userId", "==", userId), where("parentId", "==", rootDoc.id)),
+    );
+    const groupSize = 1 + childrenSnapshot.docs.length;
+
+    // 이 그룹을 더하면 상한을 넘는 경우, 그룹을 쪼개는 대신 지금까지 쌓인 배치를
+    // 먼저 commit하고 새 배치에서 이 그룹을 시작한다. 한 루트가 400개 넘는 자식을
+    // 갖는 극단적 케이스는 다루지 않는다(이 프로젝트 규모에서 사실상 없다고 가정).
+    if (pendingWrites > 0 && pendingWrites + groupSize > SWEEP_BATCH_SIZE) {
+      await commitPending();
+    }
+
+    if (!batch) batch = writeBatch(db);
+    batch.update(rootDoc.ref, { archived: true, updatedAt: now });
+    childrenSnapshot.docs.forEach((childDoc) => {
+      (batch as ReturnType<typeof writeBatch>).update(childDoc.ref, {
+        archived: true,
+        updatedAt: now,
+      });
+    });
+    pendingWrites += groupSize;
+  }
+
+  await commitPending();
+};
+
 export const updateTodoDueAt = async (
   id: string,
   dueAt: string | null,
@@ -339,6 +423,7 @@ export const createChildTodo = async (
     order: maxOrder + 1,
     recurrence: null,
     recurrenceId: null,
+    archived: false,
   });
 
   // 새 하위(todo) 추가 → 상위 상태 재계산
@@ -425,6 +510,7 @@ const createRecurringTodoImpl = async (
       status: "todo" as const,
       doneAt: null,
       parentId: null,
+      archived: false,
       recurrenceId,
       createdAt: now,
       updatedAt: now,
@@ -599,6 +685,7 @@ const editRecurringSeriesImpl = async (
         status: "todo",
         doneAt: null,
         parentId: null,
+        archived: false,
         recurrenceId,
         createdAt: now,
         updatedAt: now,
