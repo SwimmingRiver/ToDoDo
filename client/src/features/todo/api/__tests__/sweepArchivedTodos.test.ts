@@ -142,6 +142,41 @@ describe("sweepArchivedTodos", () => {
     expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 
+  it("반복 시리즈 인스턴스(parentId: null)도 별도 처리 없이 루트 규칙을 그대로 적용받아 archived 처리한다", async () => {
+    // 반복 시리즈 인스턴스는 항상 parentId: null(루트)로 생성된다(buildRecurringInstanceId).
+    // sweepArchivedTodos는 recurrence/recurrenceId 여부를 특별 취급하지 않고 parentId===null
+    // 문서를 전부 동일한 루트 쿼리 대상으로 다루므로, done된 지 30일 지난 반복 인스턴스도
+    // 일반 단독 투두와 동일하게 archived 처리되어야 한다(스펙 7절).
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const recurringInstance = makeTodo({
+      id: "series-1_2026-06-01",
+      status: "done",
+      doneAt: "2026-06-01T00:00:00.000Z",
+      recurrenceId: "series-1",
+      recurrence: { type: "daily", endType: "indefinite" },
+    });
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot([recurringInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      ) // 루트 조회
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      ); // 자식 조회(반복 인스턴스는 자식이 없음)
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { sweepArchivedTodos } = await import("../todoApi");
+    await sweepArchivedTodos();
+
+    expect(batch.update).toHaveBeenCalledWith(
+      { id: "series-1_2026-06-01" },
+      expect.objectContaining({ archived: true }),
+    );
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
   it("루트 조회 결과가 없으면(진행 중인 프로젝트뿐이면) batch를 만들지 않는다", async () => {
     // 형제 서브태스크 중 하나가 40일 전 done이어도, 나머지가 진행 중이라 루트 자체가
     // done이 아니면 Firestore 쿼리(status=="done") 조건에 애초에 걸리지 않는다 —
