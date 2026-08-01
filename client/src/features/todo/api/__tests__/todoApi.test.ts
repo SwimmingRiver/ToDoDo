@@ -126,6 +126,56 @@ describe('todoApi', () => {
     })
   })
 
+  describe('createTodo', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const firebase = await import('@/shared/lib/firebase')
+      Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
+    })
+
+    it('생성한 문서에 archived: false를 명시적으로 채워야 한다', async () => {
+      const { getDocs, addDoc, query, where } = await import('firebase/firestore')
+      const { createTodo } = await import('../todoApi')
+
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [],
+      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+      vi.mocked(addDoc).mockResolvedValueOnce({ id: 'new-1' } as Awaited<ReturnType<typeof addDoc>>)
+
+      await createTodo(makeTodo({ title: '새 할일' }))
+
+      expect(addDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ archived: false }),
+      )
+    })
+  })
+
+  describe('createChildTodo', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const firebase = await import('@/shared/lib/firebase')
+      Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
+    })
+
+    it('생성한 하위 할 일에 archived: false를 명시적으로 채워야 한다', async () => {
+      const { addDoc, updateDoc } = await import('firebase/firestore')
+      const { createChildTodo } = await import('../todoApi')
+
+      vi.mocked(addDoc).mockResolvedValueOnce({ id: 'child-1' } as Awaited<ReturnType<typeof addDoc>>)
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined)
+
+      await createChildTodo('parent-1', { title: '하위 할일' }, [])
+
+      expect(addDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ archived: false }),
+      )
+    })
+  })
+
   describe('getSearchTodoList', () => {
     beforeEach(async () => {
       vi.clearAllMocks()

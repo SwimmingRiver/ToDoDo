@@ -141,6 +141,7 @@ export const createTodo = async (todo: Todo) => {
     parentId: null,
     status: "todo",
     order: maxOrder + 1,
+    archived: false,
   });
   return { ...todo, id: docRef.id };
 };
@@ -343,6 +344,7 @@ export const createChildTodo = async (
     order: maxOrder + 1,
     recurrence: null,
     recurrenceId: null,
+    archived: false,
   });
 
   // 새 하위(todo) 추가 → 상위 상태 재계산
@@ -429,6 +431,7 @@ const createRecurringTodoImpl = async (
       status: "todo" as const,
       doneAt: null,
       parentId: null,
+      archived: false,
       recurrenceId,
       createdAt: now,
       updatedAt: now,
@@ -603,6 +606,7 @@ const editRecurringSeriesImpl = async (
         status: "todo",
         doneAt: null,
         parentId: null,
+        archived: false,
         recurrenceId,
         createdAt: now,
         updatedAt: now,

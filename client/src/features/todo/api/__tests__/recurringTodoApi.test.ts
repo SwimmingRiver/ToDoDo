@@ -172,6 +172,24 @@ describe("createRecurringTodo", () => {
     });
   });
 
+  it("생성한 각 인스턴스에 archived: false를 명시적으로 채운다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(emptyDocsSnapshot);
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../todoApi");
+    await createRecurringTodo(
+      makeTodo({ recurrence: dailyRule, startAt: "2026-07-10T09:00:00" }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ archived: false }),
+    );
+  });
+
   it("생성한 인스턴스 문서 ID는 {recurrenceId}_{날짜} 형태로 결정론적이다 (멀티탭/멀티기기 동시 생성 시 중복 방지)", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     vi.mocked(getDocs).mockResolvedValueOnce(
@@ -480,6 +498,32 @@ describe("editRecurringSeries", () => {
     expect(batch.delete).toHaveBeenCalledTimes(1);
     expect(batch.set).toHaveBeenCalled();
     expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("재생성한 인스턴스에 archived: false를 명시적으로 채운다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(emptyDocsSnapshot) // 시리즈 조회 결과 없음 → 전부 재생성
+      .mockResolvedValueOnce(emptyDocsSnapshot); // getNextRootOrder
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../todoApi");
+    await editRecurringSeries(
+      makeTodo({
+        id: "series-1",
+        recurrenceId: "rec-1",
+        recurrence: dailyRule,
+        startAt: "2026-07-10T09:00:00",
+        dueAt: "2026-07-10T09:00:00",
+      }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ archived: false }),
+    );
   });
 
   it("재생성되는 인스턴스 문서 ID도 {recurrenceId}_{날짜} 형태로 결정론적이다", async () => {
