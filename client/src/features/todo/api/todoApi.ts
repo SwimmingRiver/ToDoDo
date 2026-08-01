@@ -266,6 +266,53 @@ export const updateToDone = async (id: string) => {
   return mapDocToTodo(docRef.id, { ...existing.data(), status: "done", doneAt: now, updatedAt: now });
 };
 
+/**
+ * 완료된 지 오래된 프로젝트를 기본 조회(getTodos)에서 제외되도록 archived 처리한다.
+ * 앱 진입 시 1회 실행(App.tsx)되는 지연 스윕 — extendIndefiniteRecurringSeries와 같은 자리.
+ *
+ * 판단 기준은 개별 항목의 doneAt이 아니라 **루트(parentId===null)의 doneAt**이다.
+ * 형제 서브태스크가 있는 프로젝트는 하나가 먼저 오래전에 done되고 나머지는 진행
+ * 중일 수 있는데, 그 개별 항목만 먼저 archived되면 getProjectProgress가 참조하는
+ * allTodos에서 조용히 빠져 진행률 계산이 틀어진다. calcParentStatus 불변식상 루트가
+ * done이라는 것은 이미 모든 자식이 done이라는 뜻이므로, 루트가 done된 시점(=전체
+ * 완료 시점)을 기준으로 루트+자식 전체를 한 번에 묶어 archived 처리한다.
+ */
+export const sweepArchivedTodos = async (cutoffDays: number = 30): Promise<void> => {
+  const userId = getUserId();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - cutoffDays);
+  const cutoffISO = cutoff.toISOString();
+
+  const rootsSnapshot = await getDocs(
+    query(
+      todosRef,
+      where("userId", "==", userId),
+      where("parentId", "==", null),
+      where("status", "==", "done"),
+      where("archived", "==", false),
+      where("doneAt", "<", cutoffISO),
+    ),
+  );
+
+  if (rootsSnapshot.docs.length === 0) return;
+
+  const batch = writeBatch(db);
+  const now = new Date().toISOString();
+
+  for (const rootDoc of rootsSnapshot.docs) {
+    batch.update(rootDoc.ref, { archived: true, updatedAt: now });
+
+    const childrenSnapshot = await getDocs(
+      query(todosRef, where("userId", "==", userId), where("parentId", "==", rootDoc.id)),
+    );
+    childrenSnapshot.docs.forEach((childDoc) => {
+      batch.update(childDoc.ref, { archived: true, updatedAt: now });
+    });
+  }
+
+  await batch.commit();
+};
+
 export const updateTodoDueAt = async (
   id: string,
   dueAt: string | null,
