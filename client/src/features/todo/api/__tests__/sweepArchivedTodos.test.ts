@@ -218,6 +218,74 @@ describe("sweepArchivedTodos", () => {
     expect(where).toHaveBeenCalledWith("doneAt", "<", "2026-04-11T00:00:00.000Z");
   });
 
+  it("대상 write 수가 Firestore batch 500 상한을 넘으면 여러 batch로 나눠 commit한다 (루트 200개 x 자식 3개 = 800 write)", async () => {
+    // 배포 시점에 이미 30일 넘은 완료 프로젝트가 다수 누적돼 있을 수 있으므로, 단일
+    // writeBatch에 전부 몰아넣으면 500 상한을 넘겨 commit() 전체가 실패할 수 있다.
+    // 루트+자식을 한 그룹으로 묶어 400(여유를 둔 청크 크기) 단위로 나눠 커밋해야 한다.
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const ROOT_COUNT = 200;
+    const CHILDREN_PER_ROOT = 3;
+    const roots = Array.from({ length: ROOT_COUNT }, (_, i) =>
+      makeTodo({ id: `root-${i}`, status: "done", doneAt: "2026-06-01T00:00:00.000Z" }),
+    );
+    const childrenByRoot = roots.map((root, i) =>
+      Array.from({ length: CHILDREN_PER_ROOT }, (_, j) =>
+        makeTodo({ id: `child-${i}-${j}`, parentId: root.id, status: "done" }),
+      ),
+    );
+
+    let callIndex = 0;
+    vi.mocked(getDocs).mockImplementation(async () => {
+      const currentCall = callIndex;
+      callIndex += 1;
+      if (currentCall === 0) {
+        return toDocSnapshot(roots) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never;
+      }
+      const rootIndex = currentCall - 1;
+      return toDocSnapshot(childrenByRoot[rootIndex]) as ReturnType<
+        typeof getDocs
+      > extends Promise<infer T>
+        ? T
+        : never;
+    });
+
+    const batches: ReturnType<typeof makeBatch>[] = [];
+    vi.mocked(writeBatch).mockImplementation(() => {
+      const b = makeBatch();
+      batches.push(b);
+      return b as unknown as ReturnType<typeof writeBatch>;
+    });
+
+    const { sweepArchivedTodos } = await import("../todoApi");
+    await sweepArchivedTodos();
+
+    const totalWrites = ROOT_COUNT * (1 + CHILDREN_PER_ROOT); // 800
+    expect(totalWrites).toBeGreaterThan(500);
+
+    // 400(그룹 크기 4의 배수) 단위로 정확히 2개 배치로 나뉘어야 한다.
+    expect(batches.length).toBe(2);
+    batches.forEach((b) => expect(b.commit).toHaveBeenCalledTimes(1));
+
+    const totalUpdateCalls = batches.reduce((sum, b) => sum + b.update.mock.calls.length, 0);
+    expect(totalUpdateCalls).toBe(totalWrites);
+    expect(batches[0].update.mock.calls.length).toBe(400);
+    expect(batches[1].update.mock.calls.length).toBe(400);
+
+    // 그룹(루트+자식) 경계에서 배치가 쪼개지지 않았는지 확인: 한 루트의 자식들은
+    // 반드시 그 루트와 같은 배치에 있어야 한다.
+    const batchIndexOf = (id: string) =>
+      batches.findIndex((b) => b.update.mock.calls.some((call) => (call[0] as { id: string }).id === id));
+
+    expect(batchIndexOf("root-99")).toBe(0);
+    expect(batchIndexOf("child-99-0")).toBe(0);
+    expect(batchIndexOf("child-99-2")).toBe(0);
+    expect(batchIndexOf("root-100")).toBe(1);
+    expect(batchIndexOf("child-100-0")).toBe(1);
+    expect(batchIndexOf("child-100-2")).toBe(1);
+  });
+
   it("인증되지 않은 경우 에러를 던져야 한다", async () => {
     const firebase = await import("@/shared/lib/firebase");
     Object.defineProperty(firebase.auth, "currentUser", { value: null, configurable: true });

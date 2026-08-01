@@ -277,6 +277,12 @@ export const updateToDone = async (id: string) => {
  * done이라는 것은 이미 모든 자식이 done이라는 뜻이므로, 루트가 done된 시점(=전체
  * 완료 시점)을 기준으로 루트+자식 전체를 한 번에 묶어 archived 처리한다.
  */
+// Firestore writeBatch는 1건당 최대 500 write까지 허용한다. 신규 기능이 아니라 기존
+// 서비스에 소급 적용되는 스윕이라 배포 시점에 이미 30일 넘은 완료 프로젝트가 다수
+// 누적돼 있을 수 있으므로, 상한 근처까지 채우지 않고 여유를 둔다(backfillArchivedField.ts
+// 스크립트와 동일한 값).
+const SWEEP_BATCH_SIZE = 400;
+
 export const sweepArchivedTodos = async (cutoffDays: number = 30): Promise<void> => {
   const userId = getUserId();
   const cutoff = new Date();
@@ -296,21 +302,47 @@ export const sweepArchivedTodos = async (cutoffDays: number = 30): Promise<void>
 
   if (rootsSnapshot.docs.length === 0) return;
 
-  const batch = writeBatch(db);
   const now = new Date().toISOString();
 
-  for (const rootDoc of rootsSnapshot.docs) {
-    batch.update(rootDoc.ref, { archived: true, updatedAt: now });
+  // 루트 하나 + 그 자식 전체를 하나의 논리적 그룹으로 취급해 청크를 나눈다. 그룹을
+  // 쪼개면 한 프로젝트의 자식 일부만 archived되고 나머지는 안 되는 상태가 생길 수
+  // 있으므로, 그룹 도중에는 절대 commit하지 않고 그룹과 그룹 사이에서만 나눈다.
+  let batch: ReturnType<typeof writeBatch> | null = null;
+  let pendingWrites = 0;
 
+  const commitPending = async () => {
+    if (batch && pendingWrites > 0) {
+      await batch.commit();
+    }
+    batch = null;
+    pendingWrites = 0;
+  };
+
+  for (const rootDoc of rootsSnapshot.docs) {
     const childrenSnapshot = await getDocs(
       query(todosRef, where("userId", "==", userId), where("parentId", "==", rootDoc.id)),
     );
+    const groupSize = 1 + childrenSnapshot.docs.length;
+
+    // 이 그룹을 더하면 상한을 넘는 경우, 그룹을 쪼개는 대신 지금까지 쌓인 배치를
+    // 먼저 commit하고 새 배치에서 이 그룹을 시작한다. 한 루트가 400개 넘는 자식을
+    // 갖는 극단적 케이스는 다루지 않는다(이 프로젝트 규모에서 사실상 없다고 가정).
+    if (pendingWrites > 0 && pendingWrites + groupSize > SWEEP_BATCH_SIZE) {
+      await commitPending();
+    }
+
+    if (!batch) batch = writeBatch(db);
+    batch.update(rootDoc.ref, { archived: true, updatedAt: now });
     childrenSnapshot.docs.forEach((childDoc) => {
-      batch.update(childDoc.ref, { archived: true, updatedAt: now });
+      (batch as ReturnType<typeof writeBatch>).update(childDoc.ref, {
+        archived: true,
+        updatedAt: now,
+      });
     });
+    pendingWrites += groupSize;
   }
 
-  await batch.commit();
+  await commitPending();
 };
 
 export const updateTodoDueAt = async (
