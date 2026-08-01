@@ -7,7 +7,7 @@ import BottomSheet from "@/shared/ui/bottomSheet/bottomSheet";
 import type { BottomSheetOption } from "@/shared/ui/bottomSheet/bottomSheet";
 import useMediaQuery from "@/shared/hooks/useMediaQuery";
 import { useTodo } from "../hooks";
-import { useToast, RecurrenceBadge } from "@/shared";
+import { useToast, RecurrenceBadge, RecurrenceMissedBadge } from "@/shared";
 import { statusColors, type Status } from "@/styles/statusColors";
 import {
   CardContainer,
@@ -46,8 +46,15 @@ const ProjectCard = ({
   onDelete,
   onAddChild,
 }: ProjectCardProps) => {
-  const { todo, childTodos, progress, subtaskInfo, overdueInfo, isExpanded } =
-    data;
+  const {
+    todo,
+    childTodos,
+    progress,
+    subtaskInfo,
+    overdueInfo,
+    recurringMissedCount,
+    isExpanded,
+  } = data;
 
   const { isOverdue, daysOver } = overdueInfo;
   const isMobile = useMediaQuery("tablet");
@@ -106,6 +113,9 @@ const ProjectCard = ({
               <CardSubtitle>{subtitleText}</CardSubtitle>
             </CardTitleGroup>
             {todo.recurrenceId != null && <RecurrenceBadge />}
+            {todo.recurrenceId != null && (
+              <RecurrenceMissedBadge count={recurringMissedCount} />
+            )}
             {isOverdue && <OverdueBadge>{daysOver}일 초과</OverdueBadge>}
           </CardLeft>
           <CardRight>

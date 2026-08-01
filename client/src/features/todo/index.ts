@@ -1,6 +1,9 @@
 export { useTodo, useTodoDetail } from "./hooks";
 export type { Todo, RecurrenceRule, TodoReorderUpdate } from "./types";
-export { collapseRecurringInstances } from "./utils/projectUtils";
+export {
+  collapseRecurringInstances,
+  getRecurringMissedCount,
+} from "./utils/projectUtils";
 export { default as TodoList } from "./components/todoList";
 export { default as TodoDetail } from "./components/todoDetail/todoDetail";
 export { default as TodoForm } from "./components/todoForm/todoForm";

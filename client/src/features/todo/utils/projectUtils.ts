@@ -56,6 +56,7 @@ export interface ProjectCardData {
   progress: number;
   subtaskInfo: { total: number; statusText: string };
   overdueInfo: { isOverdue: boolean; daysOver: number };
+  recurringMissedCount: number;
   isExpanded: boolean;
 }
 
@@ -137,4 +138,20 @@ export function getProjectOverdue(
   );
 
   return { isOverdue: true, daysOver };
+}
+
+// 같은 recurrenceId를 가진 형제 인스턴스 중 overdueArchived === true로 조용히 대표
+// 후보에서 제외된 건수를 센다. collapseRecurringInstances가 화면에는 대표 1건만
+// 남기고 나머지는 숨기기 때문에, 사용자에게 "몇 회차가 밀렸는지" 알려줄 유일한
+// 신호가 이 카운트다 — 일반 투두의 getProjectOverdue(마감 초과 배지)와 같은 목적의
+// 반복 투두 버전. recurrenceId가 없는(반복 아닌) 할 일에는 0을 반환한다.
+export function getRecurringMissedCount(
+  allTodos: Todo[],
+  todo: Todo
+): number {
+  if (!todo.recurrenceId) return 0;
+
+  return allTodos.filter(
+    (t) => t.recurrenceId === todo.recurrenceId && t.overdueArchived === true
+  ).length;
 }
