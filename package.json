@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "husky"
+    "prepare": "husky",
+    "backfill:archived": "tsx scripts/backfillArchivedField.ts"
   },
   "repository": {
     "type": "git",
@@ -20,7 +21,9 @@
   },
   "homepage": "https://github.com/SwimmingRiver/ToDoDo#readme",
   "devDependencies": {
+    "firebase-admin": "^14.2.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7"
+    "lint-staged": "^16.2.7",
+    "tsx": "^4.23.1"
   }
 }
