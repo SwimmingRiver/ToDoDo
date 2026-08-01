@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # Client: lint-staged (lint)
 (cd client && npx lint-staged)
