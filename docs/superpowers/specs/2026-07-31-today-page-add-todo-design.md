@@ -2,7 +2,12 @@
 
 - 대상 파일: `client/src/features/today/pages/todayPage.tsx`, `client/src/features/today/pages/todayPage.styles.tsx`
 - 작성일: 2026-07-31
-- 상태: 사용자 승인 완료 — 구현 계획 수립 대기
+- 상태: **폐기됨 — `2026-07-31-today-page-fab-button.md`로 대체됨 (2026-07-31)**
+
+> **[대체 공지, 2026-07-31]** 이 문서에서 결정한 "목록 페이지와 동일한 하단 고정 풀와이드 바" 설계는 구현 후 사용자 검토 결과 데스크톱/태블릿에서 어색하다는 피드백을 받아 폐기되었다.
+> 오늘 페이지의 할 일 추가 버튼은 이제 화면 크기와 무관하게 통일된 FAB(Floating Action Button) 패턴으로 전환한다.
+> 최신 설계는 [`2026-07-31-today-page-fab-button.md`](./2026-07-31-today-page-fab-button.md)를 참조할 것. 이 문서는 변경 배경 기록용으로만 보존한다.
+
 
 ## 1. 문제 정의
 
