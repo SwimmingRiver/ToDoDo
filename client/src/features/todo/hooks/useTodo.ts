@@ -16,6 +16,7 @@ import {
   sweepArchivedTodos,
   sweepOverdueRecurringTodos,
   reorderTodos,
+  calcParentStatus,
 } from "../api";
 
 export const useTodo = () => {
@@ -56,23 +57,11 @@ export const useTodo = () => {
           const siblings = next.filter(
             (t) => t.parentId === updatedTodo.parentId,
           );
-          let newParentStatus: Todo["status"];
-          if (siblings.every((s) => s.status === "done")) {
-            newParentStatus = "done";
-          } else if (
-            siblings.some((s) => s.status === "doing" || s.status === "done")
-          ) {
-            newParentStatus = "doing";
-          } else {
-            newParentStatus = "todo";
-          }
+          const { status: newParentStatus, doneAt } =
+            calcParentStatus(siblings);
           next = next.map((t) =>
             t.id === updatedTodo.parentId
-              ? {
-                  ...t,
-                  status: newParentStatus,
-                  doneAt: newParentStatus === "done" ? now : null,
-                }
+              ? { ...t, status: newParentStatus, doneAt }
               : t,
           );
         }

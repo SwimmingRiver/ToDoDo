@@ -14,3 +14,4 @@ export { default as RecurrenceBadge } from "./recurrenceBadge/recurrenceBadge";
 export type { RecurrenceBadgeProps } from "./recurrenceBadge/recurrenceBadge";
 export { default as RecurrenceMissedBadge } from "./recurrenceMissedBadge/recurrenceMissedBadge";
 export type { RecurrenceMissedBadgeProps } from "./recurrenceMissedBadge/recurrenceMissedBadge";
+export { default as ErrorBoundary } from "./errorBoundary/errorBoundary";
