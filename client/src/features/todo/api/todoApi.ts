@@ -146,7 +146,7 @@ export const createTodo = async (todo: Todo) => {
   return { ...todo, id: docRef.id };
 };
 
-const calcParentStatus = (
+export const calcParentStatus = (
   siblings: Todo[],
 ): { status: Todo["status"]; doneAt: string | null } => {
   const now = new Date().toISOString();
