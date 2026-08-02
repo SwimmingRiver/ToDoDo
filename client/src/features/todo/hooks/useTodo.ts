@@ -76,8 +76,15 @@ export const useTodo = () => {
         queryClient.setQueryData(["todos"], context.previous);
       }
     },
+    // 상세 페이지(useTodoDetail)는 목록과 별도의 쿼리 키(["todoDetail", id])를 쓴다.
+    // ["todos"]만 무효화하면, 상세 페이지에서 저장 후 같은 항목을 staleTime(1분)
+    // 안에 다시 열었을 때 무효화되지 않은 캐시가 "신선하다"고 판단되어 재조회 없이
+    // 그대로 재사용된다 — 방금 저장한 필드(예: description)가 화면에 반영되지 않는
+    // 버그의 원인이었다. ["todoDetail"]은 id 없이 prefix로 넘겨 해당 todo를 보고
+    // 있던 모든 상세 쿼리를 함께 무효화한다.
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -114,6 +121,7 @@ export const useTodo = () => {
     mutationFn: (id: string) => deleteTodo(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -126,6 +134,7 @@ export const useTodo = () => {
     mutationFn: (id: string) => updateToDone(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -141,6 +150,7 @@ export const useTodo = () => {
     }) => updateTodoDueAt(id, dueAt, startAt),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -157,6 +167,9 @@ export const useTodo = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      // 자식 생성은 부모의 status/doneAt도 재계산해 갱신하므로(createChildTodo),
+      // 부모가 상세 페이지에 열려 있다면 그 캐시도 함께 무효화해야 한다.
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -169,6 +182,7 @@ export const useTodo = () => {
     mutationFn: (todo: Todo) => createRecurringTodo(todo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -178,6 +192,7 @@ export const useTodo = () => {
     mutationFn: (seriesTodo: Todo) => editRecurringSeries(seriesTodo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -187,6 +202,7 @@ export const useTodo = () => {
     mutationFn: (recurrenceId: string) => deleteRecurringSeries(recurrenceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 

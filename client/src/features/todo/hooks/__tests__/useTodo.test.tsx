@@ -159,6 +159,103 @@ describe('useTodo 훅', () => {
     })
   })
 
+  describe('useUpdateTodo', () => {
+    it('할 일 수정 mutation이 정의되어 있어야 한다', () => {
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      expect(result.current.useUpdateTodo).toBeDefined()
+      expect(typeof result.current.useUpdateTodo.mutate).toBe('function')
+    })
+
+    it('수정 성공 시 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, editTodo } = await import('../../api')
+      const updatedTodo = makeTodo({ id: 'todo-1', title: '수정된 할 일' })
+
+      vi.mocked(getTodos).mockResolvedValue([updatedTodo])
+      vi.mocked(editTodo).mockResolvedValueOnce(updatedTodo)
+
+      const { result } = renderHook(() => useTodo(), {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(result.current.useGetTodos.isSuccess).toBe(true)
+      })
+
+      result.current.useUpdateTodo.mutate(updatedTodo)
+
+      await waitFor(() => {
+        expect(result.current.useUpdateTodo.isSuccess).toBe(true)
+      })
+
+      expect(vi.mocked(editTodo)).toHaveBeenCalled()
+    })
+
+    // 회귀 테스트: 상세 페이지(TodoDetail)는 목록과 별도의 쿼리 키
+    // ["todoDetail", id]로 데이터를 가져온다(useTodoDetail). useUpdateTodo의
+    // onSettled는 지금까지 ["todos"]만 무효화하고 ["todoDetail", id]는 무효화하지
+    // 않았다 — main.tsx의 QueryClient가 staleTime: 60_000(1분)으로 설정되어 있어서,
+    // 상세 페이지에서 description을 수정 저장한 뒤 1분 안에 같은 할 일 상세를 다시
+    // 열면 무효화되지 않은 캐시가 "신선하다"고 판단되어 재조회 없이 그대로 재사용된다.
+    // 그 결과 방금 저장한 description이 화면에 반영되지 않아 "설명이 표시되지 않는다"는
+    // 버그로 보인다(실제로는 저장은 됐으나 상세 캐시만 갱신되지 않은 것).
+    it('수정 성공 시 todoDetail 쿼리도 무효화해야 한다 (상세 페이지 캐시 동기화)', async () => {
+      const { getTodos, getTodoDetail, editTodo } = await import('../../api')
+      const originalTodo = makeTodo({ id: 'todo-1', title: '할 일', description: undefined })
+      const updatedTodo = makeTodo({ id: 'todo-1', title: '할 일', description: '새로 추가한 설명' })
+
+      vi.mocked(getTodos).mockResolvedValue([originalTodo])
+      vi.mocked(getTodoDetail).mockResolvedValueOnce(originalTodo)
+      vi.mocked(editTodo).mockResolvedValueOnce(updatedTodo)
+      // 무효화로 인한 자동 재조회가 일어난다면 이 두 번째 응답을 받아야 한다.
+      vi.mocked(getTodoDetail).mockResolvedValueOnce(updatedTodo)
+
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          // main.tsx의 실제 프로덕션 설정과 동일하게 staleTime을 1분으로 재현한다.
+          // 이 값이 없으면(테스트 기본값 staleTime: 0) 마운트마다 항상 재조회가
+          // 일어나 버그가 재현되지 않는다.
+          queries: { retry: false, gcTime: 0, staleTime: 60_000 },
+          mutations: { retry: false },
+        },
+      })
+      const Wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+
+      // 실제 앱처럼 useTodo()(useUpdateTodo)와 useTodoDetail()이 같은
+      // QueryClient를 공유하는 상황을 재현한다.
+      const { result } = renderHook(
+        () => ({ todo: useTodo(), detail: useTodoDetail({ id: 'todo-1' }) }),
+        { wrapper: Wrapper },
+      )
+
+      await waitFor(() => {
+        expect(result.current.detail.todo?.id).toBe('todo-1')
+      })
+      expect(result.current.detail.todo?.description).toBeUndefined()
+
+      result.current.todo.useUpdateTodo.mutate(updatedTodo)
+
+      await waitFor(() => {
+        expect(result.current.todo.useUpdateTodo.isSuccess).toBe(true)
+      })
+
+      // todoDetail 쿼리가 무효화되어(staleTime 안에 있더라도) active 쿼리이므로
+      // 자동으로 재조회되고, 화면에 새 description이 반영되어야 한다. 무효화가
+      // 빠져 있으면 캐시된 옛 값(undefined)이 계속 유지되어 이 assertion이 실패한다.
+      await waitFor(() => {
+        expect(result.current.detail.todo?.description).toBe('새로 추가한 설명')
+      })
+
+      const state = queryClient.getQueryState(['todoDetail', 'todo-1'])
+      expect(state?.isInvalidated).toBe(false)
+      expect(vi.mocked(getTodoDetail)).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('useDeleteTodo', () => {
     it('할 일 삭제 mutation이 정의되어 있어야 한다', () => {
       const { result } = renderHook(() => useTodo(), {
