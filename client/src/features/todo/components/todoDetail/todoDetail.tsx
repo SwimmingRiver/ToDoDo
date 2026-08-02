@@ -3,12 +3,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast, ConfirmModal, toDatetimeLocalValue } from "@/shared";
+import useModal from "@/shared/hooks/useModal";
+import Modal from "@/shared/ui/modal/modal";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
 import { toFormValue, toRecurrenceRule } from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
+import ChildTodoCard from "../childTodoCard";
+import TodoForm from "../todoForm/todoForm";
+import { ProgressBar, ProgressFill, EmptyChildMessage } from "../projectCard.styles";
+import { getProjectProgress, getProjectSubtaskInfo } from "../../utils/projectUtils";
 import {
   Overlay,
   Panel,
@@ -32,6 +38,13 @@ import {
   Select,
   Button,
   ErrorText,
+  SubtaskSectionHeader,
+  SubtaskLabelGroup,
+  SubtaskCountBadge,
+  SubtaskHeaderActions,
+  SubtaskIconButton,
+  SubtaskListContainer,
+  EmptyChildAddButton,
 } from "./todoDetail.styles";
 
 interface TodoFormData {
@@ -90,10 +103,34 @@ const TodoDetail = () => {
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
 
-  const hasChildren = useMemo(() => {
-    if (!todo) return false;
-    return (allTodos ?? []).some((t) => t.parentId === todo.id);
+  // 하위 투두 배열 자체를 계산해두면(기존엔 존재 여부만 boolean으로 계산했음)
+  // 반복 설정 비활성화 조건(hasChildren)과 신규 하위 투두 섹션 렌더링을 동일한
+  // 데이터에서 파생시킬 수 있다 — 동작은 기존과 완전히 동일(existence -> length>0).
+  const childTodos = useMemo(() => {
+    if (!todo) return [];
+    return (allTodos ?? []).filter((t) => t.parentId === todo.id);
   }, [allTodos, todo]);
+
+  const hasChildren = childTodos.length > 0;
+
+  const progress = useMemo(
+    () => (todo ? getProjectProgress(allTodos ?? [], todo.id) : 0),
+    [allTodos, todo],
+  );
+  const subtaskInfo = useMemo(
+    () => (todo ? getProjectSubtaskInfo(allTodos ?? [], todo.id) : { total: 0, statusText: "" }),
+    [allTodos, todo],
+  );
+
+  const [isSubtaskExpanded, setIsSubtaskExpanded] = useState(true);
+  const { isOpen: isAddChildOpen, setIsOpen: setIsAddChildOpen } = useModal();
+  const { isOpen: isEditChildOpen, setIsOpen: setIsEditChildOpen } = useModal();
+  const [editingChildTodo, setEditingChildTodo] = useState<Todo | null>(null);
+
+  const handleEditChild = (childTodo: Todo) => {
+    setEditingChildTodo(childTodo);
+    setIsEditChildOpen(true);
+  };
 
   const [recurrenceValue, setRecurrenceValue] = useState<RecurrenceFormValue | null>(null);
 
@@ -382,6 +419,78 @@ const TodoDetail = () => {
                 />
               </FormGroup>
             )}
+
+            {!todo.parentId && (
+              <FormGroup>
+                <SubtaskSectionHeader>
+                  <SubtaskLabelGroup>
+                    <Label>하위 할 일</Label>
+                    <SubtaskCountBadge>{subtaskInfo.total}</SubtaskCountBadge>
+                  </SubtaskLabelGroup>
+                  <SubtaskHeaderActions>
+                    <SubtaskIconButton
+                      type="button"
+                      onClick={() => setIsAddChildOpen(true)}
+                      disabled={todo.recurrence != null}
+                      aria-disabled={todo.recurrence != null}
+                      title={
+                        todo.recurrence != null
+                          ? "반복 할 일에는 하위 작업을 추가할 수 없습니다"
+                          : undefined
+                      }
+                      aria-label="하위 할 일 추가"
+                    >
+                      <Plus size={16} />
+                    </SubtaskIconButton>
+                    {childTodos.length > 0 && (
+                      <SubtaskIconButton
+                        type="button"
+                        onClick={() => setIsSubtaskExpanded((prev) => !prev)}
+                        aria-label={
+                          isSubtaskExpanded ? "하위 할 일 접기" : "하위 할 일 펼치기"
+                        }
+                      >
+                        {isSubtaskExpanded ? (
+                          <ChevronDown size={16} />
+                        ) : (
+                          <ChevronRight size={16} />
+                        )}
+                      </SubtaskIconButton>
+                    )}
+                  </SubtaskHeaderActions>
+                </SubtaskSectionHeader>
+
+                {isSubtaskExpanded && childTodos.length === 0 && (
+                  <>
+                    <EmptyChildMessage>하위 항목이 없습니다</EmptyChildMessage>
+                    <EmptyChildAddButton
+                      type="button"
+                      onClick={() => setIsAddChildOpen(true)}
+                      disabled={todo.recurrence != null}
+                    >
+                      + 첫 하위 할 일 추가
+                    </EmptyChildAddButton>
+                  </>
+                )}
+
+                {isSubtaskExpanded && childTodos.length > 0 && (
+                  <>
+                    <ProgressBar>
+                      <ProgressFill $progress={progress} />
+                    </ProgressBar>
+                    <SubtaskListContainer>
+                      {childTodos.map((childTodo) => (
+                        <ChildTodoCard
+                          key={childTodo.id}
+                          todo={childTodo}
+                          onEdit={handleEditChild}
+                        />
+                      ))}
+                    </SubtaskListContainer>
+                  </>
+                )}
+              </FormGroup>
+            )}
           </FormContainer>
         </PanelContent>
 
@@ -433,6 +542,17 @@ const TodoDetail = () => {
         onConfirm={handleConfirmDelete}
         onCancel={() => setIsDeleteConfirmOpen(false)}
       />
+
+      <Modal isOpen={isAddChildOpen} setIsOpen={setIsAddChildOpen}>
+        <TodoForm parentId={todo.id} onClose={() => setIsAddChildOpen(false)} />
+      </Modal>
+
+      <Modal isOpen={isEditChildOpen} setIsOpen={setIsEditChildOpen}>
+        <TodoForm
+          todo={editingChildTodo || undefined}
+          onClose={() => setIsEditChildOpen(false)}
+        />
+      </Modal>
     </>
   );
 };

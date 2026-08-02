@@ -74,7 +74,7 @@ const ChildTodoCard = ({
         onConfirm={handleDelete}
         onCancel={() => setIsDeleteOpen(false)}
       />
-      <ChildCardWrapper $status={todo.status}>
+      <ChildCardWrapper $status={todo.status} $priority={todo.priority}>
         <ChildCardContainer>
           <ChildCardLeft>
             <StatusDotTrigger

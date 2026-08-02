@@ -1,7 +1,8 @@
-import { styled } from "styled-components";
+import { css, styled } from "styled-components";
 import { colors } from "@/styles/colors";
 import type { Status } from "@/styles/statusColors";
 import { statusColors } from "@/styles/statusColors";
+import type { Todo } from "../types";
 
 export const CardContainer = styled.div<{ $isOverdue?: boolean }>`
   border-radius: 12px;
@@ -159,12 +160,21 @@ export const EmptyChildMessage = styled.p`
   text-align: center;
 `;
 
-export const ChildCardWrapper = styled.div<{ $status: Status }>`
+export const ChildCardWrapper = styled.div<{
+  $status: Status;
+  $priority: Todo["priority"];
+}>`
   border-radius: 10px;
   border: 0.5px solid ${({ $status }) => statusColors[$status].border};
   overflow: hidden;
   flex-shrink: 0;
   background: ${colors.background.primary};
+
+  ${({ $priority }) =>
+    $priority === "high" &&
+    css`
+      border-left: 3px solid ${colors.danger.main};
+    `}
 
   @media (min-width: 768px) {
     min-width: 280px;

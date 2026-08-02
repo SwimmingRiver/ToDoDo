@@ -2,6 +2,7 @@ import { keyframes, styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
 import { colors } from "@/styles/colors";
 import { statusColors, type Status } from "@/styles/statusColors";
+import { ChildTodoCardList } from "../projectCard.styles";
 
 const slideIn = keyframes`
   from {
@@ -345,6 +346,105 @@ const ErrorText = styled.span`
   font-size: 12px;
 `;
 
+const SubtaskSectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+`;
+
+const SubtaskLabelGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`;
+
+const SubtaskCountBadge = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${colors.text.tertiary};
+  background-color: ${colors.background.secondary};
+  border-radius: 10px;
+  padding: 1px 8px;
+`;
+
+const SubtaskHeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2px;
+`;
+
+const SubtaskIconButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: ${colors.text.secondary};
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background-color: #e0ede8;
+    color: ${colors.brand.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.secondary};
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  ${media.tablet} {
+    min-width: 32px;
+    min-height: 32px;
+  }
+`;
+
+// ChildTodoCardList(배경 없는 세로 리스트)를 그대로 재사용하되, 하위 투두가 많을 때
+// 패널 자체가 무한정 길어지지 않도록 max-height + overflow-y만 얹는다.
+const SubtaskListContainer = styled(ChildTodoCardList)`
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0;
+
+  ${media.mobile} {
+    max-height: 260px;
+  }
+`;
+
+const EmptyChildAddButton = styled.button`
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: ${colors.brand.secondary};
+  font-size: 12px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`;
+
 export {
   Overlay,
   Panel,
@@ -368,4 +468,11 @@ export {
   StatusBadge,
   PriorityBadge,
   ErrorText,
+  SubtaskSectionHeader,
+  SubtaskLabelGroup,
+  SubtaskCountBadge,
+  SubtaskHeaderActions,
+  SubtaskIconButton,
+  SubtaskListContainer,
+  EmptyChildAddButton,
 };
