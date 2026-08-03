@@ -51,16 +51,10 @@ const Calendar = () => {
   const toast = useToast();
 
   const events = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     return todos
       ?.filter((todo: Todo) => !!todo.startAt || !!todo.dueAt)
       .map((todo: Todo) => {
-        const overdue =
-          todo.dueAt !== null &&
-          new Date(todo.dueAt) < today &&
-          todo.status !== "done";
+        const overdue = isOverdue(todo);
 
         // FullCalendar all-day 형식 (date-only 문자열)
         // end는 배타적이므로 dueAt 다음 날로 설정해야 dueAt 당일이 표시됨
