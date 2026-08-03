@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { getDaysLeft, getDueBadgeLabel, getUrgency, DUE_SOON_DAYS } from '../due'
+import { getDaysLeft, getDueBadgeLabel, getUrgency, DUE_SOON_DAYS, isTodoOverdue } from '../due'
 
 describe('due 유틸 함수', () => {
   beforeEach(() => {
@@ -88,6 +88,32 @@ describe('due 유틸 함수', () => {
     it('daysLeft가 DUE_SOON_DAYS(3)보다 크면 "normal"을 반환해야 한다', () => {
       expect(getUrgency(DUE_SOON_DAYS + 1)).toBe('normal')
       expect(getUrgency(10)).toBe('normal')
+    })
+  })
+
+  describe('isTodoOverdue', () => {
+    it('dueAt이 null이면 false를 반환해야 한다', () => {
+      expect(isTodoOverdue({ dueAt: null, status: 'todo' })).toBe(false)
+    })
+
+    it('status가 done이면 dueAt이 과거여도 false를 반환해야 한다', () => {
+      expect(isTodoOverdue({ dueAt: '2026-06-01', status: 'done' })).toBe(false)
+    })
+
+    it('마감일이 오늘이면 false를 반환해야 한다', () => {
+      expect(isTodoOverdue({ dueAt: '2026-06-14', status: 'todo' })).toBe(false)
+    })
+
+    it('마감일이 어제면 true를 반환해야 한다', () => {
+      expect(isTodoOverdue({ dueAt: '2026-06-13', status: 'todo' })).toBe(true)
+    })
+
+    it('마감일이 내일이면 false를 반환해야 한다', () => {
+      expect(isTodoOverdue({ dueAt: '2026-06-15', status: 'todo' })).toBe(false)
+    })
+
+    it('status가 doing이고 마감일이 과거면 true를 반환해야 한다', () => {
+      expect(isTodoOverdue({ dueAt: '2026-06-01', status: 'doing' })).toBe(true)
     })
   })
 })
