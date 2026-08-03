@@ -1,4 +1,5 @@
 import type { Todo } from "../types";
+import { isTodoOverdue } from "@/shared/utils/due";
 
 /**
  * 같은 recurrenceId를 가진 반복 인스턴스 중 dueAt이 가장 이른 것(지난 미완료(overdue)가
@@ -109,12 +110,7 @@ export function getProjectOverdue(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const isOverdueCandidate = (t: Todo) => {
-    if (!t.dueAt || t.status === "done") return false;
-    const dueDate = new Date(t.dueAt);
-    dueDate.setHours(0, 0, 0, 0);
-    return dueDate < today;
-  };
+  const isOverdueCandidate = (t: Todo) => isTodoOverdue(t);
 
   // 루트 투두 자신도 후보에 포함시켜, 하위 투두가 없거나 아직 지나지 않았더라도
   // 루트 자신의 dueAt이 지났으면 초과로 판정되도록 한다.
