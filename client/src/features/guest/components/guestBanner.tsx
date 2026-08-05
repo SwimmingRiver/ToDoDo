@@ -14,10 +14,11 @@ const GuestBanner = ({ onLoginClick }: GuestBannerProps) => {
     <BannerContainer role="note">
       <Message>
         <Info size={16} aria-hidden="true" />
-        체험 모드입니다. 새로고침하면 작성한 내용이 사라져요.
+        체험 모드입니다. 새로고침하거나 로그인해도 작성한 내용은 저장되지
+        않아요.
       </Message>
       <LoginButton type="button" onClick={onLoginClick}>
-        Google로 로그인하고 저장하기
+        Google로 로그인하기
       </LoginButton>
     </BannerContainer>
   );
