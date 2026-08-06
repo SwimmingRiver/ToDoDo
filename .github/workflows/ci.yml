@@ -236,6 +236,17 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+          # VITE_ 접두사가 붙어 클라이언트 번들(import.meta.env)에 포함된다. Vite는
+          # VITE_* 변수를 빌드 타임에 정적으로 인라인하므로, 이 스텝에서 주입되지
+          # 않으면 배포된 번들에는 dsn이 빈 값으로 굳어져 Sentry가 초기화되지 않는다.
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          # Sentry 소스맵 업로드 전용 시크릿. VITE_ 접두사가 아니므로 클라이언트
+          # 번들(import.meta.env)에는 노출되지 않고, vite.config.ts의 Node 빌드
+          # 프로세스(@sentry/vite-plugin)에서만 읽힌다. client job(테스트 빌드)에는
+          # 의도적으로 주입하지 않는다 — 실제 배포 빌드에서만 업로드가 필요하다.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: npm run build
 
       - name: Deploy to Firebase Hosting & Firestore Rules/Indexes

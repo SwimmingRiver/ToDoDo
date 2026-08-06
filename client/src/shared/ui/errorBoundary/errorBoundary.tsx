@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import * as Sentry from "@sentry/react";
 import { Container, Title, Description, ReloadButton } from "./errorBoundary.styles";
 
 interface ErrorBoundaryProps {
@@ -19,6 +20,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
+    // beforeSend(scrubEvent)가 contexts.react만 허용하므로 여기서 componentStack을 담아도
+    // title/description 같은 사용자 입력이 섞일 위험 없이 전달된다.
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: errorInfo.componentStack } },
+    });
   }
 
   render() {
