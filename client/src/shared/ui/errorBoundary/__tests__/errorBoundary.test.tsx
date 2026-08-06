@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import * as Sentry from '@sentry/react'
 import ErrorBoundary from '../errorBoundary'
+
+vi.mock('@sentry/react', () => ({
+  captureException: vi.fn(),
+}))
 
 const ThrowingChild = () => {
   throw new Error('boom')
@@ -18,6 +23,7 @@ describe('ErrorBoundary 컴포넌트', () => {
       configurable: true,
       value: { ...window.location, reload: reloadSpy },
     })
+    vi.mocked(Sentry.captureException).mockClear()
   })
 
   afterEach(() => {
@@ -56,5 +62,42 @@ describe('ErrorBoundary 컴포넌트', () => {
     await user.click(screen.getByRole('button', { name: '새로고침' }))
 
     expect(reloadSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('하위 컴포넌트가 예외를 던지면 Sentry.captureException을 호출한다', () => {
+    render(
+      <ErrorBoundary>
+        <ThrowingChild />
+      </ErrorBoundary>,
+    )
+
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+  })
+
+  it('Sentry.captureException 호출 시 에러 객체와 componentStack을 담은 react 컨텍스트를 함께 전달한다', () => {
+    render(
+      <ErrorBoundary>
+        <ThrowingChild />
+      </ErrorBoundary>,
+    )
+
+    const [error, context] = vi.mocked(Sentry.captureException).mock.calls[0]
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toBe('boom')
+    expect(context).toEqual({
+      contexts: {
+        react: { componentStack: expect.any(String) },
+      },
+    })
+  })
+
+  it('정상 렌더링 시에는 Sentry.captureException을 호출하지 않는다', () => {
+    render(
+      <ErrorBoundary>
+        <div>정상 화면</div>
+      </ErrorBoundary>,
+    )
+
+    expect(Sentry.captureException).not.toHaveBeenCalled()
   })
 })
