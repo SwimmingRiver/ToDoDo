@@ -111,6 +111,12 @@ const TodoDetail = () => {
           dueAt: todo.dueAt ? toDatetimeLocalValue(todo.dueAt) : "",
         }
       : undefined,
+    // values prop은 넘긴 객체가 달라지면 폼 전체를 서버 값으로 되돌린다. 그런데 그
+    // 리셋을 유발하는 기능이 이 패널 안에 있다 — 하위 할 일을 추가하면 부모의
+    // status/doneAt이 재계산되고 ["todoDetail"]이 무효화되므로, refetch된 status가
+    // values를 바꾼다. 그대로 두면 그 순간 입력 중이던 설명이 사라진다.
+    // 사용자가 건드린 필드만 지키고 나머지는 정상적으로 서버 값을 따라간다.
+    resetOptions: { keepDirtyValues: true },
   });
 
   const startAtWatch = watch("startAt");

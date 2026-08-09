@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import TodoDetail from '../todoDetail'
 import type { Todo } from '../../../types/todo.type'
 import { ToastProvider } from '@/shared/ui/toast/toastContext'
+import { setupUser } from '@/test/setupUser'
 
 vi.mock('@/shared/lib/firebase', () => ({
   db: {},
@@ -30,10 +31,14 @@ const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
   ...overrides,
 })
 
-const todo = makeTodo()
+/**
+ * 고정 객체를 반환하면 "서버 데이터가 갱신되는" 상황 자체를 재현할 수 없다.
+ * useTodoDetail이 매 렌더 읽어가는 가변 홀더로 두어 refetch를 흉내낸다.
+ */
+const mockState = vi.hoisted(() => ({ todo: null as unknown }))
 
 vi.mock('../../../hooks', () => ({
-  useTodoDetail: () => ({ todo }),
+  useTodoDetail: () => ({ todo: mockState.todo }),
   useTodo: () => ({
     useUpdateTodo: { mutate: vi.fn() },
     useCreateRecurringTodo: { mutate: vi.fn() },
@@ -44,33 +49,76 @@ vi.mock('../../../hooks', () => ({
   }),
 }))
 
+/**
+ * 매번 새 엘리먼트를 만들어야 한다. 같은 엘리먼트 객체를 rerender에 넘기면 React가
+ * 참조 동일성으로 서브트리 렌더를 통째로 건너뛰어, 리렌더가 일어난 것처럼 보이지만
+ * 실제로는 아무 일도 일어나지 않는다(테스트가 거짓 통과한다).
+ */
+const detailUi = () => (
+  <ToastProvider>
+    <MemoryRouter initialEntries={['/todo/todo-1']}>
+      <Routes>
+        <Route path="/todo/:id" element={<TodoDetail />} />
+      </Routes>
+    </MemoryRouter>
+  </ToastProvider>
+)
+
+const renderDetail = () => render(detailUi())
+
+beforeEach(() => {
+  mockState.todo = makeTodo()
+})
+
 describe('TodoDetail 컴포넌트', () => {
   it('기존 description이 설명 textarea에 표시되어야 한다', () => {
-    render(
-      <ToastProvider>
-        <MemoryRouter initialEntries={['/todo/todo-1']}>
-          <Routes>
-            <Route path="/todo/:id" element={<TodoDetail />} />
-          </Routes>
-        </MemoryRouter>
-      </ToastProvider>,
-    )
+    renderDetail()
 
     const descInput = screen.getByPlaceholderText('상세 설명을 입력하세요') as HTMLTextAreaElement
     expect(descInput.value).toBe('기존 설명 텍스트')
   })
 
   it('제목도 description과 함께 정상 표시되어야 한다', () => {
-    render(
-      <ToastProvider>
-        <MemoryRouter initialEntries={['/todo/todo-1']}>
-          <Routes>
-            <Route path="/todo/:id" element={<TodoDetail />} />
-          </Routes>
-        </MemoryRouter>
-      </ToastProvider>,
-    )
+    renderDetail()
 
     expect(screen.getByPlaceholderText('할 일 제목')).toHaveValue('테스트 할 일')
+  })
+
+  describe('서버 데이터 갱신 중 편집 내용 보존', () => {
+    /**
+     * useForm이 defaultValues가 아닌 values prop 기반이라, 넘긴 객체가 달라지면
+     * 폼 전체가 리셋된다. 그런데 리셋을 유발하는 기능이 이 패널 안에 있다 —
+     * 하위 할 일을 추가하면 createChildTodo가 부모 status/doneAt을 재계산하고
+     * ["todoDetail"]을 무효화하므로, refetch된 status가 values를 바꾼다.
+     * resetOptions.keepDirtyValues가 없으면 여기서 입력 중이던 설명이 사라진다.
+     */
+    it('편집 중인 설명은 서버 데이터가 바뀌어도 유지된다', async () => {
+      const user = setupUser()
+      const { rerender } = renderDetail()
+
+      const desc = screen.getByPlaceholderText('상세 설명을 입력하세요')
+      await user.clear(desc)
+      await user.type(desc, '작성 중인 새 설명')
+
+      // 하위 할 일 추가로 부모 status가 서버에서 바뀐 상황
+      mockState.todo = makeTodo({ status: 'doing' })
+      rerender(detailUi())
+
+      expect(desc).toHaveValue('작성 중인 새 설명')
+    })
+
+    it('건드리지 않은 필드는 서버 값으로 갱신된다', async () => {
+      // keepDirtyValues를 "values 동기화를 통째로 끄는" 식으로 잘못 고치면 이 테스트가 깨진다.
+      const user = setupUser()
+      const { rerender } = renderDetail()
+
+      const desc = screen.getByPlaceholderText('상세 설명을 입력하세요')
+      await user.type(desc, ' 추가분')
+
+      mockState.todo = makeTodo({ title: '서버에서 바뀐 제목' })
+      rerender(detailUi())
+
+      expect(screen.getByPlaceholderText('할 일 제목')).toHaveValue('서버에서 바뀐 제목')
+    })
   })
 })
