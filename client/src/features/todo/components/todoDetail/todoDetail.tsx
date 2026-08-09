@@ -80,10 +80,9 @@ const formatDateTime = (dateString: string | null) => {
   });
 };
 
-const TodoDetail = () => {
-  const { id } = useParams<{ id: string }>();
+const TodoDetailView = ({ id }: { id: string }) => {
   const navigate = useNavigate();
-  const { todo } = useTodoDetail({ id: id! });
+  const { todo } = useTodoDetail({ id });
   const {
     useUpdateTodo,
     useCreateRecurringTodo,
@@ -631,6 +630,20 @@ const TodoDetail = () => {
       </Modal>
     </>
   );
+};
+
+/**
+ * 라우트 파라미터만 바뀌면(예: 하위 할 일 카드 클릭 → navigate(`/todo/${child.id}`))
+ * React Router는 같은 엘리먼트를 재사용하므로 컴포넌트가 **재마운트되지 않는다**.
+ * 그러면 useForm의 values만 다음 todo로 갈아끼워지는데, resetOptions.keepDirtyValues가
+ * 이전 todo에서 편집 중이던 값을 그대로 들고 가버린다 — 그 상태로 저장하면 A의 설명이
+ * B에 덮어써진다.
+ *
+ * id를 key로 줘서 다른 todo로 이동하면 폼 상태를 새로 시작하게 한다.
+ */
+const TodoDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  return <TodoDetailView key={id} id={id!} />;
 };
 
 export default TodoDetail;

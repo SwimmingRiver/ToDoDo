@@ -93,7 +93,9 @@ const TodayTodoItem = ({
         {todo.description && (
           <DescriptionRow>
             {hasLinks && (
-              <LinkIndicator aria-label="링크 포함">
+              // span의 암묵 role은 generic이라 aria-label이 무시된다.
+              // role="img"를 줘야 스크린리더가 라벨을 읽는다.
+              <LinkIndicator role="img" aria-label="링크 포함">
                 <Link2 size={11} />
               </LinkIndicator>
             )}

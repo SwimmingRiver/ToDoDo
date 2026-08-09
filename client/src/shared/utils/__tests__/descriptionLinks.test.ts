@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   extractLinks,
@@ -88,9 +90,16 @@ describe("extractLinks", () => {
     });
   });
 
-  it("DESCRIPTION_MAX_LENGTH는 firestore.rules의 상한과 같은 2000이다", () => {
-    // 한쪽만 바뀌면 클라이언트는 통과시키는데 서버가 거부하는 상태가 된다.
-    expect(DESCRIPTION_MAX_LENGTH).toBe(2000);
+  it("DESCRIPTION_MAX_LENGTH가 firestore.rules의 상한과 실제로 일치한다", () => {
+    // 주석으로만 동기화를 약속하면 한쪽만 바뀌었을 때 아무도 못 잡는다. 클라이언트는
+    // 통과시키는데 서버가 permission-denied로 거부하는, 원인 파악이 어려운 상태가 된다.
+    const rules = readFileSync(resolve(process.cwd(), "../firestore.rules"), "utf-8");
+    const limits = [...rules.matchAll(/\.size\(\)\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
+
+    expect(limits.length).toBeGreaterThan(0);
+    for (const limit of limits) {
+      expect(limit).toBe(DESCRIPTION_MAX_LENGTH);
+    }
   });
 });
 

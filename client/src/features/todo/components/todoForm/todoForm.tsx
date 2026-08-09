@@ -86,6 +86,14 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
     if (showMore) resizeDescription();
   }, [showMore, resizeDescription]);
 
+  // 설명 에러 메시지는 접히는 DetailSection 안에 있다. 접힌 상태로 저장을 누르면
+  // 유효성 검사에 걸려 제출은 막히는데 메시지는 0fr 안에 잘려 보이지 않고, RHF의
+  // shouldFocusError가 안 보이는 textarea로 포커스를 옮겨 폼이 죽은 것처럼 보인다.
+  // 에러가 생기면 섹션을 열어 사용자가 무엇이 문제인지 볼 수 있게 한다.
+  useEffect(() => {
+    if (errors.description) setShowMore(true);
+  }, [errors.description]);
+
   // 하위 할 일 생성 폼(parentId 존재, 케이스 D)에서는 반복 섹션 자체를 렌더링하지 않는다.
   const showRecurrenceSection = !parentId;
 

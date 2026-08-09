@@ -7,10 +7,19 @@ service cloud.firestore {
       // 상한 2000은 클라이언트의 DESCRIPTION_MAX_LENGTH(shared/utils/descriptionLinks.ts)와
       // 같은 값이어야 한다 — 한쪽만 바꾸면 클라이언트는 통과시키는데 서버가 거부한다.
       function descriptionValid() {
-        return !("description" in request.resource.data)
-               || request.resource.data.description == null
-               || (request.resource.data.description is string
-                   && request.resource.data.description.size() <= 2000);
+        let d = request.resource.data.get("description", null);
+        return d == null || (d is string && d.size() <= 2000);
+      }
+
+      // update의 request.resource.data는 "쓰기 후 문서 전체"다. 즉 description을
+      // 건드리지 않는 부분 업데이트(완료 처리, 마감일 변경, 칸반 재정렬 배치 등)에도
+      // 이 검증이 걸린다. 상한 도입 전에 2000자를 넘겨 저장된 문서가 있다면 그 문서는
+      // 모든 쓰기가 막혀 사용자가 복구할 방법이 없어진다 — writeBatch는 원자적이라
+      // 그런 문서 하나가 재정렬 배치 전체를 실패시킨다.
+      // 그래서 "새 값이 유효하거나, description을 바꾸지 않는 쓰기"를 허용한다.
+      function descriptionUnchanged() {
+        return request.resource.data.get("description", null)
+               == resource.data.get("description", null);
       }
 
       allow read:   if request.auth != null && resource.data.userId == request.auth.uid;
@@ -20,7 +29,7 @@ service cloud.firestore {
       allow update: if request.auth != null
                     && resource.data.userId == request.auth.uid
                     && request.resource.data.userId == resource.data.userId
-                    && descriptionValid();
+                    && (descriptionValid() || descriptionUnchanged());
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
