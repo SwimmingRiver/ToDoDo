@@ -2,7 +2,13 @@ import { useForm } from "react-hook-form";
 import { useEffect, useMemo, useState } from "react";
 
 import { useTodo } from "../../hooks";
-import { useToast, ConfirmModal, toDatetimeLocalValue } from "@/shared";
+import {
+  useToast,
+  ConfirmModal,
+  toDatetimeLocalValue,
+  useAutoGrowTextArea,
+  DESCRIPTION_MAX_LENGTH,
+} from "@/shared";
 import type { RecurrenceRule, Todo } from "../../types";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
@@ -12,6 +18,7 @@ import {
   FormContainer,
   InputLabel,
   Input,
+  TextArea,
   MoreButton,
   MoreButtonContainer,
   DetailSection,
@@ -68,6 +75,16 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
 
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
+  const descriptionWatch = watch("description");
+
+  const { setRef: setDescriptionRef, resize: resizeDescription } =
+    useAutoGrowTextArea(descriptionWatch);
+
+  // "더보기"로 접혀 있는 동안 textarea는 grid 0fr 안에 있어 높이 측정이 신뢰할 수 없다.
+  // 섹션이 열리는 시점에 한 번 더 재서 기존 값이 잘려 보이지 않게 한다.
+  useEffect(() => {
+    if (showMore) resizeDescription();
+  }, [showMore, resizeDescription]);
 
   // 하위 할 일 생성 폼(parentId 존재, 케이스 D)에서는 반복 섹션 자체를 렌더링하지 않는다.
   const showRecurrenceSection = !parentId;
@@ -266,6 +283,14 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
     }
   };
 
+  // register가 ref 슬롯을 가져가므로, auto-grow용 ref와 합치려면 미리 분리해 둔다.
+  const { ref: descriptionFieldRef, ...descriptionField } = register("description", {
+    maxLength: {
+      value: DESCRIPTION_MAX_LENGTH,
+      message: `설명은 ${DESCRIPTION_MAX_LENGTH}자 이내로 입력해주세요`,
+    },
+  });
+
   return (
     <>
       <FormContainer id="todo-form" onSubmit={handleSubmit(onSubmit)}>
@@ -284,10 +309,20 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
         <DetailSection $isOpen={showMore}>
           <DetailContent>
             <InputLabel>설명</InputLabel>
-            <Input
-              {...register("description")}
+            <TextArea
+              {...descriptionField}
+              ref={(el) => {
+                descriptionFieldRef(el);
+                setDescriptionRef(el);
+              }}
+              rows={2}
               placeholder="상세 설명을 입력하세요"
             />
+            {errors.description && (
+              <span style={{ color: "red", fontSize: "12px" }}>
+                {errors.description.message}
+              </span>
+            )}
 
             <InputLabel>우선순위</InputLabel>
             <Select {...register("priority")} defaultValue="medium">

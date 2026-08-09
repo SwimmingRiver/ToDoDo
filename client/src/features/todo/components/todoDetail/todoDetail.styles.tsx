@@ -126,6 +126,19 @@ const Label = styled.label`
   color: ${colors.text.primary};
 `;
 
+/**
+ * 라벨과 그 행의 보조 액션을 나란히 두는 행.
+ * 액션을 별도 블록으로 내리지 않고 라벨 행의 남는 오른쪽을 쓰는 이유는, 이 패널이
+ * 이미 매우 긴 폼이라 세로 공간을 추가로 쓰는 비용이 크기 때문이다.
+ */
+const LabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 20px;
+`;
+
 const Input = styled.input`
   width: 100%;
   padding: 12px 14px;
@@ -154,7 +167,12 @@ const TextArea = styled.textarea`
   border-radius: 8px;
   outline: none;
   box-sizing: border-box;
-  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+  /* 높이는 useAutoGrowTextArea가 관리한다. 수동 리사이즈 핸들은 auto-grow와 서로 싸우고,
+     우하단 핸들이 라벨 행 액션과 시각적으로 충돌하기도 해서 끈다. */
+  resize: none;
+  overflow: hidden;
   min-height: 100px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
@@ -455,6 +473,7 @@ export {
   FormContainer,
   FormGroup,
   Label,
+  LabelRow,
   Input,
   TextArea,
   Select,

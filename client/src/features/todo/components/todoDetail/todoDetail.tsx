@@ -4,7 +4,15 @@ import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
 import { X, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
-import { useToast, ConfirmModal, toDatetimeLocalValue } from "@/shared";
+import {
+  useToast,
+  ConfirmModal,
+  toDatetimeLocalValue,
+  useAutoGrowTextArea,
+  extractLinks,
+  DESCRIPTION_MAX_LENGTH,
+} from "@/shared";
+import DescriptionLinkAction from "./descriptionLinkAction";
 import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import RecurrenceFields from "../recurrence/recurrenceFields";
@@ -33,6 +41,7 @@ import {
   PriorityBadge,
   FormGroup,
   Label,
+  LabelRow,
   Input,
   TextArea,
   Select,
@@ -102,6 +111,24 @@ const TodoDetail = () => {
 
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
+  const descriptionWatch = watch("description");
+
+  const { setRef: setDescriptionRef } = useAutoGrowTextArea(descriptionWatch);
+
+  // 저장된 값이 아니라 입력 중인 값에서 링크를 뽑는다 — 붙여넣자마자 링크가 인식됐는지
+  // 확인할 수 있어야 오탐(파일명 등)도 그 자리에서 알아챌 수 있다.
+  const descriptionLinks = useMemo(
+    () => extractLinks(descriptionWatch),
+    [descriptionWatch]
+  );
+
+  // register가 ref 슬롯을 가져가므로, auto-grow용 ref와 합치려면 미리 분리해 둔다.
+  const { ref: descriptionFieldRef, ...descriptionField } = register("description", {
+    maxLength: {
+      value: DESCRIPTION_MAX_LENGTH,
+      message: `설명은 ${DESCRIPTION_MAX_LENGTH}자 이내로 입력해주세요`,
+    },
+  });
 
   // 하위 투두 배열 자체를 계산해두면(기존엔 존재 여부만 boolean으로 계산했음)
   // 반복 설정 비활성화 조건(hasChildren)과 신규 하위 투두 섹션 렌더링을 동일한
@@ -370,11 +397,24 @@ const TodoDetail = () => {
             </FormGroup>
 
             <FormGroup>
-              <Label>설명</Label>
+              <LabelRow>
+                <Label htmlFor="todo-detail-description">설명</Label>
+                {descriptionLinks.length > 0 && (
+                  <DescriptionLinkAction links={descriptionLinks} />
+                )}
+              </LabelRow>
               <TextArea
-                {...register("description")}
+                {...descriptionField}
+                ref={(el) => {
+                  descriptionFieldRef(el);
+                  setDescriptionRef(el);
+                }}
+                id="todo-detail-description"
                 placeholder="상세 설명을 입력하세요"
               />
+              {errors.description && (
+                <ErrorText>{errors.description.message}</ErrorText>
+              )}
             </FormGroup>
 
             <InfoRow>

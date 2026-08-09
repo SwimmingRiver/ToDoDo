@@ -2,11 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /todos/{todoId} {
+      // description은 선택 필드다. 없거나 null이면 그대로 통과시키고, 값이 있으면
+      // 문자열이면서 길이 상한 이내여야 한다.
+      // 상한 2000은 클라이언트의 DESCRIPTION_MAX_LENGTH(shared/utils/descriptionLinks.ts)와
+      // 같은 값이어야 한다 — 한쪽만 바꾸면 클라이언트는 통과시키는데 서버가 거부한다.
+      function descriptionValid() {
+        return !("description" in request.resource.data)
+               || request.resource.data.description == null
+               || (request.resource.data.description is string
+                   && request.resource.data.description.size() <= 2000);
+      }
+
       allow read:   if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && descriptionValid();
       allow update: if request.auth != null
                     && resource.data.userId == request.auth.uid
-                    && request.resource.data.userId == resource.data.userId;
+                    && request.resource.data.userId == resource.data.userId
+                    && descriptionValid();
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
