@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
@@ -10,6 +10,7 @@ import {
   toDatetimeLocalValue,
   useAutoGrowTextArea,
   extractLinks,
+  toDescriptionSegments,
   DESCRIPTION_MAX_LENGTH,
 } from "@/shared";
 import DescriptionLinkAction from "./descriptionLinkAction";
@@ -44,6 +45,9 @@ import {
   LabelRow,
   Input,
   TextArea,
+  DescriptionField,
+  DescriptionOverlay,
+  OverlayLink,
   Select,
   Button,
   ErrorText,
@@ -121,6 +125,14 @@ const TodoDetail = () => {
     () => extractLinks(descriptionWatch),
     [descriptionWatch]
   );
+
+  // 본문 하이라이트용 — 위치를 보존하고 중복 URL도 각각 유지한다(extractLinks와 요구가 다름).
+  const descriptionSegments = useMemo(
+    () => toDescriptionSegments(descriptionWatch),
+    [descriptionWatch]
+  );
+  // 링크가 없으면 오버레이를 아예 렌더하지 않는다 — 이득 없이 정렬 리스크만 지는 상태를 만들지 않는다.
+  const hasDescriptionHighlight = descriptionSegments.some((s) => s.isLink);
 
   // register가 ref 슬롯을 가져가므로, auto-grow용 ref와 합치려면 미리 분리해 둔다.
   const { ref: descriptionFieldRef, ...descriptionField } = register("description", {
@@ -403,15 +415,33 @@ const TodoDetail = () => {
                   <DescriptionLinkAction links={descriptionLinks} />
                 )}
               </LabelRow>
-              <TextArea
-                {...descriptionField}
-                ref={(el) => {
-                  descriptionFieldRef(el);
-                  setDescriptionRef(el);
-                }}
-                id="todo-detail-description"
-                placeholder="상세 설명을 입력하세요"
-              />
+              <DescriptionField $highlight={hasDescriptionHighlight}>
+                {hasDescriptionHighlight && (
+                  // 실제 콘텐츠는 아래 textarea가 갖고 있다. 오버레이는 순수 장식이므로
+                  // 스크린리더에는 같은 본문이 두 번 읽히지 않도록 숨긴다.
+                  <DescriptionOverlay aria-hidden="true">
+                    {descriptionSegments.map((segment, index) =>
+                      segment.isLink ? (
+                        <OverlayLink key={index}>{segment.text}</OverlayLink>
+                      ) : (
+                        <Fragment key={index}>{segment.text}</Fragment>
+                      )
+                    )}
+                    {/* textarea는 끝의 개행 뒤 빈 줄을 렌더하지만 div는 접는다.
+                        폭 0 문자를 붙여 마지막 줄 높이를 textarea와 맞춘다. */}
+                    {"​"}
+                  </DescriptionOverlay>
+                )}
+                <TextArea
+                  {...descriptionField}
+                  ref={(el) => {
+                    descriptionFieldRef(el);
+                    setDescriptionRef(el);
+                  }}
+                  id="todo-detail-description"
+                  placeholder="상세 설명을 입력하세요"
+                />
+              </DescriptionField>
               {errors.description && (
                 <ErrorText>{errors.description.message}</ErrorText>
               )}

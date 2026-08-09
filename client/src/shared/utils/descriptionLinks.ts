@@ -28,6 +28,33 @@ interface DetectedLink {
   label: string;
 }
 
+/** description을 링크/비링크 구간으로 쪼갠 조각. 하이라이트 렌더링용. */
+interface DescriptionSegment {
+  text: string;
+  isLink: boolean;
+}
+
+type LinkifyMatch = ReturnType<typeof find>[number];
+
+/**
+ * "열어도 되는 링크"의 단일 판정 지점.
+ *
+ * extractLinks(열기 버튼)와 toDescriptionSegments(본문 하이라이트)가 반드시 이 함수를
+ * 공유해야 한다. 두 곳이 갈라지면 "색은 칠해졌는데 버튼에는 안 뜨는" 어긋남이 생기고,
+ * 그건 그 자체로 버그다.
+ */
+const toAllowedUrl = (token: LinkifyMatch): URL | null => {
+  if (token.type !== "url") return null;
+  if (!EXPLICIT_LINK.test(token.value)) return null;
+
+  try {
+    const url = new URL(token.href);
+    return ALLOWED_PROTOCOLS.includes(url.protocol) ? url : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * plain text description에서 열 수 있는 링크를 뽑아낸다.
  *
@@ -44,18 +71,10 @@ export const extractLinks = (text?: string | null): DetectedLink[] => {
   const links: DetectedLink[] = [];
 
   for (const token of find(text, { defaultProtocol: "https" })) {
-    // find()는 email 등도 함께 반환한다. 지금 "열기"를 제공할 대상은 URL뿐이다.
-    if (token.type !== "url") continue;
-    if (!EXPLICIT_LINK.test(token.value)) continue;
-
-    let url: URL;
-    try {
-      url = new URL(token.href);
-    } catch {
-      continue;
-    }
-
-    if (!ALLOWED_PROTOCOLS.includes(url.protocol)) continue;
+    const url = toAllowedUrl(token);
+    if (!url) continue;
+    // 같은 URL이 두 번 적혀 있어도 열기 버튼은 하나면 충분하다.
+    // (본문 하이라이트는 요구가 정반대라 toDescriptionSegments에서 중복 제거를 하지 않는다.)
     if (seen.has(url.href)) continue;
 
     seen.add(url.href);
@@ -65,4 +84,35 @@ export const extractLinks = (text?: string | null): DetectedLink[] => {
   return links;
 };
 
-export type { DetectedLink };
+/**
+ * description을 링크/비링크 구간으로 쪼갠다. 본문 하이라이트 렌더링용.
+ *
+ * extractLinks와 달리 (1) 원문 내 위치를 보존하고 (2) 같은 URL이 여러 번 나오면
+ * 그 횟수만큼 반환한다 — 본문에 두 번 적힌 URL은 두 곳 다 칠해져야 하기 때문이다.
+ * 반환된 text 조각을 순서대로 이으면 원문과 정확히 일치한다(하이라이트 오버레이가
+ * textarea와 같은 줄바꿈을 얻으려면 이 성질이 깨지면 안 된다).
+ */
+export const toDescriptionSegments = (text?: string | null): DescriptionSegment[] => {
+  if (!text) return [];
+
+  const segments: DescriptionSegment[] = [];
+  let cursor = 0;
+
+  for (const token of find(text, { defaultProtocol: "https" })) {
+    if (!toAllowedUrl(token)) continue;
+
+    if (token.start > cursor) {
+      segments.push({ text: text.slice(cursor, token.start), isLink: false });
+    }
+    segments.push({ text: text.slice(token.start, token.end), isLink: true });
+    cursor = token.end;
+  }
+
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), isLink: false });
+  }
+
+  return segments;
+};
+
+export type { DetectedLink, DescriptionSegment };

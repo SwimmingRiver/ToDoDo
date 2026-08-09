@@ -20,18 +20,23 @@ const trigger = `
   gap: 4px;
   height: 44px;
   margin: -12px 0;
-  padding: 0 4px;
+  padding: 0 10px;
   max-width: 100%;
   border: none;
-  background: none;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-family: inherit;
-  color: ${colors.brand.secondary};
   text-decoration: none;
+  /* 13px는 WCAG large text(18.66px bold / 24px)가 아니므로 대비 4.5:1이 적용된다.
+     brand.secondary(#1D9E75)는 흰 배경에서 3.39:1로 미달이라 쓸 수 없다.
+     brand.primary(#0F6E56)는 흰 배경 6.20:1, tint 배경(#E8F5EF) 위에서도 5.54:1로 통과. */
+  color: ${colors.brand.primary};
+  background-color: ${colors.brand.background};
+  transition: background-color 0.15s ease;
 
   &:hover {
-    color: ${colors.brand.primary};
+    background-color: #d9ece4;
     text-decoration: underline;
   }
 
