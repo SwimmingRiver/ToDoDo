@@ -159,33 +159,49 @@ const Input = styled.input`
   }
 `;
 
-const TextArea = styled.textarea`
-  width: 100%;
+/**
+ * TextArea와 DescriptionOverlay가 **같은 줄바꿈**을 만들기 위해 픽셀 단위로 일치해야
+ * 하는 값들. 한쪽만 수정하는 사고를 막으려고 한 곳에서 정의해 양쪽에 보간한다.
+ * (이전에는 같은 값을 양쪽에 손으로 복사하고 주석으로만 동기화를 약속하고 있었다.)
+ *
+ * 테두리/모서리/포커스 링은 여기 없다 — 스크롤 컨테이너인 DescriptionField가 갖는다.
+ * 내용과 함께 스크롤돼 사라지면 안 되기 때문이다.
+ */
+const textBoxMetrics = css`
   padding: 12px 14px;
-  font-size: 14px;
-  border: 1px solid ${colors.border.secondary};
-  border-radius: 8px;
-  outline: none;
   box-sizing: border-box;
-  line-height: 1.5;
   font-family: inherit;
-  /* color를 명시하는 이유: 하이라이트 오버레이(DescriptionOverlay)가 같은 색으로
-     본문을 그려야 하는데, 미지정이면 UA 기본색이라 두 값이 미세하게 달라진다. */
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+`;
+
+const TextArea = styled.textarea`
+  ${textBoxMetrics}
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
   color: ${colors.text.primary};
+  display: block;
   /* 높이는 useAutoGrowTextArea가 관리한다. 수동 리사이즈 핸들은 auto-grow와 서로 싸우고,
-     우하단 핸들이 라벨 행 액션과 시각적으로 충돌하기도 해서 끈다. */
+     우하단 핸들이 라벨 행 액션과 시각적으로 충돌하기도 해서 끈다.
+     overflow: hidden은 오버레이 설계의 전제다 — textarea가 자체 스크롤을 가지면
+     오버레이와 scrollTop을 동기화해야 하는데, 지금은 스크롤러가 바깥에 하나뿐이라
+     그 코드가 아예 필요 없다. */
   resize: none;
   overflow: hidden;
   min-height: 100px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  /* DescriptionField가 max-height를 가진 flex 컨테이너라, 기본값(flex-shrink: 1)이면
+     textarea가 컨테이너 높이에 맞춰 눌린다. 그러면 auto-grow로 잡아둔 높이가 무시되고
+     overflow: hidden 때문에 넘치는 내용이 스크롤도 안 되고 잘려버린다.
+     높이를 지키고 스크롤은 컨테이너에 맡긴다. */
+  flex-shrink: 0;
 
   &::placeholder {
     color: ${colors.text.tertiary};
-  }
-
-  &:focus {
-    border-color: ${colors.brand.secondary};
-    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
   }
 `;
 
@@ -196,23 +212,17 @@ const TextArea = styled.textarea`
  * 줄바꿈 위치가 달라져 오버레이가 컨테이너를 넘친다. TextArea를 고칠 때 여기도 같이 고칠 것.
  */
 const DescriptionOverlay = styled.div`
+  ${textBoxMetrics}
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* bottom을 auto로 두는 게 중요하다. inset:0으로 컨테이너에 고정하면 컨테이너가
+     스크롤될 때 오버레이만 제자리에 남아 본문과 어긋난다. 내용 높이만큼만 차지하게
+     두면 textarea와 함께 스크롤된다. */
+  bottom: auto;
   pointer-events: none;
-  overflow: hidden;
-  border-radius: 8px;
-
-  /* ↓ TextArea와 일치시켜야 하는 값들 */
-  padding: 12px 14px;
-  border: 1px solid transparent;
-  box-sizing: border-box;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.5;
   color: ${colors.text.primary};
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-break: normal;
 `;
 
 /** 오버레이에서 링크로 인식된 구간. 색만으로 구분하지 않도록 밑줄을 함께 준다. */
@@ -238,6 +248,32 @@ const DescriptionField = styled.div<{ $highlight: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
+  /* 테두리·모서리·포커스 링을 textarea에서 여기로 올렸다. 이 요소가 스크롤 컨테이너라
+     안쪽에 두면 내용과 함께 스크롤돼 사라진다. */
+  border: 1px solid ${colors.border.secondary};
+  border-radius: 8px;
+  background-color: ${colors.background.primary};
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  /* auto-grow는 내용이 길어지는 만큼 끝없이 늘어난다. 상한이 없으면 2000자 설명이
+     필드를 모바일에서 1200px 넘게 키워, 우선순위/마감일/하위 할 일이 화면 몇 개
+     아래로 밀려난다. 모바일 기준 약 420자부터 체감된다.
+     상한을 textarea가 아니라 이 컨테이너에 두는 이유는 textarea에 내부 스크롤이
+     생기면 오버레이와 scrollTop을 동기화해야 하기 때문이다. 스크롤러를 바깥에
+     하나만 두면 오버레이가 내용과 같이 움직여 동기화가 필요 없다.
+     .5줄로 끊은 것도 의도적이다 — 마지막 줄이 반쯤 잘려야 JS 없이 "아래에 더 있다"는
+     신호가 된다. 정수 줄이면 깔끔하게 끝나 보여 그 신호가 사라진다. */
+  max-height: 330px;
+  overflow-y: auto;
+
+  ${media.mobile} {
+    max-height: 246px;
+  }
+
+  &:focus-within {
+    border-color: ${colors.brand.secondary};
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+  }
 
   ${({ $highlight }) =>
     $highlight &&

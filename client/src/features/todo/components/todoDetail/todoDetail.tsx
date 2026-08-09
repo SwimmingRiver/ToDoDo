@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
@@ -146,6 +146,21 @@ const TodoDetailView = ({ id }: { id: string }) => {
       message: `설명은 ${DESCRIPTION_MAX_LENGTH}자 이내로 입력해주세요`,
     },
   });
+
+  // register()는 매 렌더 새 ref 함수를 반환한다. 그대로 인라인으로 합치면 ref의
+  // identity가 매번 달라져 React가 타건마다 ref를 null로 뗐다 다시 붙이고, 그때마다
+  // setRef가 resize()를 호출해 강제 리플로우가 한 번 더 일어난다.
+  // 최신 ref를 ref 박스에 담아 호출하면 stale 없이 identity를 고정할 수 있다.
+  const latestFieldRef = useRef(descriptionFieldRef);
+  latestFieldRef.current = descriptionFieldRef;
+
+  const setDescriptionTextArea = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      latestFieldRef.current(el);
+      setDescriptionRef(el);
+    },
+    [setDescriptionRef]
+  );
 
   // 하위 투두 배열 자체를 계산해두면(기존엔 존재 여부만 boolean으로 계산했음)
   // 반복 설정 비활성화 조건(hasChildren)과 신규 하위 투두 섹션 렌더링을 동일한
@@ -439,10 +454,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
                 )}
                 <TextArea
                   {...descriptionField}
-                  ref={(el) => {
-                    descriptionFieldRef(el);
-                    setDescriptionRef(el);
-                  }}
+                  ref={setDescriptionTextArea}
                   id="todo-detail-description"
                   placeholder="상세 설명을 입력하세요"
                 />

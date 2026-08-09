@@ -1,5 +1,5 @@
 import { useForm } from "react-hook-form";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useTodo } from "../../hooks";
 import {
@@ -299,6 +299,20 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
     },
   });
 
+  // register()가 매 렌더 새 ref 함수를 반환해 인라인으로 합치면 타건마다 ref가
+  // 떨어졌다 붙는다(그때마다 resize()로 강제 리플로우 1회 추가).
+  // 최신 ref를 박스에 담아 호출해 stale 없이 identity를 고정한다.
+  const latestFieldRef = useRef(descriptionFieldRef);
+  latestFieldRef.current = descriptionFieldRef;
+
+  const setDescriptionTextArea = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      latestFieldRef.current(el);
+      setDescriptionRef(el);
+    },
+    [setDescriptionRef]
+  );
+
   return (
     <>
       <FormContainer id="todo-form" onSubmit={handleSubmit(onSubmit)}>
@@ -319,10 +333,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
             <InputLabel>설명</InputLabel>
             <TextArea
               {...descriptionField}
-              ref={(el) => {
-                descriptionFieldRef(el);
-                setDescriptionRef(el);
-              }}
+              ref={setDescriptionTextArea}
               rows={2}
               placeholder="상세 설명을 입력하세요"
             />
