@@ -4,9 +4,12 @@ import { MemoryRouter } from 'react-router-dom'
 import Calendar from '../calendar'
 
 vi.mock('@/shared/lib/firebase', () => ({
-  db: {},
   auth: { currentUser: null },
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
+  db: {},
 }))
 
 const { mockTodos } = vi.hoisted(() => {

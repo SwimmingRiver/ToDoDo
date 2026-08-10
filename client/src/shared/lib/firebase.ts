@@ -1,29 +1,18 @@
-import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { app, isEmulator } from "./firebaseApp";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-};
-
-const app = initializeApp(firebaseConfig);
+// ⚠️ 이 모듈은 Firebase **Auth 전용**이다. Firestore는 `./firestore`에 따로 있다.
+//
+// AuthProvider가 앱 진입 시점에 이 모듈을 정적으로 import하기 때문에, 여기 있는 것은
+// 전부 초기 청크에 들어간다. 여기서 `getFirestore`를 다시 import하면 라우트를 아무리
+// lazy로 쪼개도 Firestore SDK(gzip 기준 수십 kB)가 초기 다운로드로 되돌아온다.
+// 랜딩/로그인 화면만 보는 방문자는 Firestore를 전혀 쓰지 않는다.
+//
+// Firestore가 필요하면 `import { db } from "@/shared/lib/firestore"`를 쓸 것.
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
 
-// E2E(Playwright) 전용 스위치. 실제 Google OAuth 팝업을 띄울 수 없는 headless
-// 브라우저에서 로그인 이후 플로우(할 일 생성/완료, 칸반 드래그, 캘린더)를
-// 검증하기 위해, 로컬 Firebase Auth/Firestore 에뮬레이터에 연결한다.
-// VITE_USE_FIREBASE_EMULATOR가 설정되지 않으면(일반 dev/prod 빌드) 이 블록은
-// 전혀 실행되지 않으므로 실 서비스 동작에는 영향이 없다.
-if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
+if (isEmulator) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-  connectFirestoreEmulator(db, "127.0.0.1", 8080);
 }

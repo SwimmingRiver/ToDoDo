@@ -12,11 +12,14 @@ import type { Todo, RecurrenceRule } from "../../types/todo.type";
 // (2026-07-11 작성 시점에 실제로 확인함).
 
 vi.mock("@/shared/lib/firebase", () => ({
-  db: {},
   auth: {
     currentUser: { uid: "test-user-id" },
   },
   googleProvider: {},
+}));
+
+vi.mock("@/shared/lib/firestore", () => ({
+  db: {},
 }));
 
 let autoIdCounter = 0;

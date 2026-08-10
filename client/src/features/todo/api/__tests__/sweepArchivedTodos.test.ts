@@ -11,11 +11,14 @@ afterEach(() => {
 });
 
 vi.mock("@/shared/lib/firebase", () => ({
-  db: {},
   auth: {
     currentUser: { uid: "test-user-id" },
   },
   googleProvider: {},
+}));
+
+vi.mock("@/shared/lib/firestore", () => ({
+  db: {},
 }));
 
 vi.mock("firebase/firestore", () => ({

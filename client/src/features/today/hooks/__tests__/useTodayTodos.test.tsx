@@ -7,11 +7,14 @@ import type { Todo } from '@/features/todo/types/todo.type'
 
 // Firebase 모킹
 vi.mock('@/shared/lib/firebase', () => ({
-  db: {},
   auth: {
     currentUser: { uid: 'test-user-id' },
   },
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
+  db: {},
 }))
 
 // todoApi 모킹

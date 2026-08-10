@@ -15,11 +15,14 @@ afterEach(() => {
 
 // Firebase 모킹 - 실제 Firebase에 연결하지 않도록 처리
 vi.mock("@/shared/lib/firebase", () => ({
-  db: {},
   auth: {
     currentUser: { uid: "test-user-id" },
   },
   googleProvider: {},
+}));
+
+vi.mock("@/shared/lib/firestore", () => ({
+  db: {},
 }));
 
 let autoIdCounter = 0;

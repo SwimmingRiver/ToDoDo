@@ -5,9 +5,12 @@ import TodayTodoItem from '../todayTodoItem'
 import type { Todo } from '@/features/todo/types/todo.type'
 
 vi.mock('@/shared/lib/firebase', () => ({
-  db: {},
   auth: { currentUser: null },
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
+  db: {},
 }))
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({

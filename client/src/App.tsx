@@ -12,7 +12,10 @@ import BottomTabBar from "@/layouts/bottomTabBar/bottomTabBar";
 import { BOTTOM_TAB_BAR_HEIGHT } from "@/layouts/bottomTabBar/bottomTabBar.styles";
 import styled from "styled-components";
 import { useMediaQuery } from "@/shared/hooks";
-import { useTodo } from "@/features/todo";
+// @/features/todo 배럴은 TodoList/TodoDetail/TodoForm까지 재수출한다. App 청크는
+// 모든 보호 라우트의 공통 경로라 여기 들어가는 건 전부 크리티컬 패스이므로,
+// 실제로 쓰는 훅만 직접 가져온다.
+import { useTodo } from "@/features/todo/hooks";
 
 const App = () => {
   const [isopen, setIsOpen] = useState(true);

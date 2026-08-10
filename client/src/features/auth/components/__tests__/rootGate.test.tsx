@@ -8,6 +8,9 @@ import type { User } from 'firebase/auth'
 vi.mock('@/shared/lib/firebase', () => ({
   auth: {},
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
   db: {},
 }))
 
@@ -44,7 +47,8 @@ describe('RootGate 컴포넌트', () => {
     expect(screen.queryByText('랜딩 페이지')).not.toBeInTheDocument()
   })
 
-  it('비로그인 사용자는 랜딩 페이지를 볼 수 있어야 한다', () => {
+  // 랜딩 페이지는 lazy 로드되므로 Suspense가 풀린 뒤에야 나타난다.
+  it('비로그인 사용자는 랜딩 페이지를 볼 수 있어야 한다', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <AuthContext.Provider value={mockAuthContext(null)}>
@@ -56,7 +60,7 @@ describe('RootGate 컴포넌트', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('랜딩 페이지')).toBeInTheDocument()
+    expect(await screen.findByText('랜딩 페이지')).toBeInTheDocument()
     expect(screen.queryByText('투데이 페이지')).not.toBeInTheDocument()
   })
 
