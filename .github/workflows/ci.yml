@@ -67,6 +67,17 @@ jobs:
         run: npx tsc -b
 
       - name: Build
+        env:
+          # 아래 Bundle budget 검사가 "실제로 배포되는 번들"과 같은 모양을 재도록 넣는
+          # 자리표시자 DSN이다. 이 값이 없으면 sentry.ts의 `if (!dsn) return`이 빌드
+          # 타임에 상수 폴딩되면서, initSentry 안에서만 참조되는 Sentry
+          # tracing/replay 인테그레이션이 통째로 트리셰이킹된다(gzip 약 26 kB).
+          # 그러면 CI가 재는 초기 페이로드가 배포본보다 그만큼 작아져, 예산에 유령
+          # 여유가 생기고 실제 회귀를 놓친다.
+          #
+          # 빌드 타임에 문자열로 인라인될 뿐 아무것도 실행되지 않고, 이 job의 산출물은
+          # 배포되지 않는다(배포는 아래 deploy job이 진짜 시크릿으로 다시 빌드한다).
+          VITE_SENTRY_DSN: https://examplePublicKey@o0.ingest.sentry.io/0
         run: npm run build
 
       # 라우트 lazy 분할이 풀리거나 무거운 의존성이 초기 경로에 들어오면 실패한다.
