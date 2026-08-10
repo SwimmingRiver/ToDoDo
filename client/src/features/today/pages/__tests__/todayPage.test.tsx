@@ -8,9 +8,12 @@ import type { Todo } from '@/features/todo/types/todo.type'
 import type { UseTodayTodosResult } from '../../hooks/useTodayTodos'
 
 vi.mock('@/shared/lib/firebase', () => ({
-  db: {},
   auth: { currentUser: null },
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
+  db: {},
 }))
 
 vi.mock('../../hooks/useTodayTodos', () => ({

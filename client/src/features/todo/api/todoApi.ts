@@ -9,7 +9,8 @@ import {
   getDoc,
   writeBatch,
 } from "firebase/firestore";
-import { db, auth } from "@/shared/lib/firebase";
+import { auth } from "@/shared/lib/firebase";
+import { db } from "@/shared/lib/firestore";
 import { toDateKeyFromISO } from "@/shared/utils/date";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
 import { generateRecurringDueDates, getDefaultHorizonEnd } from "../utils/recurrence";

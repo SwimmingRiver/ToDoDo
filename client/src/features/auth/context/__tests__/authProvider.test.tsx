@@ -10,6 +10,9 @@ let authStateCallback: ((user: User | null) => void) | null = null
 vi.mock('@/shared/lib/firebase', () => ({
   auth: {},
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
   db: {},
 }))
 

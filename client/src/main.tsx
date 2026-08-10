@@ -5,7 +5,11 @@ import "./index.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { RouterProvider } from "react-router-dom";
-import { ToastProvider, ErrorBoundary } from "@/shared";
+// @/shared 배럴 대신 직접 경로를 쓴다. 배럴은 ui/hooks/utils 전체를 초기 청크의
+// 모듈 그래프에 올리는데, 그 안의 utils/descriptionLinks → linkifyjs는 부피
+// 대부분이 TLD 데이터 테이블이라 트리셰이킹이 한 번만 어긋나도 통째로 딸려온다.
+import { ToastProvider } from "@/shared/ui/toast/toastContext";
+import ErrorBoundary from "@/shared/ui/errorBoundary/errorBoundary";
 import { AuthProvider } from "@/features/auth/context/authProvider";
 import { initSentry } from "@/shared/lib/sentry";
 import { router } from "./router";

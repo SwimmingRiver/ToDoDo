@@ -1,0 +1,4 @@
+{
+  "_comment": "초기 다운로드 페이로드(index.html이 직접 참조하는 JS+CSS)의 gzip 상한. scripts/checkBundleBudget.mjs가 빌드 후 검사한다. 2026-08-10 코드 스플리팅 도입 시점 실측 177,157 bytes(173.00 kB) 기준 약 10% 여유. 의도적으로 늘려야 할 때만 근거와 함께 올릴 것.",
+  "initialGzipBytes": 195000
+}

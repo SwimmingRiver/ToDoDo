@@ -7,9 +7,12 @@ import { ToastProvider } from '@/shared/ui/toast/toastContext'
 import { setupUser } from '@/test/setupUser'
 
 vi.mock('@/shared/lib/firebase', () => ({
-  db: {},
   auth: { currentUser: null },
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
+  db: {},
 }))
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({

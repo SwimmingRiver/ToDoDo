@@ -8,6 +8,9 @@ import type { User } from 'firebase/auth'
 vi.mock('@/shared/lib/firebase', () => ({
   auth: {},
   googleProvider: {},
+}))
+
+vi.mock('@/shared/lib/firestore', () => ({
   db: {},
 }))
 
