@@ -85,12 +85,39 @@ const Title = styled.span<{ $isDone: boolean }>`
   white-space: nowrap;
 `;
 
-const Description = styled.span`
-  font-size: 12px;
+const DescriptionRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
   color: ${colors.text.secondary};
+`;
+
+/**
+ * description에 링크가 있음을 알리는 표시.
+ * 여기서 URL 자체를 링크로 만들지 않는 이유는 이 행 전체가 상세 진입 클릭 영역이라서다
+ * — 잘린 URL을 탭 타겟으로 만들면 "링크 열기"와 "상세 열기"가 같은 자리에서 경쟁한다.
+ */
+const LinkIndicator = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 3px;
+  color: ${colors.brand.secondary};
+`;
+
+const Description = styled.span`
+  min-width: 0;
+  font-size: 12px;
+  /* 이제 description에 줄바꿈을 입력할 수 있으므로 pre-wrap으로 보존한다.
+     다만 행이 무한정 길어지면 목록의 훑어보기 성능이 떨어지므로 2줄에서 자른다.
+     긴 URL이 행 폭을 밀어내지 않도록 anywhere로 강제 줄바꿈한다. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 `;
 
 const TimeLabel = styled.span`
@@ -145,6 +172,8 @@ export {
   Content,
   TitleRow,
   Title,
+  DescriptionRow,
+  LinkIndicator,
   Description,
   TimeLabel,
   OverdueBadge,

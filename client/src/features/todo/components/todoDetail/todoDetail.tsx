@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useTodoDetail, useTodo } from "../../hooks";
 import type { Todo } from "../../types";
 import { X, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
-import { useToast, ConfirmModal, toDatetimeLocalValue } from "@/shared";
+import {
+  useToast,
+  ConfirmModal,
+  toDatetimeLocalValue,
+  useAutoGrowTextArea,
+  extractLinks,
+  toDescriptionSegments,
+  DESCRIPTION_MAX_LENGTH,
+} from "@/shared";
+import DescriptionLinkAction from "./descriptionLinkAction";
 import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import RecurrenceFields from "../recurrence/recurrenceFields";
@@ -33,8 +42,12 @@ import {
   PriorityBadge,
   FormGroup,
   Label,
+  LabelRow,
   Input,
   TextArea,
+  DescriptionField,
+  DescriptionOverlay,
+  OverlayLink,
   Select,
   Button,
   ErrorText,
@@ -67,10 +80,9 @@ const formatDateTime = (dateString: string | null) => {
   });
 };
 
-const TodoDetail = () => {
-  const { id } = useParams<{ id: string }>();
+const TodoDetailView = ({ id }: { id: string }) => {
   const navigate = useNavigate();
-  const { todo } = useTodoDetail({ id: id! });
+  const { todo } = useTodoDetail({ id });
   const {
     useUpdateTodo,
     useCreateRecurringTodo,
@@ -98,10 +110,57 @@ const TodoDetail = () => {
           dueAt: todo.dueAt ? toDatetimeLocalValue(todo.dueAt) : "",
         }
       : undefined,
+    // values prop은 넘긴 객체가 달라지면 폼 전체를 서버 값으로 되돌린다. 그런데 그
+    // 리셋을 유발하는 기능이 이 패널 안에 있다 — 하위 할 일을 추가하면 부모의
+    // status/doneAt이 재계산되고 ["todoDetail"]이 무효화되므로, refetch된 status가
+    // values를 바꾼다. 그대로 두면 그 순간 입력 중이던 설명이 사라진다.
+    // 사용자가 건드린 필드만 지키고 나머지는 정상적으로 서버 값을 따라간다.
+    resetOptions: { keepDirtyValues: true },
   });
 
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
+  const descriptionWatch = watch("description");
+
+  const { setRef: setDescriptionRef } = useAutoGrowTextArea(descriptionWatch);
+
+  // 저장된 값이 아니라 입력 중인 값에서 링크를 뽑는다 — 붙여넣자마자 링크가 인식됐는지
+  // 확인할 수 있어야 오탐(파일명 등)도 그 자리에서 알아챌 수 있다.
+  const descriptionLinks = useMemo(
+    () => extractLinks(descriptionWatch),
+    [descriptionWatch]
+  );
+
+  // 본문 하이라이트용 — 위치를 보존하고 중복 URL도 각각 유지한다(extractLinks와 요구가 다름).
+  const descriptionSegments = useMemo(
+    () => toDescriptionSegments(descriptionWatch),
+    [descriptionWatch]
+  );
+  // 링크가 없으면 오버레이를 아예 렌더하지 않는다 — 이득 없이 정렬 리스크만 지는 상태를 만들지 않는다.
+  const hasDescriptionHighlight = descriptionSegments.some((s) => s.isLink);
+
+  // register가 ref 슬롯을 가져가므로, auto-grow용 ref와 합치려면 미리 분리해 둔다.
+  const { ref: descriptionFieldRef, ...descriptionField } = register("description", {
+    maxLength: {
+      value: DESCRIPTION_MAX_LENGTH,
+      message: `설명은 ${DESCRIPTION_MAX_LENGTH}자 이내로 입력해주세요`,
+    },
+  });
+
+  // register()는 매 렌더 새 ref 함수를 반환한다. 그대로 인라인으로 합치면 ref의
+  // identity가 매번 달라져 React가 타건마다 ref를 null로 뗐다 다시 붙이고, 그때마다
+  // setRef가 resize()를 호출해 강제 리플로우가 한 번 더 일어난다.
+  // 최신 ref를 ref 박스에 담아 호출하면 stale 없이 identity를 고정할 수 있다.
+  const latestFieldRef = useRef(descriptionFieldRef);
+  latestFieldRef.current = descriptionFieldRef;
+
+  const setDescriptionTextArea = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      latestFieldRef.current(el);
+      setDescriptionRef(el);
+    },
+    [setDescriptionRef]
+  );
 
   // 하위 투두 배열 자체를 계산해두면(기존엔 존재 여부만 boolean으로 계산했음)
   // 반복 설정 비활성화 조건(hasChildren)과 신규 하위 투두 섹션 렌더링을 동일한
@@ -370,11 +429,39 @@ const TodoDetail = () => {
             </FormGroup>
 
             <FormGroup>
-              <Label>설명</Label>
-              <TextArea
-                {...register("description")}
-                placeholder="상세 설명을 입력하세요"
-              />
+              <LabelRow>
+                <Label htmlFor="todo-detail-description">설명</Label>
+                {descriptionLinks.length > 0 && (
+                  <DescriptionLinkAction links={descriptionLinks} />
+                )}
+              </LabelRow>
+              <DescriptionField $highlight={hasDescriptionHighlight}>
+                {hasDescriptionHighlight && (
+                  // 실제 콘텐츠는 아래 textarea가 갖고 있다. 오버레이는 순수 장식이므로
+                  // 스크린리더에는 같은 본문이 두 번 읽히지 않도록 숨긴다.
+                  <DescriptionOverlay aria-hidden="true">
+                    {descriptionSegments.map((segment, index) =>
+                      segment.isLink ? (
+                        <OverlayLink key={index}>{segment.text}</OverlayLink>
+                      ) : (
+                        <Fragment key={index}>{segment.text}</Fragment>
+                      )
+                    )}
+                    {/* textarea는 끝의 개행 뒤 빈 줄을 렌더하지만 div는 접는다.
+                        폭 0 문자를 붙여 마지막 줄 높이를 textarea와 맞춘다. */}
+                    {"​"}
+                  </DescriptionOverlay>
+                )}
+                <TextArea
+                  {...descriptionField}
+                  ref={setDescriptionTextArea}
+                  id="todo-detail-description"
+                  placeholder="상세 설명을 입력하세요"
+                />
+              </DescriptionField>
+              {errors.description && (
+                <ErrorText>{errors.description.message}</ErrorText>
+              )}
             </FormGroup>
 
             <InfoRow>
@@ -555,6 +642,20 @@ const TodoDetail = () => {
       </Modal>
     </>
   );
+};
+
+/**
+ * 라우트 파라미터만 바뀌면(예: 하위 할 일 카드 클릭 → navigate(`/todo/${child.id}`))
+ * React Router는 같은 엘리먼트를 재사용하므로 컴포넌트가 **재마운트되지 않는다**.
+ * 그러면 useForm의 values만 다음 todo로 갈아끼워지는데, resetOptions.keepDirtyValues가
+ * 이전 todo에서 편집 중이던 값을 그대로 들고 가버린다 — 그 상태로 저장하면 A의 설명이
+ * B에 덮어써진다.
+ *
+ * id를 key로 줘서 다른 todo로 이동하면 폼 상태를 새로 시작하게 한다.
+ */
+const TodoDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  return <TodoDetailView key={id} id={id!} />;
 };
 
 export default TodoDetail;

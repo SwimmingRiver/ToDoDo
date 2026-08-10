@@ -11,3 +11,9 @@ export {
 } from "./date";
 export { isDateInTodoRange, getPeriodProgress } from "./dateRange";
 export type { TodoRangeLike, PeriodProgress } from "./dateRange";
+export {
+  extractLinks,
+  toDescriptionSegments,
+  DESCRIPTION_MAX_LENGTH,
+} from "./descriptionLinks";
+export type { DetectedLink, DescriptionSegment } from "./descriptionLinks";

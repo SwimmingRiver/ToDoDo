@@ -1,7 +1,8 @@
-import { Check, Trash2 } from "lucide-react";
+import { Check, Link2, Trash2 } from "lucide-react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Todo } from "@/features/todo/types";
-import { RecurrenceBadge } from "@/shared";
+import { RecurrenceBadge, extractLinks } from "@/shared";
 import { getDaysLeft, getDueBadgeLabel, getUrgency } from "@/shared/utils/due";
 import { getPeriodProgress } from "@/shared/utils/dateRange";
 import { toDateKey } from "@/shared/utils/date";
@@ -13,6 +14,8 @@ import {
   Content,
   TitleRow,
   Title,
+  DescriptionRow,
+  LinkIndicator,
   Description,
   TimeLabel,
   OverdueBadge,
@@ -55,6 +58,12 @@ const TodayTodoItem = ({
   const handleItemClick = () =>
     onItemClick ? onItemClick(todo) : navigate(`/todo/${todo.id}`);
 
+  // 목록의 모든 행마다 스캔이 돌므로 description이 바뀔 때만 다시 계산한다.
+  const hasLinks = useMemo(
+    () => extractLinks(todo.description).length > 0,
+    [todo.description]
+  );
+
   return (
     <Row>
       <Checkbox
@@ -81,7 +90,18 @@ const TodayTodoItem = ({
           <Title $isDone={isDone}>{todo.title}</Title>
           {todo.recurrenceId != null && <RecurrenceBadge compact />}
         </TitleRow>
-        {todo.description && <Description>{todo.description}</Description>}
+        {todo.description && (
+          <DescriptionRow>
+            {hasLinks && (
+              // span의 암묵 role은 generic이라 aria-label이 무시된다.
+              // role="img"를 줘야 스크린리더가 라벨을 읽는다.
+              <LinkIndicator role="img" aria-label="링크 포함">
+                <Link2 size={11} />
+              </LinkIndicator>
+            )}
+            <Description>{todo.description}</Description>
+          </DescriptionRow>
+        )}
       </Content>
       {!isDone && daysLeft !== null && urgency === "danger" && (
         <OverdueBadge>{getDueBadgeLabel(daysLeft)}</OverdueBadge>
