@@ -51,30 +51,9 @@ brand: {
 `fill`의 정의는 정확히 **"글자를 얹지 않는 배경"**이다. 이 경계를 지키는 한 `#1D9E75`는
 비텍스트 3:1 기준을 3.39:1로 통과한다.
 
-### 왜 `primary`/`secondary`를 안 쓰나
-
-`primary`/`secondary`가 업계에서 훨씬 흔한 이름인 건 맞다(Bootstrap, MUI, Ant Design, Chakra).
-쓰지 않는 이유는 **그 이름의 원래 뜻이 지금 상황과 다르기 때문**이다.
-
-표준 시스템에서 `primary`와 `secondary`는 *서로 다른 색, 서로 다른 역할*이다 — 브랜드 주색과
-보조 강조색, 예컨대 파랑과 주황. 그런데 이 코드베이스는 **같은 초록의 명도 두 단계**에 그
-이름을 붙였다. `secondary`라는 단어는 "더 밝은 버전"이라는 뜻을 담을 수 없고, 그래서
-`CLAUDE.md`와 `colors.ts`가 서로 반대로 서술해도 아무도 눈치채지 못했다.
-
-같은 색의 명도 단계를 구분하는 문제를 성숙한 시스템들은 전부 `primary`/`secondary`가 아닌
-방식으로 푼다.
-
-| 시스템 | 글자용 | 솔리드 배경용 |
-|---|---|---|
-| Material 3 | `primary` | `primary` + 짝 토큰 `onPrimary` |
-| GitHub Primer | `accent.fg` | `accent.emphasis` |
-| Shopify Polaris | `text-brand` | `bg-fill-brand` |
-| Atlassian | `text.brand` | `background.brand.bold` |
-| Radix Colors | 11·12단계 | 9·10단계 (단계별 대비 보장) |
-
-`fill`은 Polaris가, `bold`(≈`strong`)는 Atlassian이 실제로 쓰는 어휘다. Material 3의
-`onPrimary` 방식도 검토했으나 "이 배경 위엔 이 글자색"을 강제하느라 토큰이 배로 늘어
-현재 앱 규모에 과하다.
+`primary`/`secondary`라는 이름을 유지하지 않는 이유는 위 "근본 원인"과 같다. 그 이름은 *서로
+다른 색의 다른 역할*을 뜻하지 같은 색의 명도 단계를 뜻하지 않아서, 무엇이 텍스트에 안전한지
+표현할 방법이 없다.
 
 ### hover 값 근거
 
