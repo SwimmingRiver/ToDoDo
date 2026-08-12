@@ -39,9 +39,9 @@ const SearchInput = styled.input`
 
   &:focus {
     outline: none;
-    border-color: ${colors.brand.secondary};
+    border-color: ${colors.brand.strong};
     background-color: #fff;
-    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.1);
+    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.1);
   }
 
   &::placeholder {
@@ -81,7 +81,7 @@ const LoadingSpinner = styled.div`
   width: 18px;
   height: 18px;
   border: 2px solid #e0e0e0;
-  border-top-color: ${colors.brand.secondary};
+  border-top-color: ${colors.brand.fill};
   border-radius: 50%;
   animation: ${spin} 0.8s linear infinite;
 `;
@@ -100,14 +100,14 @@ const ResultCount = styled.span`
   color: #1a1a1a;
 
   strong {
-    color: ${colors.brand.secondary};
+    color: ${colors.brand.strong};
   }
 `;
 
 const CancelSearchButton = styled.button`
   border: none;
   background: none;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -116,7 +116,7 @@ const CancelSearchButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: #e8f0fe;
+    background-color: ${colors.brand.tint};
   }
 `;
 

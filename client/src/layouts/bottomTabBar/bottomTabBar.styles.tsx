@@ -38,7 +38,7 @@ const TabNavLink = styled(NavLink)`
   text-decoration: none;
 
   &.active {
-    color: ${colors.brand.primary};
+    color: ${colors.brand.strong};
     font-weight: 500;
   }
 `;

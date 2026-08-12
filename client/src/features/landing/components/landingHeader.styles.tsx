@@ -28,12 +28,12 @@ const LoginLink = styled.button`
   border: none;
   font-size: 14px;
   font-weight: 600;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   cursor: pointer;
   transition: color 0.2s ease;
 
   &:hover {
-    color: ${colors.brand.primary};
+    color: ${colors.brand.strongHover};
   }
 `;
 

@@ -57,7 +57,7 @@ const ActionButton = styled.button`
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   color: white;
   font-size: 14px;
   font-weight: 600;
@@ -67,7 +67,7 @@ const ActionButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: ${colors.brand.primary};
+    background-color: ${colors.brand.strongHover};
   }
 
   ${media.mobile} {

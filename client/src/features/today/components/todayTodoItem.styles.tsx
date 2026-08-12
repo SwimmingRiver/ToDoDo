@@ -49,7 +49,7 @@ const Checkbox = styled.button<{ $isDone: boolean; $urgency: CheckboxUrgency }>`
         return colors.border.secondary;
       }};
     background-color: ${({ $isDone }) =>
-      $isDone ? colors.brand.secondary : "transparent"};
+      $isDone ? colors.brand.fill : "transparent"};
     transition: background-color 0.15s ease;
   }
 
@@ -103,7 +103,7 @@ const LinkIndicator = styled.span`
   display: inline-flex;
   align-items: center;
   margin-top: 3px;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
 `;
 
 const Description = styled.span`

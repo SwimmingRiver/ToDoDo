@@ -33,7 +33,7 @@ export default Header;
 const HeaderTitle = styled.h1`
   cursor: pointer;
   &:hover {
-    color: ${colors.brand.secondary};
+    color: ${colors.brand.strong};
   }
 `;
 
@@ -56,7 +56,7 @@ const LogoutButton = styled.button`
   font-size: 14px;
   background: none;
   border: none;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   cursor: pointer;
 
   &:hover {

@@ -88,11 +88,11 @@ const CloseButton = styled.button`
 
   &:hover {
     background-color: #e0ede8;
-    color: ${colors.brand.secondary};
+    color: ${colors.brand.strong};
   }
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.secondary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 `;
@@ -154,8 +154,8 @@ const Input = styled.input`
   }
 
   &:focus {
-    border-color: ${colors.brand.secondary};
-    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+    border-color: ${colors.brand.strong};
+    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
   }
 `;
 
@@ -227,11 +227,11 @@ const DescriptionOverlay = styled.div`
 
 /** 오버레이에서 링크로 인식된 구간. 색만으로 구분하지 않도록 밑줄을 함께 준다. */
 const OverlayLink = styled.span`
-  /* brand.secondary(#1D9E75)는 흰 배경 대비 3.39:1로 WCAG AA(4.5:1)에 미달한다.
-     brand.primary(#0F6E56)는 6.20:1로 통과.
+  /* brand.fill(#1D9E75)는 흰 배경 대비 3.39:1로 WCAG AA(4.5:1)에 미달한다.
+     brand.strong(#0F6E56)는 6.20:1로 통과.
      다만 #0F6E56과 본문색(#1A1A1A)의 대비는 2.81:1이라 색만으로는 구분이 보장되지
      않는다(WCAG 1.4.1). 밑줄은 장식이 아니라 필수 요건이다. */
-  color: ${colors.brand.primary};
+  color: ${colors.brand.strong};
   text-decoration: underline;
   text-underline-offset: 2px;
 `;
@@ -271,8 +271,8 @@ const DescriptionField = styled.div<{ $highlight: boolean }>`
   }
 
   &:focus-within {
-    border-color: ${colors.brand.secondary};
-    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+    border-color: ${colors.brand.strong};
+    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
   }
 
   ${({ $highlight }) =>
@@ -304,8 +304,8 @@ const Select = styled.select`
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:focus {
-    border-color: ${colors.brand.secondary};
-    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+    border-color: ${colors.brand.strong};
+    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
   }
 `;
 
@@ -370,25 +370,25 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
   transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.secondary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 
   ${({ $variant }) =>
     $variant === "primary"
       ? `
-    background-color: ${colors.brand.secondary};
+    background-color: ${colors.brand.strong};
     color: white;
     border: none;
     box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
 
     &:hover {
-      background-color: ${colors.brand.primary};
+      background-color: ${colors.brand.strongHover};
       box-shadow: 0 2px 6px rgba(15, 110, 86, 0.25);
     }
 
     &:active {
-      background-color: ${colors.brand.primary};
+      background-color: ${colors.brand.strongHover};
       box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
     }
   `
@@ -514,11 +514,11 @@ const SubtaskIconButton = styled.button`
 
   &:hover {
     background-color: #e0ede8;
-    color: ${colors.brand.secondary};
+    color: ${colors.brand.strong};
   }
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.secondary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 
@@ -552,7 +552,7 @@ const EmptyChildAddButton = styled.button`
   gap: 4px;
   min-height: 44px;
   padding: 8px 12px;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   font-size: 12px;
   font-weight: 500;
   background: none;
@@ -560,7 +560,7 @@ const EmptyChildAddButton = styled.button`
   cursor: pointer;
 
   &:hover {
-    opacity: 0.8;
+    color: ${colors.brand.strongHover};
   }
 
   &:disabled {

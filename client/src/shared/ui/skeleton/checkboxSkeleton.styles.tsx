@@ -73,7 +73,7 @@ const CheckMark = styled.svg<{ $delay: number }>`
   animation-delay: ${({ $delay }) => $delay}s;
 
   .check-path {
-    stroke: ${colors.brand.secondary};
+    stroke: ${colors.brand.fill};
     stroke-width: 2.5;
     stroke-linecap: round;
     stroke-linejoin: round;

@@ -63,7 +63,7 @@ export const LogoutButton = styled.button`
   margin-top: 2px;
 
   &:hover {
-    color: ${colors.brand.secondary};
+    color: ${colors.brand.strong};
   }
 `;
 
@@ -80,8 +80,9 @@ export const NavItem = styled.div<{ $active?: boolean }>`
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? colors.brand.secondary : "#1a1a1a")};
-  background-color: ${({ $active }) => ($active ? "#E8F5EF" : "transparent")};
+  color: ${({ $active }) => ($active ? colors.brand.strong : "#1a1a1a")};
+  background-color: ${({ $active }) =>
+    $active ? colors.brand.tint : "transparent"};
   border-radius: 8px;
   transition: background-color 0.15s ease;
 
@@ -109,9 +110,9 @@ export const NavNavLink = styled(NavLink)`
   }
 
   &.active {
-    color: ${colors.brand.secondary};
-    background-color: #E8F4F1;
-    border-left: 3px solid #1D9E75;
+    color: ${colors.brand.strong};
+    background-color: ${colors.brand.tint};
+    border-left: 3px solid ${colors.brand.strong};
     border-radius: 0 8px 8px 0;
     padding-left: 7px;
 

@@ -21,7 +21,7 @@ const DateLabel = styled.span`
 const CompletionLabel = styled.span`
   font-size: 13px;
   font-weight: 500;
-  color: ${colors.brand.primary};
+  color: ${colors.brand.strong};
 `;
 
 const ProgressBarTrack = styled.div`
@@ -35,7 +35,7 @@ const ProgressBarTrack = styled.div`
 const ProgressBarFill = styled.div`
   height: 100%;
   border-radius: 3px;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.fill};
   transition: width 0.2s ease;
 `;
 

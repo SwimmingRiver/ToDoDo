@@ -12,8 +12,8 @@ const BannerContainer = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
-  background-color: ${colors.brand.background};
-  color: ${colors.brand.primary};
+  background-color: ${colors.brand.tint};
+  color: ${colors.brand.strong};
 
   ${media.tablet} {
     flex-direction: column;
@@ -28,14 +28,14 @@ const Message = styled.div`
   gap: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: ${colors.brand.primary};
+  color: ${colors.brand.strong};
 `;
 
 const LoginButton = styled.button`
   flex-shrink: 0;
   min-height: 44px;
   padding: 0 16px;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
@@ -46,7 +46,7 @@ const LoginButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: ${colors.brand.primary};
+    background-color: ${colors.brand.strongHover};
   }
 
   ${media.tablet} {

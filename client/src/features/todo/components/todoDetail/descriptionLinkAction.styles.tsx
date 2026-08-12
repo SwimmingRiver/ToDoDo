@@ -29,10 +29,10 @@ const trigger = `
   font-family: inherit;
   text-decoration: none;
   /* 13px는 WCAG large text(18.66px bold / 24px)가 아니므로 대비 4.5:1이 적용된다.
-     brand.secondary(#1D9E75)는 흰 배경에서 3.39:1로 미달이라 쓸 수 없다.
-     brand.primary(#0F6E56)는 흰 배경 6.20:1, tint 배경(#E8F5EF) 위에서도 5.54:1로 통과. */
-  color: ${colors.brand.primary};
-  background-color: ${colors.brand.background};
+     brand.fill(#1D9E75)는 흰 배경에서 3.39:1로 미달이라 쓸 수 없다.
+     brand.strong(#0F6E56)는 흰 배경 6.20:1, tint 배경(#E8F5EF) 위에서도 5.54:1로 통과. */
+  color: ${colors.brand.strong};
+  background-color: ${colors.brand.tint};
   transition: background-color 0.15s ease;
 
   &:hover {
@@ -41,7 +41,7 @@ const trigger = `
   }
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.secondary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -94,7 +94,7 @@ const PopoverLink = styled.a`
   }
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.secondary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: -2px;
   }
 `;

@@ -21,7 +21,7 @@ const Input = styled.input`
   box-sizing: border-box;
 
   &:focus {
-    border-color: ${colors.brand.secondary};
+    border-color: ${colors.brand.strong};
   }
 `;
 
@@ -34,7 +34,7 @@ const AddButton = styled.button`
   min-width: 44px;
   min-height: 44px;
   padding: 0 16px;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
@@ -44,7 +44,7 @@ const AddButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover:not(:disabled) {
-    background-color: ${colors.brand.primary};
+    background-color: ${colors.brand.strongHover};
   }
 
   &:disabled {

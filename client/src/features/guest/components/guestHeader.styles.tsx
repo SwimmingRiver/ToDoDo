@@ -34,8 +34,8 @@ const ModeBadge = styled.span`
   align-items: center;
   padding: 2px 8px;
   border-radius: ${radius.full};
-  background-color: ${colors.brand.background};
-  color: ${colors.brand.primary};
+  background-color: ${colors.brand.tint};
+  color: ${colors.brand.strong};
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
@@ -44,7 +44,7 @@ const ModeBadge = styled.span`
 const LoginButton = styled.button`
   min-height: 44px;
   padding: 0 16px;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
@@ -54,7 +54,7 @@ const LoginButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: ${colors.brand.primary};
+    background-color: ${colors.brand.strongHover};
   }
 
   ${media.mobile} {

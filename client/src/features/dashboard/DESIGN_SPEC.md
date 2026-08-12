@@ -1,5 +1,11 @@
 # Dashboard 캘린더 중심 개편 — 디자인 스펙
 
+> **[2026-08-12 갱신]** 브랜드 토큰이 역할 기반으로 재편되어 `colors.brand.primary` / `secondary` / `background`는 더 이상 존재하지 않습니다.
+> 매핑은 `primary`(#0F6E56) → `brand.strong`, `secondary`(#1D9E75) → `brand.fill`, `background`(#E8F5EF) → `brand.tint`입니다.
+> 다만 `secondary`가 글자·아이콘·솔리드 버튼 배경에 쓰이던 자리는 WCAG AA 대비 때문에 `brand.fill`이 아니라 `brand.strong`(#0F6E56)으로 이관됐습니다.
+> 아래 본문은 당시 결정을 남긴 기록이라 값과 서술을 그대로 둡니다. 현재 값은 `client/src/styles/colors.ts`,
+> 근거는 `docs/superpowers/specs/2026-08-11-brand-color-contrast-aa-design.md`를 보세요.
+
 - 대상 파일: `client/src/features/dashboard/`
 - 작성일: 2026-06-27
 - 상태: **구현 완료** (커밋 `81f6db7 feat: 파이차트 제거 및 캘린더 대시보드 개편`) — 본 문서는 구현 참고용 기록으로 보존

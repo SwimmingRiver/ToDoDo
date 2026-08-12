@@ -75,7 +75,7 @@ const ModalCloseButton = styled.button`
 const ModalSubmitButton = styled.button`
   width: 100%;
   height: 100%;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   color: white;
   font-size: 16px;
   font-weight: bold;

@@ -34,7 +34,7 @@ export const ColorDot = styled.span<{ $isOverdue?: boolean }>`
   height: 8px;
   border-radius: 50%;
   background-color: ${({ $isOverdue }) =>
-    $isOverdue ? colors.danger.main : colors.brand.secondary};
+    $isOverdue ? colors.danger.main : colors.brand.fill};
   flex-shrink: 0;
 `;
 
@@ -126,7 +126,7 @@ export const ProgressFill = styled.div<{
   width: ${({ $progress }) => $progress}%;
   height: 100%;
   background-color: ${({ $isOverdue }) =>
-    $isOverdue ? colors.danger.main : colors.brand.secondary};
+    $isOverdue ? colors.danger.main : colors.brand.fill};
   transition: width 0.3s ease;
 `;
 
