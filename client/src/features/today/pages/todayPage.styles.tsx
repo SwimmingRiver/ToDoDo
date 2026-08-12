@@ -35,7 +35,7 @@ const Fab = styled.button`
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background-color: ${colors.brand.primary};
+  background-color: ${colors.brand.strong};
   color: white;
   font-size: 14px;
   font-weight: 500;
@@ -48,7 +48,7 @@ const Fab = styled.button`
     transform 0.15s ease;
 
   &:hover {
-    background-color: #0d5e49;
+    background-color: ${colors.brand.strongHover};
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     transform: translateY(-1px);
   }
@@ -59,7 +59,7 @@ const Fab = styled.button`
   }
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.secondary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 

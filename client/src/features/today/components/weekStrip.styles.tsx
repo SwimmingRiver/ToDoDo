@@ -37,7 +37,7 @@ const ArrowButton = styled.button`
     color: ${colors.text.primary};
   }
   &:focus-visible {
-    outline: 2px solid ${colors.brand.primary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 `;
@@ -49,7 +49,7 @@ const TodayChip = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${colors.brand.primary};
+  background: ${colors.brand.strong};
   color: #ffffff;
   border: none;
   border-radius: ${radius.md};
@@ -59,7 +59,7 @@ const TodayChip = styled.button`
   white-space: nowrap;
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.primary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 `;
@@ -78,13 +78,13 @@ const DayCell = styled.div<{ $isSelected: boolean; $isToday: boolean }>`
   cursor: pointer;
   box-sizing: border-box;
   background-color: ${({ $isSelected }) =>
-    $isSelected ? colors.brand.primary : "transparent"};
+    $isSelected ? colors.brand.strong : "transparent"};
   border: 1.5px solid
     ${({ $isSelected, $isToday }) =>
-      !$isSelected && $isToday ? colors.brand.primary : "transparent"};
+      !$isSelected && $isToday ? colors.brand.strong : "transparent"};
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.primary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 `;
@@ -101,7 +101,7 @@ const DateLabel = styled.span<{ $isSelected: boolean; $isToday: boolean }>`
     $isSelected
       ? "#FFFFFF"
       : $isToday
-        ? colors.brand.primary
+        ? colors.brand.strong
         : colors.text.primary};
 `;
 
@@ -115,7 +115,7 @@ const Dot = styled.span<{
   background-color: ${({ $marker, $onColoredBackground }) => {
     if ($marker === "none") return "transparent";
     if ($onColoredBackground) return "#FFFFFF";
-    return $marker === "danger" ? colors.danger.main : colors.brand.primary;
+    return $marker === "danger" ? colors.danger.main : colors.brand.strong;
   }};
 `;
 
