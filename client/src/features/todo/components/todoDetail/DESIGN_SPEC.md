@@ -1,5 +1,13 @@
 # Todo 상세 페이지 리브랜딩 — 디자인 스펙
 
+> **[2026-08-12 갱신]** 브랜드 토큰이 역할 기반으로 재편되어 `colors.brand.primary` / `secondary` / `background`는 더 이상 존재하지 않습니다.
+> 매핑은 `primary`(#0F6E56) → `brand.strong`, `secondary`(#1D9E75) → `brand.fill`, `background`(#E8F5EF) → `brand.tint`입니다.
+> 다만 `secondary`가 글자·아이콘·솔리드 버튼 배경에 쓰이던 자리는 WCAG AA 대비 때문에 `brand.fill`이 아니라 `brand.strong`(#0F6E56)으로 이관됐습니다.
+> 아래 본문은 당시 결정을 남긴 기록이라 값과 서술을 그대로 둡니다. 현재 값은 `client/src/styles/colors.ts`,
+> 근거는 `docs/superpowers/specs/2026-08-11-brand-color-contrast-aa-design.md`를 보세요.
+>
+> **주의**: 548행의 "포커스 링 `rgba(29,158,117,0.12)`과 Button(primary)의 `rgba(15,110,86,…)`은 다른 게 의도된 것이니 통일하지 말 것" 지시는 더 이상 유효하지 않습니다 — 인접 `border-color`가 `#1D9E75`라는 전제가 깨져(현재 `brand.strong` `#0F6E56`) 이번 변경에서 포커스 링을 `rgba(15,110,86,0.12)`으로 통일했습니다.
+
 - 대상 파일: `client/src/features/todo/components/todoDetail/`
 - 작성일: 2026-07-02
 - 상태: **사용자 검토 대기** — 승인 후 ui-ux-improver가 구현

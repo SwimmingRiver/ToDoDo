@@ -1,5 +1,11 @@
 # 랜딩 페이지 + 게스트 체험 모드 디자인 스펙
 
+> **[2026-08-12 갱신]** 브랜드 토큰이 역할 기반으로 재편되어 `colors.brand.primary` / `secondary` / `background`는 더 이상 존재하지 않습니다.
+> 매핑은 `primary`(#0F6E56) → `brand.strong`, `secondary`(#1D9E75) → `brand.fill`, `background`(#E8F5EF) → `brand.tint`입니다.
+> 다만 `secondary`가 글자·아이콘·솔리드 버튼 배경에 쓰이던 자리는 WCAG AA 대비 때문에 `brand.fill`이 아니라 `brand.strong`(#0F6E56)으로 이관됐습니다.
+> 아래 본문은 당시 결정을 남긴 기록이라 값과 서술을 그대로 둡니다. 현재 값은 `client/src/styles/colors.ts`,
+> 근거는 `docs/superpowers/specs/2026-08-11-brand-color-contrast-aa-design.md`를 보세요.
+
 작성 대상: 신규 방문자가 `/`에서 바로 로그인 강제 리다이렉트를 겪지 않고, 서비스를 소개받거나
 로그인 없이 Today 수준 CRUD를 체험할 수 있게 한다.
 
