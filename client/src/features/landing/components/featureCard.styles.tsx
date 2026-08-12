@@ -25,8 +25,8 @@ const IconWrapper = styled.div`
   height: 40px;
   margin-bottom: 4px;
   border-radius: ${radius.md};
-  background-color: ${colors.brand.background};
-  color: ${colors.brand.primary};
+  background-color: ${colors.brand.tint};
+  color: ${colors.brand.strong};
 `;
 
 const TitleRow = styled.div`
@@ -57,8 +57,8 @@ const Badge = styled.span`
   align-items: center;
   padding: 2px 8px;
   border-radius: ${radius.full};
-  background-color: ${colors.brand.background};
-  color: ${colors.brand.primary};
+  background-color: ${colors.brand.tint};
+  color: ${colors.brand.strong};
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;

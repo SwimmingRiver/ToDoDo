@@ -18,14 +18,14 @@ const PrimaryButton = styled.button`
   font-size: 15px;
   font-weight: 600;
   color: #ffffff;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   border: none;
   border-radius: ${radius.md};
   cursor: pointer;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: ${colors.brand.primary};
+    background-color: ${colors.brand.strongHover};
   }
 
   ${media.tablet} {
@@ -37,15 +37,15 @@ const SecondaryButton = styled.button`
   padding: 14px 28px;
   font-size: 15px;
   font-weight: 600;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   background-color: transparent;
-  border: 1px solid ${colors.brand.secondary};
+  border: 1px solid ${colors.brand.strong};
   border-radius: ${radius.md};
   cursor: pointer;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: ${colors.brand.background};
+    background-color: ${colors.brand.tint};
   }
 
   ${media.tablet} {
