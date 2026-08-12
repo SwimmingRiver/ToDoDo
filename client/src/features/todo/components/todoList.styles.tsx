@@ -18,7 +18,7 @@ const AddButton = styled.button`
   width: 100%;
   height: 48px;
   flex-shrink: 0;
-  background-color: ${colors.brand.primary};
+  background-color: ${colors.brand.strong};
   color: white;
   font-size: 14px;
   font-weight: 500;
@@ -33,7 +33,7 @@ const AddButton = styled.button`
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: #0d5e49;
+    background-color: ${colors.brand.strongHover};
   }
 
   ${media.mobile} {
@@ -59,7 +59,7 @@ const NewProjectLink = styled.button`
   display: flex;
   align-items: center;
   gap: 4px;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;

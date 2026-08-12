@@ -25,7 +25,7 @@ const Input = styled.input`
   box-sizing: border-box;
 
   &:focus {
-    border-color: ${colors.brand.secondary};
+    border-color: ${colors.brand.strong};
   }
 `;
 
@@ -58,7 +58,7 @@ const TextArea = styled.textarea`
   }
 
   &:focus {
-    border-color: ${colors.brand.secondary};
+    border-color: ${colors.brand.strong};
   }
 `;
 
@@ -67,7 +67,7 @@ const MoreButton = styled.button`
   border: none;
   cursor: pointer;
   background: none;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   font-size: 14px;
 
   &:hover {
@@ -107,7 +107,7 @@ const Select = styled.select`
   cursor: pointer;
 
   &:focus {
-    border-color: ${colors.brand.secondary};
+    border-color: ${colors.brand.strong};
   }
 `;
 

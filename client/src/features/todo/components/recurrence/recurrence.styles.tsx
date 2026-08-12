@@ -105,13 +105,13 @@ export const TabButton = styled.button<{ $active: boolean }>`
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? colors.brand.secondary : colors.text.secondary)};
+  color: ${({ $active }) => ($active ? colors.brand.strong : colors.text.secondary)};
   border-bottom: 2px solid
-    ${({ $active }) => ($active ? colors.brand.secondary : "transparent")};
+    ${({ $active }) => ($active ? colors.brand.strong : "transparent")};
   transition: color 0.15s ease, border-color 0.15s ease;
 
   &:hover {
-    color: ${colors.brand.secondary};
+    color: ${colors.brand.strong};
   }
 `;
 
@@ -135,7 +135,7 @@ export const DayChip = styled.button`
   flex-shrink: 0;
 
   &:focus-visible {
-    outline: 2px solid ${colors.brand.primary};
+    outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
 `;
@@ -150,7 +150,7 @@ export const DayChipCircle = styled.span<{ $selected: boolean }>`
   justify-content: center;
   font-size: 12px;
   font-weight: 500;
-  background-color: ${({ $selected }) => ($selected ? colors.brand.primary : "transparent")};
+  background-color: ${({ $selected }) => ($selected ? colors.brand.strong : "transparent")};
   color: ${({ $selected }) => ($selected ? "#FFFFFF" : colors.text.tertiary)};
   transition: background-color 0.15s ease, color 0.15s ease;
 `;
