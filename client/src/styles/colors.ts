@@ -15,11 +15,6 @@ export const colors = {
     fill: "#1D9E75",
     /** 연한 배경. 반복 배지, 활성 내비, hover 배경. */
     tint: "#E8F5EF",
-
-    // --- 아래 3개는 마이그레이션 중에만 존재한다. Task 8에서 삭제한다. ---
-    primary: "#0F6E56",
-    secondary: "#1D9E75",
-    background: "#E8F5EF",
   },
   danger: {
     main: "#E24B4A",

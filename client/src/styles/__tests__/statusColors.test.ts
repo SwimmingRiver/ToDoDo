@@ -27,7 +27,8 @@ describe('statusColors', () => {
     })
 
     it('done 상태는 초록색 계열 색상을 가져야 한다', () => {
-      // 리브랜딩 스펙(1-4) 기준 브랜드 secondary 틸 색상으로 통일됨
+      // 리브랜딩 스펙(1-4) 기준 브랜드 틸 색상으로 통일됨. brand.fill과 값은 같지만
+      // 할 일 상태를 나타내는 별도 체계라 brand 토큰을 참조하지 않는다.
       expect(statusColors.done.main).toBe('#1D9E75')
     })
   })
