@@ -104,8 +104,9 @@ const OptionList = styled.ul`
 const OptionItem = styled.li<{ $selected?: boolean }>`
   padding: 16px 20px;
   font-size: 16px;
-  color: ${({ $selected }) => ($selected ? colors.brand.secondary : "#1a1a1a")};
-  background-color: ${({ $selected }) => ($selected ? "#e8f0fe" : "transparent")};
+  color: ${({ $selected }) => ($selected ? colors.brand.strong : "#1a1a1a")};
+  background-color: ${({ $selected }) =>
+    $selected ? colors.brand.tint : "transparent"};
   cursor: pointer;
   display: flex;
   align-items: center;

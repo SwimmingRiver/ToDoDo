@@ -80,7 +80,7 @@ const CardCheckbox = styled.div<{ $delay: number }>`
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.fill};
   opacity: 0.3;
   flex-shrink: 0;
   margin-top: 2px;

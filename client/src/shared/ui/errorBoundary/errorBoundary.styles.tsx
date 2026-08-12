@@ -29,13 +29,13 @@ export const ReloadButton = styled.button`
   padding: 12px 24px;
   border: none;
   border-radius: 8px;
-  background-color: ${colors.brand.secondary};
+  background-color: ${colors.brand.strong};
   color: #fff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    background-color: ${colors.brand.primary};
+    background-color: ${colors.brand.strongHover};
   }
 `;

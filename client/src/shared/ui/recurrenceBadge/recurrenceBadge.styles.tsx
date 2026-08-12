@@ -10,8 +10,8 @@ export const Badge = styled.span`
   gap: 4px;
   padding: 3px 8px;
   border-radius: ${radius.md};
-  background: ${colors.brand.background};
-  color: ${colors.brand.primary};
+  background: ${colors.brand.tint};
+  color: ${colors.brand.strong};
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
