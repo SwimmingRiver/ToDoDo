@@ -68,7 +68,7 @@ const NewProjectLink = styled.button`
   padding: 0;
 
   &:hover {
-    opacity: 0.8;
+    color: ${colors.brand.strongHover};
   }
 `;
 

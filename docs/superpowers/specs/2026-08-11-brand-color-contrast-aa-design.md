@@ -191,7 +191,7 @@ WCAG 상대 휘도 공식을 테스트 파일 안에 직접 구현한다. 색 �
 
 ## 범위
 
-약 34개 파일. 피처 전 영역(landing/today/todo/dashboard/kanban/guest) + `shared/ui` 7개 +
+32개 파일. 피처 전 영역(landing/today/todo/dashboard/kanban/guest) + `shared/ui` 7개 +
 `layouts` 5개 + `styles` 1개.
 
 한 PR로 간다. 토큰 이름이 바뀌므로 중간 상태가 컴파일되지 않아 쪼갤 수 없다. 대신 커밋을

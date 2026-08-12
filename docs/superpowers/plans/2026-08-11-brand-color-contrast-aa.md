@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `colors.brand`를 역할 기반 토큰(`strong`/`strongHover`/`fill`/`tint`)으로 재정의하고, 32개 파일 150개 참조를 용도에 맞게 옮겨 WCAG AA 대비 위반을 없앤다.
+**Goal:** `colors.brand`를 역할 기반 토큰(`strong`/`strongHover`/`fill`/`tint`)으로 재정의하고, 32개 파일 99개 참조를 용도에 맞게 옮겨 WCAG AA 대비 위반을 없앤다.
 
 **Architecture:** 신규 토큰을 기존 토큰 **옆에 먼저 추가**해서 모든 중간 상태가 컴파일되게 한다. 그다음 디렉토리 단위로 참조를 옮기고, 마지막에 구 토큰을 삭제한다. 구 토큰 삭제 시 `tsc`가 남은 참조를 전부 열거해 주므로 **컴파일러가 누락 검사기 역할**을 한다.
 
@@ -904,7 +904,7 @@ git add client/src/styles CLAUDE.md
 git commit -m "refactor: 구 brand 토큰 제거 + 문서 갱신
 
 primary/secondary/background를 삭제한다. tsc가 깨끗하다는 것이
-150개 참조가 모두 이관됐다는 증거다.
+99개 참조가 모두 이관됐다는 증거다.
 
 CLAUDE.md의 디자인 요소 절은 값이 colors.ts와 반대로 적혀 있었다.
 역할 기반 이름으로 바꾸면서 그 불일치도 없어진다."
