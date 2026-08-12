@@ -23,7 +23,7 @@ const LogoMark = styled.span`
   width: 24px;
   height: 24px;
   border-radius: ${radius.md};
-  background-color: ${colors.brand.primary};
+  background-color: ${colors.brand.strong};
 `;
 
 const LogoText = styled.span`

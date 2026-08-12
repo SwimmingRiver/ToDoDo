@@ -76,7 +76,7 @@ const IconWrapper = styled.span<{ $isopen: boolean; $active: boolean }>`
 
   ${({ $isopen, $active }) =>
     !$isopen && $active
-      ? `background-color: #E8F4F1; color: ${colors.brand.secondary};`
+      ? `background-color: ${colors.brand.tint}; color: ${colors.brand.strong};`
       : ""}
 `;
 
@@ -100,12 +100,13 @@ const SidebarNavLink = styled(NavLink)<{ $isopen: boolean }>`
   }
 
   &.active {
-    color: ${colors.brand.secondary};
-    background-color: ${({ $isopen }) => ($isopen ? "#E8F4F1" : "transparent")};
+    color: ${colors.brand.strong};
+    background-color: ${({ $isopen }) =>
+      $isopen ? colors.brand.tint : "transparent"};
     ${({ $isopen }) =>
       $isopen
         ? `
-      border-left: 3px solid #1D9E75;
+      border-left: 3px solid ${colors.brand.strong};
       border-radius: 0 8px 8px 0;
       padding-left: 7px;
     `
