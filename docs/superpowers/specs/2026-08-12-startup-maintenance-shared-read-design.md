@@ -152,7 +152,7 @@ const useRunStartupMaintenance = useMutation({
 
 ## 6. 테스트 전략
 
-**신규 유닛 테스트** `utils/__tests__/startupMaintenance.test.ts` — planner 3개의 판단 로직. 에뮬레이터 불필요.
+**신규 유닛 테스트** `utils/__tests__/startupMaintenance.test.ts` — planner 3개의 판단 로직. planner는 Firestore를 모르므로 `vi.mock("firebase/firestore")` 없이 배열을 넣고 배열을 받는 평범한 테스트가 된다.
 
 - 컷오프 경계(정확히 30일, 29일, 31일)
 - 호라이즌 경계(마지막 인스턴스가 호라이즌과 같은 날 / 하루 전)
@@ -160,7 +160,11 @@ const useRunStartupMaintenance = useMutation({
 - 루트+자식 그룹핑이 `parentId`로 정확한지 (N+1 제거의 핵심)
 - 쓸 게 없을 때 빈 배열 반환
 
-**기존 에뮬레이터 테스트 3개** (`sweepArchivedTodos.test.ts`, `sweepOverdueRecurringTodos.test.ts`, `recurringTodoApi.test.ts`) — 판단 케이스를 유닛으로 넘기고 실제 커밋·청크 분할·그룹 정합성 검증으로 범위를 좁힌다. 기존 테스트 중 반환값을 단언하는 곳은 0건이라 시그니처 변경이 깨뜨리는 것은 없다.
+**기존 테스트 3개** (`sweepArchivedTodos.test.ts`, `sweepOverdueRecurringTodos.test.ts`, `recurringTodoApi.test.ts`) — 판단 케이스를 planner 유닛 테스트로 넘기고, 실제 커밋·청크 분할·그룹 정합성 검증으로 범위를 좁힌다.
+
+이 테스트들은 에뮬레이터가 아니라 `vi.mock("firebase/firestore")`로 Firestore를 통째로 모킹한다. 그런데 **`getDocs` 호출 순서에 결합돼 있다** — `mockResolvedValueOnce`를 체인으로 걸어 "첫 번째 호출은 루트 조회, 두 번째는 자식 조회" 식으로 가정한다(`sweepArchivedTodos.test.ts:98-104`). 이번 변경이 읽기를 3회+N+1에서 1회로 줄이므로 **이 모의 설정은 반드시 깨진다.** 재작성은 선택이 아니라 필수다.
+
+기존 테스트 중 반환값을 단언하는 곳은 0건이라 시그니처 변경 자체가 깨뜨리는 것은 없다.
 
 **회귀 방지 테스트**: 쓸 게 없는 상태에서 `runStartupMaintenance()`가 `0`을 반환하는지. 이게 무효화가 안 도는 것을 보장하는 지점이다.
 
@@ -182,7 +186,7 @@ const useRunStartupMaintenance = useMutation({
 
 `onSuccess`가 조건 없이 도는 지금은 쓸 게 없어도 재조회 비용을 그대로 낸다. 그게 이번 변경으로 사라지는 가장 큰 몫이다.
 
-테스트 측면에서는 planner 3개가 에뮬레이터 의존에서 순수 유닛 테스트로 내려온다.
+테스트 측면에서는 판단 로직이 Firestore 모의(`getDocs` 호출 순서에 결합된 `mockResolvedValueOnce` 체인)에서 벗어나, 배열을 넣고 배열을 받는 순수 함수 테스트가 된다.
 
 ## 8. 범위 밖 (기록)
 
