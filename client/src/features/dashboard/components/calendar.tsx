@@ -333,7 +333,7 @@ const Spinner = styled.div`
   width: 36px;
   height: 36px;
   border: 3px solid #e0e0e0;
-  border-top-color: ${colors.brand.secondary};
+  border-top-color: ${colors.brand.fill};
   border-radius: 50%;
   animation: ${spin} 0.8s linear infinite;
 `;

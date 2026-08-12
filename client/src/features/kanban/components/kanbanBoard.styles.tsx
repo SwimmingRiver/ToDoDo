@@ -111,9 +111,9 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  color: ${({ $active }) => ($active ? colors.brand.secondary : "#5f6368")};
+  color: ${({ $active }) => ($active ? colors.brand.strong : "#5f6368")};
   border-bottom: 2px solid
-    ${({ $active }) => ($active ? colors.brand.secondary : "transparent")};
+    ${({ $active }) => ($active ? colors.brand.strong : "transparent")};
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
@@ -121,7 +121,7 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
   gap: 6px;
 
   &:hover {
-    color: ${({ $active }) => ($active ? colors.brand.secondary : "#1a1a1a")};
+    color: ${({ $active }) => ($active ? colors.brand.strong : "#1a1a1a")};
     background-color: #f8f9fa;
   }
 `;

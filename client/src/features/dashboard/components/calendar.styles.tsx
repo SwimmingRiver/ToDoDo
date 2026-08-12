@@ -22,7 +22,7 @@ const CalendarContainer = styled.div`
 
   /* 드래그 drop 타겟 셀 강조 */
   .fc-highlight {
-    background-color: #e8f5ef !important;
+    background-color: ${colors.brand.tint} !important;
   }
 
   .fc-daygrid-event-dot {
@@ -126,7 +126,7 @@ const DayDetailDate = styled.p`
 const DayDetailRecurrenceCaption = styled.p`
   margin: 2px 0 0;
   font-size: 11px;
-  color: ${colors.brand.primary};
+  color: ${colors.brand.strong};
 `;
 
 // eventContent 콜백에서 반복 아이콘 + 제목을 함께 배치하기 위한 래퍼
@@ -158,8 +158,8 @@ const ViewButton = styled.button<{ $active: boolean }>`
   font-size: 14px;
   font-weight: 500;
   border: 1px solid
-    ${({ $active }) => ($active ? colors.brand.secondary : colors.border.secondary)};
-  background-color: ${({ $active }) => ($active ? colors.brand.secondary : "transparent")};
+    ${({ $active }) => ($active ? colors.brand.strong : colors.border.secondary)};
+  background-color: ${({ $active }) => ($active ? colors.brand.strong : "transparent")};
   color: ${({ $active }) => ($active ? "#ffffff" : colors.text.secondary)};
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -192,10 +192,10 @@ const AddButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1.5px solid ${colors.brand.secondary};
+  border: 1.5px solid ${colors.brand.strong};
   border-radius: 8px;
   background-color: transparent;
-  color: ${colors.brand.secondary};
+  color: ${colors.brand.strong};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
