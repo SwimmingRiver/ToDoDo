@@ -652,7 +652,6 @@ const deleteRecurringSeriesImpl = async (recurrenceId: string): Promise<void> =>
   await batch.commit();
 };
 
-
 /** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
  *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
 const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
@@ -660,8 +659,13 @@ const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
   return snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
 };
 
-/** 평평한 업데이트 목록을 SWEEP_BATCH_SIZE 단위로 나눠 커밋한다. */
+/** 평평한 업데이트 목록을 SWEEP_BATCH_SIZE 단위로 나눠 커밋한다.
+ *
+ *  반환값은 "실제로 커밋된" 문서 수만 센다. 중간 청크가 실패하면 예외가 runSweep까지
+ *  전파되어 이 반환값 자체가 쓰이지 않지만(그 스윕은 0으로 집계된다), 카운터가 커밋
+ *  이후에만 증가하도록 두면 이 함수가 홀로 무엇을 세는지가 코드에서 분명해진다. */
 const commitUpdates = async (updates: TodoFieldUpdate[]): Promise<number> => {
+  let committed = 0;
   for (let i = 0; i < updates.length; i += SWEEP_BATCH_SIZE) {
     const chunk = updates.slice(i, i + SWEEP_BATCH_SIZE);
     const batch = writeBatch(db);
@@ -669,8 +673,9 @@ const commitUpdates = async (updates: TodoFieldUpdate[]): Promise<number> => {
       batch.update(doc(db, "todos", id), fields);
     });
     await batch.commit();
+    committed += chunk.length;
   }
-  return updates.length;
+  return committed;
 };
 
 /**
@@ -705,7 +710,9 @@ const commitArchiveGroups = async (groups: ArchiveGroup[]): Promise<number> => {
   return totalWritten;
 };
 
+/** commitUpdates와 동일하게 실제로 커밋된 문서 수만 센다. */
 const commitCreates = async (creates: TodoCreate[]): Promise<number> => {
+  let committed = 0;
   for (let i = 0; i < creates.length; i += SWEEP_BATCH_SIZE) {
     const chunk = creates.slice(i, i + SWEEP_BATCH_SIZE);
     const batch = writeBatch(db);
@@ -713,8 +720,9 @@ const commitCreates = async (creates: TodoCreate[]): Promise<number> => {
       batch.set(doc(db, "todos", id), docData);
     });
     await batch.commit();
+    committed += chunk.length;
   }
-  return creates.length;
+  return committed;
 };
 
 /**
