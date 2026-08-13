@@ -11,9 +11,21 @@ import {
 } from "firebase/firestore";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
-import { toDateKeyFromISO } from "@/shared/utils/date";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
-import { generateRecurringDueDates, getDefaultHorizonEnd } from "../utils/recurrence";
+import {
+  buildRecurringInstanceId,
+  generateRecurringDueDates,
+  getDefaultHorizonEnd,
+} from "../utils/recurrence";
+import {
+  buildExtensionCreates,
+  planArchivedSweep,
+  planIndefiniteExtension,
+  planOverdueRecurringSweep,
+  type ArchiveGroup,
+  type TodoCreate,
+  type TodoFieldUpdate,
+} from "../utils/startupMaintenance";
 
 const todosRef = collection(db, "todos");
 
@@ -39,24 +51,10 @@ const normalizeOrder = (order: number | undefined): number =>
   typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
 
 /**
- * 반복 인스턴스 문서 ID를 {recurrenceId}_{YYYY-MM-DD}로 결정론적으로 만든다(로컬 타임존
- * 기준 연-월-일 — 코드베이스 전반의 toDateString() 기반 "같은 날짜" 판정과 동일 기준).
- *
- * createRecurringTodo/editRecurringSeries/extendIndefiniteRecurringSeries는 서로 다른
- * 탭·기기에서 겹쳐 실행될 수 있는데(withRecurringSeriesLock은 탭 내부만 직렬화), 인스턴스를
- * 매번 새 자동생성 ID로 만들면 같은 recurrenceId·같은 날짜에 대해 두 문서가 동시에 생성될 수
- * 있다. ID 자체를 recurrenceId+날짜로 고정하면 Firestore 문서 ID의 유일성이 곧 "같은
- * 날짜엔 항상 같은 문서"를 보장하므로, 여러 곳에서 동시에 써도(batch.set은 없으면 생성,
- * 있으면 덮어쓰는 upsert) 마지막에 커밋된 내용으로 수렴할 뿐 중복 문서가 생기지 않는다.
- */
-const buildRecurringInstanceId = (recurrenceId: string, dueAt: string): string =>
-  `${recurrenceId}_${toDateKeyFromISO(dueAt)}`;
-
-/**
  * 반복 시리즈를 읽고(getDocs) 판단한 뒤 batch로 쓰는 함수들(createRecurringTodo,
- * editRecurringSeries, deleteRecurringSeries, extendIndefiniteRecurringSeries)은 트랜잭션으로
+ * editRecurringSeries, deleteRecurringSeries, runStartupMaintenance)은 트랜잭션으로
  * 묶여있지 않다. 이 함수들이 겹쳐 실행되면(예: 앱 마운트 시 백그라운드로 도는
- * extendIndefiniteRecurringSeries와 사용자가 그 사이에 실행하는 editRecurringSeries) 서로
+ * runStartupMaintenance와 사용자가 그 사이에 실행하는 editRecurringSeries) 서로
  * 상대방의 쓰기를 반영하지 못한 stale 스냅샷을 기준으로 각자 커밋해서, 같은 recurrenceId의
  * 같은 날짜에 문서가 중복 생성되는 문제가 있었다. 완전한 원자성 대신, 이 함수들을 항상 하나씩
  * 순서대로만 실행되게 직렬화해 겹쳐 실행 자체를 막는다.
@@ -267,143 +265,11 @@ export const updateToDone = async (id: string) => {
   return mapDocToTodo(docRef.id, { ...existing.data(), status: "done", doneAt: now, updatedAt: now });
 };
 
-/**
- * 완료된 지 오래된 프로젝트를 기본 조회(getTodos)에서 제외되도록 archived 처리한다.
- * 앱 진입 시 1회 실행(App.tsx)되는 지연 스윕 — extendIndefiniteRecurringSeries와 같은 자리.
- *
- * 판단 기준은 개별 항목의 doneAt이 아니라 **루트(parentId===null)의 doneAt**이다.
- * 형제 서브태스크가 있는 프로젝트는 하나가 먼저 오래전에 done되고 나머지는 진행
- * 중일 수 있는데, 그 개별 항목만 먼저 archived되면 getProjectProgress가 참조하는
- * allTodos에서 조용히 빠져 진행률 계산이 틀어진다. calcParentStatus 불변식상 루트가
- * done이라는 것은 이미 모든 자식이 done이라는 뜻이므로, 루트가 done된 시점(=전체
- * 완료 시점)을 기준으로 루트+자식 전체를 한 번에 묶어 archived 처리한다.
- */
 // Firestore writeBatch는 1건당 최대 500 write까지 허용한다. 신규 기능이 아니라 기존
 // 서비스에 소급 적용되는 스윕이라 배포 시점에 이미 30일 넘은 완료 프로젝트가 다수
 // 누적돼 있을 수 있으므로, 상한 근처까지 채우지 않고 여유를 둔다(backfillArchivedField.ts
 // 스크립트와 동일한 값).
 const SWEEP_BATCH_SIZE = 400;
-
-export const sweepArchivedTodos = async (cutoffDays: number = 30): Promise<void> => {
-  const userId = getUserId();
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - cutoffDays);
-  const cutoffISO = cutoff.toISOString();
-
-  const rootsSnapshot = await getDocs(
-    query(
-      todosRef,
-      where("userId", "==", userId),
-      where("parentId", "==", null),
-      where("status", "==", "done"),
-      where("archived", "==", false),
-      where("doneAt", "<", cutoffISO),
-    ),
-  );
-
-  if (rootsSnapshot.docs.length === 0) return;
-
-  const now = new Date().toISOString();
-
-  // 루트 하나 + 그 자식 전체를 하나의 논리적 그룹으로 취급해 청크를 나눈다. 그룹을
-  // 쪼개면 한 프로젝트의 자식 일부만 archived되고 나머지는 안 되는 상태가 생길 수
-  // 있으므로, 그룹 도중에는 절대 commit하지 않고 그룹과 그룹 사이에서만 나눈다.
-  let batch: ReturnType<typeof writeBatch> | null = null;
-  let pendingWrites = 0;
-
-  const commitPending = async () => {
-    if (batch && pendingWrites > 0) {
-      await batch.commit();
-    }
-    batch = null;
-    pendingWrites = 0;
-  };
-
-  for (const rootDoc of rootsSnapshot.docs) {
-    const childrenSnapshot = await getDocs(
-      query(todosRef, where("userId", "==", userId), where("parentId", "==", rootDoc.id)),
-    );
-    const groupSize = 1 + childrenSnapshot.docs.length;
-
-    // 이 그룹을 더하면 상한을 넘는 경우, 그룹을 쪼개는 대신 지금까지 쌓인 배치를
-    // 먼저 commit하고 새 배치에서 이 그룹을 시작한다. 한 루트가 400개 넘는 자식을
-    // 갖는 극단적 케이스는 다루지 않는다(이 프로젝트 규모에서 사실상 없다고 가정).
-    if (pendingWrites > 0 && pendingWrites + groupSize > SWEEP_BATCH_SIZE) {
-      await commitPending();
-    }
-
-    if (!batch) batch = writeBatch(db);
-    batch.update(rootDoc.ref, { archived: true, updatedAt: now });
-    childrenSnapshot.docs.forEach((childDoc) => {
-      (batch as ReturnType<typeof writeBatch>).update(childDoc.ref, {
-        archived: true,
-        updatedAt: now,
-      });
-    });
-    pendingWrites += groupSize;
-  }
-
-  await commitPending();
-};
-
-/**
- * 지난 미완료(overdue) 반복 투두 인스턴스를 archived 처리한다. status가 "todo"이고
- * recurrenceId가 있으며 dueAt이 오늘(로컬 자정 기준) 이전인 인스턴스가 대상이다.
- * Firestore 문서 자체는 지우지 않고 `overdueArchived: true` 플래그만 세워, 목록/칸반의
- * 대표 노출(collapseRecurringInstances)에서만 제외한다.
- *
- * sweepArchivedTodos(완료 프로젝트 archived)와 별개 필드(overdueArchived)를 사용한다 —
- * getTodos()의 Firestore 쿼리는 `archived` 필드만 걸러내므로(`where("archived", "==",
- * false)`), 이 정책에 `archived`를 그대로 재사용하면 캘린더(이 정책 대상에서 제외되어야
- * 함)도 getTodos() 결과에서 함께 사라진다. overdueArchived는 애플리케이션 레이어
- * (collapseRecurringInstances)에서만 걸러지므로 캘린더 코드를 전혀 건드리지 않아도 기존
- * 그대로 렌더링된다.
- *
- * editRecurringSeriesImpl의 "done/doing/overdue 인스턴스는 삭제하지 않고 그대로 보존한다"
- * 계약은 문서 자체를 지우지 않는 것으로 이미 충족되므로(오직 플래그만 세팅), 이 스윕이
- * 병행 실행돼도 그 계약을 깨지 않는다.
- *
- * overdueArchived는 Firestore 쿼리 등호 조건에 쓰지 않는다(기존 문서엔 필드가 아예 없을
- * 수 있어 `where("overdueArchived", "==", false)`가 그 문서들을 걸러버릴 수 있음 — 별도
- * 백필 없이도 안전하도록 userId+status만 쿼리하고 나머지는 클라이언트에서 판별한다).
- *
- * 반복 인스턴스는 하위 할 일을 가질 수 없다는 상호 배제 원칙(parentId는 항상 null)이라
- * sweepArchivedTodos처럼 루트+자식을 그룹으로 묶어 청크를 나눌 필요가 없다. 다만 오래
- * 방치된 계정은 대상 문서 수가 많을 수 있으므로 동일한 SWEEP_BATCH_SIZE 청크 분할
- * 패턴은 그대로 적용한다.
- */
-export const sweepOverdueRecurringTodos = async (): Promise<void> => {
-  const userId = getUserId();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const snapshot = await getDocs(
-    query(todosRef, where("userId", "==", userId), where("status", "==", "todo")),
-  );
-
-  const targets = snapshot.docs.filter((d) => {
-    const data = d.data();
-    if (!data.recurrenceId) return false;
-    if (data.overdueArchived === true) return false;
-    if (!data.dueAt) return false;
-    const due = new Date(data.dueAt as string);
-    due.setHours(0, 0, 0, 0);
-    return due.getTime() < todayStart.getTime();
-  });
-
-  if (targets.length === 0) return;
-
-  const now = new Date().toISOString();
-
-  for (let i = 0; i < targets.length; i += SWEEP_BATCH_SIZE) {
-    const chunk = targets.slice(i, i + SWEEP_BATCH_SIZE);
-    const batch = writeBatch(db);
-    chunk.forEach((d) => {
-      batch.update(d.ref, { overdueArchived: true, updatedAt: now });
-    });
-    await batch.commit();
-  }
-};
 
 export const updateTodoDueAt = async (
   id: string,
@@ -786,102 +652,174 @@ const deleteRecurringSeriesImpl = async (recurrenceId: string): Promise<void> =>
   await batch.commit();
 };
 
-/**
- * "무기한(indefinite)" 반복 시리즈들의 남은 인스턴스를, 오늘 기준 새 호라이즌
- * (getDefaultHorizonEnd)까지 이어서 생성한다. 기존 인스턴스는 전혀 건드리지 않고
- * 마지막 인스턴스 이후의 빈 구간만 채운다 — 앱 진입 시(App.tsx) 1회 호출해서,
- * 사용자가 앱을 계속 쓰는 한 "무기한"이 실제로 끊기지 않게 한다.
+/** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
+ *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
+const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
+  const snapshot = await getDocs(query(todosRef, where("userId", "==", userId)));
+  return snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
+};
+
+/** 평평한 업데이트 목록을 SWEEP_BATCH_SIZE 단위로 나눠 커밋한다.
  *
- * 종료 조건이 "특정 날짜까지(untilDate)"인 시리즈는 대상이 아니다(이미 끝이
- * 정해져 있어 확장이 필요 없음). 종료 조건이 없는(recurrence: null, 반복
- * OFF) 일반 할 일도 당연히 대상이 아니다.
+ *  반환값은 "실제로 커밋된" 문서 수만 센다. 카운터를 커밋 이후에만 올려 이 함수가 무엇을
+ *  세는지 분명히 했지만, **중간 청크가 실패하면 그 값이 밖으로 나가지 못한다** — 예외가
+ *  runSweep까지 전파되고 그 스윕은 0으로 집계된다. 앞선 청크가 이미 커밋됐는데도
+ *  written에 0이 더해지므로, 그 스윕이 유일한 쓰기였다면 useTodo가 무효화를 건너뛴다.
+ *  즉 방금 쓴 문서가 캐시에 반영되지 않을 수 있다.
+ *
+ *  알면서 두는 트레이드오프다: 400건을 넘는 쓰기 + 중간 실패라는 조합이 동시에 필요하고,
+ *  다음 refetch(staleTime 만료·라우트 이동·재접속)에서 자연히 수렴하며, 유지보수 자체도
+ *  다음 접속 때 재시도된다. 부분 성공을 반환하려면 이 함수가 예외를 삼켜야 하는데 그건
+ *  "실패한 스윕은 0" 이라는 runSweep의 계약을 흐린다. 카운팅 자체는 기존 동작 그대로이고,
+ *  무효화가 이 값에 의존하게 된 것이 이번 변경에서 새로 생긴 결합이라 여기 기록해 둔다. */
+const commitUpdates = async (updates: TodoFieldUpdate[]): Promise<number> => {
+  let committed = 0;
+  for (let i = 0; i < updates.length; i += SWEEP_BATCH_SIZE) {
+    const chunk = updates.slice(i, i + SWEEP_BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(({ id, fields }) => {
+      batch.update(doc(db, "todos", id), fields);
+    });
+    await batch.commit();
+    committed += chunk.length;
+  }
+  return committed;
+};
+
+/**
+ * 그룹 경계에서만 배치를 나눠 커밋한다. 그룹 도중에 commit하면 한 프로젝트의 자식
+ * 일부만 archived되고 나머지는 안 되는 상태가 생긴다. 한 루트가 SWEEP_BATCH_SIZE보다
+ * 많은 자식을 갖는 극단적 케이스는 다루지 않는다(이 프로젝트 규모에서 사실상 없다).
  */
-export const extendIndefiniteRecurringSeries = (
-  horizonEnd: Date = getDefaultHorizonEnd(),
-): Promise<void> => withRecurringSeriesLock(() => extendIndefiniteRecurringSeriesImpl(horizonEnd));
+const commitArchiveGroups = async (groups: ArchiveGroup[]): Promise<number> => {
+  let batch: ReturnType<typeof writeBatch> | null = null;
+  let pendingWrites = 0;
+  let totalWritten = 0;
 
-const extendIndefiniteRecurringSeriesImpl = async (horizonEnd: Date): Promise<void> => {
-  const userId = getUserId();
-  const q = query(todosRef, where("userId", "==", userId));
-  const snapshot = await getDocs(q);
-  const allTodos = snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
+  const commitPending = async () => {
+    if (batch && pendingWrites > 0) await batch.commit();
+    batch = null;
+    pendingWrites = 0;
+  };
 
-  const seriesByRecurrenceId = new Map<string, Todo[]>();
-  for (const todo of allTodos) {
-    if (!todo.recurrenceId || !todo.recurrence) continue;
-    if (todo.recurrence.endType !== "indefinite") continue;
-    if (!todo.dueAt) continue;
-    const list = seriesByRecurrenceId.get(todo.recurrenceId) ?? [];
-    list.push(todo);
-    seriesByRecurrenceId.set(todo.recurrenceId, list);
+  for (const group of groups) {
+    if (pendingWrites > 0 && pendingWrites + group.updates.length > SWEEP_BATCH_SIZE) {
+      await commitPending();
+    }
+    if (!batch) batch = writeBatch(db);
+    group.updates.forEach(({ id, fields }) => {
+      (batch as ReturnType<typeof writeBatch>).update(doc(db, "todos", id), fields);
+    });
+    pendingWrites += group.updates.length;
+    totalWritten += group.updates.length;
   }
 
-  if (seriesByRecurrenceId.size === 0) return;
+  await commitPending();
+  return totalWritten;
+};
+
+/**
+ * 이미 읽어둔 전체 스냅샷에서 다음 루트 order를 계산한다. getNextRootOrder의 Firestore
+ * 쿼리(`userId` + `parentId == null`)는 이 스냅샷을 `parentId === null`로 거른 것과 정확히
+ * 같은 집합이다 — allTodos가 `userId`만으로 필터링된 무조건 전체 읽기이기 때문이다.
+ * 따라서 확장 스윕에서는 두 번째 읽기가 순수한 낭비였다.
+ *
+ * 원자성은 잃지 않는다: 스냅샷은 withRecurringSeriesLock 안에서 떴고, getNextRootOrder
+ * 자체도 트랜잭션이 아닌 read-then-write였다.
+ *
+ * `?? 0`과 시드 `-1`은 getNextRootOrder의 semantics를 그대로 옮긴 것이다. order 필드가
+ * 없는 레거시 문서는 0으로 취급하고, 루트가 하나도 없으면 -1 + 1 = 0이 된다.
+ * (정렬용 normalizeOrder는 없는 order를 Infinity로 보내므로 여기 쓰면 안 된다.)
+ */
+const nextRootOrderFrom = (allTodos: Todo[]): number =>
+  allTodos
+    .filter((t) => t.parentId === null)
+    .reduce((max, t) => Math.max(max, t.order ?? 0), -1) + 1;
+
+/** commitUpdates와 동일하게 실제로 커밋된 문서 수만 센다. */
+const commitCreates = async (creates: TodoCreate[]): Promise<number> => {
+  let committed = 0;
+  for (let i = 0; i < creates.length; i += SWEEP_BATCH_SIZE) {
+    const chunk = creates.slice(i, i + SWEEP_BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(({ id, doc: docData }) => {
+      batch.set(doc(db, "todos", id), docData);
+    });
+    await batch.commit();
+    committed += chunk.length;
+  }
+  return committed;
+};
+
+/**
+ * 개별 스윕을 격리 실행한다. 하나가 실패해도 나머지는 진행해야 한다 — 이전에는 세 스윕이
+ * 독립 mutation이라 자연히 그랬고, 하나로 합치면서 그 동작을 잃지 않기 위해 명시적으로
+ * 감싼다. 사용자 액션이 아닌 백그라운드 유지보수라 조용히 넘어가되(다음 접속 때 재시도),
+ * 운영 중 문제(예: permission-denied)를 감지할 수 있도록 콘솔에는 남긴다.
+ */
+const runSweep = async (name: string, run: () => Promise<number>): Promise<number> => {
+  try {
+    return await run();
+  } catch (error) {
+    console.error(`앱 진입 유지보수 실패 (${name}):`, error);
+    return 0;
+  }
+};
+
+/**
+ * 앱 진입 시 1회 실행되는 백그라운드 유지보수(App.tsx). 세 정책을 한 번의 읽기로 처리한다.
+ *
+ * 1. 30일 지난 완료 프로젝트를 archived 처리 (루트+자식 단위)
+ * 2. 지난 미완료 반복 인스턴스를 overdueArchived 처리
+ * 3. 무기한 반복 시리즈를 새 호라이즌까지 확장
+ *
+ * 반환값은 실제로 쓴 문서 수다. 호출부(useTodo)는 이 값이 0보다 클 때만 캐시를 무효화한다 —
+ * 세 정책 모두 대부분의 실행에서 쓸 것이 없는데, 무조건 무효화하면 하는 일 없이 getTodos()
+ * 전체 재조회를 유발한다.
+ *
+ * 전체를 withRecurringSeriesLock으로 감싼다. 확장(3)은 읽고 판단한 뒤 쓰는 사이에 사용자의
+ * editRecurringSeries가 끼어들면 stale 스냅샷 기준으로 커밋되는데, 읽기를 공유하면서 그
+ * 간격에 다른 두 스윕의 커밋까지 끼어 더 길어졌다.
+ */
+export const runStartupMaintenance = (
+  cutoffDays: number = 30,
+  horizonEnd: Date = getDefaultHorizonEnd(),
+): Promise<number> =>
+  withRecurringSeriesLock(() => runStartupMaintenanceImpl(cutoffDays, horizonEnd));
+
+const runStartupMaintenanceImpl = async (
+  cutoffDays: number,
+  horizonEnd: Date,
+): Promise<number> => {
+  const userId = getUserId();
+  const allTodos = await fetchAllUserTodos(userId);
 
   const now = new Date().toISOString();
-  const batch = writeBatch(db);
-  let hasWrites = false;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - cutoffDays);
+  const cutoffISO = cutoff.toISOString();
+  // planOverdueRecurringSweep이 dueAt을 로컬 setHours로 자정 절삭해 비교하므로,
+  // 기준도 반드시 로컬 자정이어야 한다(UTC 자정을 섞으면 KST에서 하루가 밀린다).
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
-  // batch가 커밋되기 전에는 새 인스턴스가 Firestore에 반영되지 않아, 시리즈마다
-  // getNextRootOrder를 호출하면 매번 같은 maxOrder를 읽어 서로 다른 시리즈의 새
-  // 인스턴스들이 중복된 order를 받는다. 그래서 루프 전체가 하나의 nextOrder를 공유하며
-  // 실제로 쓴 만큼만 증가시킨다. 단, 이 함수는 앱 진입 시마다 실행되고 대부분의 경우
-  // 확장할 것이 없으므로, 첫 쓰기가 필요해지는 시점에 한 번만 지연 조회한다
-  // (생성할 것이 없으면 getNextRootOrder용 추가 조회도 발생하지 않아야 한다).
-  let sharedNextOrder: number | null = null;
+  let written = 0;
 
-  for (const [recurrenceId, instances] of seriesByRecurrenceId) {
-    const latest = instances.reduce((a, b) =>
-      new Date(a.dueAt as string).getTime() > new Date(b.dueAt as string).getTime() ? a : b,
-    );
-    const latestTime = new Date(latest.dueAt as string).getTime();
-    if (latestTime >= horizonEnd.getTime()) continue; // 이미 새 호라이즌까지 채워져 있음
+  written += await runSweep("archived", () =>
+    commitArchiveGroups(planArchivedSweep(allTodos, cutoffISO, now)),
+  );
 
-    const rule = latest.recurrence as RecurrenceRule;
-    // 멀티탭 등에서 이미 존재하는 날짜를 다시 만들지 않도록 최소한의 존재 체크를 한다.
-    const existingDateKeys = new Set(
-      instances.map((t) => new Date(t.dueAt as string).toDateString()),
-    );
-    const newDueDates = generateRecurringDueDates(latest.dueAt as string, rule, horizonEnd)
-      .filter((iso) => new Date(iso).getTime() > latestTime)
-      .filter((iso) => !existingDateKeys.has(new Date(iso).toDateString()));
+  written += await runSweep("overdue", () =>
+    commitUpdates(planOverdueRecurringSweep(allTodos, todayStart, now)),
+  );
 
-    if (newDueDates.length === 0) continue;
+  written += await runSweep("extension", async () => {
+    const extensions = planIndefiniteExtension(allTodos, horizonEnd);
+    // 생성할 것이 있을 때만 order를 계산한다 — 대부분의 앱 진입에서는 여기서 끝난다.
+    if (extensions.length === 0) return 0;
+    const startOrder = nextRootOrderFrom(allTodos);
+    return commitCreates(buildExtensionCreates(extensions, startOrder, userId, now));
+  });
 
-    if (sharedNextOrder === null) {
-      sharedNextOrder = await getNextRootOrder(userId);
-    }
-    let nextOrder: number = sharedNextOrder;
-
-    // 가장 최근 인스턴스의 제목/우선순위 등 필드를 그대로 이어서 사용한다(기존 값 승계).
-    const { id: _id, ...rest } = latest;
-
-    newDueDates.forEach((dueAt) => {
-      const newDocRef = doc(db, "todos", buildRecurringInstanceId(recurrenceId, dueAt));
-      batch.set(newDocRef, {
-        ...rest,
-        userId,
-        // createRecurringTodoImpl과 동일한 이유: rest(마지막 인스턴스 필드 승계)에 담긴
-        // startAt은 latest 인스턴스 자신의 발생일 기준 값이라 새로 만드는 인스턴스에는
-        // 맞지 않으므로, 매번 그 인스턴스의 발생일(dueAt)로 덮어쓴다.
-        startAt: dueAt,
-        dueAt,
-        status: "todo",
-        doneAt: null,
-        parentId: null,
-        recurrenceId,
-        createdAt: now,
-        updatedAt: now,
-        order: nextOrder,
-      });
-      nextOrder += 1;
-      hasWrites = true;
-    });
-
-    sharedNextOrder = nextOrder;
-  }
-
-  if (hasWrites) {
-    await batch.commit();
-  }
+  return written;
 };

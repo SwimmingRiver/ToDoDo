@@ -7,7 +7,7 @@ import { isTodoOverdue } from "@/shared/utils/due";
  * 할 일(recurrenceId === null)은 그대로 통과시킨다. 다른 문서를 지우는 게 아니라 이
  * 목록에 렌더링할 대표만 고르는 순수 함수다 — 실제 삭제는 useDeleteRecurringSeries가 담당.
  *
- * overdueArchived: true인 인스턴스(sweepOverdueRecurringTodos가 dueAt이 지나 archived
+ * overdueArchived: true인 인스턴스(runStartupMaintenance의 overdue 스윕이 dueAt이 지나 archived
  * 처리한 지난 미완료 회차)는 대표 후보에서 완전히 제외한다. 그러지 않으면 방치된 overdue
  * 인스턴스가 영구히 "대표"로 노출되는 문제(이번 정책의 발단)가 그대로 재현된다 — archived된
  * 회차를 건너뛰면 남은 인스턴스 중 다음으로 이른 것(미래 예정 건 포함)이 자연스럽게 새

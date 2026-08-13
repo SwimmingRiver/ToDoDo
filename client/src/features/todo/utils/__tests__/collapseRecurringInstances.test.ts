@@ -116,7 +116,7 @@ describe("collapseRecurringInstances", () => {
   });
 
   it("done 상태 인스턴스는 overdueArchived 정책과 무관하게 기존처럼 그대로 대표 후보로 노출된다 (회귀 확인)", () => {
-    // overdueArchived는 sweepOverdueRecurringTodos가 status:"todo"인 문서만 대상으로 세팅하므로
+    // overdueArchived는 planOverdueRecurringSweep이 status:"todo"인 문서만 대상으로 세팅하므로
     // done 인스턴스에는 애초에 붙지 않지만, collapseRecurringInstances 자체가 status를 보고
     // 분기하지 않는다는 점(overdueArchived 필드 유무만 본다)을 명시적으로 회귀 확인한다.
     const todos = [

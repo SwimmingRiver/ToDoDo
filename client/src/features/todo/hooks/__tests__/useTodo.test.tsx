@@ -30,9 +30,7 @@ vi.mock('../../api', () => ({
   createRecurringTodo: vi.fn(),
   editRecurringSeries: vi.fn(),
   deleteRecurringSeries: vi.fn(),
-  extendIndefiniteRecurringSeries: vi.fn(),
-  sweepArchivedTodos: vi.fn(),
-  sweepOverdueRecurringTodos: vi.fn(),
+  runStartupMaintenance: vi.fn(),
   reorderTodos: vi.fn(),
 }))
 
@@ -547,173 +545,91 @@ describe('useTodo 훅', () => {
     })
   })
 
-  describe('useExtendIndefiniteRecurringSeries', () => {
-    it('무기한 반복 시리즈 확장 mutation이 정의되어 있어야 한다', () => {
+  describe('useRunStartupMaintenance', () => {
+    it('앱 진입 유지보수 mutation이 정의되어 있어야 한다', () => {
       const { result } = renderHook(() => useTodo(), {
         wrapper: createWrapper(),
       })
 
-      expect(result.current.useExtendIndefiniteRecurringSeries).toBeDefined()
-      expect(typeof result.current.useExtendIndefiniteRecurringSeries.mutate).toBe('function')
+      expect(result.current.useRunStartupMaintenance).toBeDefined()
+      expect(typeof result.current.useRunStartupMaintenance.mutate).toBe('function')
     })
 
-    it('성공 시 todos 쿼리를 무효화해야 한다', async () => {
-      const { getTodos, extendIndefiniteRecurringSeries } = await import('../../api')
+    it('쓴 문서가 있으면 todos 쿼리를 무효화해야 한다', async () => {
+      const { getTodos, runStartupMaintenance } = await import('../../api')
 
       vi.mocked(getTodos).mockResolvedValue([])
-      vi.mocked(extendIndefiniteRecurringSeries).mockResolvedValueOnce(undefined)
+      vi.mocked(runStartupMaintenance).mockResolvedValueOnce(3)
 
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: 0 },
+          mutations: { retry: false },
+        },
       })
-
-      await waitFor(() => {
-        expect(result.current.useGetTodos.isSuccess).toBe(true)
-      })
-
-      result.current.useExtendIndefiniteRecurringSeries.mutate()
-
-      await waitFor(() => {
-        expect(result.current.useExtendIndefiniteRecurringSeries.isSuccess).toBe(true)
-      })
-
-      expect(vi.mocked(extendIndefiniteRecurringSeries)).toHaveBeenCalled()
-    })
-
-    it('실패 시 사용자에게는 알리지 않되 콘솔에는 에러를 남겨야 한다', async () => {
-      const { getTodos, extendIndefiniteRecurringSeries } = await import('../../api')
-
-      vi.mocked(getTodos).mockResolvedValue([])
-      const error = new Error('permission-denied')
-      vi.mocked(extendIndefiniteRecurringSeries).mockRejectedValueOnce(error)
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
-      })
-
-      await waitFor(() => {
-        expect(result.current.useGetTodos.isSuccess).toBe(true)
-      })
-
-      result.current.useExtendIndefiniteRecurringSeries.mutate()
-
-      await waitFor(() => {
-        expect(result.current.useExtendIndefiniteRecurringSeries.isError).toBe(true)
-      })
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('반복 할 일 호라이즌 확장 실패'),
-        error,
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       )
 
-      consoleErrorSpy.mockRestore()
-    })
-  })
-
-  describe('useSweepArchivedTodos', () => {
-    it('done 아카이빙 스윕 mutation이 정의되어 있어야 한다', () => {
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
-      })
-
-      expect(result.current.useSweepArchivedTodos).toBeDefined()
-      expect(typeof result.current.useSweepArchivedTodos.mutate).toBe('function')
-    })
-
-    it('성공 시 todos 쿼리를 무효화해야 한다', async () => {
-      const { getTodos, sweepArchivedTodos } = await import('../../api')
-
-      vi.mocked(getTodos).mockResolvedValue([])
-      vi.mocked(sweepArchivedTodos).mockResolvedValueOnce(undefined)
-
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useTodo(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.useGetTodos.isSuccess).toBe(true)
       })
+      invalidateSpy.mockClear()
 
-      result.current.useSweepArchivedTodos.mutate()
+      result.current.useRunStartupMaintenance.mutate()
 
       await waitFor(() => {
-        expect(result.current.useSweepArchivedTodos.isSuccess).toBe(true)
+        expect(result.current.useRunStartupMaintenance.isSuccess).toBe(true)
       })
 
-      expect(vi.mocked(sweepArchivedTodos)).toHaveBeenCalled()
+      expect(vi.mocked(runStartupMaintenance)).toHaveBeenCalled()
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
     })
 
-    it('실패 시 사용자에게는 알리지 않되 콘솔에는 에러를 남겨야 한다', async () => {
-      const { getTodos, sweepArchivedTodos } = await import('../../api')
+    // 이 refactor의 핵심 목적: 세 정책 모두 대부분의 실행에서 쓸 것이 없는데 무조건
+    // 무효화하면 하는 일 없이 getTodos() 전체 재조회를 유발한다.
+    it('쓴 문서가 없으면 todos 쿼리를 무효화하지 않아야 한다', async () => {
+      const { getTodos, runStartupMaintenance } = await import('../../api')
 
       vi.mocked(getTodos).mockResolvedValue([])
-      const error = new Error('permission-denied')
-      vi.mocked(sweepArchivedTodos).mockRejectedValueOnce(error)
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.mocked(runStartupMaintenance).mockResolvedValueOnce(0)
 
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: 0 },
+          mutations: { retry: false },
+        },
       })
-
-      await waitFor(() => {
-        expect(result.current.useGetTodos.isSuccess).toBe(true)
-      })
-
-      result.current.useSweepArchivedTodos.mutate()
-
-      await waitFor(() => {
-        expect(result.current.useSweepArchivedTodos.isError).toBe(true)
-      })
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('done 아카이빙 스윕 실패'),
-        error,
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       )
 
-      consoleErrorSpy.mockRestore()
-    })
-  })
-
-  describe('useSweepOverdueRecurringTodos', () => {
-    it('반복 할 일 지난 미완료 아카이빙 스윕 mutation이 정의되어 있어야 한다', () => {
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
-      })
-
-      expect(result.current.useSweepOverdueRecurringTodos).toBeDefined()
-      expect(typeof result.current.useSweepOverdueRecurringTodos.mutate).toBe('function')
-    })
-
-    it('성공 시 todos 쿼리를 무효화해야 한다', async () => {
-      const { getTodos, sweepOverdueRecurringTodos } = await import('../../api')
-
-      vi.mocked(getTodos).mockResolvedValue([])
-      vi.mocked(sweepOverdueRecurringTodos).mockResolvedValueOnce(undefined)
-
-      const { result } = renderHook(() => useTodo(), {
-        wrapper: createWrapper(),
-      })
+      const { result } = renderHook(() => useTodo(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.useGetTodos.isSuccess).toBe(true)
       })
+      invalidateSpy.mockClear()
 
-      result.current.useSweepOverdueRecurringTodos.mutate()
+      result.current.useRunStartupMaintenance.mutate()
 
       await waitFor(() => {
-        expect(result.current.useSweepOverdueRecurringTodos.isSuccess).toBe(true)
+        expect(result.current.useRunStartupMaintenance.isSuccess).toBe(true)
       })
 
-      expect(vi.mocked(sweepOverdueRecurringTodos)).toHaveBeenCalled()
+      expect(invalidateSpy).not.toHaveBeenCalled()
     })
 
     it('실패 시 사용자에게는 알리지 않되 콘솔에는 에러를 남겨야 한다', async () => {
-      const { getTodos, sweepOverdueRecurringTodos } = await import('../../api')
+      const { getTodos, runStartupMaintenance } = await import('../../api')
 
       vi.mocked(getTodos).mockResolvedValue([])
       const error = new Error('permission-denied')
-      vi.mocked(sweepOverdueRecurringTodos).mockRejectedValueOnce(error)
+      vi.mocked(runStartupMaintenance).mockRejectedValueOnce(error)
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       const { result } = renderHook(() => useTodo(), {
@@ -724,14 +640,14 @@ describe('useTodo 훅', () => {
         expect(result.current.useGetTodos.isSuccess).toBe(true)
       })
 
-      result.current.useSweepOverdueRecurringTodos.mutate()
+      result.current.useRunStartupMaintenance.mutate()
 
       await waitFor(() => {
-        expect(result.current.useSweepOverdueRecurringTodos.isError).toBe(true)
+        expect(result.current.useRunStartupMaintenance.isError).toBe(true)
       })
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('반복 할 일 지난 미완료 아카이빙 스윕 실패'),
+        expect.stringContaining('앱 진입 유지보수 실패'),
         error,
       )
 
