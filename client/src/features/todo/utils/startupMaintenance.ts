@@ -50,3 +50,36 @@ export const planArchivedSweep = (
 
   return groups;
 };
+
+/**
+ * 지난 미완료(overdue) 반복 인스턴스에 overdueArchived를 세울 계획을 만든다.
+ *
+ * overdueArchived는 Firestore 등호 조건에 쓰지 않는다 — 기존 문서엔 필드가 아예 없을
+ * 수 있어 `where("overdueArchived", "==", false)`가 그 문서들을 걸러버린다. 백필 없이도
+ * 안전하도록 여기서 `!== true`로 판정한다.
+ *
+ * status 조건은 이전에 Firestore 쿼리(`where("status", "==", "todo")`)가 담당했으므로
+ * 메모리 판정으로 옮기면서 명시적으로 다시 걸어야 한다.
+ */
+export const planOverdueRecurringSweep = (
+  todos: Todo[],
+  todayStart: Date,
+  now: string,
+): TodoFieldUpdate[] => {
+  const todayStartTime = todayStart.getTime();
+
+  return todos
+    .filter((todo) => {
+      if (todo.status !== "todo") return false;
+      if (!todo.recurrenceId) return false;
+      if (todo.overdueArchived === true) return false;
+      if (!todo.dueAt) return false;
+      const due = new Date(todo.dueAt);
+      due.setUTCHours(0, 0, 0, 0);
+      return due.getTime() < todayStartTime;
+    })
+    .map((todo) => ({
+      id: todo.id,
+      fields: { overdueArchived: true, updatedAt: now },
+    }));
+};

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Todo } from "../../types/todo.type";
-import { planArchivedSweep } from "../startupMaintenance";
+import { planArchivedSweep, planOverdueRecurringSweep } from "../startupMaintenance";
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
   id: "todo-1",
@@ -81,5 +81,64 @@ describe("planArchivedSweep", () => {
 
   it("대상이 없으면 빈 배열을 반환한다", () => {
     expect(planArchivedSweep([makeTodo()], CUTOFF, NOW)).toEqual([]);
+  });
+});
+
+describe("planOverdueRecurringSweep", () => {
+  const todayStart = new Date("2026-07-10T00:00:00.000Z");
+  const NOW_ISO = "2026-07-10T00:00:00.000Z";
+
+  const makeInstance = (overrides: Partial<Todo> = {}): Todo =>
+    makeTodo({
+      recurrenceId: "series-1",
+      recurrence: { type: "daily", endType: "indefinite" },
+      dueAt: "2026-07-01T00:00:00.000Z",
+      ...overrides,
+    });
+
+  it("dueAt이 오늘보다 이전인 미완료 반복 인스턴스를 대상으로 삼는다", () => {
+    const overdue = makeInstance({ id: "inst-1" });
+
+    expect(planOverdueRecurringSweep([overdue], todayStart, NOW_ISO)).toEqual([
+      { id: "inst-1", fields: { overdueArchived: true, updatedAt: NOW_ISO } },
+    ]);
+  });
+
+  it("오늘 마감인 인스턴스는 제외한다", () => {
+    const today = makeInstance({ id: "inst-1", dueAt: "2026-07-10T09:00:00.000Z" });
+
+    expect(planOverdueRecurringSweep([today], todayStart, NOW_ISO)).toEqual([]);
+  });
+
+  it("status가 todo가 아닌 인스턴스는 제외한다", () => {
+    const done = makeInstance({ id: "inst-1", status: "done" });
+    const doing = makeInstance({ id: "inst-2", status: "doing" });
+
+    expect(planOverdueRecurringSweep([done, doing], todayStart, NOW_ISO)).toEqual([]);
+  });
+
+  it("반복이 아닌 할 일은 제외한다", () => {
+    const plain = makeTodo({ id: "plain-1", dueAt: "2026-07-01T00:00:00.000Z" });
+
+    expect(planOverdueRecurringSweep([plain], todayStart, NOW_ISO)).toEqual([]);
+  });
+
+  it("이미 overdueArchived인 인스턴스는 제외한다", () => {
+    const already = makeInstance({ id: "inst-1", overdueArchived: true });
+
+    expect(planOverdueRecurringSweep([already], todayStart, NOW_ISO)).toEqual([]);
+  });
+
+  it("overdueArchived 필드가 없는 문서는 대상에 포함한다", () => {
+    const legacy = makeInstance({ id: "inst-1" });
+    expect(legacy.overdueArchived).toBeUndefined();
+
+    expect(planOverdueRecurringSweep([legacy], todayStart, NOW_ISO)).toHaveLength(1);
+  });
+
+  it("dueAt이 없는 인스턴스는 제외한다", () => {
+    const noDue = makeInstance({ id: "inst-1", dueAt: null });
+
+    expect(planOverdueRecurringSweep([noDue], todayStart, NOW_ISO)).toEqual([]);
   });
 });
