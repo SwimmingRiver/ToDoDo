@@ -128,13 +128,14 @@ export const planIndefiniteExtension = (
     if (latestTime >= horizonEnd.getTime()) continue; // 이미 새 호라이즌까지 채워져 있음
 
     const rule = latest.recurrence as RecurrenceRule;
-    // 멀티탭 등에서 이미 존재하는 날짜를 다시 만들지 않도록 최소한의 존재 체크를 한다.
-    const existingDateKeys = new Set(
-      instances.map((t) => new Date(t.dueAt as string).toDateString()),
-    );
+    // `> latestTime` 하나로 충분하다. latest는 시리즈에서 dueAt이 가장 큰 인스턴스이므로
+    // 기존 인스턴스는 전부 `<= latestTime`이고, 후보는 전부 `> latestTime`이라 둘은 같은
+    // 날짜를 가질 수 없다. 이전에 있던 existingDateKeys 중복 제거 필터는 이 이유로
+    // 도달 불가였고(Task 3 리뷰에서 확인), 그 필터의 테스트도 함께 제거했다.
+    // 멀티탭에서 같은 날짜가 동시에 생성되는 문제는 이 필터가 아니라 결정론적 문서 ID
+    // (buildRecurringInstanceId)가 막는다 — 같은 문서로 수렴하므로 중복이 생기지 않는다.
     const dueDates = generateRecurringDueDates(latest.dueAt as string, rule, horizonEnd)
-      .filter((iso) => new Date(iso).getTime() > latestTime)
-      .filter((iso) => !existingDateKeys.has(new Date(iso).toDateString()));
+      .filter((iso) => new Date(iso).getTime() > latestTime);
 
     if (dueDates.length === 0) continue;
 

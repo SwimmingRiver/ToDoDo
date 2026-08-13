@@ -141,7 +141,7 @@ export function generateRecurringDueDates(
  * 반복 인스턴스 문서 ID를 {recurrenceId}_{YYYY-MM-DD}로 결정론적으로 만든다(로컬 타임존
  * 기준 연-월-일 — 코드베이스 전반의 toDateString() 기반 "같은 날짜" 판정과 동일 기준).
  *
- * createRecurringTodo/editRecurringSeries/extendIndefiniteRecurringSeries는 서로 다른
+ * createRecurringTodo/editRecurringSeries/runStartupMaintenance(확장 스윕)는 서로 다른
  * 탭·기기에서 겹쳐 실행될 수 있는데(withRecurringSeriesLock은 탭 내부만 직렬화), 인스턴스를
  * 매번 새 자동생성 ID로 만들면 같은 recurrenceId·같은 날짜에 대해 두 문서가 동시에 생성될 수
  * 있다. ID 자체를 recurrenceId+날짜로 고정하면 Firestore 문서 ID의 유일성이 곧 "같은

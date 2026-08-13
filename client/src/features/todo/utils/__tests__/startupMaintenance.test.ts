@@ -207,16 +207,6 @@ describe("planIndefiniteExtension", () => {
     expect(planIndefiniteExtension([makeTodo({ id: "plain-1" })], horizonEnd)).toEqual([]);
   });
 
-  it("시리즈에 이미 존재하는 날짜는 계획에서 뺀다", () => {
-    const first = makeSeriesInstance({ id: "inst-1", dueAt: "2026-07-10T00:00:00.000Z" });
-    const second = makeSeriesInstance({ id: "inst-2", dueAt: "2026-07-11T00:00:00.000Z" });
-
-    const [extension] = planIndefiniteExtension([first, second], horizonEnd);
-
-    const dateKeys = extension.dueDates.map((iso) => new Date(iso).toDateString());
-    expect(dateKeys).not.toContain(new Date("2026-07-11T00:00:00.000Z").toDateString());
-  });
-
   it("여러 시리즈를 각각 계획한다", () => {
     const a = makeSeriesInstance({ id: "a-1", recurrenceId: "series-a" });
     const b = makeSeriesInstance({ id: "b-1", recurrenceId: "series-b" });
