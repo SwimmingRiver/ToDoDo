@@ -21,6 +21,12 @@ export type ArchiveGroup = { updates: TodoFieldUpdate[] };
  * `where("archived", "==", false)`는 필드가 아예 없는 레거시 문서를 매칭하지 않았다.
  * todo.type.ts가 명시한 "없으면 archived 아닌 것으로 취급" 의미를 따르며, 이 문서들은
  * getTodos()에서 이미 보이지 않으므로 archived를 세워도 화면 변화가 없다.
+ *
+ * `doneAt`이 null인 done 루트는 이제 아카이빙되지 않는다(의도된 동작 변경). 구
+ * Firestore 조건 `where("doneAt", "<", cutoffISO)`는 이들을 매칭했다 — Firestore의
+ * 타입 간 정렬에서 null이 문자열보다 앞서기 때문이다. 그래서 완료 시점을 모르는데도
+ * 30일 규칙을 건너뛰고 즉시 아카이빙됐다. 완료 시점이 없으면 "30일 지났는지" 자체를
+ * 판단할 수 없으므로 보존하는 쪽이 맞다.
  */
 export const planArchivedSweep = (
   todos: Todo[],
@@ -100,9 +106,10 @@ export type SeriesExtension = {
  * 무기한(indefinite) 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
  * 기존 인스턴스는 건드리지 않고 마지막 인스턴스 이후의 빈 구간만 채운다.
  *
- * order를 여기서 매기지 않는 이유: 다음 order는 Firestore 조회(getNextRootOrder)가
- * 필요한데, 대부분의 앱 진입에서는 확장할 것이 없어 그 조회 자체를 하지 말아야 한다.
- * 계획이 비어있지 않을 때만 api 레이어가 조회해 buildExtensionCreates로 넘긴다.
+ * order를 여기서 매기지 않는 이유: 다음 order는 이 시리즈뿐 아니라 사용자의 **모든**
+ * 루트 할 일에 걸친 최대값이라 이 함수가 보는 범위를 넘어선다. 계획이 비어있지 않을 때만
+ * api 레이어가 공유 스냅샷에서 계산해 buildExtensionCreates로 넘긴다.
+ * (초기 설계에서는 api가 Firestore를 한 번 더 조회했으나, 공유 스냅샷으로 충분해 없앴다.)
  */
 export const planIndefiniteExtension = (
   todos: Todo[],

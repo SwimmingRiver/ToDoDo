@@ -233,6 +233,45 @@ describe("runStartupMaintenance", () => {
   });
 
   /**
+   * 확장 스윕이 **실제로 쓰는** 경로에서도 읽기가 1회뿐임을 고정한다.
+   *
+   * 위의 `"컬렉션을 한 번만 읽는다"`는 쓸 것이 없는 경로만 덮는다 — 그 경로는
+   * `extensions.length === 0` early return에 걸려 애초에 두 번째 읽기 지점에 닿지 않는다.
+   * order를 공유 스냅샷에서 메모리로 계산하게 만든 이번 변경이 만들어낸 속성은 여기서만
+   * 관측되므로, 별도 테스트로 못박는다.
+   */
+  it("확장을 실제로 쓸 때도 컬렉션을 한 번만 읽는다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const latest = makeTodo({
+      id: "latest-1",
+      order: 7,
+      dueAt: "2026-07-12T09:00:00",
+      startAt: "2026-07-12T09:00:00",
+      recurrenceId: "series-1",
+      recurrence: { type: "daily", endType: "indefinite" },
+    });
+    vi.mocked(getDocs).mockResolvedValue(toDocSnapshot([latest]));
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as never);
+
+    const { runStartupMaintenance } = await import("../todoApi");
+    const written = await runStartupMaintenance(30, new Date("2026-07-15T00:00:00"));
+
+    // 확장이 실제로 일어났는지 먼저 확인한다 — 0건이면 읽기 단언이 공허해진다.
+    expect(written).toBeGreaterThan(0);
+    expect(batch.set).toHaveBeenCalled();
+
+    // getNextRootOrder용 두 번째 읽기가 없어야 한다.
+    expect(vi.mocked(getDocs)).toHaveBeenCalledTimes(1);
+
+    // order는 공유 스냅샷의 루트 최대값(7) 다음부터 이어져야 한다.
+    const orders = batch.set.mock.calls.map((call) => (call[1] as { order: number }).order);
+    expect(orders[0]).toBe(8);
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+
+  /**
    * commitArchiveGroups가 존재하는 유일한 이유를 고정한다: 배치가 쪼개지더라도 한 루트와
    * 그 자식들은 반드시 같은 커밋에 들어가야 한다. 갈라지면 한 프로젝트의 자식 일부만
    * archived된 상태가 남아 getProjectProgress의 진행률이 틀어진다.

@@ -969,7 +969,6 @@ describe("runStartupMaintenance — 무기한 반복 시리즈 확장", () => {
 
   it("무기한 시리즈의 마지막 인스턴스 이후 빈 구간을 새 호라이즌까지 채운다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
-    const now = new Date("2026-07-10T00:00:00");
     const latestExisting = makeTodo({
       id: "latest-1",
       status: "todo",
@@ -979,22 +978,17 @@ describe("runStartupMaintenance — 무기한 반복 시리즈 확장", () => {
     });
     const horizonEnd = new Date("2026-07-15T00:00:00");
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce(
-        toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
-          ? T
-          : never,
-      )
-      // getNextRootOrder용 조회
-      .mockResolvedValueOnce(
-        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
-      );
+    // 확장 스윕은 order를 공유 스냅샷에서 메모리로 계산하므로 추가 조회가 없다.
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
     const batch = makeBatch();
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 
     const { runStartupMaintenance } = await import("../todoApi");
     await runStartupMaintenance(30, horizonEnd);
-    void now;
 
     // 7/13, 7/14, 7/15 (7/12는 이미 존재하므로 제외) = 3건 생성
     expect(batch.set).toHaveBeenCalledTimes(3);
@@ -1023,15 +1017,11 @@ describe("runStartupMaintenance — 무기한 반복 시리즈 확장", () => {
     });
     const horizonEnd = new Date("2026-07-15T00:00:00");
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce(
-        toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
-          ? T
-          : never,
-      )
-      .mockResolvedValueOnce(
-        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
-      );
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
     const batch = makeBatch();
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 
@@ -1056,15 +1046,11 @@ describe("runStartupMaintenance — 무기한 반복 시리즈 확장", () => {
     });
     const horizonEnd = new Date("2026-07-15T00:00:00");
 
-    vi.mocked(getDocs)
-      .mockResolvedValueOnce(
-        toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
-          ? T
-          : never,
-      )
-      .mockResolvedValueOnce(
-        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
-      );
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      toDocSnapshot([latestExisting]) as ReturnType<typeof getDocs> extends Promise<infer T>
+        ? T
+        : never,
+    );
     const batch = makeBatch();
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 
@@ -1197,17 +1183,13 @@ describe("runStartupMaintenance와 editRecurringSeries 동시 실행", () => {
     vi.mocked(getDocs)
       // 1) extend의 전체 조회 - 의도적으로 지연시켜 "느린 네트워크"를 흉내낸다
       .mockImplementationOnce(() => extendReadPromise as ReturnType<typeof getDocs>)
-      // 2) extend의 getNextRootOrder 조회
-      .mockResolvedValueOnce(
-        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
-      )
-      // 3) edit의 시리즈 조회
+      // 2) edit의 시리즈 조회
       .mockResolvedValueOnce(
         toDocSnapshot([futureEditInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
           ? T
           : never,
       )
-      // 4) edit의 getNextRootOrder 조회
+      // 3) edit의 getNextRootOrder 조회
       .mockResolvedValueOnce(
         emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
       );
@@ -1251,6 +1233,7 @@ describe("runStartupMaintenance와 editRecurringSeries 동시 실행", () => {
 
     await editPromise;
     expect(editBatch.commit).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(getDocs).mock.calls.length).toBe(4);
+    // extend는 공유 스냅샷 1회, edit은 시리즈 조회 + getNextRootOrder 2회 = 총 3회.
+    expect(vi.mocked(getDocs).mock.calls.length).toBe(3);
   });
 });

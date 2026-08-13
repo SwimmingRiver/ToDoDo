@@ -661,9 +661,17 @@ const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
 
 /** 평평한 업데이트 목록을 SWEEP_BATCH_SIZE 단위로 나눠 커밋한다.
  *
- *  반환값은 "실제로 커밋된" 문서 수만 센다. 중간 청크가 실패하면 예외가 runSweep까지
- *  전파되어 이 반환값 자체가 쓰이지 않지만(그 스윕은 0으로 집계된다), 카운터가 커밋
- *  이후에만 증가하도록 두면 이 함수가 홀로 무엇을 세는지가 코드에서 분명해진다. */
+ *  반환값은 "실제로 커밋된" 문서 수만 센다. 카운터를 커밋 이후에만 올려 이 함수가 무엇을
+ *  세는지 분명히 했지만, **중간 청크가 실패하면 그 값이 밖으로 나가지 못한다** — 예외가
+ *  runSweep까지 전파되고 그 스윕은 0으로 집계된다. 앞선 청크가 이미 커밋됐는데도
+ *  written에 0이 더해지므로, 그 스윕이 유일한 쓰기였다면 useTodo가 무효화를 건너뛴다.
+ *  즉 방금 쓴 문서가 캐시에 반영되지 않을 수 있다.
+ *
+ *  알면서 두는 트레이드오프다: 400건을 넘는 쓰기 + 중간 실패라는 조합이 동시에 필요하고,
+ *  다음 refetch(staleTime 만료·라우트 이동·재접속)에서 자연히 수렴하며, 유지보수 자체도
+ *  다음 접속 때 재시도된다. 부분 성공을 반환하려면 이 함수가 예외를 삼켜야 하는데 그건
+ *  "실패한 스윕은 0" 이라는 runSweep의 계약을 흐린다. 카운팅 자체는 기존 동작 그대로이고,
+ *  무효화가 이 값에 의존하게 된 것이 이번 변경에서 새로 생긴 결합이라 여기 기록해 둔다. */
 const commitUpdates = async (updates: TodoFieldUpdate[]): Promise<number> => {
   let committed = 0;
   for (let i = 0; i < updates.length; i += SWEEP_BATCH_SIZE) {
@@ -709,6 +717,24 @@ const commitArchiveGroups = async (groups: ArchiveGroup[]): Promise<number> => {
   await commitPending();
   return totalWritten;
 };
+
+/**
+ * 이미 읽어둔 전체 스냅샷에서 다음 루트 order를 계산한다. getNextRootOrder의 Firestore
+ * 쿼리(`userId` + `parentId == null`)는 이 스냅샷을 `parentId === null`로 거른 것과 정확히
+ * 같은 집합이다 — allTodos가 `userId`만으로 필터링된 무조건 전체 읽기이기 때문이다.
+ * 따라서 확장 스윕에서는 두 번째 읽기가 순수한 낭비였다.
+ *
+ * 원자성은 잃지 않는다: 스냅샷은 withRecurringSeriesLock 안에서 떴고, getNextRootOrder
+ * 자체도 트랜잭션이 아닌 read-then-write였다.
+ *
+ * `?? 0`과 시드 `-1`은 getNextRootOrder의 semantics를 그대로 옮긴 것이다. order 필드가
+ * 없는 레거시 문서는 0으로 취급하고, 루트가 하나도 없으면 -1 + 1 = 0이 된다.
+ * (정렬용 normalizeOrder는 없는 order를 Infinity로 보내므로 여기 쓰면 안 된다.)
+ */
+const nextRootOrderFrom = (allTodos: Todo[]): number =>
+  allTodos
+    .filter((t) => t.parentId === null)
+    .reduce((max, t) => Math.max(max, t.order ?? 0), -1) + 1;
 
 /** commitUpdates와 동일하게 실제로 커밋된 문서 수만 센다. */
 const commitCreates = async (creates: TodoCreate[]): Promise<number> => {
@@ -789,9 +815,9 @@ const runStartupMaintenanceImpl = async (
 
   written += await runSweep("extension", async () => {
     const extensions = planIndefiniteExtension(allTodos, horizonEnd);
+    // 생성할 것이 있을 때만 order를 계산한다 — 대부분의 앱 진입에서는 여기서 끝난다.
     if (extensions.length === 0) return 0;
-    // 생성할 것이 있을 때만 order를 조회한다 — 대부분의 앱 진입에서는 여기 도달하지 않는다.
-    const startOrder = await getNextRootOrder(userId);
+    const startOrder = nextRootOrderFrom(allTodos);
     return commitCreates(buildExtensionCreates(extensions, startOrder, userId, now));
   });
 
