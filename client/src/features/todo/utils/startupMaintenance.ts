@@ -75,7 +75,7 @@ export const planOverdueRecurringSweep = (
       if (todo.overdueArchived === true) return false;
       if (!todo.dueAt) return false;
       const due = new Date(todo.dueAt);
-      due.setUTCHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
       return due.getTime() < todayStartTime;
     })
     .map((todo) => ({

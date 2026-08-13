@@ -85,14 +85,15 @@ describe("planArchivedSweep", () => {
 });
 
 describe("planOverdueRecurringSweep", () => {
-  const todayStart = new Date("2026-07-10T00:00:00.000Z");
-  const NOW_ISO = "2026-07-10T00:00:00.000Z";
+  const todayStart = new Date(2026, 5, 10);
+  todayStart.setHours(0, 0, 0, 0);
+  const NOW_ISO = new Date(2026, 5, 10).toISOString();
 
   const makeInstance = (overrides: Partial<Todo> = {}): Todo =>
     makeTodo({
       recurrenceId: "series-1",
       recurrence: { type: "daily", endType: "indefinite" },
-      dueAt: "2026-07-01T00:00:00.000Z",
+      dueAt: new Date(2026, 5, 1, 12, 0).toISOString(),
       ...overrides,
     });
 
@@ -105,7 +106,7 @@ describe("planOverdueRecurringSweep", () => {
   });
 
   it("오늘 마감인 인스턴스는 제외한다", () => {
-    const today = makeInstance({ id: "inst-1", dueAt: "2026-07-10T09:00:00.000Z" });
+    const today = makeInstance({ id: "inst-1", dueAt: new Date(2026, 5, 10, 9, 0).toISOString() });
 
     expect(planOverdueRecurringSweep([today], todayStart, NOW_ISO)).toEqual([]);
   });
@@ -118,7 +119,7 @@ describe("planOverdueRecurringSweep", () => {
   });
 
   it("반복이 아닌 할 일은 제외한다", () => {
-    const plain = makeTodo({ id: "plain-1", dueAt: "2026-07-01T00:00:00.000Z" });
+    const plain = makeTodo({ id: "plain-1", dueAt: new Date(2026, 5, 1, 12, 0).toISOString() });
 
     expect(planOverdueRecurringSweep([plain], todayStart, NOW_ISO)).toEqual([]);
   });
@@ -140,5 +141,17 @@ describe("planOverdueRecurringSweep", () => {
     const noDue = makeInstance({ id: "inst-1", dueAt: null });
 
     expect(planOverdueRecurringSweep([noDue], todayStart, NOW_ISO)).toEqual([]);
+  });
+
+  it("오전 마감인 반복 인스턴스는 KST에서도 오늘로 취급한다", () => {
+    // This test ensures that early-morning local times are not accidentally swept.
+    // In KST (UTC+9), an early morning local deadline should NOT be marked as overdue
+    // when it's still the same calendar day locally.
+    const earlyMorning = makeInstance({
+      id: "inst-kst",
+      dueAt: new Date(2026, 5, 10, 5, 0).toISOString() // 5 AM local time
+    });
+
+    expect(planOverdueRecurringSweep([earlyMorning], todayStart, NOW_ISO)).toEqual([]);
   });
 });
