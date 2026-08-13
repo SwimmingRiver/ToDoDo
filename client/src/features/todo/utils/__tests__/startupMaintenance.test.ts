@@ -85,15 +85,15 @@ describe("planArchivedSweep", () => {
 });
 
 describe("planOverdueRecurringSweep", () => {
-  const todayStart = new Date(2026, 5, 10);
+  const todayStart = new Date(2026, 6, 10);
   todayStart.setHours(0, 0, 0, 0);
-  const NOW_ISO = new Date(2026, 5, 10).toISOString();
+  const NOW_ISO = new Date(2026, 6, 10).toISOString();
 
   const makeInstance = (overrides: Partial<Todo> = {}): Todo =>
     makeTodo({
       recurrenceId: "series-1",
       recurrence: { type: "daily", endType: "indefinite" },
-      dueAt: new Date(2026, 5, 1, 12, 0).toISOString(),
+      dueAt: new Date(2026, 6, 1, 12, 0).toISOString(),
       ...overrides,
     });
 
@@ -106,7 +106,7 @@ describe("planOverdueRecurringSweep", () => {
   });
 
   it("오늘 마감인 인스턴스는 제외한다", () => {
-    const today = makeInstance({ id: "inst-1", dueAt: new Date(2026, 5, 10, 9, 0).toISOString() });
+    const today = makeInstance({ id: "inst-1", dueAt: new Date(2026, 6, 10, 9, 0).toISOString() });
 
     expect(planOverdueRecurringSweep([today], todayStart, NOW_ISO)).toEqual([]);
   });
@@ -119,7 +119,7 @@ describe("planOverdueRecurringSweep", () => {
   });
 
   it("반복이 아닌 할 일은 제외한다", () => {
-    const plain = makeTodo({ id: "plain-1", dueAt: new Date(2026, 5, 1, 12, 0).toISOString() });
+    const plain = makeTodo({ id: "plain-1", dueAt: new Date(2026, 6, 1, 12, 0).toISOString() });
 
     expect(planOverdueRecurringSweep([plain], todayStart, NOW_ISO)).toEqual([]);
   });
@@ -149,7 +149,7 @@ describe("planOverdueRecurringSweep", () => {
     // when it's still the same calendar day locally.
     const earlyMorning = makeInstance({
       id: "inst-kst",
-      dueAt: new Date(2026, 5, 10, 5, 0).toISOString() // 5 AM local time
+      dueAt: new Date(2026, 6, 10, 5, 0).toISOString() // 5 AM local time
     });
 
     expect(planOverdueRecurringSweep([earlyMorning], todayStart, NOW_ISO)).toEqual([]);
