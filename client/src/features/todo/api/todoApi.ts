@@ -11,9 +11,12 @@ import {
 } from "firebase/firestore";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
-import { toDateKeyFromISO } from "@/shared/utils/date";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
-import { generateRecurringDueDates, getDefaultHorizonEnd } from "../utils/recurrence";
+import {
+  buildRecurringInstanceId,
+  generateRecurringDueDates,
+  getDefaultHorizonEnd,
+} from "../utils/recurrence";
 
 const todosRef = collection(db, "todos");
 
@@ -37,20 +40,6 @@ const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
  */
 const normalizeOrder = (order: number | undefined): number =>
   typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
-
-/**
- * 반복 인스턴스 문서 ID를 {recurrenceId}_{YYYY-MM-DD}로 결정론적으로 만든다(로컬 타임존
- * 기준 연-월-일 — 코드베이스 전반의 toDateString() 기반 "같은 날짜" 판정과 동일 기준).
- *
- * createRecurringTodo/editRecurringSeries/extendIndefiniteRecurringSeries는 서로 다른
- * 탭·기기에서 겹쳐 실행될 수 있는데(withRecurringSeriesLock은 탭 내부만 직렬화), 인스턴스를
- * 매번 새 자동생성 ID로 만들면 같은 recurrenceId·같은 날짜에 대해 두 문서가 동시에 생성될 수
- * 있다. ID 자체를 recurrenceId+날짜로 고정하면 Firestore 문서 ID의 유일성이 곧 "같은
- * 날짜엔 항상 같은 문서"를 보장하므로, 여러 곳에서 동시에 써도(batch.set은 없으면 생성,
- * 있으면 덮어쓰는 upsert) 마지막에 커밋된 내용으로 수렴할 뿐 중복 문서가 생기지 않는다.
- */
-const buildRecurringInstanceId = (recurrenceId: string, dueAt: string): string =>
-  `${recurrenceId}_${toDateKeyFromISO(dueAt)}`;
 
 /**
  * 반복 시리즈를 읽고(getDocs) 판단한 뒤 batch로 쓰는 함수들(createRecurringTodo,

@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { toDateKeyFromISO } from "@/shared/utils/date";
 import type { Todo } from "../../types/todo.type";
-import { planArchivedSweep, planOverdueRecurringSweep } from "../startupMaintenance";
+import {
+  buildExtensionCreates,
+  planArchivedSweep,
+  planIndefiniteExtension,
+  planOverdueRecurringSweep,
+} from "../startupMaintenance";
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
   id: "todo-1",
@@ -153,5 +159,130 @@ describe("planOverdueRecurringSweep", () => {
     });
 
     expect(planOverdueRecurringSweep([earlyMorning], todayStart, NOW_ISO)).toEqual([]);
+  });
+});
+
+describe("planIndefiniteExtension", () => {
+  // 실제 호출자(getDefaultHorizonEnd)는 로컬 Date를 넘기므로 픽스처도 로컬로 만든다.
+  // UTC 리터럴(new Date("...Z"))로 만들면 타임존마다 로컬 날짜가 달라진다.
+  const horizonEnd = new Date(2026, 7, 7);
+
+  const makeSeriesInstance = (overrides: Partial<Todo> = {}): Todo =>
+    makeTodo({
+      recurrenceId: "series-1",
+      recurrence: { type: "daily", endType: "indefinite" },
+      dueAt: "2026-07-10T00:00:00.000Z",
+      ...overrides,
+    });
+
+  it("마지막 인스턴스 이후 호라이즌까지의 날짜를 계획한다", () => {
+    const latest = makeSeriesInstance({ id: "inst-1" });
+
+    const [extension] = planIndefiniteExtension([latest], horizonEnd);
+
+    expect(extension.recurrenceId).toBe("series-1");
+    expect(extension.dueDates.length).toBeGreaterThan(0);
+    expect(new Date(extension.dueDates[0]).getTime()).toBeGreaterThan(
+      new Date("2026-07-10T00:00:00.000Z").getTime(),
+    );
+    expect(extension.template.title).toBe(latest.title);
+  });
+
+  it("이미 호라이즌까지 채워진 시리즈는 제외한다", () => {
+    const filled = makeSeriesInstance({ id: "inst-1", dueAt: "2026-08-20T00:00:00.000Z" });
+
+    expect(planIndefiniteExtension([filled], horizonEnd)).toEqual([]);
+  });
+
+  it("untilDate 종료 시리즈는 대상이 아니다", () => {
+    const until = makeSeriesInstance({
+      id: "inst-1",
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-12-31T00:00:00.000Z" },
+    });
+
+    expect(planIndefiniteExtension([until], horizonEnd)).toEqual([]);
+  });
+
+  it("반복이 아닌 할 일은 대상이 아니다", () => {
+    expect(planIndefiniteExtension([makeTodo({ id: "plain-1" })], horizonEnd)).toEqual([]);
+  });
+
+  it("시리즈에 이미 존재하는 날짜는 계획에서 뺀다", () => {
+    const first = makeSeriesInstance({ id: "inst-1", dueAt: "2026-07-10T00:00:00.000Z" });
+    const second = makeSeriesInstance({ id: "inst-2", dueAt: "2026-07-11T00:00:00.000Z" });
+
+    const [extension] = planIndefiniteExtension([first, second], horizonEnd);
+
+    const dateKeys = extension.dueDates.map((iso) => new Date(iso).toDateString());
+    expect(dateKeys).not.toContain(new Date("2026-07-11T00:00:00.000Z").toDateString());
+  });
+
+  it("여러 시리즈를 각각 계획한다", () => {
+    const a = makeSeriesInstance({ id: "a-1", recurrenceId: "series-a" });
+    const b = makeSeriesInstance({ id: "b-1", recurrenceId: "series-b" });
+
+    const extensions = planIndefiniteExtension([a, b], horizonEnd);
+
+    expect(extensions.map((e) => e.recurrenceId).sort()).toEqual(["series-a", "series-b"]);
+  });
+});
+
+describe("buildExtensionCreates", () => {
+  it("startOrder부터 순차적으로 order를 매긴다", () => {
+    const extensions = [
+      {
+        recurrenceId: "series-1",
+        template: { ...makeTodo({ id: "x" }), title: "반복 할 일" } as Omit<Todo, "id">,
+        dueDates: ["2026-07-11T00:00:00.000Z", "2026-07-12T00:00:00.000Z"],
+      },
+    ];
+
+    const creates = buildExtensionCreates(extensions, 5, "test-user-id", "2026-07-10T00:00:00.000Z");
+
+    expect(creates.map((c) => c.doc.order)).toEqual([5, 6]);
+  });
+
+  it("문서 ID를 recurrenceId_날짜로 결정론적으로 만든다", () => {
+    const extensions = [
+      {
+        recurrenceId: "series-1",
+        template: makeTodo({ id: "x" }) as Omit<Todo, "id">,
+        dueDates: ["2026-07-11T00:00:00.000Z"],
+      },
+    ];
+
+    const [create] = buildExtensionCreates(extensions, 0, "test-user-id", "2026-07-10T00:00:00.000Z");
+
+    expect(create.id).toBe(`series-1_${toDateKeyFromISO("2026-07-11T00:00:00.000Z")}`);
+  });
+
+  it("startAt을 각 인스턴스의 발생일로 덮어쓰고 status를 todo로 초기화한다", () => {
+    const extensions = [
+      {
+        recurrenceId: "series-1",
+        template: makeTodo({ id: "x", status: "done", doneAt: "2026-07-01T00:00:00.000Z" }) as Omit<Todo, "id">,
+        dueDates: ["2026-07-11T00:00:00.000Z"],
+      },
+    ];
+
+    const [create] = buildExtensionCreates(extensions, 0, "test-user-id", "2026-07-10T00:00:00.000Z");
+
+    expect(create.doc.startAt).toBe("2026-07-11T00:00:00.000Z");
+    expect(create.doc.dueAt).toBe("2026-07-11T00:00:00.000Z");
+    expect(create.doc.status).toBe("todo");
+    expect(create.doc.doneAt).toBeNull();
+    expect(create.doc.parentId).toBeNull();
+  });
+
+  it("여러 시리즈에 걸쳐 order가 계속 증가한다", () => {
+    const template = makeTodo({ id: "x" }) as Omit<Todo, "id">;
+    const extensions = [
+      { recurrenceId: "series-a", template, dueDates: ["2026-07-11T00:00:00.000Z"] },
+      { recurrenceId: "series-b", template, dueDates: ["2026-07-11T00:00:00.000Z"] },
+    ];
+
+    const creates = buildExtensionCreates(extensions, 10, "test-user-id", "2026-07-10T00:00:00.000Z");
+
+    expect(creates.map((c) => c.doc.order)).toEqual([10, 11]);
   });
 });

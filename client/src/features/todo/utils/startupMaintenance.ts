@@ -1,4 +1,5 @@
-import type { Todo } from "../types/todo.type";
+import type { RecurrenceRule, Todo } from "../types/todo.type";
+import { buildRecurringInstanceId, generateRecurringDueDates } from "./recurrence";
 
 /** 기존 문서의 일부 필드를 갱신하는 계획 항목. */
 export type TodoFieldUpdate = { id: string; fields: Partial<Omit<Todo, "id">> };
@@ -82,4 +83,107 @@ export const planOverdueRecurringSweep = (
       id: todo.id,
       fields: { overdueArchived: true, updatedAt: now },
     }));
+};
+
+/** 신규 문서 생성 계획 항목. id는 결정론적으로 계산된 문서 ID다. */
+export type TodoCreate = { id: string; doc: Omit<Todo, "id"> };
+
+/** 한 반복 시리즈에 대해 "무엇을 언제 만들지"만 담은 계획. order는 아직 비어 있다. */
+export type SeriesExtension = {
+  recurrenceId: string;
+  /** 가장 최근 인스턴스의 필드를 승계할 템플릿. */
+  template: Omit<Todo, "id">;
+  dueDates: string[];
+};
+
+/**
+ * 무기한(indefinite) 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
+ * 기존 인스턴스는 건드리지 않고 마지막 인스턴스 이후의 빈 구간만 채운다.
+ *
+ * order를 여기서 매기지 않는 이유: 다음 order는 Firestore 조회(getNextRootOrder)가
+ * 필요한데, 대부분의 앱 진입에서는 확장할 것이 없어 그 조회 자체를 하지 말아야 한다.
+ * 계획이 비어있지 않을 때만 api 레이어가 조회해 buildExtensionCreates로 넘긴다.
+ */
+export const planIndefiniteExtension = (
+  todos: Todo[],
+  horizonEnd: Date,
+): SeriesExtension[] => {
+  const seriesByRecurrenceId = new Map<string, Todo[]>();
+  for (const todo of todos) {
+    if (!todo.recurrenceId || !todo.recurrence) continue;
+    if (todo.recurrence.endType !== "indefinite") continue;
+    if (!todo.dueAt) continue;
+    const list = seriesByRecurrenceId.get(todo.recurrenceId) ?? [];
+    list.push(todo);
+    seriesByRecurrenceId.set(todo.recurrenceId, list);
+  }
+
+  const extensions: SeriesExtension[] = [];
+
+  for (const [recurrenceId, instances] of seriesByRecurrenceId) {
+    const latest = instances.reduce((a, b) =>
+      new Date(a.dueAt as string).getTime() > new Date(b.dueAt as string).getTime() ? a : b,
+    );
+    const latestTime = new Date(latest.dueAt as string).getTime();
+    if (latestTime >= horizonEnd.getTime()) continue; // 이미 새 호라이즌까지 채워져 있음
+
+    const rule = latest.recurrence as RecurrenceRule;
+    // 멀티탭 등에서 이미 존재하는 날짜를 다시 만들지 않도록 최소한의 존재 체크를 한다.
+    const existingDateKeys = new Set(
+      instances.map((t) => new Date(t.dueAt as string).toDateString()),
+    );
+    const dueDates = generateRecurringDueDates(latest.dueAt as string, rule, horizonEnd)
+      .filter((iso) => new Date(iso).getTime() > latestTime)
+      .filter((iso) => !existingDateKeys.has(new Date(iso).toDateString()));
+
+    if (dueDates.length === 0) continue;
+
+    const { id: _id, ...template } = latest;
+    extensions.push({ recurrenceId, template, dueDates });
+  }
+
+  return extensions;
+};
+
+/**
+ * 계획에 order를 채워 실제 생성할 문서로 만든다.
+ *
+ * order는 시리즈 경계를 넘어 계속 증가한다 — batch가 커밋되기 전에는 새 인스턴스가
+ * Firestore에 반영되지 않으므로, 시리즈마다 order를 다시 조회하면 서로 다른 시리즈의
+ * 인스턴스들이 중복된 order를 받는다.
+ */
+export const buildExtensionCreates = (
+  extensions: SeriesExtension[],
+  startOrder: number,
+  userId: string,
+  now: string,
+): TodoCreate[] => {
+  const creates: TodoCreate[] = [];
+  let nextOrder = startOrder;
+
+  for (const { recurrenceId, template, dueDates } of extensions) {
+    for (const dueAt of dueDates) {
+      creates.push({
+        id: buildRecurringInstanceId(recurrenceId, dueAt),
+        doc: {
+          ...template,
+          userId,
+          // template(마지막 인스턴스 필드 승계)에 담긴 startAt은 그 인스턴스 자신의
+          // 발생일 기준 값이라 새로 만드는 인스턴스에는 맞지 않으므로 매번 덮어쓴다.
+          startAt: dueAt,
+          dueAt,
+          status: "todo",
+          doneAt: null,
+          parentId: null,
+          recurrenceId,
+          createdAt: now,
+          updatedAt: now,
+          order: nextOrder,
+        },
+      });
+      nextOrder += 1;
+    }
+  }
+
+  return creates;
 };
