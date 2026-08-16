@@ -1,7 +1,7 @@
 import type { Todo } from "../../types";
 import { PencilIcon, TrashIcon, Plus, ChevronRight, ChevronDown } from "lucide-react";
-import { useState } from "react";
-import { useTodo } from "../../hooks";
+import { memo, useState } from "react";
+import { useDeleteTodo, useUpdateTodo } from "../../hooks";
 import { useNavigate } from "react-router-dom";
 import { ConfirmModal, useToast } from "@/shared";
 import StatusSelect from "./statusSelect";
@@ -16,7 +16,7 @@ import {
 } from "./todoListItem.styles";
 import { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel } from "@/shared/utils";
 
-const TodoListItem = ({
+const TodoListItem = memo(({
   todo,
   isChild,
   childTodos,
@@ -31,12 +31,13 @@ const TodoListItem = ({
 }) => {
   const [isMore, setIsMore] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const { useDeleteTodo, useUpdateTodo } = useTodo();
+  const deleteTodo = useDeleteTodo();
+  const updateTodo = useUpdateTodo();
   const navigate = useNavigate();
   const toast = useToast();
 
   const handleDelete = () => {
-    useDeleteTodo.mutate(todo.id, {
+    deleteTodo.mutate(todo.id, {
       onSuccess: () => {
         toast.success("삭제 완료", `"${todo.title}" 할 일이 삭제되었습니다`);
       },
@@ -57,7 +58,7 @@ const TodoListItem = ({
   };
 
   const handleStatusChange = (newStatus: "todo" | "doing" | "done") => {
-    useUpdateTodo.mutate({
+    updateTodo.mutate({
       ...todo,
       status: newStatus,
     }, {
@@ -129,6 +130,6 @@ const TodoListItem = ({
       )}
     </>
   );
-};
+});
 
 export default TodoListItem;

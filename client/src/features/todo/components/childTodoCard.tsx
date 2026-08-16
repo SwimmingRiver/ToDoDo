@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { PencilIcon, TrashIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ConfirmModal, useToast } from "@/shared";
-import { useTodo } from "../hooks";
+import { useDeleteTodo, useUpdateTodo } from "../hooks";
 import type { Todo } from "../types";
 import type { Status } from "@/styles/statusColors";
 import {
@@ -24,7 +24,7 @@ const STATUS_LABELS: Record<Status, string> = {
   done: "완료",
 };
 
-const ChildTodoCard = ({
+const ChildTodoCard = memo(({
   todo,
   onEdit,
 }: {
@@ -33,12 +33,13 @@ const ChildTodoCard = ({
 }) => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
-  const { useDeleteTodo, useUpdateTodo } = useTodo();
+  const deleteTodo = useDeleteTodo();
+  const updateTodo = useUpdateTodo();
   const navigate = useNavigate();
   const toast = useToast();
 
   const handleDelete = () => {
-    useDeleteTodo.mutate(todo.id, {
+    deleteTodo.mutate(todo.id, {
       onSuccess: () => {
         setIsDeleteOpen(false);
         toast.success("삭제 완료", `"${todo.title}" 할 일이 삭제되었습니다`);
@@ -51,7 +52,7 @@ const ChildTodoCard = ({
   };
 
   const handleStatusChange = (newStatus: Status) => {
-    useUpdateTodo.mutate(
+    updateTodo.mutate(
       { ...todo, status: newStatus },
       {
         onSuccess: () =>
@@ -121,6 +122,6 @@ const ChildTodoCard = ({
       </ChildCardWrapper>
     </>
   );
-};
+});
 
 export default ChildTodoCard;

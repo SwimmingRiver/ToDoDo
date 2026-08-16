@@ -93,10 +93,10 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
 
   const displayTodos = isSearching ? searchResultTree : todoTree;
 
-  const handleEdit = (todo: Todo) => {
+  const handleEdit = useCallback((todo: Todo) => {
     setEditingTodo(todo);
     setIsEditOpen(true);
-  };
+  }, [setIsEditOpen]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
@@ -106,7 +106,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
     setSearchQuery("");
   }, []);
 
-  const handleToggleExpand = (id: string) => {
+  const handleToggleExpand = useCallback((id: string) => {
     setExpandedProjectIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -116,21 +116,25 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       }
       return next;
     });
-  };
+  }, []);
 
-  const handleCardClick = (todo: Todo) => {
+  const handleCardClick = useCallback((todo: Todo) => {
     navigate(`/todo/${todo.id}`);
-  };
+  }, [navigate]);
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = useCallback((id: string) => {
     setDeleteTargetId(id);
-  };
+  }, []);
 
-  const handleAddChild = (parentId: string) => {
+  const handleAddChild = useCallback((parentId: string) => {
     setParentTodoId(parentId);
     setIsAddChildOpen(true);
-  };
+  }, [setIsAddChildOpen]);
 
+  // expandedProjectIds는 일부러 의존성에서 뺐다: 카드 하나를 펼쳐도 이 배열
+  // 전체가 새로 생성되면 .map()이 바뀌지 않은 프로젝트의 data까지 새 객체로
+  // 만들어버려, ProjectCard(memo)가 전부 리렌더된다. isExpanded는 아래에서
+  // ProjectCard에 별도 prop으로 넘겨 펼친 카드 하나의 prop만 바뀌게 한다.
   const projectCards = useMemo<ProjectCardData[]>(() => {
     return todoTree.map((rootTodo) => ({
       todo: rootTodo,
@@ -139,9 +143,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       subtaskInfo: getProjectSubtaskInfo(todos, rootTodo.id),
       overdueInfo: getProjectOverdue(todos, rootTodo),
       recurringMissedCount: getRecurringMissedCount(todos, rootTodo),
-      isExpanded: expandedProjectIds.has(rootTodo.id),
     }));
-  }, [todoTree, todos, expandedProjectIds]);
+  }, [todoTree, todos]);
 
   const deleteTargetTodo = deleteTargetId
     ? todos.find((t) => t.id === deleteTargetId)
@@ -232,12 +235,12 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
                   subtaskInfo: getProjectSubtaskInfo(todos, todo.id),
                   overdueInfo: getProjectOverdue(todos, todo),
                   recurringMissedCount: getRecurringMissedCount(todos, todo),
-                  isExpanded: expandedProjectIds.has(todo.id),
                 };
                 return (
                   <ProjectCard
                     key={todo.id}
                     data={projectData}
+                    isExpanded={expandedProjectIds.has(todo.id)}
                     onCardClick={handleCardClick}
                     onToggleExpand={handleToggleExpand}
                     onEdit={handleEdit}
@@ -282,6 +285,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
               <ProjectCard
                 key={card.todo.id}
                 data={card}
+                isExpanded={expandedProjectIds.has(card.todo.id)}
                 onCardClick={handleCardClick}
                 onToggleExpand={handleToggleExpand}
                 onEdit={handleEdit}
