@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
+import * as Sentry from '@sentry/react'
 import { useTodo, useTodoDetail } from '../useTodo'
 import type { Todo } from '../../types/todo.type'
+
+vi.mock('@sentry/react', () => ({ captureException: vi.fn() }))
 
 // Firebase 모킹
 vi.mock('@/shared/lib/firebase', () => ({
@@ -650,6 +653,7 @@ describe('useTodo 훅', () => {
         expect.stringContaining('앱 진입 유지보수 실패'),
         error,
       )
+      expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(error)
 
       consoleErrorSpy.mockRestore()
     })
