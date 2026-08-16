@@ -58,7 +58,6 @@ export interface ProjectCardData {
   subtaskInfo: { total: number; statusText: string };
   overdueInfo: { isOverdue: boolean; daysOver: number };
   recurringMissedCount: number;
-  isExpanded: boolean;
 }
 
 // 서브태스크 중 done 비율 (0~100). 서브태스크가 없으면 0 반환

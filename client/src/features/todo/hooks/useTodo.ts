@@ -4,8 +4,6 @@ import type { Todo, TodoReorderUpdate } from "../types";
 import {
   createTodo,
   getTodos,
-  editTodo,
-  deleteTodo,
   updateToDone,
   updateTodoDueAt,
   createChildTodo,
@@ -15,8 +13,9 @@ import {
   deleteRecurringSeries,
   runStartupMaintenance,
   reorderTodos,
-  calcParentStatus,
 } from "../api";
+import { useUpdateTodo } from "./useUpdateTodo";
+import { useDeleteTodo } from "./useDeleteTodo";
 
 export const useTodo = () => {
   const queryClient = useQueryClient();
@@ -27,65 +26,11 @@ export const useTodo = () => {
     },
   });
 
-  const useUpdateTodo = useMutation({
-    mutationFn: (todo: Todo) => {
-      const allTodos = queryClient.getQueryData<Todo[]>(["todos"]) ?? [];
-      return editTodo(todo, allTodos);
-    },
-    onMutate: async (updatedTodo) => {
-      await queryClient.cancelQueries({ queryKey: ["todos"] });
-      const previous = queryClient.getQueryData<Todo[]>(["todos"]);
-
-      queryClient.setQueryData<Todo[]>(["todos"], (old = []) => {
-        const now = new Date().toISOString();
-        let next = old.map((t) =>
-          t.id === updatedTodo.id ? { ...t, ...updatedTodo } : t,
-        );
-
-        // 상위 done → 하위 전부 done
-        if (updatedTodo.status === "done") {
-          next = next.map((t) =>
-            t.parentId === updatedTodo.id
-              ? { ...t, status: "done" as const, doneAt: now }
-              : t,
-          );
-        }
-
-        // 하위 변경 → 상위 상태 재계산
-        if (updatedTodo.parentId) {
-          const siblings = next.filter(
-            (t) => t.parentId === updatedTodo.parentId,
-          );
-          const { status: newParentStatus, doneAt } =
-            calcParentStatus(siblings);
-          next = next.map((t) =>
-            t.id === updatedTodo.parentId
-              ? { ...t, status: newParentStatus, doneAt }
-              : t,
-          );
-        }
-
-        return next;
-      });
-
-      return { previous };
-    },
-    onError: (_err, _todo, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["todos"], context.previous);
-      }
-    },
-    // 상세 페이지(useTodoDetail)는 목록과 별도의 쿼리 키(["todoDetail", id])를 쓴다.
-    // ["todos"]만 무효화하면, 상세 페이지에서 저장 후 같은 항목을 staleTime(1분)
-    // 안에 다시 열었을 때 무효화되지 않은 캐시가 "신선하다"고 판단되어 재조회 없이
-    // 그대로 재사용된다 — 방금 저장한 필드(예: description)가 화면에 반영되지 않는
-    // 버그의 원인이었다. ["todoDetail"]은 id 없이 prefix로 넘겨 해당 todo를 보고
-    // 있던 모든 상세 쿼리를 함께 무효화한다.
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["todos"] });
-      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
-    },
-  });
+  // 리스트 행처럼 반복 렌더링되는 컴포넌트는 useTodo() 전체 대신 이 훅을 직접
+  // 호출한다(todoListItem, childTodoCard, projectCard). 여기서는 useTodo() 소비자
+  // 전체의 반환 형태를 유지하기 위해 재사용한다.
+  const updateTodo = useUpdateTodo();
+  const deleteTodo = useDeleteTodo();
 
   // 칸반 보드 같은 컬럼 내 드래그 재정렬(useKanbanDrag)에서 사용. 여러 문서의 order를
   // 한 번에 bulk write하는 reorderTodos를 감싼다. useUpdateTodo와 동일한 이유로
@@ -113,14 +58,6 @@ export const useTodo = () => {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
-    },
-  });
-
-  const useDeleteTodo = useMutation({
-    mutationFn: (id: string) => deleteTodo(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["todos"] });
-      queryClient.invalidateQueries({ queryKey: ["todoDetail"] });
     },
   });
 
@@ -229,9 +166,9 @@ export const useTodo = () => {
 
   return {
     useCreateTodo,
-    useUpdateTodo,
+    useUpdateTodo: updateTodo,
     useReorderTodos,
-    useDeleteTodo,
+    useDeleteTodo: deleteTodo,
     useGetTodos,
     useUpdateToDone,
     useUpdateTodoDueAt,

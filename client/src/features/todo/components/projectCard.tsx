@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { Todo } from "../types";
 import type { ProjectCardData } from "../utils/projectUtils";
 import ChildTodoCard from "./childTodoCard";
@@ -6,7 +6,7 @@ import { TrashIcon, ChevronRight, ChevronDown, Plus, Circle, Loader, CheckCircle
 import BottomSheet from "@/shared/ui/bottomSheet/bottomSheet";
 import type { BottomSheetOption } from "@/shared/ui/bottomSheet/bottomSheet";
 import useMediaQuery from "@/shared/hooks/useMediaQuery";
-import { useTodo } from "../hooks";
+import { useUpdateTodo } from "../hooks";
 import { useToast, RecurrenceBadge, RecurrenceMissedBadge } from "@/shared";
 import { statusColors, type Status } from "@/styles/statusColors";
 import {
@@ -31,6 +31,7 @@ import {
 
 interface ProjectCardProps {
   data: ProjectCardData;
+  isExpanded: boolean;
   onCardClick: (todo: Todo) => void;
   onToggleExpand: (id: string) => void;
   onEdit: (todo: Todo) => void;
@@ -38,8 +39,9 @@ interface ProjectCardProps {
   onAddChild: (parentId: string) => void;
 }
 
-const ProjectCard = ({
+const ProjectCard = memo(({
   data,
+  isExpanded,
   onCardClick,
   onToggleExpand,
   onEdit,
@@ -53,7 +55,6 @@ const ProjectCard = ({
     subtaskInfo,
     overdueInfo,
     recurringMissedCount,
-    isExpanded,
   } = data;
 
   const { isOverdue, daysOver } = overdueInfo;
@@ -61,7 +62,7 @@ const ProjectCard = ({
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
 
-  const { useUpdateTodo } = useTodo();
+  const updateTodo = useUpdateTodo();
   const toast = useToast();
 
   const subtitleText =
@@ -76,7 +77,7 @@ const ProjectCard = ({
   ];
 
   const handleStatusChange = (newStatus: Status) => {
-    useUpdateTodo.mutate(
+    updateTodo.mutate(
       { ...todo, status: newStatus },
       {
         onSuccess: () =>
@@ -218,6 +219,6 @@ const ProjectCard = ({
       />
     </>
   );
-};
+});
 
 export default ProjectCard;
