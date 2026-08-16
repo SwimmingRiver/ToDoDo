@@ -1,7 +1,8 @@
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "@/shared/lib/firebase";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "../context/useAuth";
 import { Container, Card, Title, GoogleButton, ErrorMessage } from "./loginPage.styles";
 
 const GoogleIcon = () => (
@@ -15,8 +16,12 @@ const GoogleIcon = () => (
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  if (loading) return null;
+  if (user) return <Navigate to="/today" replace />;
 
   const handleGoogleLogin = async () => {
     setErrorMessage(null);
