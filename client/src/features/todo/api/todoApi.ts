@@ -9,6 +9,7 @@ import {
   getDoc,
   writeBatch,
 } from "firebase/firestore";
+import * as Sentry from "@sentry/react";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
@@ -762,6 +763,7 @@ const runSweep = async (name: string, run: () => Promise<number>): Promise<numbe
     return await run();
   } catch (error) {
     console.error(`앱 진입 유지보수 실패 (${name}):`, error);
+    Sentry.captureException(error, { tags: { sweep: name } });
     return 0;
   }
 };

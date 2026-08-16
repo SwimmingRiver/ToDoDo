@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as Sentry from "@sentry/react";
 import type { Todo } from "../../types/todo.type";
+
+vi.mock("@sentry/react", () => ({ captureException: vi.fn() }));
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -104,6 +107,7 @@ describe("runStartupMaintenance", () => {
     const firebase = await import("@/shared/lib/firebase");
     Object.assign(firebase.auth, { currentUser: { uid: "test-user-id" } });
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(Sentry.captureException).mockClear();
   });
 
   afterEach(() => {
@@ -208,6 +212,25 @@ describe("runStartupMaintenance", () => {
     expect(written).toBe(1); // 실패한 스윕은 0으로 집계
     // 이 테스트만이 console.error를 기대한다(나머지는 전부 not.toHaveBeenCalled).
     expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it("스윕이 실패하면 콘솔뿐 아니라 Sentry로도 보고한다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const root = makeTodo({ id: "root-1", status: "done", doneAt: "2026-06-01T00:00:00.000Z" });
+    vi.mocked(getDocs).mockResolvedValue(toDocSnapshot([root]));
+
+    const failingBatch = makeBatch();
+    const sweepError = new Error("permission-denied");
+    failingBatch.commit.mockRejectedValue(sweepError);
+    vi.mocked(writeBatch).mockReturnValue(failingBatch as never);
+
+    const { runStartupMaintenance } = await import("../todoApi");
+    await runStartupMaintenance();
+
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(
+      sweepError,
+      { tags: { sweep: "archived" } },
+    );
   });
 
   it("한 배치 상한을 넘는 overdue 대상은 나눠서 커밋한다", async () => {

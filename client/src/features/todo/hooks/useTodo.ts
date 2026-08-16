@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Sentry from "@sentry/react";
 import type { Todo, TodoReorderUpdate } from "../types";
 import {
   createTodo,
@@ -222,6 +223,7 @@ export const useTodo = () => {
     },
     onError: (error) => {
       console.error("앱 진입 유지보수 실패:", error);
+      Sentry.captureException(error);
     },
   });
 
