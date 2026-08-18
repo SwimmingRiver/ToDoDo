@@ -19,17 +19,17 @@ describe('statusColors', () => {
     })
 
     it('todo 상태는 회색 계열 색상을 가져야 한다', () => {
-      expect(statusColors.todo.main).toBe('#6b7280')
+      expect(statusColors.todo.main).toBe('#4b5563')
     })
 
     it('doing 상태는 파란색 계열 색상을 가져야 한다', () => {
-      expect(statusColors.doing.main).toBe('#3b82f6')
+      expect(statusColors.doing.main).toBe('#1d4ed8')
     })
 
     it('done 상태는 초록색 계열 색상을 가져야 한다', () => {
-      // 리브랜딩 스펙(1-4) 기준 브랜드 틸 색상으로 통일됨. brand.fill과 값은 같지만
-      // 할 일 상태를 나타내는 별도 체계라 brand 토큰을 참조하지 않는다.
-      expect(statusColors.done.main).toBe('#1D9E75')
+      // brand.fill(#1D9E75)은 텍스트로 쓸 수 없어(colors.ts, brandContrast.test.ts)
+      // 할 일 상태 배지 텍스트로는 더 어두운 별도 값을 쓴다.
+      expect(statusColors.done.main).toBe('#065f46')
     })
   })
 
