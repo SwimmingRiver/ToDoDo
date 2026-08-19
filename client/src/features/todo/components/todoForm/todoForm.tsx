@@ -24,7 +24,7 @@ import {
   DetailSection,
   DetailContent,
   Select,
-} from "./todoFrom.styles";
+} from "./todoForm.styles";
 
 interface TodoFormData {
   title: string;

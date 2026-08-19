@@ -38,7 +38,7 @@ export const DisabledHint = styled.div`
   margin-top: -4px;
 `;
 
-// 기존 DetailSection의 grid-template-rows 트랜지션 패턴(todoFrom.styles.tsx) 재사용.
+// 기존 DetailSection의 grid-template-rows 트랜지션 패턴(todoForm.styles.tsx) 재사용.
 export const RecurrenceDetailPanel = styled.div<{ $isOpen: boolean }>`
   display: grid;
   grid-template-rows: ${({ $isOpen }) => ($isOpen ? "1fr" : "0fr")};

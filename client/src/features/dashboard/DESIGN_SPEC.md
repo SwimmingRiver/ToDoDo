@@ -639,7 +639,7 @@ FullCalendar의 `interactionPlugin`은 터치 이벤트도 지원한다 (`touchs
 | `features/dashboard/components/calendar.tsx` | 수정 | 뷰 전환 state, viewToggle UI, isOverdue 판정, eventDrop 핸들러, BottomSheet AddButton, create Modal |
 | `features/dashboard/components/calendar.styles.tsx` | 수정 | pointer-events 제거, ViewToggleRow/ViewButton/AddButton 추가, DayDetailItem $overdue prop, .fc-highlight 배경색 |
 | `features/todo/components/todoForm/todoForm.tsx` | 수정 | `initialDueAt?: string` prop 추가 |
-| `features/todo/components/todoForm/todoFrom.styles.tsx` | 변경 없음 | |
+| `features/todo/components/todoForm/todoForm.styles.tsx` | 변경 없음 | |
 | `features/dashboard/Pages/pieChartPage.tsx` | 삭제 또는 라우트 제거 | 파이차트 제거 (라우트 변경은 라우팅 파일 별도 확인 필요) |
 
 ---
