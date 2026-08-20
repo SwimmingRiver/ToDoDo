@@ -12,6 +12,24 @@ import { expect } from '@playwright/test'
  * uid가 달라져 Firestore 데이터가 테스트 간에 완전히 격리된다.
  */
 export async function loginAsTestUser(page: Page): Promise<void> {
+  // main.tsx가 dev 서버에서 항상 마운트하는 TanStack Query Devtools 토글
+  // 버튼(prod 빌드에는 없음)이 화면 하단 요소들과 좌표가 겹쳐 클릭을 가로채는
+  // 경우가 있어 숨긴다. page.goto()는 매번 실제 페이지 네비게이션이라
+  // addStyleTag로는 다음 goto에서 스타일이 날아가므로, 모든 네비게이션에
+  // 적용되는 addInitScript를 쓴다.
+  await page.addInitScript(() => {
+    const inject = () => {
+      const style = document.createElement('style')
+      style.textContent = '.tsqd-parent-container { display: none !important; }'
+      document.head.appendChild(style)
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', inject)
+    } else {
+      inject()
+    }
+  })
+
   // 앱(및 firebase.ts의 싱글턴 auth/db)이 부트스트랩되도록 아무 라우트나 먼저 연다.
   await page.goto('/login')
 
