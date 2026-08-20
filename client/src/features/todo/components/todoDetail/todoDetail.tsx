@@ -1,7 +1,15 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { useTodoDetail, useTodo } from "../../hooks";
+import {
+  useTodoDetail,
+  useUpdateTodo,
+  useCreateRecurringTodo,
+  useEditRecurringSeries,
+  useDeleteTodo,
+  useDeleteRecurringSeries,
+  useGetTodos,
+} from "../../hooks";
 import type { Todo } from "../../types";
 import { X, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import {
@@ -83,15 +91,12 @@ const formatDateTime = (dateString: string | null) => {
 const TodoDetailView = ({ id }: { id: string }) => {
   const navigate = useNavigate();
   const { todo } = useTodoDetail({ id });
-  const {
-    useUpdateTodo,
-    useCreateRecurringTodo,
-    useEditRecurringSeries,
-    useDeleteTodo,
-    useDeleteRecurringSeries,
-    useGetTodos,
-  } = useTodo();
-  const { data: allTodos } = useGetTodos;
+  const updateTodo = useUpdateTodo();
+  const createRecurringTodo = useCreateRecurringTodo();
+  const editRecurringSeries = useEditRecurringSeries();
+  const deleteTodo = useDeleteTodo();
+  const deleteRecurringSeries = useDeleteRecurringSeries();
+  const { data: allTodos } = useGetTodos();
   const toast = useToast();
 
   const {
@@ -241,7 +246,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
     // todoList.tsx의 삭제 분기와 동일하게, 반복 시리즈면 recurrenceId 기준으로 전체
     // 시리즈를 지우고, 아니면 단일 문서만 지운다.
     if (todo.recurrenceId) {
-      useDeleteRecurringSeries.mutate(todo.recurrenceId, {
+      deleteRecurringSeries.mutate(todo.recurrenceId, {
         onSuccess: () => {
           toast.success("삭제 완료", `"${title}" 반복 일정이 모두 삭제되었습니다`);
           setIsDeleteConfirmOpen(false);
@@ -255,7 +260,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
       return;
     }
 
-    useDeleteTodo.mutate(todo.id, {
+    deleteTodo.mutate(todo.id, {
       onSuccess: () => {
         toast.success("삭제 완료", `"${title}"이(가) 삭제되었습니다`);
         setIsDeleteConfirmOpen(false);
@@ -270,7 +275,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
 
   const handleConfirmSeriesEdit = () => {
     if (!pendingSeriesUpdate) return;
-    useEditRecurringSeries.mutate(pendingSeriesUpdate, {
+    editRecurringSeries.mutate(pendingSeriesUpdate, {
       onSuccess: () => {
         toast.success("저장 완료", "반복 일정이 성공적으로 저장되었습니다");
         closeSeriesConfirm();
@@ -319,9 +324,9 @@ const TodoDetailView = ({ id }: { id: string }) => {
       // todoForm.tsx와 동일한 근거: editRecurringSeries는 recurrenceId 없이는 호출할 수
       // 없으므로(todoApi.ts), 원래 비반복이던 todo를 새로 반복 전환할 때는
       // createRecurringTodo로 새 인스턴스를 먼저 만들고 성공 후에만 기존 문서를 삭제한다.
-      useCreateRecurringTodo.mutate(updatedFields, {
+      createRecurringTodo.mutate(updatedFields, {
         onSuccess: () => {
-          useDeleteTodo.mutate(todo.id, {
+          deleteTodo.mutate(todo.id, {
             onSuccess: () => {
               toast.success("반복 설정 완료", "할 일이 반복 일정으로 전환되었습니다");
               handleClose();
@@ -342,7 +347,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
       return;
     }
 
-    useUpdateTodo.mutate(updatedFields, {
+    updateTodo.mutate(updatedFields, {
       onSuccess: () => {
         toast.success("저장 완료", "할 일이 성공적으로 저장되었습니다");
         handleClose();
@@ -610,7 +615,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
         }
         confirmText="전체 적용"
         cancelText="취소"
-        confirmDisabled={useEditRecurringSeries.isPending}
+        confirmDisabled={editRecurringSeries.isPending}
         onConfirm={handleConfirmSeriesEdit}
         onCancel={closeSeriesConfirm}
       />
@@ -625,7 +630,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
         }
         confirmText="삭제"
         cancelText="취소"
-        confirmDisabled={useDeleteTodo.isPending || useDeleteRecurringSeries.isPending}
+        confirmDisabled={deleteTodo.isPending || deleteRecurringSeries.isPending}
         onConfirm={handleConfirmDelete}
         onCancel={() => setIsDeleteConfirmOpen(false)}
       />

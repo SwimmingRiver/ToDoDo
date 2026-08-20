@@ -66,18 +66,12 @@ vi.mock('../../../hooks', () => ({
         }
       : mockState.todo,
   }),
-  useTodo: () => ({
-    useUpdateTodo: { mutate: vi.fn() },
-    useCreateRecurringTodo: { mutate: vi.fn() },
-    useEditRecurringSeries: { mutate: vi.fn(), isPending: false },
-    useDeleteTodo: { mutate: vi.fn(), isPending: false },
-    useDeleteRecurringSeries: { mutate: vi.fn(), isPending: false },
-    useGetTodos: { data: [] },
-  }),
-  // ChildTodoCard(하위 항목 렌더링)가 useTodo() 전체가 아니라 이 두 훅을 직접
-  // 호출한다. useTodo()와 별도로 모킹해야 한다.
   useUpdateTodo: () => ({ mutate: vi.fn() }),
+  useCreateRecurringTodo: () => ({ mutate: vi.fn() }),
+  useEditRecurringSeries: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteTodo: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteRecurringSeries: () => ({ mutate: vi.fn(), isPending: false }),
+  useGetTodos: () => ({ data: [] }),
 }))
 
 /**

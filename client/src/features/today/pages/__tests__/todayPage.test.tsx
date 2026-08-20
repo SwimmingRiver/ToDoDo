@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import TodayPage from '../todayPage'
 import { useTodayTodos } from '../../hooks/useTodayTodos'
-import { useTodo } from '@/features/todo/hooks'
+import { useGetTodos } from '@/features/todo/hooks'
 import type { Todo } from '@/features/todo/types/todo.type'
 import type { UseTodayTodosResult } from '../../hooks/useTodayTodos'
 
@@ -21,7 +21,7 @@ vi.mock('../../hooks/useTodayTodos', () => ({
 }))
 
 vi.mock('@/features/todo/hooks', () => ({
-  useTodo: vi.fn(),
+  useGetTodos: vi.fn(),
 }))
 
 vi.mock('@/features/todo/components/todoForm/todoForm', () => ({
@@ -84,9 +84,9 @@ describe('TodayPage 컴포넌트', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 31, 9, 0))
-    vi.mocked(useTodo).mockReturnValue({
-      useGetTodos: { refetch } as unknown as ReturnType<typeof useTodo>['useGetTodos'],
-    } as ReturnType<typeof useTodo>)
+    vi.mocked(useGetTodos).mockReturnValue({
+      refetch,
+    } as unknown as ReturnType<typeof useGetTodos>)
     refetch.mockClear()
   })
 

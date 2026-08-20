@@ -16,10 +16,8 @@ vi.mock('@/shared/lib/firestore', () => ({
 }))
 
 vi.mock('../../hooks', () => ({
-  useTodo: () => ({
-    useDeleteTodo: { mutate: vi.fn(), isPending: false },
-    useDeleteRecurringSeries: { mutate: vi.fn(), isPending: false },
-  }),
+  useDeleteTodo: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteRecurringSeries: () => ({ mutate: vi.fn(), isPending: false }),
   useSearchTodo: () => ({ data: undefined, isLoading: false }),
 }))
 

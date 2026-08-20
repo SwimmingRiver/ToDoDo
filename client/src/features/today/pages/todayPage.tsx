@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { Sun, Plus } from "lucide-react";
 import { useTodayTodos } from "../hooks/useTodayTodos";
-import { useTodo } from "@/features/todo/hooks";
+import { useGetTodos } from "@/features/todo/hooks";
 import { formatTodayLabel } from "@/shared/utils/formatToday";
 import { toDateKey, parseLocalDateOnly } from "@/shared/utils/date";
 import { EmptyState, TodayItemSkeleton, Modal } from "@/shared";
@@ -41,7 +41,7 @@ const TodayPage = () => {
     isError,
     toggleDone,
   } = useTodayTodos(selectedDate, windowStart);
-  const { useGetTodos } = useTodo();
+  const getTodos = useGetTodos();
 
   const hasTodos = inProgressTodos.length > 0 || doneTodos.length > 0;
 
@@ -71,7 +71,7 @@ const TodayPage = () => {
             title="할 일을 불러오지 못했습니다"
             description="잠시 후 다시 시도해주세요"
             actionLabel="다시 시도"
-            onAction={() => useGetTodos.refetch()}
+            onAction={() => getTodos.refetch()}
           />
         )}
 

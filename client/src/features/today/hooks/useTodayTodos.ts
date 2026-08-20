@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useTodo } from "@/features/todo/hooks";
+import { useGetTodos, useUpdateTodo } from "@/features/todo/hooks";
 import type { Todo } from "@/features/todo/types";
 import { getDaysLeft } from "@/shared/utils/due";
 import { getStripDates, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
@@ -24,9 +24,8 @@ export interface UseTodayTodosResult {
  * 완료율을 계산한다.
  */
 export const useTodayTodos = (selectedDate: string, windowStart: string): UseTodayTodosResult => {
-  const { useGetTodos, useUpdateTodo } = useTodo();
-  const { data: todos, isLoading, isError } = useGetTodos;
-  const { mutate: updateTodo } = useUpdateTodo;
+  const { data: todos, isLoading, isError } = useGetTodos();
+  const { mutate: updateTodo } = useUpdateTodo();
 
   const todosForSelectedDate = useMemo(() => {
     if (!todos) return [];

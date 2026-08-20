@@ -15,13 +15,13 @@ import { useMediaQuery } from "@/shared/hooks";
 // @/features/todo 배럴은 TodoList/TodoDetail/TodoForm까지 재수출한다. App 청크는
 // 모든 보호 라우트의 공통 경로라 여기 들어가는 건 전부 크리티컬 패스이므로,
 // 실제로 쓰는 훅만 직접 가져온다.
-import { useTodo } from "@/features/todo/hooks";
+import { useRunStartupMaintenance } from "@/features/todo/hooks";
 
 const App = () => {
   const [isopen, setIsOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isMobile = useMediaQuery("tablet");
-  const { useRunStartupMaintenance } = useTodo();
+  const runStartupMaintenance = useRunStartupMaintenance();
   const hasRunMaintenanceRef = useRef(false);
 
   // 인증된 레이아웃(App) 마운트 시 1회. 세션 중 재마운트되어도 다시 실행되지 않도록
@@ -29,7 +29,7 @@ const App = () => {
   useEffect(() => {
     if (!hasRunMaintenanceRef.current) {
       hasRunMaintenanceRef.current = true;
-      useRunStartupMaintenance.mutate();
+      runStartupMaintenance.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

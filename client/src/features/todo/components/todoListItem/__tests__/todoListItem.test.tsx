@@ -26,8 +26,9 @@ type MutateOptions = { onSuccess?: () => void; onError?: () => void };
 const deleteMutate = vi.fn();
 const updateMutate = vi.fn();
 
-// 이 컴포넌트는 리스트 행이라 useTodo() 전체가 아니라 useDeleteTodo/useUpdateTodo를
-// 독립적으로 호출한다(CLAUDE.md 컨벤션) — mock도 그 구조를 그대로 반영한다.
+// 이 컴포넌트는 리스트 행이라, 실제로 쓰는 mutation만 useDeleteTodo/useUpdateTodo로
+// 독립적으로 호출한다 — 행 개수만큼 불필요한 mutation·쿼리 옵저버가 생기는 걸 막기
+// 위함이다(CLAUDE.md 컨벤션). mock도 그 구조를 그대로 반영한다.
 vi.mock("../../../hooks", () => ({
   useDeleteTodo: () => ({ mutate: deleteMutate }),
   useUpdateTodo: () => ({ mutate: updateMutate }),
