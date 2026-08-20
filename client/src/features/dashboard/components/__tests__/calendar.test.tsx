@@ -37,10 +37,8 @@ const { mockTodos } = vi.hoisted(() => {
 })
 
 vi.mock('@/features/todo', () => ({
-  useTodo: () => ({
-    useGetTodos: { data: mockTodos, isLoading: false, isError: false },
-    useUpdateTodoDueAt: { mutate: vi.fn() },
-  }),
+  useGetTodos: () => ({ data: mockTodos, isLoading: false, isError: false }),
+  useUpdateTodoDueAt: () => ({ mutate: vi.fn() }),
   TodoForm: () => null,
 }))
 

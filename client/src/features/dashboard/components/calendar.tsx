@@ -3,7 +3,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTodo, TodoForm } from "@/features/todo";
+import { useGetTodos, useUpdateTodoDueAt, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
 import type { EventInput, EventClickArg, EventContentArg, MoreLinkArg } from "@fullcalendar/core/index.js";
 import type { DateClickArg } from "@fullcalendar/interaction";
@@ -42,8 +42,8 @@ const Calendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { useGetTodos, useUpdateTodoDueAt } = useTodo();
-  const { data: todos, isLoading, isError } = useGetTodos;
+  const updateTodoDueAt = useUpdateTodoDueAt();
+  const { data: todos, isLoading, isError } = useGetTodos();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"dayGridMonth" | "dayGridWeek">("dayGridMonth");
@@ -152,7 +152,7 @@ const Calendar = () => {
       todo.startAt,
     );
 
-    useUpdateTodoDueAt.mutate(
+    updateTodoDueAt.mutate(
       { id: todo.id, dueAt: newDueAt, startAt: newStartAt },
       {
         onError: () => {
@@ -161,7 +161,7 @@ const Calendar = () => {
         },
       }
     );
-  }, [todos, useUpdateTodoDueAt, toast]);
+  }, [todos, updateTodoDueAt, toast]);
 
   useEffect(() => {
     if (calendarRef.current) {
