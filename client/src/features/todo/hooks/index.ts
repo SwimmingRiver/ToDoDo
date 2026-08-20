@@ -5,4 +5,5 @@ export { useSearchTodo } from "./useSearchTodo";
 export { useDeleteTodo } from "./useDeleteTodo";
 export { useUpdateTodo } from "./useUpdateTodo";
 export { useUpdateToDone } from "./useUpdateToDone";
+export { useUpdateTodoDueAt } from "./useUpdateTodoDueAt";
 export { useCreateTodo } from "./useCreateTodo";
