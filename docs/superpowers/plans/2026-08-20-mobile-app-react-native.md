@@ -83,7 +83,7 @@ tododo/
 
 이 4개 함수와 2개 타입이 Task 4~6에서 그대로 쓰인다.
 
-- [ ] **Step 1: packages/core 디렉터리와 package.json 작성**
+- [x] **Step 1: packages/core 디렉터리와 package.json 작성**
 
 ```bash
 mkdir -p packages/core/src/api/__tests__ packages/core/src/types
@@ -131,7 +131,7 @@ mkdir -p packages/core/src/api/__tests__ packages/core/src/types
 }
 ```
 
-- [ ] **Step 2: Todo 타입 작성**
+- [x] **Step 2: Todo 타입 작성**
 
 `packages/core/src/types/todo.ts`:
 
@@ -166,7 +166,7 @@ interface TodoFields {
 export type { Todo, TodoFields };
 ```
 
-- [ ] **Step 3: 실패하는 테스트 작성**
+- [x] **Step 3: 실패하는 테스트 작성**
 
 `packages/core/src/api/__tests__/todoApi.test.ts`:
 
@@ -255,18 +255,18 @@ describe("todoApi", () => {
 });
 ```
 
-- [ ] **Step 4: 테스트 실행해서 실패 확인**
+- [x] **Step 4: 테스트 실행해서 실패 확인**
 
 Run: `cd packages/core && npx vitest run` (아직 `todoApi.ts`, `vitest` 설정, `node_modules`가 없으므로 모듈 resolve 에러로 실패)
 Expected: FAIL — `Cannot find module '../todoApi'` 또는 `vitest: command not found`
 
-- [ ] **Step 5: 의존성 설치**
+- [x] **Step 5: 의존성 설치**
 
 ```bash
 cd packages/core && npm install
 ```
 
-- [ ] **Step 6: todoApi 구현**
+- [x] **Step 6: todoApi 구현**
 
 `packages/core/src/api/todoApi.ts`:
 
@@ -348,17 +348,17 @@ export type { Todo, TodoFields } from "./types/todo";
 export { getTodos, createTodo, updateTodo, deleteTodo } from "./api/todoApi";
 ```
 
-- [ ] **Step 7: 테스트 통과 확인**
+- [x] **Step 7: 테스트 통과 확인**
 
 Run: `cd packages/core && npx vitest run`
 Expected: PASS (4 tests)
 
-- [ ] **Step 8: 빌드 확인 (mobile/client가 dist를 소비하므로 필수)**
+- [x] **Step 8: 빌드 확인 (mobile/client가 dist를 소비하므로 필수)**
 
 Run: `cd packages/core && npm run build`
 Expected: `packages/core/dist/index.js`, `packages/core/dist/index.d.ts` 생성, 에러 없음
 
-- [ ] **Step 9: 커밋**
+- [x] **Step 9: 커밋**
 
 ```bash
 git add packages/core
