@@ -1,4 +1,4 @@
-export { useTodo, useTodoDetail } from "./hooks";
+export { useTodoDetail } from "./hooks";
 export { useGetTodos } from "./hooks";
 export { useUpdateTodo } from "./hooks";
 export { useUpdateTodoDueAt } from "./hooks";
