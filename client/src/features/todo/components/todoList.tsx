@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-dom";
 import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import TodoForm from "./todoForm/todoForm";
-import { useTodo } from "../hooks";
+import { useDeleteTodo, useDeleteRecurringSeries } from "../hooks";
 import {
   TodoListContainer,
   AddButton,
@@ -44,7 +44,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(
     null
   );
-  const { useDeleteTodo, useDeleteRecurringSeries } = useTodo();
+  const deleteTodo = useDeleteTodo();
+  const deleteRecurringSeries = useDeleteRecurringSeries();
   const toast = useToast();
 
   const { data: searchResults, isLoading: isSearchLoading } =
@@ -181,12 +182,12 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
           if (deleteTargetId) {
             const title = deleteTargetTodo?.title ?? "";
             if (deleteTargetTodo?.recurrenceId) {
-              useDeleteRecurringSeries.mutate(deleteTargetTodo.recurrenceId, {
+              deleteRecurringSeries.mutate(deleteTargetTodo.recurrenceId, {
                 onSuccess: () => toast.success("삭제 완료", `"${title}" 반복 일정이 모두 삭제되었습니다`),
                 onError: () => toast.error("삭제 실패", "삭제 중 오류가 발생했습니다"),
               });
             } else {
-              useDeleteTodo.mutate(deleteTargetId, {
+              deleteTodo.mutate(deleteTargetId, {
                 onSuccess: () => toast.success("삭제 완료", `"${title}" 프로젝트가 삭제되었습니다`),
                 onError: () => toast.error("삭제 실패", "삭제 중 오류가 발생했습니다"),
               });
