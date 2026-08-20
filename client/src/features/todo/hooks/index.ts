@@ -8,3 +8,6 @@ export { useUpdateToDone } from "./useUpdateToDone";
 export { useUpdateTodoDueAt } from "./useUpdateTodoDueAt";
 export { useCreateTodo } from "./useCreateTodo";
 export { useCreateChildTodo } from "./useCreateChildTodo";
+export { useCreateRecurringTodo } from "./useCreateRecurringTodo";
+export { useEditRecurringSeries } from "./useEditRecurringSeries";
+export { useDeleteRecurringSeries } from "./useDeleteRecurringSeries";
