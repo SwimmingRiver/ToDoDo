@@ -1,11 +1,10 @@
 import TodoList from "@/features/todo/components/todoList";
-import { useTodo } from "@/features/todo/hooks";
+import { useGetTodos } from "@/features/todo/hooks";
 import { CheckboxSkeleton, EmptyState } from "@/shared";
 import { AlertCircle } from "lucide-react";
 
 export default function TodoListPage() {
-  const { useGetTodos: todosQuery } = useTodo();
-  const { data: todos, isLoading, isError } = todosQuery;
+  const { data: todos, isLoading, isError } = useGetTodos();
 
   if (isLoading) {
     return <CheckboxSkeleton count={5} />;
