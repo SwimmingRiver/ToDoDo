@@ -11,3 +11,4 @@ export { useCreateChildTodo } from "./useCreateChildTodo";
 export { useCreateRecurringTodo } from "./useCreateRecurringTodo";
 export { useEditRecurringSeries } from "./useEditRecurringSeries";
 export { useDeleteRecurringSeries } from "./useDeleteRecurringSeries";
+export { useReorderTodos } from "./useReorderTodos";
