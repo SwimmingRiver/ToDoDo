@@ -10,6 +10,7 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: vi.fn(),
   query: vi.fn(),
   where: vi.fn(),
+  writeBatch: vi.fn(),
 }));
 
 const fakeDb = {} as Firestore;
@@ -70,13 +71,50 @@ describe("todoApi", () => {
     expect(payload).toHaveProperty("updatedAt");
   });
 
-  it("deleteTodo는 해당 문서를 삭제한다", async () => {
-    const { deleteDoc, doc } = await import("firebase/firestore");
+  it("deleteTodo는 하위 할 일이 없으면 대상 문서만 삭제한다", async () => {
+    const { getDocs, writeBatch, doc } = await import("firebase/firestore");
     const { deleteTodo } = await import("../todoApi");
+
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: [],
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    const batchDelete = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      delete: batchDelete,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
 
     await deleteTodo(fakeDb, "todo-1");
 
     expect(doc).toHaveBeenCalledWith(fakeDb, "todos", "todo-1");
-    expect(deleteDoc).toHaveBeenCalled();
+    expect(batchDelete).toHaveBeenCalledTimes(1);
+    expect(batchCommit).toHaveBeenCalled();
+  });
+
+  it("deleteTodo는 하위 할 일이 있으면 함께 삭제해 고아 문서를 남기지 않는다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const { deleteTodo } = await import("../todoApi");
+
+    const childRefs = [{ id: "child-1" }, { id: "child-2" }];
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: childRefs.map((ref) => ({ ref })),
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    const batchDelete = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      delete: batchDelete,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    await deleteTodo(fakeDb, "root-1");
+
+    // 대상 문서 1개 + 하위 할 일 2개 = 총 3번의 batch.delete 호출
+    expect(batchDelete).toHaveBeenCalledTimes(3);
+    expect(batchDelete).toHaveBeenCalledWith(childRefs[0]);
+    expect(batchDelete).toHaveBeenCalledWith(childRefs[1]);
+    expect(batchCommit).toHaveBeenCalled();
   });
 });
