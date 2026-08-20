@@ -1,0 +1,120 @@
+import { describe, it, expect, vi } from "vitest";
+import type { Firestore } from "firebase/firestore";
+
+vi.mock("firebase/firestore", () => ({
+  collection: vi.fn(() => ({})),
+  addDoc: vi.fn(),
+  getDocs: vi.fn(),
+  doc: vi.fn(() => ({})),
+  updateDoc: vi.fn(),
+  deleteDoc: vi.fn(),
+  query: vi.fn(),
+  where: vi.fn(),
+  writeBatch: vi.fn(),
+}));
+
+const fakeDb = {} as Firestore;
+
+describe("todoApi", () => {
+  it("getTodos는 order 순으로 정렬해서 반환한다", async () => {
+    const { getDocs } = await import("firebase/firestore");
+    const { getTodos } = await import("../todoApi");
+
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: [
+        { id: "todo-2", data: () => ({ userId: "u1", title: "b", order: 1 }) },
+        { id: "todo-1", data: () => ({ userId: "u1", title: "a", order: 0 }) },
+      ],
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    const result = await getTodos(fakeDb, "u1");
+
+    expect(result.map((t) => t.id)).toEqual(["todo-1", "todo-2"]);
+  });
+
+  it("createTodo는 status/doneAt/timestamps를 채워서 저장하고 생성된 id를 반환한다", async () => {
+    const { addDoc } = await import("firebase/firestore");
+    const { createTodo } = await import("../todoApi");
+
+    vi.mocked(addDoc).mockResolvedValueOnce({ id: "new-id" } as Awaited<
+      ReturnType<typeof addDoc>
+    >);
+
+    const id = await createTodo(fakeDb, "u1", {
+      title: "새 할 일",
+      priority: "medium",
+      startAt: null,
+      dueAt: null,
+      parentId: null,
+      order: 0,
+    });
+
+    expect(id).toBe("new-id");
+    const [, payload] = vi.mocked(addDoc).mock.calls[0];
+    expect(payload).toMatchObject({
+      userId: "u1",
+      title: "새 할 일",
+      status: "todo",
+      doneAt: null,
+      archived: false,
+    });
+  });
+
+  it("updateTodo는 updatedAt을 갱신해서 저장한다", async () => {
+    const { updateDoc } = await import("firebase/firestore");
+    const { updateTodo } = await import("../todoApi");
+
+    await updateTodo(fakeDb, "todo-1", { status: "done", doneAt: "2026-08-20T00:00:00.000Z" });
+
+    const [, payload] = vi.mocked(updateDoc).mock.calls[0];
+    expect(payload).toMatchObject({ status: "done", doneAt: "2026-08-20T00:00:00.000Z" });
+    expect(payload).toHaveProperty("updatedAt");
+  });
+
+  it("deleteTodo는 하위 할 일이 없으면 대상 문서만 삭제한다", async () => {
+    const { getDocs, writeBatch, doc } = await import("firebase/firestore");
+    const { deleteTodo } = await import("../todoApi");
+
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: [],
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    const batchDelete = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      delete: batchDelete,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    await deleteTodo(fakeDb, "todo-1");
+
+    expect(doc).toHaveBeenCalledWith(fakeDb, "todos", "todo-1");
+    expect(batchDelete).toHaveBeenCalledTimes(1);
+    expect(batchCommit).toHaveBeenCalled();
+  });
+
+  it("deleteTodo는 하위 할 일이 있으면 함께 삭제해 고아 문서를 남기지 않는다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    const { deleteTodo } = await import("../todoApi");
+
+    const childRefs = [{ id: "child-1" }, { id: "child-2" }];
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: childRefs.map((ref) => ({ ref })),
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    const batchDelete = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      delete: batchDelete,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    await deleteTodo(fakeDb, "root-1");
+
+    // 대상 문서 1개 + 하위 할 일 2개 = 총 3번의 batch.delete 호출
+    expect(batchDelete).toHaveBeenCalledTimes(3);
+    expect(batchDelete).toHaveBeenCalledWith(childRefs[0]);
+    expect(batchDelete).toHaveBeenCalledWith(childRefs[1]);
+    expect(batchCommit).toHaveBeenCalled();
+  });
+});
