@@ -53,11 +53,9 @@ vi.mock("@/features/todo", async () => {
   );
   return {
     collapseRecurringInstances,
-    useTodo: () => ({
-      useGetTodos: { data: [makeTodo()], isLoading: false, isError: false },
-      useUpdateTodo: { mutate: updateMutate },
-      useReorderTodos: { mutate: reorderMutate },
-    }),
+    useGetTodos: () => ({ data: [makeTodo()], isLoading: false, isError: false }),
+    useUpdateTodo: () => ({ mutate: updateMutate }),
+    useReorderTodos: () => ({ mutate: reorderMutate }),
   };
 });
 

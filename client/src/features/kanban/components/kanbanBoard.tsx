@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, DragOverlay, closestCorners } from "@dnd-kit/core";
-import { useTodo, type Todo } from "@/features/todo";
+import { useGetTodos, useUpdateTodo, useReorderTodos, type Todo } from "@/features/todo";
 import { useMediaQuery, KanbanSkeleton, EmptyState, useToast } from "@/shared";
 import KanbanColumn, { type Status } from "./kanbanColumn";
 import { useKanbanDrag } from "../hooks/useKanbanDrag";
@@ -22,8 +22,9 @@ type KanbanTab = "todo" | "doing" | "done";
 
 const KanbanBoard = () => {
   const navigate = useNavigate();
-  const { useGetTodos, useUpdateTodo, useReorderTodos } = useTodo();
-  const { data: todos, isLoading, isError } = useGetTodos;
+  const updateTodo = useUpdateTodo();
+  const reorderTodos = useReorderTodos();
+  const { data: todos, isLoading, isError } = useGetTodos();
   const [activeTab, setActiveTab] = useState<KanbanTab>("todo");
   const isTablet = useMediaQuery("tablet");
   const toast = useToast();
@@ -35,9 +36,9 @@ const KanbanBoard = () => {
     useKanbanDrag({
       todos,
       onUpdateTodo: (todo) =>
-        useUpdateTodo.mutate(todo, { onError: notifyStatusChangeError }),
+        updateTodo.mutate(todo, { onError: notifyStatusChangeError }),
       onReorderTodos: (updates) =>
-        useReorderTodos.mutate(updates, {
+        reorderTodos.mutate(updates, {
           onError: () => {
             toast.error("순서 변경 실패", "할 일 순서 변경 중 오류가 발생했습니다");
           },
@@ -85,7 +86,7 @@ const KanbanBoard = () => {
   // 드래그와 동일한 useUpdateTodo mutation을 재사용해 상태를 변경한다.
   const handleStatusChange = (todo: Todo, status: Status) => {
     if (todo.status === status) return;
-    useUpdateTodo.mutate(
+    updateTodo.mutate(
       { ...todo, status },
       { onError: notifyStatusChangeError },
     );
