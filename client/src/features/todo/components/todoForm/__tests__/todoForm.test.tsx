@@ -32,7 +32,13 @@ const mockTodo = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../hooks", () => ({
-  useTodo: () => mockTodo,
+  useCreateTodo: () => mockTodo.useCreateTodo,
+  useUpdateTodo: () => mockTodo.useUpdateTodo,
+  useCreateChildTodo: () => mockTodo.useCreateChildTodo,
+  useCreateRecurringTodo: () => mockTodo.useCreateRecurringTodo,
+  useEditRecurringSeries: () => mockTodo.useEditRecurringSeries,
+  useDeleteTodo: () => mockTodo.useDeleteTodo,
+  useGetTodos: () => mockTodo.useGetTodos,
 }));
 
 const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({

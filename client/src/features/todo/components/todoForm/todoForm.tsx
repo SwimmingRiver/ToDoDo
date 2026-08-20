@@ -1,7 +1,15 @@
 import { useForm } from "react-hook-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useTodo } from "../../hooks";
+import {
+  useCreateTodo,
+  useUpdateTodo,
+  useCreateChildTodo,
+  useCreateRecurringTodo,
+  useEditRecurringSeries,
+  useDeleteTodo,
+  useGetTodos,
+} from "../../hooks";
 import {
   useToast,
   ConfirmModal,
@@ -62,16 +70,13 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
         ? { dueAt: initialDueAt }
         : undefined,
   });
-  const {
-    useCreateTodo,
-    useUpdateTodo,
-    useCreateChildTodo,
-    useCreateRecurringTodo,
-    useEditRecurringSeries,
-    useDeleteTodo,
-    useGetTodos,
-  } = useTodo();
-  const { data: allTodos } = useGetTodos;
+  const createTodo = useCreateTodo();
+  const updateTodo = useUpdateTodo();
+  const createChildTodo = useCreateChildTodo();
+  const createRecurringTodo = useCreateRecurringTodo();
+  const editRecurringSeries = useEditRecurringSeries();
+  const deleteTodo = useDeleteTodo();
+  const { data: allTodos } = useGetTodos();
 
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
@@ -132,7 +137,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
 
   const handleConfirmSeriesEdit = () => {
     if (!pendingSeriesUpdate) return;
-    useEditRecurringSeries.mutate(pendingSeriesUpdate, {
+    editRecurringSeries.mutate(pendingSeriesUpdate, {
       onSuccess: () => {
         toast.success("수정 완료", `"${pendingSeriesUpdate.title}" 반복 일정이 수정되었습니다`);
         closeSeriesConfirm();
@@ -193,9 +198,9 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
         // 이 기존 단일 todo에는 사용할 수 없다. 대신 useCreateRecurringTodo로 새 반복
         // 인스턴스들을 먼저 생성하고, 성공한 뒤에만 기존 단일 문서를 삭제한다 — 생성 실패 시
         // 기존 데이터가 그대로 보존되는 쪽이(반대 순서보다) 더 안전한 실패 모드이기 때문이다.
-        useCreateRecurringTodo.mutate(updatedFields, {
+        createRecurringTodo.mutate(updatedFields, {
           onSuccess: () => {
-            useDeleteTodo.mutate(todo.id, {
+            deleteTodo.mutate(todo.id, {
               onSuccess: () => {
                 toast.success(
                   "반복 설정 완료",
@@ -220,7 +225,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
       }
 
       // 일반(비반복) 수정
-      useUpdateTodo.mutate(updatedFields, {
+      updateTodo.mutate(updatedFields, {
         onSuccess: () => {
           toast.success("수정 완료", `"${data.title}" 할 일이 수정되었습니다`);
           onClose?.();
@@ -233,7 +238,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
       // 자식 todo 생성 (반복 설정 대상 아님)
       // 빈 datetime-local 값은 null이 아닌 ""라서 그대로 저장하면 캘린더 등
       // ?? 기반 소비처가 오동작한다 — 다른 경로처럼 ISO/null로 정규화한다
-      useCreateChildTodo.mutate(
+      createChildTodo.mutate(
         {
           parentId,
           todo: {
@@ -255,7 +260,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
     } else if (recurrenceValue) {
       // 반복 설정된 신규 할 일 생성 — 확인 모달 없음(4-4절)
       const newRecurrence = toRecurrenceRule(recurrenceValue, dueAtIso) as RecurrenceRule;
-      useCreateRecurringTodo.mutate(
+      createRecurringTodo.mutate(
         {
           ...data,
           startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
@@ -274,7 +279,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
       );
     } else {
       // 일반 todo 생성 — 빈 datetime-local 값("")을 null로, 값은 ISO로 정규화
-      useCreateTodo.mutate(
+      createTodo.mutate(
         {
           ...data,
           startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
@@ -384,7 +389,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
         }
         confirmText="전체 적용"
         cancelText="취소"
-        confirmDisabled={useEditRecurringSeries.isPending}
+        confirmDisabled={editRecurringSeries.isPending}
         onConfirm={handleConfirmSeriesEdit}
         onCancel={closeSeriesConfirm}
       />
