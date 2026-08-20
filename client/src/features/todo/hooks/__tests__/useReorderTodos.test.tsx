@@ -54,6 +54,8 @@ describe('useReorderTodos 훅', () => {
       makeTodo({ id: 'todo-2', order: 1 }),
     ])
 
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
     const { result } = renderHook(() => useReorderTodos(), {
       wrapper: createWrapper(queryClient),
     })
@@ -69,6 +71,7 @@ describe('useReorderTodos 훅', () => {
     })
 
     expect(vi.mocked(reorderTodos)).toHaveBeenCalledWith(updates)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
   })
 
   it('mutate 호출 즉시(서버 응답 전) 캐시에 새 order를 낙관적으로 반영해야 한다', async () => {

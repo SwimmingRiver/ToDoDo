@@ -665,7 +665,7 @@ const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
  *  반환값은 "실제로 커밋된" 문서 수만 센다. 카운터를 커밋 이후에만 올려 이 함수가 무엇을
  *  세는지 분명히 했지만, **중간 청크가 실패하면 그 값이 밖으로 나가지 못한다** — 예외가
  *  runSweep까지 전파되고 그 스윕은 0으로 집계된다. 앞선 청크가 이미 커밋됐는데도
- *  written에 0이 더해지므로, 그 스윕이 유일한 쓰기였다면 useTodo가 무효화를 건너뛴다.
+ *  written에 0이 더해지므로, 그 스윕이 유일한 쓰기였다면 useRunStartupMaintenance가 무효화를 건너뛴다.
  *  즉 방금 쓴 문서가 캐시에 반영되지 않을 수 있다.
  *
  *  알면서 두는 트레이드오프다: 400건을 넘는 쓰기 + 중간 실패라는 조합이 동시에 필요하고,
@@ -775,7 +775,7 @@ const runSweep = async (name: string, run: () => Promise<number>): Promise<numbe
  * 2. 지난 미완료 반복 인스턴스를 overdueArchived 처리
  * 3. 무기한 반복 시리즈를 새 호라이즌까지 확장
  *
- * 반환값은 실제로 쓴 문서 수다. 호출부(useTodo)는 이 값이 0보다 클 때만 캐시를 무효화한다 —
+ * 반환값은 실제로 쓴 문서 수다. 호출부(useRunStartupMaintenance)는 이 값이 0보다 클 때만 캐시를 무효화한다 —
  * 세 정책 모두 대부분의 실행에서 쓸 것이 없는데, 무조건 무효화하면 하는 일 없이 getTodos()
  * 전체 재조회를 유발한다.
  *

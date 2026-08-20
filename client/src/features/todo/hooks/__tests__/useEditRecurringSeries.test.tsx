@@ -37,7 +37,7 @@ const createWrapper = () => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
-  return Wrapper
+  return { Wrapper, queryClient }
 }
 
 describe('useEditRecurringSeries 훅', () => {
@@ -45,12 +45,14 @@ describe('useEditRecurringSeries 훅', () => {
     vi.clearAllMocks()
   })
 
-  it('수정 성공 시 editRecurringSeries를 호출해야 한다', async () => {
+  it('수정 성공 시 editRecurringSeries를 호출하고 todos, todoDetail 쿼리를 무효화해야 한다', async () => {
     const { editRecurringSeries } = await import('../../api')
     const seriesTodo = makeTodo()
     vi.mocked(editRecurringSeries).mockResolvedValueOnce(undefined)
 
-    const { result } = renderHook(() => useEditRecurringSeries(), { wrapper: createWrapper() })
+    const { Wrapper, queryClient } = createWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useEditRecurringSeries(), { wrapper: Wrapper })
 
     result.current.mutate(seriesTodo)
 
@@ -59,5 +61,7 @@ describe('useEditRecurringSeries 훅', () => {
     })
 
     expect(vi.mocked(editRecurringSeries)).toHaveBeenCalledWith(seriesTodo)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todoDetail'] })
   })
 })

@@ -3,7 +3,7 @@ import type { Todo } from "@/features/todo/types";
 
 /**
  * 게스트 체험용 시드 데이터. 모두 dueAt: null이라 배지/시간 표시 없이 깔끔하게 렌더된다.
- * 이 훅은 완전히 독립된 로컬 상태로, 실제 useTodo/useTodayTodos(Firebase 의존)를
+ * 이 훅은 완전히 독립된 로컬 상태로, 실제 useGetTodos/useTodayTodos(Firebase 의존)를
  * 절대 import하지 않는다 — 실 서비스 데이터 경로와 섞이지 않아야 한다는 요구사항.
  */
 const seedGuestTodos = (): Todo[] => {

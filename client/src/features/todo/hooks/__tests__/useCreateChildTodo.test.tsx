@@ -38,7 +38,7 @@ const createWrapper = () => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
-  return Wrapper
+  return { Wrapper, queryClient }
 }
 
 describe('useCreateChildTodo 훅', () => {
@@ -47,15 +47,18 @@ describe('useCreateChildTodo 훅', () => {
   })
 
   it('하위 할 일 생성 mutation이 정의되어 있어야 한다', () => {
-    const { result } = renderHook(() => useCreateChildTodo(), { wrapper: createWrapper() })
+    const { Wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateChildTodo(), { wrapper: Wrapper })
     expect(typeof result.current.mutate).toBe('function')
   })
 
-  it('캐시된 전체 목록을 함께 넘겨 createChildTodo를 호출해야 한다', async () => {
+  it('캐시된 전체 목록을 함께 넘겨 createChildTodo를 호출하고 todos, todoDetail 쿼리를 무효화해야 한다', async () => {
     const { createChildTodo } = await import('../../api')
     vi.mocked(createChildTodo).mockResolvedValueOnce(makeTodo({ id: 'child-1', parentId: 'parent-1' }))
 
-    const { result } = renderHook(() => useCreateChildTodo(), { wrapper: createWrapper() })
+    const { Wrapper, queryClient } = createWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useCreateChildTodo(), { wrapper: Wrapper })
 
     result.current.mutate({ parentId: 'parent-1', todo: { title: '자식 할 일' } })
 
@@ -68,5 +71,7 @@ describe('useCreateChildTodo 훅', () => {
       { title: '자식 할 일' },
       [makeTodo()],
     )
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todoDetail'] })
   })
 })

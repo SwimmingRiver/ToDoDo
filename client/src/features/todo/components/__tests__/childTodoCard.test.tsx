@@ -26,8 +26,9 @@ type MutateOptions = { onSuccess?: () => void; onError?: () => void };
 const deleteMutate = vi.fn();
 const updateMutate = vi.fn();
 
-// childTodoCard는 리스트 행처럼 반복 렌더링되는 컴포넌트라 useTodo() 전체가 아니라
-// useDeleteTodo/useUpdateTodo를 독립적으로 호출한다(CLAUDE.md 컨벤션).
+// childTodoCard는 리스트 행처럼 반복 렌더링되는 컴포넌트라, 실제로 쓰는 mutation만
+// useDeleteTodo/useUpdateTodo로 독립적으로 호출한다 — 행 개수만큼 불필요한 mutation·쿼리
+// 옵저버가 생기는 걸 막기 위함이다(CLAUDE.md 컨벤션).
 vi.mock("../../hooks", () => ({
   useDeleteTodo: () => ({ mutate: deleteMutate }),
   useUpdateTodo: () => ({ mutate: updateMutate }),

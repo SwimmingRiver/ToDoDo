@@ -10,8 +10,8 @@ import CalendarSkeleton from "@/shared/ui/skeleton/calendarSkeleton";
 // 라우트 컴포넌트는 전부 lazy로 둔다. 정적 import 하나만 되살아나도 해당 라우트의
 // 의존성(FullCalendar, dnd-kit, Firestore 등)이 통째로 초기 청크로 딸려온다.
 //
-// App(인증 레이아웃)을 lazy로 두는 것이 특히 중요하다. App은 useTodo를 통해 할 일
-// 도메인 → todoApi → Firestore로 이어지므로, eager로 두면 로그인 전 화면에서도
+// App(인증 레이아웃)을 lazy로 두는 것이 특히 중요하다. App은 useRunStartupMaintenance를
+// 통해 할 일 도메인 → todoApi → Firestore로 이어지므로, eager로 두면 로그인 전 화면에서도
 // Firestore SDK를 내려받게 된다.
 //
 // ProtectedRoute / RootGate만 eager다. 최초 라우팅 판단에 즉시 필요하고 auth 외
