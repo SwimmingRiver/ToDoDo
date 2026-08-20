@@ -3,7 +3,8 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import * as Sentry from '@sentry/react'
-import { useTodo, useTodoDetail } from '../useTodo'
+import { useTodo } from '../useTodo'
+import { useTodoDetail } from '../useTodoDetail'
 import type { Todo } from '../../types/todo.type'
 
 vi.mock('@sentry/react', () => ({ captureException: vi.fn() }))

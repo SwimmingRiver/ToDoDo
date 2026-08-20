@@ -7,7 +7,6 @@ import {
   updateToDone,
   updateTodoDueAt,
   createChildTodo,
-  getTodoDetail,
   createRecurringTodo,
   editRecurringSeries,
   deleteRecurringSeries,
@@ -178,12 +177,4 @@ export const useTodo = () => {
     useDeleteRecurringSeries,
     useRunStartupMaintenance,
   };
-};
-
-export const useTodoDetail = ({ id }: { id: string }) => {
-  const { data: todo } = useQuery({
-    queryKey: ["todoDetail", id],
-    queryFn: () => getTodoDetail(id),
-  });
-  return { todo };
 };

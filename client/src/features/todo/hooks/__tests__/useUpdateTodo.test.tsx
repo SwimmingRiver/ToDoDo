@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useUpdateTodo } from '../useUpdateTodo'
-import { useTodoDetail } from '../useTodo'
+import { useTodoDetail } from '../useTodoDetail'
 import type { Todo } from '../../types/todo.type'
 
 vi.mock('@/shared/lib/firebase', () => ({
