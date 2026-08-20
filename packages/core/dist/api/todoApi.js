@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, updateDoc, query, where, writeBatch, } from "firebase/firestore";
 const normalizeOrder = (order) => typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
 const mapDocToTodo = (id, data) => ({ id, ...data });
 export const getTodos = async (db, userId) => {
@@ -28,5 +28,13 @@ export const updateTodo = async (db, id, fields) => {
     });
 };
 export const deleteTodo = async (db, id) => {
-    await deleteDoc(doc(db, "todos", id));
+    // 대상이 루트 할 일이면 하위 할 일도 함께 지워야 parentId가 존재하지 않는
+    // 문서를 가리키는 고아 문서가 남지 않는다.
+    const childrenSnapshot = await getDocs(query(collection(db, "todos"), where("parentId", "==", id)));
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "todos", id));
+    childrenSnapshot.docs.forEach((childDoc) => {
+        batch.delete(childDoc.ref);
+    });
+    await batch.commit();
 };
