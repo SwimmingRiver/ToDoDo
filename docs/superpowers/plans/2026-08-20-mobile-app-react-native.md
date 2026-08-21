@@ -506,7 +506,7 @@ git commit -m "feat: mobile/ Expo 앱 스캐폴딩 및 Firebase 초기화"
   - `useAuthState(): { user: User | null; loading: boolean }` — Task 4 이후 화면들이 `user.uid`로 CRUD 함수를 호출할 때 쓴다.
   - `RootNavigator` — 이후 화면(`TodoListScreen` 등)이 이 네비게이터의 스택에 등록된다.
 
-- [ ] **Step 1: 의존성 설치**
+- [x] **Step 1: 의존성 설치**
 
 ```bash
 cd mobile
@@ -515,7 +515,9 @@ npm install @react-navigation/native @react-navigation/native-stack
 npx expo install react-native-screens react-native-safe-area-context
 ```
 
-- [ ] **Step 2: 실패하는 테스트 작성**
+> 브리프의 Step 3/5가 `npx jest`로 테스트를 실행하도록 명시했지만 `mobile/`에 Jest가 아직 구성되어 있지 않았음 — `jest-expo`, `babel-preset-expo`, `@testing-library/react-native`를 함께 설치하고 `mobile/babel.config.js`, `mobile/jest.config.js`, `package.json`의 `test` 스크립트를 새로 구성함.
+
+- [x] **Step 2: 실패하는 테스트 작성**
 
 `mobile/src/auth/__tests__/useAuthState.test.tsx`:
 
@@ -554,12 +556,12 @@ describe("useAuthState", () => {
 });
 ```
 
-- [ ] **Step 3: 테스트 실행해서 실패 확인**
+- [x] **Step 3: 테스트 실행해서 실패 확인**
 
 Run: `cd mobile && npx jest src/auth/__tests__/useAuthState.test.tsx`
 Expected: FAIL — `Cannot find module '../useAuthState'`
 
-- [ ] **Step 4: useAuthState 구현**
+- [x] **Step 4: useAuthState 구현**
 
 `mobile/src/auth/useAuthState.ts`:
 
@@ -583,12 +585,12 @@ export const useAuthState = () => {
 };
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인**
 
 Run: `cd mobile && npx jest src/auth/__tests__/useAuthState.test.tsx`
 Expected: PASS (2 tests)
 
-- [ ] **Step 6: Google 로그인 함수 작성**
+- [x] **Step 6: Google 로그인 함수 작성**
 
 `mobile/src/auth/googleSignIn.ts`:
 
@@ -613,7 +615,7 @@ export const signInWithGoogle = async () => {
 
 `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID`는 Firebase 콘솔 > 프로젝트 설정 > 일반 > 웹 SDK 구성의 클라이언트 ID다. `mobile/.env`에 추가한다.
 
-- [ ] **Step 7: 로그인 화면 작성**
+- [x] **Step 7: 로그인 화면 작성**
 
 `mobile/src/screens/LoginScreen.tsx`:
 
@@ -643,7 +645,7 @@ export const LoginScreen = () => {
 };
 ```
 
-- [ ] **Step 8: 인증 상태별 네비게이션 분기**
+- [x] **Step 8: 인증 상태별 네비게이션 분기**
 
 `mobile/src/navigation/RootNavigator.tsx`:
 
@@ -684,7 +686,7 @@ export const RootNavigator = () => {
 
 `RootNavigator`는 `TodoListScreen`을 import한다 — 이 파일은 Task 4에서 만들어지므로, Task 3만 단독 실행 시 최소 스텁(`export const TodoListScreen = () => null;`)을 `mobile/src/screens/TodoListScreen.tsx`에 임시로 만들어 둔다. Task 4에서 실제 구현으로 교체한다.
 
-- [ ] **Step 9: App.tsx를 RootNavigator로 교체**
+- [x] **Step 9: App.tsx를 RootNavigator로 교체**
 
 `mobile/App.tsx`:
 
@@ -704,13 +706,17 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 10: 수동 확인**
+- [ ] **Step 10: 수동 확인** — 미완료, 아래 참고
 
 Run: `cd mobile && npx expo start`
 
 로그인 화면이 뜨고, Google 로그인 버튼을 누르면 네이티브 Google 계정 선택 UI가 뜨는지 확인한다(실제 로그인 성공 후 빈 `TodoListScreen`으로 전환되면 정상).
 
-- [ ] **Step 11: 커밋**
+> 이 세션 환경에는 실기기/시뮬레이터가 없어 `npx expo start`로 직접 실행은 못 함. 대신 코드 리뷰 과정에서 **Task 2의 `mobile/src/firebase/index.native.ts`에 실행 시점 크래시를 유발하는 버그**를 발견해 고쳤다: `getReactNativePersistence`를 `"firebase/auth"`에서 import했는데, 설치된 `firebase@12.18.0`의 `exports["./auth"]` 맵에는 `"react-native"` 조건이 없어 이 함수가 실제로는 export되지 않았다(`firebase/auth/dist/esm/index.esm.js`, `dist/index.cjs.js` 모두 확인 — 0건). Metro의 실제 조건 해석 로직(`metro-resolver`가 활성 조건 집합을 만드는 방식, Expo의 `@expo/metro-config`가 ios/android 플랫폼에 `"react-native"` 조건을 주입하는 것까지 추적)을 따라간 결과, `firebase`가 내부적으로 의존하는 `"@firebase/auth"` 패키지를 직접 import하면 해당 조건이 실제로 매칭되어 `dist/rn/index.js`(함수 존재 확인됨)로 resolve된다는 것을 확인해 import 경로를 수정함(`mobile/src/firebase/index.native.ts`, `firebaseAuthReactNative.d.ts`로 타입 보강). 정적 분석(패키지 exports 맵 추적)으로 검증했으나 실제 Metro 번들 실행으로 최종 확인하지는 못했다.
+>
+> **실기기 검증 시도(같은 세션, 병합 전)와 후순위 보류 결정:** iOS 시뮬레이터로 직접 검증을 시도함 — `mobile/.env`를 실제 Firebase 프로젝트(`tododo-83576`) 값 + Google Web Client ID로 채우고, Xcode 시뮬레이터 런타임을 다운로드해 `expo run:ios`까지 진행했으나 **CocoaPods CLI 설치가 이 머신에서 실패**(시스템 Ruby 2.6이 너무 낮아 `gem install cocoapods` 실패, Homebrew 경유 설치는 디스크 공간 부족으로 실패)해 네이티브 빌드까지 도달하지 못했다. 이 과정에서 iOS 시뮬레이터 런타임(16GB)이 이 머신의 디스크 여유공간을 1GB 미만까지 소진시켜, 런타임을 삭제해 원복함(순정 4.7GB 여유로 회복 — 이 머신은 원래도 여유 공간이 넉넉하지 않음). Android 에뮬레이터도 비슷한 용량이 필요해 같은 문제가 반복될 가능성이 높음. 사용자 판단으로 **실기기 검증은 후순위 과제로 보류**하고 Task 3는 이 상태로 병합함 — 재시도 시 CocoaPods용으로 Ruby를 먼저(rbenv/asdf 등으로) 최신화하고, 디스크 여유공간을 미리 확보해둘 것.
+
+- [x] **Step 11: 커밋**
 
 ```bash
 git add mobile
@@ -1619,3 +1625,5 @@ git commit -m "feat: mobile EAS 빌드/배포 설정"
 - 칸반 보드, 캘린더 대시보드의 RN 포팅
 - 서버발 푸시 알림, 오프라인 동기화
 - RN E2E(Detox/Maestro)
+- **Task 3 실기기(iOS 시뮬레이터/Android 에뮬레이터) 검증** — CocoaPods CLI 설치 실패(시스템 Ruby 2.6, 디스크 공간 부족)로 이번엔 보류. 재시도 전 Ruby(rbenv/asdf) 최신화 + 디스크 여유공간 확보 필요. `mobile/.env`는 이미 실제 값으로 준비돼 있음(gitignore됨, 로컬에만 존재).
+- CI에 `mobile/` job 추가 — 현재 client/packages-core/server만 CI가 있고 mobile은 로컬 검증에만 의존

@@ -1,6 +1,12 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    // src/firebase가 index.native.ts/index.web.ts로만 나뉘어 있어(Task 2),
+    // tsc가 "../firebase" 디렉터리 임포트를 찾으려면 플랫폼 접미사 해석이 필요하다.
+    // 네이티브가 이 앱의 주 타깃이므로 .native만 우선 시도하고 나머지는 기본(비접미사) 파일로 폴백한다.
+    // ".web"을 포함하면 .native가 없는 서드파티 타입(.d.ts에 .web 변형만 있는 경우)에서
+    // 기본 파일보다 .web 변형이 잘못 우선 선택되므로 넣지 않는다.
+    "moduleSuffixes": [".native", ""]
   }
 }
