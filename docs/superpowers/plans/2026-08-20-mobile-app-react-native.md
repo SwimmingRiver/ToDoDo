@@ -473,11 +473,13 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 6: 앱이 뜨는지 수동 확인**
+- [x] **Step 6: 앱이 뜨는지 수동 확인**
 
 Run: `cd mobile && npx expo start`
 
 iOS 시뮬레이터 또는 Expo Go 앱으로 접속해 "Firebase 연결 확인용 임시 화면" 텍스트가 뜨고, 콘솔에 Firebase 초기화 에러(`auth/invalid-api-key` 등)가 없는지 확인한다. 이 태스크는 UI 로직이 없어 자동화 테스트 대신 이 수동 부팅 확인이 완료 기준이다.
+
+> 실기기 Expo Go는 SDK 57 스토어 롤아웃 지연("requires a newer version of Expo Go")으로 접속 불가해, `npx expo start --web`으로 대체 확인함. 이 과정에서 `firebase/auth`의 웹 번들에 `getReactNativePersistence`가 없어 `TypeError`가 발생하는 것을 발견 — `mobile/src/firebase/index.ts`를 `index.native.ts`(RN persistence, 기존 코드)와 `index.web.ts`(`getAuth`, 웹 전용 신규)로 분리해 해결. 웹에서 에러 없이 렌더링되는 것을 확인함.
 
 - [ ] **Step 7: 커밋**
 
