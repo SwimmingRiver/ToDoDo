@@ -712,7 +712,7 @@ Run: `cd mobile && npx expo start`
 
 로그인 화면이 뜨고, Google 로그인 버튼을 누르면 네이티브 Google 계정 선택 UI가 뜨는지 확인한다(실제 로그인 성공 후 빈 `TodoListScreen`으로 전환되면 정상).
 
-> 이 세션 환경에는 실기기/시뮬레이터가 없어 실행하지 못함. 대신 코드 리뷰 과정에서 **Task 2의 `mobile/src/firebase/index.native.ts`에 실행 시점 크래시를 유발하는 버그**를 발견함: `getReactNativePersistence`를 `"firebase/auth"`에서 import하지만, 설치된 `firebase@12.18.0`의 `exports["./auth"]` 맵에는 `"react-native"` 조건이 없어 이 함수가 실제로는 export되지 않는다(`firebase/auth/dist/esm/index.esm.js`, `dist/index.cjs.js` 모두 확인 — 0건). `App.tsx`가 `import "./src/firebase"`를 최상단에서 실행하므로, 이 Step 10을 지금 시도하면 앱 부팅 시 `TypeError: getReactNativePersistence is not a function`로 크래시할 가능성이 높다. Task 3의 파일 목록 밖(Task 2 소유 파일)이라 이 태스크에서 고치지 않고 별도 후속 작업으로 남김 — Task 4 이후 수동 검증 전에 먼저 해결 필요.
+> 이 세션 환경에는 실기기/시뮬레이터가 없어 `npx expo start`로 직접 실행은 못 함. 대신 코드 리뷰 과정에서 **Task 2의 `mobile/src/firebase/index.native.ts`에 실행 시점 크래시를 유발하는 버그**를 발견해 고쳤다: `getReactNativePersistence`를 `"firebase/auth"`에서 import했는데, 설치된 `firebase@12.18.0`의 `exports["./auth"]` 맵에는 `"react-native"` 조건이 없어 이 함수가 실제로는 export되지 않았다(`firebase/auth/dist/esm/index.esm.js`, `dist/index.cjs.js` 모두 확인 — 0건). Metro의 실제 조건 해석 로직(`metro-resolver`가 활성 조건 집합을 만드는 방식, Expo의 `@expo/metro-config`가 ios/android 플랫폼에 `"react-native"` 조건을 주입하는 것까지 추적)을 따라간 결과, `firebase`가 내부적으로 의존하는 `"@firebase/auth"` 패키지를 직접 import하면 해당 조건이 실제로 매칭되어 `dist/rn/index.js`(함수 존재 확인됨)로 resolve된다는 것을 확인해 import 경로를 수정함(`mobile/src/firebase/index.native.ts`, `firebaseAuthReactNative.d.ts`로 타입 보강). 정적 분석(패키지 exports 맵 추적)으로 검증했으나 실제 Metro 번들 실행으로 최종 확인하지는 못했다 — 실기기/시뮬레이터가 있는 환경에서 이 Step 10을 실행해 최종 검증 필요.
 
 - [x] **Step 11: 커밋**
 
