@@ -506,7 +506,7 @@ git commit -m "feat: mobile/ Expo 앱 스캐폴딩 및 Firebase 초기화"
   - `useAuthState(): { user: User | null; loading: boolean }` — Task 4 이후 화면들이 `user.uid`로 CRUD 함수를 호출할 때 쓴다.
   - `RootNavigator` — 이후 화면(`TodoListScreen` 등)이 이 네비게이터의 스택에 등록된다.
 
-- [ ] **Step 1: 의존성 설치**
+- [x] **Step 1: 의존성 설치**
 
 ```bash
 cd mobile
@@ -515,7 +515,9 @@ npm install @react-navigation/native @react-navigation/native-stack
 npx expo install react-native-screens react-native-safe-area-context
 ```
 
-- [ ] **Step 2: 실패하는 테스트 작성**
+> 브리프의 Step 3/5가 `npx jest`로 테스트를 실행하도록 명시했지만 `mobile/`에 Jest가 아직 구성되어 있지 않았음 — `jest-expo`, `babel-preset-expo`, `@testing-library/react-native`를 함께 설치하고 `mobile/babel.config.js`, `mobile/jest.config.js`, `package.json`의 `test` 스크립트를 새로 구성함.
+
+- [x] **Step 2: 실패하는 테스트 작성**
 
 `mobile/src/auth/__tests__/useAuthState.test.tsx`:
 
@@ -554,12 +556,12 @@ describe("useAuthState", () => {
 });
 ```
 
-- [ ] **Step 3: 테스트 실행해서 실패 확인**
+- [x] **Step 3: 테스트 실행해서 실패 확인**
 
 Run: `cd mobile && npx jest src/auth/__tests__/useAuthState.test.tsx`
 Expected: FAIL — `Cannot find module '../useAuthState'`
 
-- [ ] **Step 4: useAuthState 구현**
+- [x] **Step 4: useAuthState 구현**
 
 `mobile/src/auth/useAuthState.ts`:
 
@@ -583,12 +585,12 @@ export const useAuthState = () => {
 };
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인**
 
 Run: `cd mobile && npx jest src/auth/__tests__/useAuthState.test.tsx`
 Expected: PASS (2 tests)
 
-- [ ] **Step 6: Google 로그인 함수 작성**
+- [x] **Step 6: Google 로그인 함수 작성**
 
 `mobile/src/auth/googleSignIn.ts`:
 
@@ -613,7 +615,7 @@ export const signInWithGoogle = async () => {
 
 `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID`는 Firebase 콘솔 > 프로젝트 설정 > 일반 > 웹 SDK 구성의 클라이언트 ID다. `mobile/.env`에 추가한다.
 
-- [ ] **Step 7: 로그인 화면 작성**
+- [x] **Step 7: 로그인 화면 작성**
 
 `mobile/src/screens/LoginScreen.tsx`:
 
@@ -643,7 +645,7 @@ export const LoginScreen = () => {
 };
 ```
 
-- [ ] **Step 8: 인증 상태별 네비게이션 분기**
+- [x] **Step 8: 인증 상태별 네비게이션 분기**
 
 `mobile/src/navigation/RootNavigator.tsx`:
 
@@ -684,7 +686,7 @@ export const RootNavigator = () => {
 
 `RootNavigator`는 `TodoListScreen`을 import한다 — 이 파일은 Task 4에서 만들어지므로, Task 3만 단독 실행 시 최소 스텁(`export const TodoListScreen = () => null;`)을 `mobile/src/screens/TodoListScreen.tsx`에 임시로 만들어 둔다. Task 4에서 실제 구현으로 교체한다.
 
-- [ ] **Step 9: App.tsx를 RootNavigator로 교체**
+- [x] **Step 9: App.tsx를 RootNavigator로 교체**
 
 `mobile/App.tsx`:
 
@@ -704,13 +706,15 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 10: 수동 확인**
+- [ ] **Step 10: 수동 확인** — 미완료, 아래 참고
 
 Run: `cd mobile && npx expo start`
 
 로그인 화면이 뜨고, Google 로그인 버튼을 누르면 네이티브 Google 계정 선택 UI가 뜨는지 확인한다(실제 로그인 성공 후 빈 `TodoListScreen`으로 전환되면 정상).
 
-- [ ] **Step 11: 커밋**
+> 이 세션 환경에는 실기기/시뮬레이터가 없어 실행하지 못함. 대신 코드 리뷰 과정에서 **Task 2의 `mobile/src/firebase/index.native.ts`에 실행 시점 크래시를 유발하는 버그**를 발견함: `getReactNativePersistence`를 `"firebase/auth"`에서 import하지만, 설치된 `firebase@12.18.0`의 `exports["./auth"]` 맵에는 `"react-native"` 조건이 없어 이 함수가 실제로는 export되지 않는다(`firebase/auth/dist/esm/index.esm.js`, `dist/index.cjs.js` 모두 확인 — 0건). `App.tsx`가 `import "./src/firebase"`를 최상단에서 실행하므로, 이 Step 10을 지금 시도하면 앱 부팅 시 `TypeError: getReactNativePersistence is not a function`로 크래시할 가능성이 높다. Task 3의 파일 목록 밖(Task 2 소유 파일)이라 이 태스크에서 고치지 않고 별도 후속 작업으로 남김 — Task 4 이후 수동 검증 전에 먼저 해결 필요.
+
+- [x] **Step 11: 커밋**
 
 ```bash
 git add mobile
