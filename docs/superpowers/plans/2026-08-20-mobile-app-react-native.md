@@ -712,7 +712,9 @@ Run: `cd mobile && npx expo start`
 
 로그인 화면이 뜨고, Google 로그인 버튼을 누르면 네이티브 Google 계정 선택 UI가 뜨는지 확인한다(실제 로그인 성공 후 빈 `TodoListScreen`으로 전환되면 정상).
 
-> 이 세션 환경에는 실기기/시뮬레이터가 없어 `npx expo start`로 직접 실행은 못 함. 대신 코드 리뷰 과정에서 **Task 2의 `mobile/src/firebase/index.native.ts`에 실행 시점 크래시를 유발하는 버그**를 발견해 고쳤다: `getReactNativePersistence`를 `"firebase/auth"`에서 import했는데, 설치된 `firebase@12.18.0`의 `exports["./auth"]` 맵에는 `"react-native"` 조건이 없어 이 함수가 실제로는 export되지 않았다(`firebase/auth/dist/esm/index.esm.js`, `dist/index.cjs.js` 모두 확인 — 0건). Metro의 실제 조건 해석 로직(`metro-resolver`가 활성 조건 집합을 만드는 방식, Expo의 `@expo/metro-config`가 ios/android 플랫폼에 `"react-native"` 조건을 주입하는 것까지 추적)을 따라간 결과, `firebase`가 내부적으로 의존하는 `"@firebase/auth"` 패키지를 직접 import하면 해당 조건이 실제로 매칭되어 `dist/rn/index.js`(함수 존재 확인됨)로 resolve된다는 것을 확인해 import 경로를 수정함(`mobile/src/firebase/index.native.ts`, `firebaseAuthReactNative.d.ts`로 타입 보강). 정적 분석(패키지 exports 맵 추적)으로 검증했으나 실제 Metro 번들 실행으로 최종 확인하지는 못했다 — 실기기/시뮬레이터가 있는 환경에서 이 Step 10을 실행해 최종 검증 필요.
+> 이 세션 환경에는 실기기/시뮬레이터가 없어 `npx expo start`로 직접 실행은 못 함. 대신 코드 리뷰 과정에서 **Task 2의 `mobile/src/firebase/index.native.ts`에 실행 시점 크래시를 유발하는 버그**를 발견해 고쳤다: `getReactNativePersistence`를 `"firebase/auth"`에서 import했는데, 설치된 `firebase@12.18.0`의 `exports["./auth"]` 맵에는 `"react-native"` 조건이 없어 이 함수가 실제로는 export되지 않았다(`firebase/auth/dist/esm/index.esm.js`, `dist/index.cjs.js` 모두 확인 — 0건). Metro의 실제 조건 해석 로직(`metro-resolver`가 활성 조건 집합을 만드는 방식, Expo의 `@expo/metro-config`가 ios/android 플랫폼에 `"react-native"` 조건을 주입하는 것까지 추적)을 따라간 결과, `firebase`가 내부적으로 의존하는 `"@firebase/auth"` 패키지를 직접 import하면 해당 조건이 실제로 매칭되어 `dist/rn/index.js`(함수 존재 확인됨)로 resolve된다는 것을 확인해 import 경로를 수정함(`mobile/src/firebase/index.native.ts`, `firebaseAuthReactNative.d.ts`로 타입 보강). 정적 분석(패키지 exports 맵 추적)으로 검증했으나 실제 Metro 번들 실행으로 최종 확인하지는 못했다.
+>
+> **실기기 검증 시도(같은 세션, 병합 전)와 후순위 보류 결정:** iOS 시뮬레이터로 직접 검증을 시도함 — `mobile/.env`를 실제 Firebase 프로젝트(`tododo-83576`) 값 + Google Web Client ID로 채우고, Xcode 시뮬레이터 런타임을 다운로드해 `expo run:ios`까지 진행했으나 **CocoaPods CLI 설치가 이 머신에서 실패**(시스템 Ruby 2.6이 너무 낮아 `gem install cocoapods` 실패, Homebrew 경유 설치는 디스크 공간 부족으로 실패)해 네이티브 빌드까지 도달하지 못했다. 이 과정에서 iOS 시뮬레이터 런타임(16GB)이 이 머신의 디스크 여유공간을 1GB 미만까지 소진시켜, 런타임을 삭제해 원복함(순정 4.7GB 여유로 회복 — 이 머신은 원래도 여유 공간이 넉넉하지 않음). Android 에뮬레이터도 비슷한 용량이 필요해 같은 문제가 반복될 가능성이 높음. 사용자 판단으로 **실기기 검증은 후순위 과제로 보류**하고 Task 3는 이 상태로 병합함 — 재시도 시 CocoaPods용으로 Ruby를 먼저(rbenv/asdf 등으로) 최신화하고, 디스크 여유공간을 미리 확보해둘 것.
 
 - [x] **Step 11: 커밋**
 
@@ -1623,3 +1625,5 @@ git commit -m "feat: mobile EAS 빌드/배포 설정"
 - 칸반 보드, 캘린더 대시보드의 RN 포팅
 - 서버발 푸시 알림, 오프라인 동기화
 - RN E2E(Detox/Maestro)
+- **Task 3 실기기(iOS 시뮬레이터/Android 에뮬레이터) 검증** — CocoaPods CLI 설치 실패(시스템 Ruby 2.6, 디스크 공간 부족)로 이번엔 보류. 재시도 전 Ruby(rbenv/asdf) 최신화 + 디스크 여유공간 확보 필요. `mobile/.env`는 이미 실제 값으로 준비돼 있음(gitignore됨, 로컬에만 존재).
+- CI에 `mobile/` job 추가 — 현재 client/packages-core/server만 CI가 있고 mobile은 로컬 검증에만 의존
