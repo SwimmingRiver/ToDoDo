@@ -380,14 +380,14 @@ git commit -m "feat: packages/core에 웹·모바일 공유 Todo 타입/CRUD 함
 - Produces:
   - `mobile/src/firebase/index.ts`의 `app`, `db`(Firestore 인스턴스), `auth`(Auth 인스턴스) — Task 3~7에서 그대로 import해서 쓴다.
 
-- [ ] **Step 1: Expo 프로젝트 생성**
+- [x] **Step 1: Expo 프로젝트 생성**
 
 ```bash
 cd /Users/river/tododo
 npx create-expo-app@latest mobile --template blank-typescript
 ```
 
-- [ ] **Step 2: 의존성 설치**
+- [x] **Step 2: 의존성 설치**
 
 ```bash
 cd mobile
@@ -406,7 +406,7 @@ npm install "@tododo/core@file:../packages/core"
 }
 ```
 
-- [ ] **Step 3: Firebase 환경변수 파일 작성**
+- [x] **Step 3: Firebase 환경변수 파일 작성**
 
 `client/.env`의 `VITE_FIREBASE_*` 7개 값을 그대로 가져와 `mobile/.env`에 Expo 규칙(`EXPO_PUBLIC_` 접두사)으로 옮긴다:
 
@@ -422,7 +422,7 @@ EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 
 `mobile/.gitignore`에 `.env`가 이미 포함되어 있는지 확인 (Expo 기본 템플릿에 포함됨).
 
-- [ ] **Step 4: Firebase 초기화 (RN persistence)**
+- [x] **Step 4: Firebase 초기화 (RN persistence)**
 
 `mobile/src/firebase/index.ts`:
 
@@ -451,7 +451,7 @@ export const auth = initializeAuth(app, {
 export const db = getFirestore(app);
 ```
 
-- [ ] **Step 5: App.tsx에서 Firebase 초기화 + QueryClientProvider 연결**
+- [x] **Step 5: App.tsx에서 Firebase 초기화 + QueryClientProvider 연결**
 
 `mobile/App.tsx`:
 
@@ -481,7 +481,7 @@ iOS 시뮬레이터 또는 Expo Go 앱으로 접속해 "Firebase 연결 확인�
 
 > 실기기 Expo Go는 SDK 57 스토어 롤아웃 지연("requires a newer version of Expo Go")으로 접속 불가해, `npx expo start --web`으로 대체 확인함. 이 과정에서 `firebase/auth`의 웹 번들에 `getReactNativePersistence`가 없어 `TypeError`가 발생하는 것을 발견 — `mobile/src/firebase/index.ts`를 `index.native.ts`(RN persistence, 기존 코드)와 `index.web.ts`(`getAuth`, 웹 전용 신규)로 분리해 해결. 웹에서 에러 없이 렌더링되는 것을 확인함.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add mobile
