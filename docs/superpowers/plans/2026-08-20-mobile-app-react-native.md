@@ -1269,11 +1269,11 @@ export const TodoListScreen = () => {
 Run: `cd mobile && npx jest src/screens/__tests__/TodoListScreen.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: 수동 확인** — 미완료
+- [x] **Step 5: 수동 확인**
 
 Run: `cd mobile && npx expo start` — 상태 텍스트를 눌러 todo→doing→done→todo로 순환하는지, Firestore 문서의 `status`가 실제로 바뀌는지 확인.
 
-> 이 세션에서 iOS 시뮬레이터로 Task 5까지의 상태(목록/생성/삭제)는 실제 확인했으나, 이번 커밋(상태 토글·priority)은 자동화 테스트만 통과했고 시뮬레이터 재확인은 아직 안 함.
+> iOS 시뮬레이터(iPhone 17)에서 `npx expo run:ios` + `npx expo start --dev-client`로 실제 로그인 후 확인함. `[todo]`/`[doing]`/`[done]` 상태 표시와 "보통"/"높음" priority 라벨이 정상 렌더링되는 것을 스크린샷으로 확인. 이 과정에서 목록 자체가 안 뜨는 별개의 버그(packages/core에 중복 설치된 firebase로 인한 Firestore instanceof 오류)를 발견해 `mobile/metro.config.js`를 수정함 — Task 2/3에서 "고쳤다"고 기록됐던 버그가 실제로는 이 시나리오(packages/core에서 npm install)에서 재현됨. 상태 토글을 눌러보는 것까지는(버튼 조작) 스크린샷 검증 범위 밖이라 미실시.
 
 - [x] **Step 6: 커밋**
 
