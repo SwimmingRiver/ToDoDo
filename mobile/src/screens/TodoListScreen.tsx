@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ActivityIndicator, Button, FlatList, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { Todo } from "@tododo/core";
@@ -5,21 +6,28 @@ import { useTodos } from "../hooks/useTodos";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
 
 const TodoRow = ({ todo }: { todo: Todo }) => {
-  const { mutate: deleteTodo } = useDeleteTodo();
+  const { mutateAsync } = useDeleteTodo();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    try {
+      setError(null);
+      await mutateAsync(todo.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "삭제에 실패했습니다");
+    }
+  };
 
   return (
     <View
       testID={`todo-row-${todo.id}`}
-      style={{
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingVertical: 8,
-        paddingLeft: todo.parentId ? 32 : 16,
-      }}
+      style={{ paddingVertical: 8, paddingLeft: todo.parentId ? 32 : 16 }}
     >
-      <Text>{todo.title}</Text>
-      <Button title="삭제" onPress={() => deleteTodo(todo.id)} />
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text>{todo.title}</Text>
+        <Button title="삭제" onPress={handleDelete} />
+      </View>
+      {error && <Text style={{ color: "red" }}>{error}</Text>}
     </View>
   );
 };

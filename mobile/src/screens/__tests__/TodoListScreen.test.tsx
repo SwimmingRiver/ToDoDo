@@ -1,14 +1,14 @@
-import { render, screen } from "@testing-library/react-native";
-import { describe, it, expect, jest } from "@jest/globals";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
 const mockUseTodos = jest.fn();
 jest.mock("../../hooks/useTodos", () => ({
   useTodos: () => mockUseTodos(),
 }));
 
-const mockDeleteTodoMutate = jest.fn();
+const mockDeleteTodoMutateAsync = jest.fn<() => Promise<void>>();
 jest.mock("../../hooks/useDeleteTodo", () => ({
-  useDeleteTodo: () => ({ mutate: mockDeleteTodoMutate }),
+  useDeleteTodo: () => ({ mutateAsync: mockDeleteTodoMutateAsync }),
 }));
 
 jest.mock("@react-navigation/native", () => ({
@@ -16,6 +16,10 @@ jest.mock("@react-navigation/native", () => ({
 }));
 
 describe("TodoListScreen", () => {
+  beforeEach(() => {
+    mockDeleteTodoMutateAsync.mockReset();
+  });
+
   it("루트와 하위 할 일 제목을 모두 렌더링한다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
@@ -68,5 +72,21 @@ describe("TodoListScreen", () => {
     await render(<TodoListScreen />);
 
     expect(screen.getByText("할 일을 불러오지 못했습니다")).toBeTruthy();
+  });
+
+  it("삭제에 실패하면 해당 항목에 에러 메시지를 보여준다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", order: 0 }],
+    });
+    mockDeleteTodoMutateAsync.mockRejectedValue(new Error("네트워크 오류"));
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    await fireEvent.press(screen.getByText("삭제"));
+
+    expect(await screen.findByText("네트워크 오류")).toBeTruthy();
   });
 });
