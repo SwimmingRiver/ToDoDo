@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from "react-native";
 import { useAuthState } from "../auth/useAuthState";
 import { LoginScreen } from "../screens/LoginScreen";
 import { TodoListScreen } from "../screens/TodoListScreen";
+import { TodoFormScreen } from "../screens/TodoFormScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -22,7 +23,10 @@ export const RootNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator>
         {user ? (
-          <Stack.Screen name="TodoList" component={TodoListScreen} options={{ title: "할 일" }} />
+          <Stack.Group>
+            <Stack.Screen name="TodoList" component={TodoListScreen} options={{ title: "할 일" }} />
+            <Stack.Screen name="TodoForm" component={TodoFormScreen} options={{ title: "할 일 추가" }} />
+          </Stack.Group>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
         )}

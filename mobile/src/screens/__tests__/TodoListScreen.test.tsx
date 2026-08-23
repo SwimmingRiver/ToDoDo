@@ -6,6 +6,15 @@ jest.mock("../../hooks/useTodos", () => ({
   useTodos: () => mockUseTodos(),
 }));
 
+const mockDeleteTodoMutate = jest.fn();
+jest.mock("../../hooks/useDeleteTodo", () => ({
+  useDeleteTodo: () => ({ mutate: mockDeleteTodoMutate }),
+}));
+
+jest.mock("@react-navigation/native", () => ({
+  useNavigation: () => ({ navigate: jest.fn() }),
+}));
+
 describe("TodoListScreen", () => {
   it("루트와 하위 할 일 제목을 모두 렌더링한다", async () => {
     mockUseTodos.mockReturnValue({
