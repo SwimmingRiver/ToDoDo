@@ -27,6 +27,7 @@
     "@sentry/react": "^10.69.0",
     "@tanstack/react-query": "^5.90.5",
     "@tanstack/react-query-devtools": "^5.90.2",
+    "@tododo/core": "file:../packages/core",
     "firebase": "^12.10.0",
     "linkifyjs": "^4.3.3",
     "lucide-react": "^0.562.0",

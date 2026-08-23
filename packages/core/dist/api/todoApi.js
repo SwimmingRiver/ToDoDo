@@ -21,7 +21,7 @@ export const createTodo = async (db, userId, fields) => {
     });
     return docRef.id;
 };
-const calcParentStatus = (siblings) => {
+export const calcParentStatus = (siblings) => {
     const now = new Date().toISOString();
     if (siblings.every((s) => s.status === "done")) {
         return { status: "done", doneAt: now };
@@ -54,8 +54,11 @@ export const updateTodo = async (db, id, fields, allTodos) => {
             });
         });
     }
-    // 하위 변경 → 상위 상태 재계산
-    const parentId = current?.parentId ?? null;
+    // 하위 변경 → 상위 상태 재계산. fields에 parentId가 포함돼 있으면(재부모
+    // 지정) 캐시상의 옛 parentId가 아니라 새 parentId를 기준으로 재계산해야
+    // 새로 옮겨간 부모의 상태가 갱신된다 — 웹 editTodo는 이미 병합된 todo를
+    // 받아 이 문제가 없지만, 여기는 partial fields라 명시적으로 처리한다.
+    const parentId = fields.parentId !== undefined ? fields.parentId : (current?.parentId ?? null);
     if (parentId) {
         const updatedTodos = allTodos.map((t) => (t.id === id ? { ...t, ...fields } : t));
         const siblings = updatedTodos.filter((t) => t.parentId === parentId);

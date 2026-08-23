@@ -172,6 +172,38 @@ describe("todoApi", () => {
     expect(batchCommit).toHaveBeenCalled();
   });
 
+  it("updateTodo가 새 parentId(재부모 지정)를 받으면 옛 부모가 아니라 새 부모를 기준으로 재계산한다", async () => {
+    const { writeBatch, doc } = await import("firebase/firestore");
+    const { updateTodo } = await import("../todoApi");
+
+    vi.mocked(doc).mockImplementation((_db, _coll, id) => ({ id }) as never);
+    const batchUpdate = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      update: batchUpdate,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    const allTodos = [
+      makeTodo({ id: "old-root", parentId: null, status: "todo" }),
+      makeTodo({ id: "old-root-child", parentId: "old-root", status: "todo" }),
+      makeTodo({ id: "new-root", parentId: null, status: "todo" }),
+      makeTodo({ id: "new-root-child", parentId: "new-root", status: "todo" }),
+      makeTodo({ id: "child-1", parentId: "old-root", status: "todo" }),
+    ];
+
+    // child-1을 old-root에서 new-root로 옮기면서 done으로 표시한다.
+    await updateTodo(fakeDb, "child-1", { parentId: "new-root", status: "done" }, allTodos);
+
+    const updatesById = Object.fromEntries(
+      batchUpdate.mock.calls.map(([ref, payload]) => [(ref as { id: string }).id, payload]),
+    );
+    // new-root는 new-root-child(todo)와 새로 들어온 child-1(done)을 형제로 가지므로 doing이어야 한다.
+    expect(updatesById["new-root"]).toMatchObject({ status: "doing", doneAt: null });
+    // old-root는 더 이상 child-1의 부모가 아니므로 재계산 대상이 아니다.
+    expect(updatesById["old-root"]).toBeUndefined();
+  });
+
   it("deleteTodo는 하위 할 일이 없으면 대상 문서만 삭제한다", async () => {
     const { getDocs, writeBatch, doc } = await import("firebase/firestore");
     const { deleteTodo } = await import("../todoApi");
@@ -217,5 +249,41 @@ describe("todoApi", () => {
     expect(batchDelete).toHaveBeenCalledWith(childRefs[0]);
     expect(batchDelete).toHaveBeenCalledWith(childRefs[1]);
     expect(batchCommit).toHaveBeenCalled();
+  });
+});
+
+describe("calcParentStatus", () => {
+  it("형제가 전부 done이면 done을 반환한다", async () => {
+    const { calcParentStatus } = await import("../todoApi");
+
+    const result = calcParentStatus([
+      makeTodo({ id: "a", status: "done" }),
+      makeTodo({ id: "b", status: "done" }),
+    ]);
+
+    expect(result.status).toBe("done");
+    expect(result.doneAt).toEqual(expect.any(String));
+  });
+
+  it("형제 중 doing이나 done이 하나라도 있으면 doing을 반환하고 doneAt은 null이다", async () => {
+    const { calcParentStatus } = await import("../todoApi");
+
+    expect(calcParentStatus([makeTodo({ status: "todo" }), makeTodo({ status: "doing" })])).toEqual({
+      status: "doing",
+      doneAt: null,
+    });
+    expect(calcParentStatus([makeTodo({ status: "todo" }), makeTodo({ status: "done" })])).toEqual({
+      status: "doing",
+      doneAt: null,
+    });
+  });
+
+  it("형제가 전부 todo면 todo를 반환한다", async () => {
+    const { calcParentStatus } = await import("../todoApi");
+
+    expect(calcParentStatus([makeTodo({ status: "todo" }), makeTodo({ status: "todo" })])).toEqual({
+      status: "todo",
+      doneAt: null,
+    });
   });
 });

@@ -6,6 +6,10 @@ type TodoUpdateFields = Partial<TodoFields> & {
     status?: Todo["status"];
     doneAt?: string | null;
 };
+export declare const calcParentStatus: (siblings: Todo[]) => {
+    status: Todo["status"];
+    doneAt: string | null;
+};
 /**
  * 웹(client/src/features/todo/api/todoApi.ts의 editTodo)과 동일한 부모-자식
  * 캐스케이드를 모바일에도 적용한다. 이게 없으면 모바일에서 부모만 done으로

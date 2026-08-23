@@ -10,6 +10,10 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import * as Sentry from "@sentry/react";
+// 부모-자식 상태 판정 규칙은 모바일(packages/core)과 동일해야 하므로 그쪽을
+// 유일한 소스로 두고 가져다 쓴다(아래에서 재수출도 함께 한다). 로컬에 따로
+// 정의하면 규칙이 바뀔 때 한쪽만 고치고 다른 쪽을 잊는 드리프트가 생긴다.
+import { calcParentStatus } from "@tododo/core";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
@@ -146,18 +150,8 @@ export const createTodo = async (todo: Todo) => {
   return { ...todo, id: docRef.id };
 };
 
-export const calcParentStatus = (
-  siblings: Todo[],
-): { status: Todo["status"]; doneAt: string | null } => {
-  const now = new Date().toISOString();
-  if (siblings.every((s) => s.status === "done")) {
-    return { status: "done", doneAt: now };
-  }
-  if (siblings.some((s) => s.status === "doing" || s.status === "done")) {
-    return { status: "doing", doneAt: null };
-  }
-  return { status: "todo", doneAt: null };
-};
+// useUpdateTodo.ts 등 기존 호출부가 "../api"에서 그대로 가져다 쓸 수 있도록 재수출한다.
+export { calcParentStatus };
 
 export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
   assertNoRecurrenceParentConflict(todo);
