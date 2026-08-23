@@ -13,8 +13,9 @@ jest.mock("../../hooks/useDeleteTodo", () => ({
 }));
 
 const mockUpdateTodoMutate = jest.fn();
+let mockUpdateTodoIsPending = false;
 jest.mock("../../hooks/useUpdateTodo", () => ({
-  useUpdateTodo: () => ({ mutate: mockUpdateTodoMutate }),
+  useUpdateTodo: () => ({ mutate: mockUpdateTodoMutate, isPending: mockUpdateTodoIsPending }),
 }));
 
 jest.mock("@react-navigation/native", () => ({
@@ -40,6 +41,7 @@ describe("TodoListScreen", () => {
   beforeEach(() => {
     mockDeleteTodoMutateAsync.mockReset();
     mockUpdateTodoMutate.mockReset();
+    mockUpdateTodoIsPending = false;
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
   });
 
@@ -199,6 +201,22 @@ describe("TodoListScreen", () => {
       id: "todo-1",
       fields: { status: "todo", doneAt: null },
     });
+  });
+
+  it("이전 상태 변경이 진행 중이면 다시 눌러도 무시된다(더블탭 방지)", async () => {
+    mockUpdateTodoIsPending = true;
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+
+    expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
   });
 
   it("우선순위 라벨을 한글로 표시한다", async () => {

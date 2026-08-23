@@ -22,10 +22,12 @@ const TodoRow = ({
   todo,
   onDelete,
   onToggleStatus,
+  isTogglingStatus,
 }: {
   todo: Todo;
   onDelete: (id: string) => Promise<void>;
   onToggleStatus: (todo: Todo) => void;
+  isTogglingStatus: boolean;
 }) => {
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +57,11 @@ const TodoRow = ({
       style={{ paddingVertical: 8, paddingLeft: todo.parentId ? 32 : 16 }}
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Pressable testID={`status-toggle-${todo.id}`} onPress={() => onToggleStatus(todo)}>
+        <Pressable
+          testID={`status-toggle-${todo.id}`}
+          disabled={isTogglingStatus}
+          onPress={() => onToggleStatus(todo)}
+        >
           <Text>[{todo.status}]</Text>
         </Pressable>
         <Text style={{ flex: 1, marginLeft: 8 }}>{todo.title}</Text>
@@ -81,10 +87,11 @@ const groupByParent = (todos: Todo[]): Todo[] => {
 export const TodoListScreen = () => {
   const { data: todos, isLoading, isError } = useTodos();
   const { mutateAsync: deleteTodo } = useDeleteTodo();
-  const { mutate: updateTodo } = useUpdateTodo();
+  const { mutate: updateTodo, isPending: isTogglingStatus } = useUpdateTodo();
   const navigation = useNavigation();
 
   const handleToggleStatus = (todo: Todo) => {
+    if (isTogglingStatus) return;
     const status = nextStatus[todo.status];
     updateTodo({
       id: todo.id,
@@ -115,7 +122,12 @@ export const TodoListScreen = () => {
         data={groupByParent(todos ?? [])}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TodoRow todo={item} onDelete={deleteTodo} onToggleStatus={handleToggleStatus} />
+          <TodoRow
+            todo={item}
+            onDelete={deleteTodo}
+            onToggleStatus={handleToggleStatus}
+            isTogglingStatus={isTogglingStatus}
+          />
         )}
       />
     </View>
