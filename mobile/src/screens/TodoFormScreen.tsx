@@ -2,24 +2,30 @@ import { useState } from "react";
 import { Button, Text, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useCreateTodo } from "../hooks/useCreateTodo";
+import { useTodos } from "../hooks/useTodos";
 
 export const TodoFormScreen = () => {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const navigation = useNavigation();
   const { mutateAsync, isPending } = useCreateTodo();
+  const { data: todos } = useTodos();
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
     try {
       setError(null);
+      const rootOrders = (todos ?? [])
+        .filter((todo) => todo.parentId === null)
+        .map((todo) => todo.order);
+      const nextOrder = Math.max(-1, ...rootOrders) + 1;
       await mutateAsync({
         title,
         priority: "medium",
         startAt: null,
         dueAt: null,
         parentId: null,
-        order: 0,
+        order: nextOrder,
       });
       navigation.goBack();
     } catch (e) {

@@ -1,21 +1,37 @@
 import { useState } from "react";
-import { ActivityIndicator, Button, FlatList, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Button, FlatList, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { Todo } from "@tododo/core";
 import { useTodos } from "../hooks/useTodos";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
 
-const TodoRow = ({ todo }: { todo: Todo }) => {
-  const { mutateAsync } = useDeleteTodo();
+const TodoRow = ({
+  todo,
+  onDelete,
+}: {
+  todo: Todo;
+  onDelete: (id: string) => Promise<void>;
+}) => {
   const [error, setError] = useState<string | null>(null);
 
   const handleDelete = async () => {
     try {
       setError(null);
-      await mutateAsync(todo.id);
+      await onDelete(todo.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "삭제에 실패했습니다");
     }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      "할 일 삭제",
+      "하위 할 일도 함께 삭제됩니다. 삭제하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { text: "삭제", style: "destructive", onPress: handleDelete },
+      ],
+    );
   };
 
   return (
@@ -25,7 +41,7 @@ const TodoRow = ({ todo }: { todo: Todo }) => {
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Text>{todo.title}</Text>
-        <Button title="삭제" onPress={handleDelete} />
+        <Button title="삭제" onPress={confirmDelete} />
       </View>
       {error && <Text style={{ color: "red" }}>{error}</Text>}
     </View>
@@ -45,6 +61,7 @@ const groupByParent = (todos: Todo[]): Todo[] => {
 
 export const TodoListScreen = () => {
   const { data: todos, isLoading, isError } = useTodos();
+  const { mutateAsync: deleteTodo } = useDeleteTodo();
   const navigation = useNavigation();
 
   if (isLoading) {
@@ -69,7 +86,7 @@ export const TodoListScreen = () => {
       <FlatList
         data={groupByParent(todos ?? [])}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <TodoRow todo={item} />}
+        renderItem={({ item }) => <TodoRow todo={item} onDelete={deleteTodo} />}
       />
     </View>
   );

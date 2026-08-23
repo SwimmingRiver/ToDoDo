@@ -11,20 +11,22 @@ jest.mock("@tododo/core", () => ({
   createTodo: jest.fn(() => Promise.resolve("new-id")),
 }));
 
-const wrapper = ({ children }: { children: ReactNode }) => {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
-      mutations: { retry: false, gcTime: 0 },
-    },
-  });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-};
-
 describe("useCreateTodo", () => {
   it("생성 성공 시 todos 쿼리를 무효화한다", async () => {
     const { createTodo } = await import("@tododo/core");
     const { useCreateTodo } = await import("../useCreateTodo");
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+    const invalidateSpy = jest.spyOn(client, "invalidateQueries");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
     const { result } = await renderHook(() => useCreateTodo(), { wrapper });
 
     result.current.mutate({
@@ -38,5 +40,6 @@ describe("useCreateTodo", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(createTodo).toHaveBeenCalledWith({}, "u1", expect.objectContaining({ title: "새 할 일" }));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos", "u1"] });
   });
 });
