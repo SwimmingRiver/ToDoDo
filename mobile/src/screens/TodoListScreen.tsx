@@ -85,7 +85,11 @@ export const TodoListScreen = () => {
   const navigation = useNavigation();
 
   const handleToggleStatus = (todo: Todo) => {
-    updateTodo({ id: todo.id, fields: { status: nextStatus[todo.status] } });
+    const status = nextStatus[todo.status];
+    updateTodo({
+      id: todo.id,
+      fields: { status, doneAt: status === "done" ? new Date().toISOString() : null },
+    });
   };
 
   if (isLoading) {

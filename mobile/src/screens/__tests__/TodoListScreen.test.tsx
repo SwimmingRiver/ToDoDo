@@ -161,7 +161,43 @@ describe("TodoListScreen", () => {
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
       id: "todo-1",
-      fields: { status: "doing" },
+      fields: { status: "doing", doneAt: null },
+    });
+  });
+
+  it("상태를 done으로 토글하면 doneAt이 현재 시간으로 설정된다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "doing", priority: "medium", order: 0 }],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+
+    expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
+      id: "todo-1",
+      fields: { status: "done", doneAt: expect.any(String) },
+    });
+  });
+
+  it("상태를 done에서 todo로 토글하면 doneAt이 null로 설정된다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "done", priority: "medium", order: 0 }],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+
+    expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
+      id: "todo-1",
+      fields: { status: "todo", doneAt: null },
     });
   });
 
