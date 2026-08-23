@@ -1,16 +1,31 @@
 import { useState } from "react";
-import { ActivityIndicator, Alert, Button, FlatList, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Button, FlatList, Pressable, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { Todo } from "@tododo/core";
 import { useTodos } from "../hooks/useTodos";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
+import { useUpdateTodo } from "../hooks/useUpdateTodo";
+
+const nextStatus: Record<Todo["status"], Todo["status"]> = {
+  todo: "doing",
+  doing: "done",
+  done: "todo",
+};
+
+const priorityLabel: Record<Todo["priority"], string> = {
+  low: "낮음",
+  medium: "보통",
+  high: "높음",
+};
 
 const TodoRow = ({
   todo,
   onDelete,
+  onToggleStatus,
 }: {
   todo: Todo;
   onDelete: (id: string) => Promise<void>;
+  onToggleStatus: (todo: Todo) => void;
 }) => {
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +55,11 @@ const TodoRow = ({
       style={{ paddingVertical: 8, paddingLeft: todo.parentId ? 32 : 16 }}
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text>{todo.title}</Text>
+        <Pressable testID={`status-toggle-${todo.id}`} onPress={() => onToggleStatus(todo)}>
+          <Text>[{todo.status}]</Text>
+        </Pressable>
+        <Text style={{ flex: 1, marginLeft: 8 }}>{todo.title}</Text>
+        <Text style={{ marginRight: 8 }}>{priorityLabel[todo.priority]}</Text>
         <Button title="삭제" onPress={confirmDelete} />
       </View>
       {error && <Text style={{ color: "red" }}>{error}</Text>}
@@ -62,7 +81,12 @@ const groupByParent = (todos: Todo[]): Todo[] => {
 export const TodoListScreen = () => {
   const { data: todos, isLoading, isError } = useTodos();
   const { mutateAsync: deleteTodo } = useDeleteTodo();
+  const { mutate: updateTodo } = useUpdateTodo();
   const navigation = useNavigation();
+
+  const handleToggleStatus = (todo: Todo) => {
+    updateTodo({ id: todo.id, fields: { status: nextStatus[todo.status] } });
+  };
 
   if (isLoading) {
     return (
@@ -86,7 +110,9 @@ export const TodoListScreen = () => {
       <FlatList
         data={groupByParent(todos ?? [])}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <TodoRow todo={item} onDelete={deleteTodo} />}
+        renderItem={({ item }) => (
+          <TodoRow todo={item} onDelete={deleteTodo} onToggleStatus={handleToggleStatus} />
+        )}
       />
     </View>
   );

@@ -12,6 +12,11 @@ jest.mock("../../hooks/useDeleteTodo", () => ({
   useDeleteTodo: () => ({ mutateAsync: mockDeleteTodoMutateAsync }),
 }));
 
+const mockUpdateTodoMutate = jest.fn();
+jest.mock("../../hooks/useUpdateTodo", () => ({
+  useUpdateTodo: () => ({ mutate: mockUpdateTodoMutate }),
+}));
+
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
 }));
@@ -34,6 +39,7 @@ const confirmAlertDelete = async () => {
 describe("TodoListScreen", () => {
   beforeEach(() => {
     mockDeleteTodoMutateAsync.mockReset();
+    mockUpdateTodoMutate.mockReset();
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
   });
 
@@ -42,8 +48,8 @@ describe("TodoListScreen", () => {
       isLoading: false,
       isError: false,
       data: [
-        { id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", order: 0 },
-        { id: "todo-2", title: "하위 할 일", parentId: "todo-1", status: "todo", order: 0 },
+        { id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 },
+        { id: "todo-2", title: "하위 할 일", parentId: "todo-1", status: "todo", priority: "medium", order: 0 },
       ],
     });
 
@@ -61,9 +67,9 @@ describe("TodoListScreen", () => {
       isLoading: false,
       isError: false,
       data: [
-        { id: "root-a", title: "루트 A", parentId: null, status: "todo", order: 0 },
-        { id: "child-e", title: "자식 E", parentId: "root-b", status: "todo", order: 0 },
-        { id: "root-b", title: "루트 B", parentId: null, status: "todo", order: 1 },
+        { id: "root-a", title: "루트 A", parentId: null, status: "todo", priority: "medium", order: 0 },
+        { id: "child-e", title: "자식 E", parentId: "root-b", status: "todo", priority: "medium", order: 0 },
+        { id: "root-b", title: "루트 B", parentId: null, status: "todo", priority: "medium", order: 1 },
       ],
     });
 
@@ -95,7 +101,7 @@ describe("TodoListScreen", () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", order: 0 }],
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
@@ -111,7 +117,7 @@ describe("TodoListScreen", () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", order: 0 }],
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
     });
     mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
 
@@ -128,7 +134,7 @@ describe("TodoListScreen", () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", order: 0 }],
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
     });
     mockDeleteTodoMutateAsync.mockRejectedValue(new Error("네트워크 오류"));
 
@@ -139,5 +145,42 @@ describe("TodoListScreen", () => {
     await confirmAlertDelete();
 
     expect(await screen.findByText("네트워크 오류")).toBeTruthy();
+  });
+
+  it("상태 버튼을 누르면 useUpdateTodo가 다음 상태로 호출된다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+
+    expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
+      id: "todo-1",
+      fields: { status: "doing" },
+    });
+  });
+
+  it("우선순위 라벨을 한글로 표시한다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [
+        { id: "todo-1", title: "낮음 할 일", parentId: null, status: "todo", priority: "low", order: 0 },
+        { id: "todo-2", title: "보통 할 일", parentId: null, status: "todo", priority: "medium", order: 1 },
+        { id: "todo-3", title: "높음 할 일", parentId: null, status: "todo", priority: "high", order: 2 },
+      ],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    expect(screen.getByText("낮음")).toBeTruthy();
+    expect(screen.getByText("보통")).toBeTruthy();
+    expect(screen.getByText("높음")).toBeTruthy();
   });
 });
