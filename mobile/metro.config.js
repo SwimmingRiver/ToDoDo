@@ -18,11 +18,13 @@ const config = getDefaultConfig(__dirname);
 // 그래서 두 가지를 함께 써야 한다: blockList로 packages/core 안의 firebase를
 // 찾지 못하게 막고(정상 탐색을 실패시켜 폴백을 타게 함), extraNodeModules로
 // "firebase"를 mobile/node_modules/firebase로 명시적으로 리다이렉트한다.
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 config.resolver.blockList = [
   ...(Array.isArray(config.resolver.blockList)
     ? config.resolver.blockList
     : [config.resolver.blockList]),
-  new RegExp(`${path.resolve(__dirname, "../packages/core/node_modules/firebase").replace(/[/\\]/g, "[/\\\\]")}.*`),
+  new RegExp(`${escapeRegExp(path.resolve(__dirname, "../packages/core/node_modules/firebase"))}.*`),
 ];
 
 config.resolver.extraNodeModules = {
