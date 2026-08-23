@@ -1153,7 +1153,7 @@ git commit -m "feat: mobile 할 일 생성·삭제 (CRUD 기본)"
 - Consumes: `useUpdateTodo` (Task 5)
 - Produces: 없음 (터미널 화면 — 이후 태스크가 이 화면을 확장하지 않음)
 
-- [ ] **Step 1: 실패하는 테스트 케이스 추가**
+- [x] **Step 1: 실패하는 테스트 케이스 추가**
 
 `mobile/src/screens/__tests__/TodoListScreen.test.tsx`에 다음 테스트를 추가:
 
@@ -1178,12 +1178,12 @@ it("상태 버튼을 누르면 useUpdateTodo가 다음 상태로 호출된다", 
 
 (`fireEvent`, `screen`은 `@testing-library/react-native`에서 함께 import한다.)
 
-- [ ] **Step 2: 테스트 실행해서 실패 확인**
+- [x] **Step 2: 테스트 실행해서 실패 확인**
 
 Run: `cd mobile && npx jest src/screens/__tests__/TodoListScreen.test.tsx`
 Expected: FAIL — `testID="status-toggle-todo-1"`을 찾을 수 없음
 
-- [ ] **Step 3: 상태 순환 로직 + priority 표시 구현**
+- [x] **Step 3: 상태 순환 로직 + priority 표시 구현**
 
 `mobile/src/screens/TodoListScreen.tsx`의 `TodoRow`를 다음으로 교체:
 
@@ -1262,16 +1262,20 @@ export const TodoListScreen = () => {
 
 기존 테스트(Task 4)의 mock 데이터에 `status`, `priority` 필드가 없으면 이 시점에 타입 에러가 나므로, `useTodos` mock 데이터에 `status: "todo", priority: "medium"`을 추가해 둔다.
 
-- [ ] **Step 4: 테스트 통과 확인**
+> 이 스니펫은 계획 작성 시점의 단순한 `TodoRow`(제목+삭제 버튼만) 기준이라 실제 코드와는 다르다. Task 5 코드 리뷰에서 이미 삭제 확인 `Alert`, 행별 에러 상태, 목록 조회 `isError` 처리, 형제 그룹별 정렬(`groupByParent`)이 추가돼 있었고, 이번 구현은 그 기능들을 유지한 채 상태 토글(`Pressable` + `testID=status-toggle-{id}`)과 priority 라벨만 얹었다. `useUpdateTodo`는 브리프대로 fire-and-forget `mutate`를 사용해 실패 시 에러 UI가 없다 — 삭제 흐름과 비대칭이지만 상태 순환은 되돌리기 쉬운 저위험 동작이라는 판단(리뷰에서 Minor로 기록, 차단 아님).
+
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `cd mobile && npx jest src/screens/__tests__/TodoListScreen.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: 수동 확인**
+- [x] **Step 5: 수동 확인**
 
 Run: `cd mobile && npx expo start` — 상태 텍스트를 눌러 todo→doing→done→todo로 순환하는지, Firestore 문서의 `status`가 실제로 바뀌는지 확인.
 
-- [ ] **Step 6: 커밋**
+> iOS 시뮬레이터(iPhone 17)에서 `npx expo run:ios` + `npx expo start --dev-client`로 실제 로그인 후 확인함. `[todo]`/`[doing]`/`[done]` 상태 표시와 "보통"/"높음" priority 라벨이 정상 렌더링되는 것을 스크린샷으로 확인. 이 과정에서 목록 자체가 안 뜨는 별개의 버그(packages/core에 중복 설치된 firebase로 인한 Firestore instanceof 오류)를 발견해 `mobile/metro.config.js`를 수정함 — Task 2/3에서 "고쳤다"고 기록됐던 버그가 실제로는 이 시나리오(packages/core에서 npm install)에서 재현됨. 상태 토글을 눌러보는 것까지는(버튼 조작) 스크린샷 검증 범위 밖이라 미실시.
+
+- [x] **Step 6: 커밋**
 
 ```bash
 git add mobile
