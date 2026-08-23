@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Firestore } from "firebase/firestore";
+import type { Todo } from "../../types/todo";
 
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn(() => ({})),
@@ -14,6 +15,22 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 const fakeDb = {} as Firestore;
+
+const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
+  id: "todo-1",
+  userId: "u1",
+  title: "테스트 할 일",
+  status: "todo",
+  priority: "medium",
+  startAt: null,
+  dueAt: null,
+  doneAt: null,
+  parentId: null,
+  order: 0,
+  createdAt: "2026-08-01T00:00:00.000Z",
+  updatedAt: "2026-08-01T00:00:00.000Z",
+  ...overrides,
+});
 
 describe("todoApi", () => {
   it("getTodos는 order 순으로 정렬해서 반환한다", async () => {
@@ -61,14 +78,98 @@ describe("todoApi", () => {
   });
 
   it("updateTodo는 updatedAt을 갱신해서 저장한다", async () => {
-    const { updateDoc } = await import("firebase/firestore");
+    const { writeBatch, doc } = await import("firebase/firestore");
     const { updateTodo } = await import("../todoApi");
 
-    await updateTodo(fakeDb, "todo-1", { status: "done", doneAt: "2026-08-20T00:00:00.000Z" });
+    vi.mocked(doc).mockImplementation((_db, _coll, id) => ({ id }) as never);
+    const batchUpdate = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      update: batchUpdate,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
 
-    const [, payload] = vi.mocked(updateDoc).mock.calls[0];
+    const allTodos = [makeTodo({ id: "todo-1", parentId: null })];
+
+    await updateTodo(
+      fakeDb,
+      "todo-1",
+      { status: "done", doneAt: "2026-08-20T00:00:00.000Z" },
+      allTodos,
+    );
+
+    expect(batchUpdate).toHaveBeenCalledTimes(1);
+    const [ref, payload] = batchUpdate.mock.calls[0];
+    expect(ref).toEqual({ id: "todo-1" });
     expect(payload).toMatchObject({ status: "done", doneAt: "2026-08-20T00:00:00.000Z" });
     expect(payload).toHaveProperty("updatedAt");
+    expect(batchCommit).toHaveBeenCalled();
+  });
+
+  it("updateTodo가 status를 done으로 바꾸면 자식들도 함께 done으로 배치 갱신한다", async () => {
+    const { writeBatch, doc } = await import("firebase/firestore");
+    const { updateTodo } = await import("../todoApi");
+
+    vi.mocked(doc).mockImplementation((_db, _coll, id) => ({ id }) as never);
+    const batchUpdate = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      update: batchUpdate,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    const allTodos = [
+      makeTodo({ id: "root-1", parentId: null, status: "doing" }),
+      makeTodo({ id: "child-1", parentId: "root-1", status: "todo" }),
+      makeTodo({ id: "child-2", parentId: "root-1", status: "doing" }),
+    ];
+
+    await updateTodo(
+      fakeDb,
+      "root-1",
+      { status: "done", doneAt: "2026-08-23T00:00:00.000Z" },
+      allTodos,
+    );
+
+    expect(batchUpdate).toHaveBeenCalledTimes(3);
+    const updatesById = Object.fromEntries(
+      batchUpdate.mock.calls.map(([ref, payload]) => [(ref as { id: string }).id, payload]),
+    );
+    expect(updatesById["root-1"]).toMatchObject({ status: "done" });
+    expect(updatesById["child-1"]).toMatchObject({ status: "done" });
+    expect(updatesById["child-1"].doneAt).toEqual(expect.any(String));
+    expect(updatesById["child-2"]).toMatchObject({ status: "done" });
+    expect(updatesById["child-2"].doneAt).toEqual(expect.any(String));
+    expect(batchCommit).toHaveBeenCalled();
+  });
+
+  it("updateTodo가 자식 상태를 바꾸면 형제들을 기준으로 부모 상태를 재계산해 함께 갱신한다", async () => {
+    const { writeBatch, doc } = await import("firebase/firestore");
+    const { updateTodo } = await import("../todoApi");
+
+    vi.mocked(doc).mockImplementation((_db, _coll, id) => ({ id }) as never);
+    const batchUpdate = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(writeBatch).mockReturnValue({
+      update: batchUpdate,
+      commit: batchCommit,
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    const allTodos = [
+      makeTodo({ id: "root-1", parentId: null, status: "todo" }),
+      makeTodo({ id: "child-1", parentId: "root-1", status: "todo" }),
+      makeTodo({ id: "child-2", parentId: "root-1", status: "done" }),
+    ];
+
+    await updateTodo(fakeDb, "child-1", { status: "doing" }, allTodos);
+
+    expect(batchUpdate).toHaveBeenCalledTimes(2);
+    const updatesById = Object.fromEntries(
+      batchUpdate.mock.calls.map(([ref, payload]) => [(ref as { id: string }).id, payload]),
+    );
+    expect(updatesById["child-1"]).toMatchObject({ status: "doing" });
+    expect(updatesById["root-1"]).toMatchObject({ status: "doing", doneAt: null });
+    expect(batchCommit).toHaveBeenCalled();
   });
 
   it("deleteTodo는 하위 할 일이 없으면 대상 문서만 삭제한다", async () => {

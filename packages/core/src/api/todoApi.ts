@@ -3,7 +3,6 @@ import {
   addDoc,
   getDocs,
   doc,
-  updateDoc,
   query,
   where,
   writeBatch,
@@ -52,15 +51,64 @@ type TodoUpdateFields = Partial<TodoFields> & {
   doneAt?: string | null;
 };
 
+const calcParentStatus = (
+  siblings: Todo[],
+): { status: Todo["status"]; doneAt: string | null } => {
+  const now = new Date().toISOString();
+  if (siblings.every((s) => s.status === "done")) {
+    return { status: "done", doneAt: now };
+  }
+  if (siblings.some((s) => s.status === "doing" || s.status === "done")) {
+    return { status: "doing", doneAt: null };
+  }
+  return { status: "todo", doneAt: null };
+};
+
+/**
+ * 웹(client/src/features/todo/api/todoApi.ts의 editTodo)과 동일한 부모-자식
+ * 캐스케이드를 모바일에도 적용한다. 이게 없으면 모바일에서 부모만 done으로
+ * 바꿔도 자식은 그대로 남아, 30일 아카이빙 스윕이 미완료 자식을 놓치는
+ * 문제가 생긴다.
+ */
 export const updateTodo = async (
   db: Firestore,
   id: string,
   fields: TodoUpdateFields,
+  allTodos: Todo[],
 ): Promise<void> => {
-  await updateDoc(doc(db, "todos", id), {
-    ...fields,
-    updatedAt: new Date().toISOString(),
+  const now = new Date().toISOString();
+  const current = allTodos.find((t) => t.id === id);
+
+  const writes: Array<{ id: string; updates: object }> = [
+    { id, updates: { ...fields, updatedAt: now } },
+  ];
+
+  // 상위 done → 하위 전부 done
+  if (fields.status === "done") {
+    allTodos
+      .filter((t) => t.parentId === id)
+      .forEach((child) => {
+        writes.push({
+          id: child.id,
+          updates: { status: "done", doneAt: now, updatedAt: now },
+        });
+      });
+  }
+
+  // 하위 변경 → 상위 상태 재계산
+  const parentId = current?.parentId ?? null;
+  if (parentId) {
+    const updatedTodos = allTodos.map((t) => (t.id === id ? { ...t, ...fields } : t));
+    const siblings = updatedTodos.filter((t) => t.parentId === parentId);
+    const { status: parentStatus, doneAt } = calcParentStatus(siblings);
+    writes.push({ id: parentId, updates: { status: parentStatus, doneAt, updatedAt: now } });
+  }
+
+  const batch = writeBatch(db);
+  writes.forEach(({ id: writeId, updates }) => {
+    batch.update(doc(db, "todos", writeId), updates);
   });
+  await batch.commit();
 };
 
 export const deleteTodo = async (db: Firestore, id: string): Promise<void> => {

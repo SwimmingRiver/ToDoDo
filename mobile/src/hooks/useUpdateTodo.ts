@@ -13,7 +13,10 @@ export const useUpdateTodo = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, fields }: UpdatePayload) => updateTodo(db, id, fields),
+    mutationFn: ({ id, fields }: UpdatePayload) => {
+      const allTodos = queryClient.getQueryData<Todo[]>(["todos", user?.uid]) ?? [];
+      return updateTodo(db, id, fields, allTodos);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["todos", user?.uid] });
     },
