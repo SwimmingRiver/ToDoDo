@@ -45,6 +45,13 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
+    // @tododo/core는 file: 심링크(packages/core)라 그 안의 실제 경로 기준으로
+    // firebase를 다시 찾는다 — packages/core가 자기 devDependencies로 별도 설치한
+    // firebase(테스트용)와 client의 firebase가 서로 다른 모듈 인스턴스로 번들에
+    // 두 번 들어가, Firestore/Auth 클래스가 갈라져 `instanceof` 검사가 깨질 수
+    // 있다(모바일 Metro에서 겪은 것과 같은 종류의 문제). dedupe로 항상 client
+    // 쪽 firebase 하나로 강제한다.
+    dedupe: ['firebase'],
   },
   build: {
     // Sentry 플러그인이 업로드할 소스맵을 Vite가 실제로 생성하도록 한다. 위

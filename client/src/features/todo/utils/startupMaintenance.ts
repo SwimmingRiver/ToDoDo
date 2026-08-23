@@ -49,7 +49,14 @@ export const planArchivedSweep = (
     if (!todo.doneAt) continue;
     if (todo.doneAt >= cutoffISO) continue;
 
-    const members = [todo, ...(childrenByParentId.get(todo.id) ?? [])];
+    const children = childrenByParentId.get(todo.id) ?? [];
+    // 부모-자식 상태는 항상 함께 갱신된다는 게 원래 불변조건이지만, 모바일
+    // 클라이언트는 캐스케이드 없이 부모 상태만 단독으로 바꿀 수 있어 깨질 수 있다.
+    // 자식이 아직 done이 아닌데 부모만 archived되면 미완료 자식이 조용히 사라지므로,
+    // 이 그룹은 자식이 전부 done일 때만 아카이빙한다.
+    if (children.some((child) => child.status !== "done")) continue;
+
+    const members = [todo, ...children];
     groups.push({
       updates: members.map((m) => ({ id: m.id, fields: { archived: true, updatedAt: now } })),
     });

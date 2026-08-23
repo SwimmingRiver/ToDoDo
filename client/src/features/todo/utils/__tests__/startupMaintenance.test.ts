@@ -88,6 +88,13 @@ describe("planArchivedSweep", () => {
   it("대상이 없으면 빈 배열을 반환한다", () => {
     expect(planArchivedSweep([makeTodo()], CUTOFF, NOW)).toEqual([]);
   });
+
+  it("자식 중 done이 아닌 항목이 있으면 그룹 전체를 archived 대상에서 제외한다", () => {
+    const root = makeTodo({ id: "root-1", status: "done", doneAt: "2026-06-01T00:00:00.000Z" });
+    const incompleteChild = makeTodo({ id: "child-1", parentId: "root-1", status: "todo" });
+
+    expect(planArchivedSweep([root, incompleteChild], CUTOFF, NOW)).toEqual([]);
+  });
 });
 
 describe("planOverdueRecurringSweep", () => {
