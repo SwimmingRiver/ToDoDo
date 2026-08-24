@@ -1297,7 +1297,7 @@ git commit -m "feat: mobile 할 일 상태 순환 토글 및 priority 표시"
 - Consumes: `Todo` 타입 (Task 1), `useCreateTodo`/`useUpdateTodo`/`useDeleteTodo`의 `onSuccess` 훅 포인트 (Task 5)
 - Produces: 없음 (터미널 태스크)
 
-- [ ] **Step 1: 순수 함수(트리거 시각 계산)부터 실패하는 테스트 작성**
+- [x] **Step 1: 순수 함수(트리거 시각 계산)부터 실패하는 테스트 작성**
 
 `mobile/src/notifications/__tests__/reminderTime.test.ts`:
 
@@ -1326,12 +1326,12 @@ describe("getReminderTrigger", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실행해서 실패 확인**
+- [x] **Step 2: 테스트 실행해서 실패 확인**
 
 Run: `cd mobile && npx jest src/notifications/__tests__/reminderTime.test.ts`
 Expected: FAIL — `Cannot find module '../reminderTime'`
 
-- [ ] **Step 3: reminderTime 구현**
+- [x] **Step 3: reminderTime 구현**
 
 `mobile/src/notifications/reminderTime.ts`:
 
@@ -1344,12 +1344,12 @@ export const getReminderTrigger = (dueAt: string | null, now: Date): Date | null
 };
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `cd mobile && npx jest src/notifications/__tests__/reminderTime.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: scheduleReminder 실패하는 테스트 작성**
+- [x] **Step 5: scheduleReminder 실패하는 테스트 작성**
 
 `mobile/src/notifications/__tests__/scheduleReminder.test.ts`:
 
@@ -1399,12 +1399,12 @@ describe("scheduleReminder", () => {
 });
 ```
 
-- [ ] **Step 6: 테스트 실행해서 실패 확인**
+- [x] **Step 6: 테스트 실행해서 실패 확인**
 
 Run: `cd mobile && npx jest src/notifications/__tests__/scheduleReminder.test.ts`
 Expected: FAIL — `Cannot find module '../scheduleReminder'`
 
-- [ ] **Step 7: expo-notifications 설치 및 scheduleReminder 구현**
+- [x] **Step 7: expo-notifications 설치 및 scheduleReminder 구현**
 
 ```bash
 cd mobile && npx expo install expo-notifications
@@ -1432,12 +1432,12 @@ export const cancelReminder = (notificationId: string): Promise<void> =>
   Notifications.cancelScheduledNotificationAsync(notificationId);
 ```
 
-- [ ] **Step 8: 테스트 통과 확인**
+- [x] **Step 8: 테스트 통과 확인**
 
 Run: `cd mobile && npx jest src/notifications/__tests__/scheduleReminder.test.ts`
 Expected: PASS
 
-- [ ] **Step 9: 생성·수정·삭제 훅에 연결**
+- [x] **Step 9: 생성·수정·삭제 훅에 연결**
 
 `mobile/src/hooks/useCreateTodo.ts`의 `onSuccess`를 다음으로 교체 (mutationFn이 반환하는 id로 알림을 예약해야 하므로 `mutationFn`도 함께 조정):
 
@@ -1503,16 +1503,24 @@ export const useUpdateTodo = () => {
 
 `mobile/src/hooks/useDeleteTodo.ts` — 삭제 시 알림 취소는 알림 id를 별도로 들고 있어야 해서 v1 범위를 넘어간다(로컬 알림 id ↔ todo id 매핑 저장소가 필요). 이번 태스크는 **생성/수정 시 예약**까지만 다루고, 삭제 시 알림 취소는 "범위 밖(기록)"에 남긴다 — 사용자가 알림을 받아도 앱을 열면 이미 삭제된 할 일이라는 것을 알 수 있어 v1 허용 범위로 판단.
 
-- [ ] **Step 10: 기존 테스트 전체 통과 확인**
+같은 이유(매핑 저장소 부재)로 dueAt을 여러 번 바꿔 재예약하는 경우에도 이전 알림이 취소되지 않아 중복 알림이 울릴 수 있다 — `/code-review`(2026-08-24)에서 지적됨. 사용자가 "계획 문서대로 계속 범위 밖"으로 명시적으로 결정, 이 문단에 함께 기록만 남긴다. 매핑 저장소를 만들 때 삭제·재예약 취소를 한 번에 같이 구현할 것.
+
+**추가로, 이 태스크와 별개로 확인된 더 근본적인 제약:** 모바일 앱에는 dueAt을 입력/수정하는 UI 자체가 아직 없다(`TodoFormScreen`은 항상 `dueAt: null`로 생성하고, 8-Task 계획 전체에 dueAt 입력 화면이 없다). 즉 이 태스크가 만든 알림 예약 로직은 현재 앱에서 실제로 트리거될 방법이 없고, 추후 dueAt 편집 UI가 추가되는 시점에 비로소 살아있는 코드가 된다.
+
+- [x] **Step 10: 기존 테스트 전체 통과 확인**
 
 Run: `cd mobile && npx jest`
 Expected: PASS (모든 테스트 — Task 5의 `useCreateTodo.test.tsx`가 `scheduleReminder`를 모킹하지 않아 깨진다면, 해당 테스트 파일 상단에 `vi.mock("../../notifications/scheduleReminder", () => ({ scheduleReminder: vi.fn().mockResolvedValue(null) }));`를 추가한다.)
 
-- [ ] **Step 11: 수동 확인**
+실제로는 mobile이 jest(jest-expo)를 쓰므로 `vi.mock` 대신 `jest.mock`을 사용했다 — 계획 문서의 스니펫은 `packages/core`(vitest) 관례를 그대로 옮겨 적어 mobile 실제 테스트 러너와 불일치했음. `useCreateTodo.test.tsx`/`useUpdateTodo.test.tsx`에 `jest.mock("../../notifications/scheduleReminder", ...)`를 추가하고, 재예약 조건(`status !== "done"`, `title` 존재, `dueAt` 변경)을 검증하는 테스트 3건도 함께 추가했다. 결과: mobile 30 tests / packages/core 11 tests 전부 통과, `tsc --noEmit` 통과.
+
+- [ ] **Step 11: 수동 확인 (보류)**
 
 Run: `cd mobile && npx expo start` — dueAt을 몇 분 뒤로 설정해 할 일을 만들고, 실제로 로컬 알림이 오는지 실기기(또는 시뮬레이터, iOS 시뮬레이터는 알림 지원 제한적이므로 실기기 권장)로 확인.
 
-- [ ] **Step 12: 커밋**
+**이 세션은 실기기/시뮬레이터 접근이 없어 수동 확인을 하지 못했다.** 사용자가 직접 실기기에서 확인 후 이 체크박스를 갱신할 것.
+
+- [x] **Step 12: 커밋**
 
 ```bash
 git add mobile
