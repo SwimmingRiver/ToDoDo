@@ -12,6 +12,7 @@
     "@tododo/core": "file:../packages/core",
     "expo": "~57.0.15",
     "expo-dev-client": "~57.0.14",
+    "expo-notifications": "~57.0.13",
     "expo-status-bar": "~57.0.1",
     "firebase": "^12.18.0",
     "react": "19.2.3",
