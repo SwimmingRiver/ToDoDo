@@ -78,4 +78,34 @@ describe("useCreateTodo", () => {
       dueAt: "2099-01-01T09:00:00.000Z",
     });
   });
+
+  it("알림 예약이 실패해도 할 일 생성 자체는 성공 처리한다", async () => {
+    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
+    jest.mocked(scheduleReminder).mockRejectedValueOnce(new Error("permission denied"));
+    const { useCreateTodo } = await import("../useCreateTodo");
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = await renderHook(() => useCreateTodo(), { wrapper });
+
+    result.current.mutate({
+      title: "장보기",
+      priority: "medium",
+      startAt: null,
+      dueAt: "2099-01-01T09:00:00.000Z",
+      parentId: null,
+      order: 0,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe("new-id");
+  });
 });

@@ -173,4 +173,28 @@ describe("useUpdateTodo", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(scheduleReminder).not.toHaveBeenCalled();
   });
+
+  it("알림 재예약이 실패해도 수정 자체는 성공 처리한다", async () => {
+    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
+    jest.mocked(scheduleReminder).mockRejectedValueOnce(new Error("permission denied"));
+    const { updateTodo } = await import("@tododo/core");
+    const { useUpdateTodo } = await import("../useUpdateTodo");
+
+    const client = createTestClient();
+    client.setQueryData(["todos", "u1"], []);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = await renderHook(() => useUpdateTodo(), { wrapper });
+
+    result.current.mutate({
+      id: "root-1",
+      fields: { dueAt: "2099-01-01T09:00:00.000Z" },
+      title: "장보기",
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(updateTodo).toHaveBeenCalled();
+  });
 });

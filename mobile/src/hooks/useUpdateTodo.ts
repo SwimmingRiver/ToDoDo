@@ -26,7 +26,11 @@ export const useUpdateTodo = () => {
       await updateTodo(db, id, fields, allTodos);
       if (fields.status === "done") return;
       if (fields.dueAt !== undefined && title) {
-        await scheduleReminder({ id, title, dueAt: fields.dueAt });
+        try {
+          await scheduleReminder({ id, title, dueAt: fields.dueAt });
+        } catch (error) {
+          console.warn("알림 재예약 실패:", error);
+        }
       }
     },
     onSuccess: () => {
