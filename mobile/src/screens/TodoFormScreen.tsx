@@ -41,7 +41,7 @@ export const TodoFormScreen = () => {
       const nextOrder = Math.max(-1, ...rootOrders) + 1;
       await mutateAsync({
         title,
-        description: description.trim() ? description : undefined,
+        description,
         priority,
         // dueAt/startAt은 네이티브 피커가 반환한 Date를 DateTimeField에서 이미
         // toISOString()(UTC "Z")으로 변환해 전달한다. 로컬 문자열을 자르거나
