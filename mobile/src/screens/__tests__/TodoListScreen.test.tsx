@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { Alert } from "react-native";
 
@@ -109,7 +109,7 @@ describe("TodoListScreen", () => {
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByText("삭제"));
+    fireEvent.press(screen.getByLabelText("할 일 삭제"));
 
     expect(Alert.alert).toHaveBeenCalled();
     expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe("TodoListScreen", () => {
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByText("삭제"));
+    fireEvent.press(screen.getByLabelText("할 일 삭제"));
     await confirmAlertDelete();
 
     expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("todo-1");
@@ -143,13 +143,38 @@ describe("TodoListScreen", () => {
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByText("삭제"));
+    fireEvent.press(screen.getByLabelText("할 일 삭제"));
     await confirmAlertDelete();
 
     expect(await screen.findByText("네트워크 오류")).toBeTruthy();
   });
 
-  it("상태 버튼을 누르면 useUpdateTodo가 다음 상태로 호출된다", async () => {
+  // 의사결정 확정 2번(design/spec.md): 탭-사이클 대신 웹과 동일한 "탭→바텀시트 3택".
+  // 상태 칩을 누르면 바텀시트가 열리고, 옵션을 선택해야만 mutate가 호출된다.
+  it("상태 칩을 누르면 상태 선택 바텀시트가 열린다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    expect(screen.queryByText("상태 선택")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+
+    // RN Modal의 jest 목(mock)은 visible prop이 false→true로 바뀔 때 내부
+    // componentDidUpdate가 한 번 더 setState를 거쳐야 렌더링되어, press 직후
+    // 동기 조회로는 아직 못 찾는다. waitFor로 다음 틱까지 기다린다.
+    await waitFor(() => {
+      expect(screen.getByText("상태 선택")).toBeTruthy();
+    });
+    expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
+  });
+
+  it("바텀시트에서 '진행 중'을 선택하면 useUpdateTodo가 해당 상태로 호출된다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -160,6 +185,7 @@ describe("TodoListScreen", () => {
     await render(<TodoListScreen />);
 
     fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(await screen.findByText("진행 중"));
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
       id: "todo-1",
@@ -167,7 +193,7 @@ describe("TodoListScreen", () => {
     });
   });
 
-  it("상태를 done으로 토글하면 doneAt이 현재 시간으로 설정된다", async () => {
+  it("바텀시트에서 '완료'를 선택하면 doneAt이 현재 시간으로 설정된다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -178,6 +204,7 @@ describe("TodoListScreen", () => {
     await render(<TodoListScreen />);
 
     fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(await screen.findByText("완료"));
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
       id: "todo-1",
@@ -185,7 +212,7 @@ describe("TodoListScreen", () => {
     });
   });
 
-  it("상태를 done에서 todo로 토글하면 doneAt이 null로 설정된다", async () => {
+  it("바텀시트에서 '할 일'을 선택하면 doneAt이 null로 설정된다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -196,6 +223,7 @@ describe("TodoListScreen", () => {
     await render(<TodoListScreen />);
 
     fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(await screen.findByText("할 일"));
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
       id: "todo-1",
@@ -203,7 +231,7 @@ describe("TodoListScreen", () => {
     });
   });
 
-  it("이전 상태 변경이 진행 중이면 다시 눌러도 무시된다(더블탭 방지)", async () => {
+  it("이전 상태 변경이 진행 중이면 상태 칩을 눌러도 바텀시트가 열리지 않는다(더블탭 방지)", async () => {
     mockUpdateTodoIsPending = true;
     mockUseTodos.mockReturnValue({
       isLoading: false,
@@ -216,10 +244,13 @@ describe("TodoListScreen", () => {
 
     fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
 
+    expect(screen.queryByText("상태 선택")).toBeNull();
     expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
   });
 
-  it("우선순위 라벨을 한글로 표시한다", async () => {
+  // 의사결정 확정(design/spec.md "우선순위" 절): "높음"만 제목 앞에 "!" 표시로 강조하고,
+  // 보통/낮음은 별도 표시가 없다(기존 한글 라벨 plain text는 제거).
+  it("우선순위가 높음인 항목만 제목 앞에 '!' 표시가 붙는다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -233,8 +264,10 @@ describe("TodoListScreen", () => {
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    expect(screen.getByText("낮음")).toBeTruthy();
-    expect(screen.getByText("보통")).toBeTruthy();
-    expect(screen.getByText("높음")).toBeTruthy();
+    expect(screen.getByText("낮음 할 일")).toBeTruthy();
+    expect(screen.getByText("보통 할 일")).toBeTruthy();
+    expect(screen.queryByText("낮음")).toBeNull();
+    expect(screen.queryByText("보통")).toBeNull();
+    expect(screen.getByText("!", { exact: false })).toBeTruthy();
   });
 });

@@ -58,4 +58,42 @@ describe("TodoFormScreen", () => {
     expect(await screen.findByText("네트워크 오류")).toBeTruthy();
     expect(mockGoBack).not.toHaveBeenCalled();
   });
+
+  // design/spec.md "TodoFormScreen — 펼침(더보기)" 절: "더보기"를 누르면 설명/우선순위/
+  // 시작일시/만료일시가 나타난다(웹 DetailSection과 동일한 정보 위계).
+  it("더보기를 누르면 설명/우선순위/날짜 필드가 나타난다", async () => {
+    const { TodoFormScreen } = await import("../TodoFormScreen");
+    await render(<TodoFormScreen />);
+
+    expect(screen.queryByPlaceholderText("상세 설명을 입력하세요")).toBeNull();
+
+    // ScrollView 하위에서의 상태 갱신은 act(async)로 감싸야 다음 조회에 반영된다
+    // (RN Modal과 마찬가지로 이 테스트 환경의 act() 플러시 타이밍 특성).
+    await act(async () => {
+      fireEvent.press(screen.getByText("더보기"));
+    });
+
+    expect(screen.getByPlaceholderText("상세 설명을 입력하세요")).toBeTruthy();
+    expect(screen.getByText("낮음")).toBeTruthy();
+    expect(screen.getByText("보통")).toBeTruthy();
+    expect(screen.getByText("높음")).toBeTruthy();
+    expect(screen.getByText("시작일시")).toBeTruthy();
+    expect(screen.getByText("만료일시")).toBeTruthy();
+  });
+
+  // 의사결정 확정 1번(design/spec.md): <select> 대신 3-세그먼트 칩.
+  it("우선순위 칩을 선택하면 선택 상태가 바뀐다", async () => {
+    const { TodoFormScreen } = await import("../TodoFormScreen");
+    await render(<TodoFormScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("더보기"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("우선순위 높음"));
+    });
+
+    expect(screen.getByLabelText("우선순위 높음").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText("우선순위 보통").props.accessibilityState.selected).toBe(false);
+  });
 });
