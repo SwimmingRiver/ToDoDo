@@ -329,4 +329,58 @@ describe("editTodo batch 원자성 (상위/하위 상태 동기화)", () => {
     expect(batch.update).toHaveBeenCalledTimes(3); // 본인 + 하위 2건
     expect(batch.commit).toHaveBeenCalledTimes(1);
   });
+
+  it("이미 저장된 레거시 startAt>dueAt 조합은, 날짜를 건드리지 않는 편집(상태만 변경)을 막지 않는다", async () => {
+    const { getDoc, writeBatch } = await import("firebase/firestore");
+
+    const legacyStartAt = "2026-07-10T18:00:00.000Z";
+    const legacyDueAt = "2026-07-10T09:00:00.000Z";
+
+    vi.mocked(getDoc).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        userId: "test-user-id",
+        startAt: legacyStartAt,
+        dueAt: legacyDueAt,
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editTodo } = await import("../todoApi");
+
+    const todo = makeTodo({
+      status: "doing",
+      startAt: legacyStartAt,
+      dueAt: legacyDueAt,
+    });
+
+    await expect(editTodo(todo, [todo])).resolves.not.toThrow();
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("startAt/dueAt을 새로 잘못된 조합으로 바꾸는 편집은 막는다", async () => {
+    const { getDoc } = await import("firebase/firestore");
+
+    vi.mocked(getDoc).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        userId: "test-user-id",
+        startAt: null,
+        dueAt: null,
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+
+    const { editTodo } = await import("../todoApi");
+
+    const todo = makeTodo({
+      startAt: "2026-07-10T18:00:00.000Z",
+      dueAt: "2026-07-10T09:00:00.000Z",
+    });
+
+    await expect(editTodo(todo, [todo])).rejects.toThrow(
+      "시작일시는 마감일시보다 늦을 수 없습니다",
+    );
+  });
 });

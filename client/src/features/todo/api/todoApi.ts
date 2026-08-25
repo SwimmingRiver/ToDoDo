@@ -31,6 +31,7 @@ import {
   type TodoCreate,
   type TodoFieldUpdate,
 } from "../utils/startupMaintenance";
+import { getTodoDateValidationError } from "../utils/todoDateValidation";
 
 const todosRef = collection(db, "todos");
 
@@ -94,6 +95,16 @@ const assertNoRecurrenceParentConflict = (todo: {
   }
 };
 
+/**
+ * getTodoDateValidationError와 동일한 규칙(시작일시 ≤ 마감일시)을 데이터 레이어에서도
+ * 강제한다. assertNoRecurrenceParentConflict와 같은 이유 — 폼에서 이미 막아도 API를
+ * 직접 호출하는 경로(테스트, 향후 다른 클라이언트 등)를 우회하지 못하게 방어한다.
+ */
+const assertValidTodoDates = (todo: { startAt: string | null; dueAt: string | null }) => {
+  const error = getTodoDateValidationError(todo.startAt, todo.dueAt);
+  if (error) throw new Error(error);
+};
+
 export const getTodos = async () => {
   const userId = getUserId();
   const q = query(
@@ -125,6 +136,7 @@ export const getSearchTodoList = async (queryStr: string) => {
 
 export const createTodo = async (todo: Todo) => {
   assertNoRecurrenceParentConflict(todo);
+  assertValidTodoDates(todo);
   const userId = getUserId();
   const now = new Date().toISOString();
   const { id: _, ...todoData } = todo;
@@ -162,7 +174,15 @@ export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
   const docRef = doc(db, "todos", id);
   const existing = await getDoc(docRef);
   if (!existing.exists()) throw new Error("Todo not found");
-  if (existing.data().userId !== userId) throw new Error("Forbidden");
+  const existingData = existing.data();
+  if (existingData.userId !== userId) throw new Error("Forbidden");
+
+  // 이미 저장돼 있던(레거시) startAt/dueAt까지 소급 검증하면, 날짜와 무관한 필드만
+  // 바꾸는 편집(상태 토글 등)까지 전부 막혀버린다. 이번 편집이 실제로 날짜 값을
+  // 바꿀 때만 검증한다.
+  if (data.startAt !== existingData.startAt || data.dueAt !== existingData.dueAt) {
+    assertValidTodoDates(data);
+  }
 
   const writes: Array<{ id: string; updates: object }> = [
     { id, updates: { ...data, updatedAt: now } },
@@ -323,6 +343,7 @@ export const createChildTodo = async (
   todo: Partial<Todo>,
   allTodos: Todo[],
 ) => {
+  assertValidTodoDates({ startAt: todo.startAt ?? null, dueAt: todo.dueAt ?? null });
   const userId = getUserId();
   const now = new Date().toISOString();
 

@@ -287,3 +287,22 @@ describe("TodoForm 반복 유효성 검사", () => {
     expect(mockTodo.useCreateRecurringTodo.mutate).not.toHaveBeenCalled();
   });
 });
+
+describe("TodoForm 날짜 유효성 검사", () => {
+  it("반복 설정 없이도 시작일시가 마감일시보다 늦으면 제출이 막히고 입력 확인 토스트가 뜬다", async () => {
+    renderForm({
+      todo: makeTodo({
+        startAt: "2026-06-10T18:00:00.000Z",
+        dueAt: "2026-06-10T09:00:00.000Z",
+      }),
+    });
+
+    fireEvent.submit(screen.getByDisplayValue("기존 할 일").closest("form")!);
+
+    expect(await screen.findByText("입력 확인")).toBeInTheDocument();
+    expect(
+      await screen.findByText("시작일시는 마감일시보다 늦을 수 없습니다"),
+    ).toBeInTheDocument();
+    expect(mockTodo.useUpdateTodo.mutate).not.toHaveBeenCalled();
+  });
+});

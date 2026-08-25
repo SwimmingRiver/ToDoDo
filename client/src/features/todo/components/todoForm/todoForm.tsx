@@ -20,6 +20,7 @@ import {
 import type { RecurrenceRule, Todo } from "../../types";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
+import { getTodoDateValidationError } from "../../utils/todoDateValidation";
 import { toFormValue, toRecurrenceRule } from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import {
@@ -152,6 +153,15 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
   };
 
   const onSubmit = (data: TodoFormData) => {
+    const dateValidationError = getTodoDateValidationError(
+      data.startAt ?? null,
+      data.dueAt ?? null,
+    );
+    if (dateValidationError) {
+      toast.error("입력 확인", dateValidationError);
+      return;
+    }
+
     if (showRecurrenceSection) {
       const validationError = getRecurrenceValidationError(
         recurrenceValue,

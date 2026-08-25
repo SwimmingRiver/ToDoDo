@@ -154,6 +154,23 @@ describe('todoApi', () => {
         expect.objectContaining({ archived: false }),
       )
     })
+
+    it('startAt이 dueAt보다 늦으면 Firestore에 쓰지 않고 에러를 던져야 한다', async () => {
+      const { addDoc } = await import('firebase/firestore')
+      const { createTodo } = await import('../todoApi')
+
+      await expect(
+        createTodo(
+          makeTodo({
+            title: '잘못된 날짜',
+            startAt: '2026-07-10T18:00:00.000Z',
+            dueAt: '2026-07-10T09:00:00.000Z',
+          }),
+        ),
+      ).rejects.toThrow('시작일시는 마감일시보다 늦을 수 없습니다')
+
+      expect(addDoc).not.toHaveBeenCalled()
+    })
   })
 
   describe('createChildTodo', () => {

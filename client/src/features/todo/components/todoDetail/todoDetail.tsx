@@ -26,6 +26,7 @@ import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
+import { getTodoDateValidationError } from "../../utils/todoDateValidation";
 import { toFormValue, toRecurrenceRule } from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import ChildTodoCard from "../childTodoCard";
@@ -290,6 +291,15 @@ const TodoDetailView = ({ id }: { id: string }) => {
 
   const onSubmit = (data: TodoFormData) => {
     if (!todo) return;
+
+    const dateValidationError = getTodoDateValidationError(
+      data.startAt ?? null,
+      data.dueAt ?? null,
+    );
+    if (dateValidationError) {
+      toast.error("입력 확인", dateValidationError);
+      return;
+    }
 
     const validationError = getRecurrenceValidationError(
       recurrenceValue,
