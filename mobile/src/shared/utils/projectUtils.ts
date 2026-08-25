@@ -1,0 +1,138 @@
+// client/src/features/todo/utils/projectUtils.ts를 로직 변경 없이 그대로 포팅한 것.
+// (design/spec.md "projectUtils.ts" 절 참고) — 순수 함수, Todo[] 인자만 받는다.
+import type { Todo } from "@tododo/core";
+import { isTodoOverdue } from "./due";
+
+/**
+ * 같은 recurrenceId를 가진 반복 인스턴스 중 dueAt이 가장 이른 것(지난 미완료(overdue)가
+ * 있으면 그것, 없으면 다음 예정 건) 하나만 남기고 나머지는 목록에서 숨긴다. 반복 아닌
+ * 할 일(recurrenceId === null)은 그대로 통과시킨다. 다른 문서를 지우는 게 아니라 이
+ * 목록에 렌더링할 대표만 고르는 순수 함수다 — 실제 삭제는 useDeleteRecurringSeries가 담당.
+ *
+ * overdueArchived: true인 인스턴스(runStartupMaintenance의 overdue 스윕이 dueAt이 지나 archived
+ * 처리한 지난 미완료 회차)는 대표 후보에서 완전히 제외한다. 그러지 않으면 방치된 overdue
+ * 인스턴스가 영구히 "대표"로 노출되는 문제(이번 정책의 발단)가 그대로 재현된다 — archived된
+ * 회차를 건너뛰면 남은 인스턴스 중 다음으로 이른 것(미래 예정 건 포함)이 자연스럽게 새
+ * 대표가 된다.
+ */
+export function collapseRecurringInstances(todos: Todo[]): Todo[] {
+  const representativeByRecurrenceId = new Map<string, Todo>();
+
+  for (const todo of todos) {
+    if (!todo.recurrenceId) continue;
+    if (todo.overdueArchived) continue;
+
+    const existing = representativeByRecurrenceId.get(todo.recurrenceId);
+    if (!existing) {
+      representativeByRecurrenceId.set(todo.recurrenceId, todo);
+      continue;
+    }
+
+    const existingDue = existing.dueAt ? new Date(existing.dueAt).getTime() : Infinity;
+    const currentDue = todo.dueAt ? new Date(todo.dueAt).getTime() : Infinity;
+    if (currentDue < existingDue) {
+      representativeByRecurrenceId.set(todo.recurrenceId, todo);
+    }
+  }
+
+  // 대표를 처음 만난 인스턴스의 자리에 끼워넣지 않고, 대표 인스턴스 자신이 원래
+  // todos 배열에서 차지하는 위치(=order 순위)에 그대로 남긴다.
+  return todos.filter(
+    (todo) =>
+      !todo.recurrenceId ||
+      (!todo.overdueArchived && representativeByRecurrenceId.get(todo.recurrenceId) === todo),
+  );
+}
+
+export interface ProjectCardData {
+  todo: Todo;
+  childTodos: Todo[];
+  progress: number;
+  subtaskInfo: { total: number; statusText: string };
+  overdueInfo: { isOverdue: boolean; daysOver: number };
+  recurringMissedCount: number;
+}
+
+// 서브태스크 중 done 비율 (0~100). 서브태스크가 없으면 0 반환
+export function getProjectProgress(allTodos: Todo[], projectId: string): number {
+  const subtasks = allTodos.filter((t) => t.parentId === projectId);
+  if (subtasks.length === 0) return 0;
+  const doneCount = subtasks.filter((t) => t.status === "done").length;
+  return Math.round((doneCount / subtasks.length) * 100);
+}
+
+// "N개 할일 · 진행 중" 형태 정보 반환
+// statusText: 모두 done → "완료", done이 하나도 없으면 "시작 전", 그 외 "진행 중"
+export function getProjectSubtaskInfo(
+  allTodos: Todo[],
+  projectId: string,
+): { total: number; statusText: string } {
+  const subtasks = allTodos.filter((t) => t.parentId === projectId);
+  const total = subtasks.length;
+
+  if (total === 0) {
+    return { total, statusText: "시작 전" };
+  }
+
+  const doneCount = subtasks.filter((t) => t.status === "done").length;
+
+  let statusText: string;
+  if (doneCount === total) {
+    statusText = "완료";
+  } else if (doneCount === 0) {
+    statusText = "시작 전";
+  } else {
+    statusText = "진행 중";
+  }
+
+  return { total, statusText };
+}
+
+// 루트 투두 자신 또는 서브태스크 중 dueAt이 오늘보다 이전인 것 감지
+// 가장 오래된 초과 건(루트 자신 포함) 기준으로 daysOver 계산
+export function getProjectOverdue(
+  allTodos: Todo[],
+  project: Todo,
+): { isOverdue: boolean; daysOver: number } {
+  const subtasks = allTodos.filter((t) => t.parentId === project.id);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isOverdueCandidate = (t: Todo) => isTodoOverdue(t);
+
+  // 루트 투두 자신도 후보에 포함시켜, 하위 투두가 없거나 아직 지나지 않았더라도
+  // 루트 자신의 dueAt이 지났으면 초과로 판정되도록 한다.
+  const overdueCandidates = [project, ...subtasks].filter(isOverdueCandidate);
+
+  if (overdueCandidates.length === 0) {
+    return { isOverdue: false, daysOver: 0 };
+  }
+
+  // 가장 오래된 초과 건 기준
+  const oldestDue = overdueCandidates.reduce((oldest, t) => {
+    const tDate = new Date(t.dueAt!);
+    const oldestDate = new Date(oldest.dueAt!);
+    return tDate < oldestDate ? t : oldest;
+  });
+
+  const oldestDueDate = new Date(oldestDue.dueAt!);
+  oldestDueDate.setHours(0, 0, 0, 0);
+  const daysOver = Math.floor(
+    (today.getTime() - oldestDueDate.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  return { isOverdue: true, daysOver };
+}
+
+// 같은 recurrenceId를 가진 형제 인스턴스 중 overdueArchived === true로 조용히 대표
+// 후보에서 제외된 건수를 센다. collapseRecurringInstances가 화면에는 대표 1건만
+// 남기고 나머지는 숨기기 때문에, 사용자에게 "몇 회차가 밀렸는지" 알려줄 유일한
+// 신호가 이 카운트다. recurrenceId가 없는(반복 아닌) 할 일에는 0을 반환한다.
+export function getRecurringMissedCount(allTodos: Todo[], todo: Todo): number {
+  if (!todo.recurrenceId) return 0;
+
+  return allTodos.filter(
+    (t) => t.recurrenceId === todo.recurrenceId && t.overdueArchived === true,
+  ).length;
+}

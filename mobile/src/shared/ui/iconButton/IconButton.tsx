@@ -10,6 +10,7 @@ interface IconButtonProps {
   accessibilityLabel: string;
   variant?: "default" | "danger";
   disabled?: boolean;
+  testID?: string;
 }
 
 export const IconButton = ({
@@ -18,9 +19,11 @@ export const IconButton = ({
   accessibilityLabel,
   variant = "default",
   disabled = false,
+  testID,
 }: IconButtonProps) => {
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"

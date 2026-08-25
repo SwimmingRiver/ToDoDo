@@ -25,7 +25,7 @@ jest.mock("@react-navigation/native", () => ({
 type AlertButton = { text: string; style?: string; onPress?: () => void };
 
 // Alert.alert는 네이티브 모듈이라 테스트 환경에서는 실제 다이얼로그를 띄우지 않는다.
-// "확인" 버튼(style: destructive)의 onPress를 직접 호출해 사용자가 삭제를 확정한
+// "삭제"(style: destructive) 버튼의 onPress를 직접 호출해 사용자가 삭제를 확정한
 // 상황을 재현한다.
 const confirmAlertDelete = async () => {
   const call = (Alert.alert as jest.Mock).mock.calls.at(-1) as [
@@ -37,53 +37,142 @@ const confirmAlertDelete = async () => {
   await destructive?.onPress?.();
 };
 
+const rootTodo = (overrides: Record<string, unknown> = {}) => ({
+  id: "root-1",
+  title: "루트 할 일",
+  parentId: null,
+  status: "todo",
+  priority: "medium",
+  order: 0,
+  dueAt: null,
+  recurrenceId: null,
+  recurrence: null,
+  ...overrides,
+});
+
+const childTodo = (overrides: Record<string, unknown> = {}) => ({
+  id: "child-1",
+  title: "하위 할 일",
+  parentId: "root-1",
+  status: "todo",
+  priority: "medium",
+  order: 0,
+  dueAt: null,
+  recurrenceId: null,
+  recurrence: null,
+  ...overrides,
+});
+
 describe("TodoListScreen", () => {
   beforeEach(() => {
     mockDeleteTodoMutateAsync.mockReset();
     mockUpdateTodoMutate.mockReset();
     mockUpdateTodoIsPending = false;
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    (Alert.alert as jest.Mock).mockClear();
   });
 
-  it("루트와 하위 할 일 제목을 모두 렌더링한다", async () => {
+  it("루트 할 일 제목과 프로젝트 개수를 렌더링한다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [
-        { id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 },
-        { id: "todo-2", title: "하위 할 일", parentId: "todo-1", status: "todo", priority: "medium", order: 0 },
-      ],
+      data: [rootTodo()],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
     expect(screen.getByText("루트 할 일")).toBeTruthy();
-    expect(screen.getByText("하위 할 일")).toBeTruthy();
+    expect(screen.getByText("프로젝트 1개")).toBeTruthy();
   });
 
-  it("하위 할 일의 order 값이 다른 루트의 order 값과 겹쳐도, 실제 부모 바로 아래에 묶여서 렌더링된다", async () => {
-    // 루트 A(order 0), 루트 B(order 1), B의 자식 E(order 0) — order만으로 전역 정렬하면
-    // A, E, B 순서가 되어 E가 B가 아니라 A의 자식처럼 보인다. 실제로는 A, B, E 순서여야 한다.
+  it("하위 할 일은 펼치기 전에는 보이지 않다가, 펼치면 보인다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo(), childTodo()],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    expect(screen.queryByText("하위 할 일")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+
+    // RN 테스트 환경에서는 Pressable onPress로 트리거된 상태 갱신이 다음 틱에
+    // 반영되어, press 직후 동기 조회로는 아직 못 찾는다(BottomSheet Modal과
+    // 동일한 이유). findBy*로 다음 틱까지 기다린다.
+    expect(await screen.findByText("하위 할 일")).toBeTruthy();
+  });
+
+  it("카드 제목 영역을 탭해도 펼치기/접기가 토글된다(웹 상세 이동을 흡수)", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo(), childTodo()],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("toggle-expand-title-root-1"));
+    expect(await screen.findByText("하위 할 일")).toBeTruthy();
+    expect(screen.getByLabelText("프로젝트 접기")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("toggle-expand-title-root-1"));
+    await waitFor(() => {
+      expect(screen.queryByText("하위 할 일")).toBeNull();
+    });
+    expect(screen.getByLabelText("프로젝트 펼치기")).toBeTruthy();
+  });
+
+  it("펼쳤는데 하위 항목이 없으면 안내 문구를 보여준다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo()],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+
+    expect(await screen.findByText("하위 항목이 없습니다")).toBeTruthy();
+  });
+
+  it("루트가 done이면 목록에서 완전히 숨겨진다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo({ id: "done-root", title: "완료된 루트", status: "done" })],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    expect(screen.queryByText("완료된 루트")).toBeNull();
+    expect(screen.getByText("할 일이 없습니다")).toBeTruthy();
+  });
+
+  it("루트가 전부 done이면(하위 데이터는 남아있어도) 빈 상태로 표시된다(빈 상태 판정 정정)", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
       data: [
-        { id: "root-a", title: "루트 A", parentId: null, status: "todo", priority: "medium", order: 0 },
-        { id: "child-e", title: "자식 E", parentId: "root-b", status: "todo", priority: "medium", order: 0 },
-        { id: "root-b", title: "루트 B", parentId: null, status: "todo", priority: "medium", order: 1 },
+        rootTodo({ id: "done-root", title: "완료된 루트", status: "done" }),
+        childTodo({ id: "done-child", title: "완료된 루트의 자식", parentId: "done-root" }),
       ],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    const rows = screen.getAllByTestId(/^todo-row-/);
-    expect(rows.map((row) => row.props.testID)).toEqual([
-      "todo-row-root-a",
-      "todo-row-root-b",
-      "todo-row-child-e",
-    ]);
+    expect(screen.getByText("할 일이 없습니다")).toBeTruthy();
+    expect(
+      screen.getByText("새로운 할 일을 추가하고 생산적인 하루를 시작해보세요!"),
+    ).toBeTruthy();
   });
 
   it("목록 조회에 실패하면 에러 메시지를 보여준다", async () => {
@@ -99,63 +188,132 @@ describe("TodoListScreen", () => {
     expect(screen.getByText("할 일을 불러오지 못했습니다")).toBeTruthy();
   });
 
-  it("삭제 버튼을 누르면 확인 다이얼로그를 띄우고, 확인 전에는 삭제 요청을 보내지 않는다", async () => {
+  it("반복 배지, 밀린 횟수 배지, 초과 배지를 조건에 맞게 보여준다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+      data: [
+        rootTodo({
+          id: "rec-1",
+          title: "반복 할 일",
+          recurrenceId: "series-1",
+          dueAt: "2020-01-01T00:00:00.000Z",
+        }),
+        rootTodo({
+          id: "rec-missed",
+          title: "밀린 형제",
+          recurrenceId: "series-1",
+          overdueArchived: true,
+          dueAt: "2019-12-01T00:00:00.000Z",
+        }),
+      ],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByLabelText("할 일 삭제"));
-
-    expect(Alert.alert).toHaveBeenCalled();
-    expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText("반복")).toBeTruthy();
+    expect(screen.getByText("1회 밀림")).toBeTruthy();
+    expect(screen.getByText(/일 초과/)).toBeTruthy();
   });
 
-  it("확인 다이얼로그에서 삭제를 확정하면 실제로 삭제 요청을 보낸다", async () => {
+  it("프로젝트 삭제 버튼을 누르면 확인 다이얼로그를 띄우고, 확인 전에는 삭제 요청을 보내지 않는다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+      data: [rootTodo()],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByLabelText("프로젝트 삭제"));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "프로젝트 삭제",
+      expect.any(String),
+      expect.any(Array),
+    );
+    expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("프로젝트 삭제를 확정하면 실제로 삭제 요청을 보낸다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo()],
     });
     mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByLabelText("할 일 삭제"));
+    fireEvent.press(screen.getByLabelText("프로젝트 삭제"));
     await confirmAlertDelete();
 
-    expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("todo-1");
+    expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("root-1");
   });
 
-  it("삭제에 실패하면 해당 항목에 에러 메시지를 보여준다", async () => {
+  it("자식 할 일 삭제 버튼을 누르면 '할 일 삭제' 확인 다이얼로그를 띄운다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+      data: [rootTodo(), childTodo()],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+    fireEvent.press(await screen.findByTestId("delete-child-child-1"));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "할 일 삭제",
+      expect.stringContaining("하위 할 일"),
+      expect.any(Array),
+    );
+  });
+
+  it("자식 삭제를 확정하면 실제로 삭제 요청을 보낸다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo(), childTodo()],
+    });
+    mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+    fireEvent.press(await screen.findByTestId("delete-child-child-1"));
+    await confirmAlertDelete();
+
+    expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("child-1");
+  });
+
+  it("삭제에 실패하면 해당 카드에 에러 메시지를 보여준다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo()],
     });
     mockDeleteTodoMutateAsync.mockRejectedValue(new Error("네트워크 오류"));
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByLabelText("할 일 삭제"));
+    fireEvent.press(screen.getByLabelText("프로젝트 삭제"));
     await confirmAlertDelete();
 
     expect(await screen.findByText("네트워크 오류")).toBeTruthy();
   });
 
-  // 의사결정 확정 2번(design/spec.md): 탭-사이클 대신 웹과 동일한 "탭→바텀시트 3택".
-  // 상태 칩을 누르면 바텀시트가 열리고, 옵션을 선택해야만 mutate가 호출된다.
-  it("상태 칩을 누르면 상태 선택 바텀시트가 열린다", async () => {
+  it("루트 상태 점을 누르면 상태 선택 바텀시트가 열린다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+      data: [rootTodo()],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
@@ -163,7 +321,7 @@ describe("TodoListScreen", () => {
 
     expect(screen.queryByText("상태 선택")).toBeNull();
 
-    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(screen.getByTestId("status-dot-root-1"));
 
     // RN Modal의 jest 목(mock)은 visible prop이 false→true로 바뀔 때 내부
     // componentDidUpdate가 한 번 더 setState를 거쳐야 렌더링되어, press 직후
@@ -178,17 +336,17 @@ describe("TodoListScreen", () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+      data: [rootTodo()],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(screen.getByTestId("status-dot-root-1"));
     fireEvent.press(await screen.findByText("진행 중"));
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
-      id: "todo-1",
+      id: "root-1",
       fields: { status: "doing", doneAt: null },
     });
   });
@@ -197,77 +355,73 @@ describe("TodoListScreen", () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "doing", priority: "medium", order: 0 }],
+      data: [rootTodo({ status: "doing" })],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(screen.getByTestId("status-dot-root-1"));
     fireEvent.press(await screen.findByText("완료"));
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
-      id: "todo-1",
+      id: "root-1",
       fields: { status: "done", doneAt: expect.any(String) },
     });
   });
 
-  it("바텀시트에서 '할 일'을 선택하면 doneAt이 null로 설정된다", async () => {
+  it("자식 할 일의 상태 점을 눌러도 같은 바텀시트가 해당 자식 기준으로 열린다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "done", priority: "medium", order: 0 }],
+      data: [rootTodo(), childTodo()],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
-    fireEvent.press(await screen.findByText("할 일"));
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+    fireEvent.press(await screen.findByTestId("status-dot-child-1"));
+    fireEvent.press(await screen.findByText("진행 중"));
 
     expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
-      id: "todo-1",
-      fields: { status: "todo", doneAt: null },
+      id: "child-1",
+      fields: { status: "doing", doneAt: null },
     });
   });
 
-  it("이전 상태 변경이 진행 중이면 상태 칩을 눌러도 바텀시트가 열리지 않는다(더블탭 방지)", async () => {
+  it("이전 상태 변경이 진행 중이면 상태 점을 눌러도 바텀시트가 열리지 않는다(더블탭 방지)", async () => {
     mockUpdateTodoIsPending = true;
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: "todo-1", title: "루트 할 일", parentId: null, status: "todo", priority: "medium", order: 0 }],
+      data: [rootTodo()],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    fireEvent.press(screen.getByTestId("status-toggle-todo-1"));
+    fireEvent.press(screen.getByTestId("status-dot-root-1"));
 
     expect(screen.queryByText("상태 선택")).toBeNull();
     expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
   });
 
-  // 의사결정 확정(design/spec.md "우선순위" 절): "높음"만 제목 앞에 "!" 표시로 강조하고,
-  // 보통/낮음은 별도 표시가 없다(기존 한글 라벨 plain text는 제거).
-  it("우선순위가 높음인 항목만 제목 앞에 '!' 표시가 붙는다", async () => {
+  it("자식의 편집 버튼은 접근성 라벨을 갖고 눌러도 아무 요청도 보내지 않는다(no-op)", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [
-        { id: "todo-1", title: "낮음 할 일", parentId: null, status: "todo", priority: "low", order: 0 },
-        { id: "todo-2", title: "보통 할 일", parentId: null, status: "todo", priority: "medium", order: 1 },
-        { id: "todo-3", title: "높음 할 일", parentId: null, status: "todo", priority: "high", order: 2 },
-      ],
+      data: [rootTodo(), childTodo()],
     });
 
     const { TodoListScreen } = await import("../TodoListScreen");
     await render(<TodoListScreen />);
 
-    expect(screen.getByText("낮음 할 일")).toBeTruthy();
-    expect(screen.getByText("보통 할 일")).toBeTruthy();
-    expect(screen.queryByText("낮음")).toBeNull();
-    expect(screen.queryByText("보통")).toBeNull();
-    expect(screen.getByText("!", { exact: false })).toBeTruthy();
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+    fireEvent.press(await screen.findByTestId("edit-child-child-1"));
+
+    expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
+    expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
