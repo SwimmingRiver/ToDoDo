@@ -12,8 +12,10 @@ jest.mock("../../hooks/useTodos", () => ({
 }));
 
 const mockGoBack = jest.fn();
+let mockRouteParams: { parentId?: string } | undefined = undefined;
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ goBack: mockGoBack }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 
 describe("TodoFormScreen", () => {
@@ -21,6 +23,7 @@ describe("TodoFormScreen", () => {
     mockMutateAsync.mockReset();
     mockGoBack.mockReset();
     mockUseTodos.mockReturnValue({ data: [] });
+    mockRouteParams = undefined;
   });
 
   it("제목이 공백뿐이면 생성 요청을 보내지 않는다", async () => {
@@ -95,5 +98,23 @@ describe("TodoFormScreen", () => {
 
     expect(screen.getByLabelText("우선순위 높음").props.accessibilityState.selected).toBe(true);
     expect(screen.getByLabelText("우선순위 보통").props.accessibilityState.selected).toBe(false);
+  });
+
+  it("route.params.parentId가 있으면 그 부모 밑에 생성 요청을 보낸다", async () => {
+    mockRouteParams = { parentId: "root-1" };
+
+    const { TodoFormScreen } = await import("../TodoFormScreen");
+    await render(<TodoFormScreen />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("할 일 제목"), "하위 할 일");
+    await screen.findByDisplayValue("하위 할 일");
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("추가"));
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: "root-1" }),
+    );
   });
 });

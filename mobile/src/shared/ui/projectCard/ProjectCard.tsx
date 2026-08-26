@@ -8,6 +8,7 @@ import { OverdueBadge } from "../overdueBadge/OverdueBadge";
 import { RecurrenceBadge } from "../recurrenceBadge/RecurrenceBadge";
 import { RecurrenceMissedBadge } from "../recurrenceMissedBadge/RecurrenceMissedBadge";
 import { IconButton } from "../iconButton/IconButton";
+import { Button } from "../button/Button";
 import { ChildTodoCard } from "../childTodoCard/ChildTodoCard";
 import { colors } from "../../../theme/colors";
 import { MIN_TOUCH_TARGET, radius, spacing } from "../../../theme/spacing";
@@ -16,6 +17,7 @@ interface ProjectCardProps {
   data: ProjectCardData;
   isExpanded: boolean;
   onToggleExpand: (id: string) => void;
+  onOpenDetail: (todo: Todo) => void;
   onOpenStatusSheet: (todo: Todo) => void;
   onDelete: (id: string) => void;
   /**
@@ -26,6 +28,8 @@ interface ProjectCardProps {
    * 재사용 가능하지만 onEdit은 루트 카드 자신에는 없는 개념이라 별도로 분리했다.
    */
   onEditChild: (todo: Todo) => void;
+  /** 하위 할 일 추가 버튼(펼친 상태에서만 노출) */
+  onAddChild: (parentId: string) => void;
   /** 루트 카드 자신의 삭제 실패 에러 메시지 */
   error?: string;
   /** 자식 카드별 삭제 실패 에러 메시지 (todo id -> 메시지) */
@@ -34,16 +38,18 @@ interface ProjectCardProps {
 
 /**
  * 웹 ProjectCard(client/src/features/todo/components/projectCard.tsx) 대응.
- * 카드 탭(제목/서브타이틀 영역)은 웹의 상세 페이지 이동 대신 펼치기/접기 토글로
- * 흡수한다(모바일에는 상세 화면이 없음 — design/spec.md "의사결정 확정" 4번).
+ * 제목 탭은 상세 화면(TodoDetailScreen) 이동으로 연결한다(웹과 동일 UX) — 펼치기/접기는
+ * 화살표(chevron) 버튼 전용으로 분리되어 있다(2026-08-26 의사결정, TodoDetailScreen 도입).
  */
 export const ProjectCard = ({
   data,
   isExpanded,
   onToggleExpand,
+  onOpenDetail,
   onOpenStatusSheet,
   onDelete,
   onEditChild,
+  onAddChild,
   error,
   childErrors,
 }: ProjectCardProps) => {
@@ -70,7 +76,7 @@ export const ProjectCard = ({
         <Pressable
           testID={`toggle-expand-title-${todo.id}`}
           style={styles.titleArea}
-          onPress={() => onToggleExpand(todo.id)}
+          onPress={() => onOpenDetail(todo)}
           accessibilityRole="button"
         >
           <View style={styles.titleRow}>
@@ -125,6 +131,12 @@ export const ProjectCard = ({
               />
             ))
           )}
+          <Button
+            title="+ 하위 할 일 추가"
+            onPress={() => onAddChild(todo.id)}
+            variant="text"
+            accessibilityLabel="하위 할 일 추가"
+          />
         </View>
       )}
     </View>

@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AlertCircle, ClipboardList, Plus } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTodos } from "../hooks/useTodos";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
 import { useUpdateTodo } from "../hooks/useUpdateTodo";
@@ -40,7 +42,7 @@ export const TodoListScreen = () => {
   const [statusSheetTodo, setStatusSheetTodo] = useState<Todo | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const allTodos = useMemo(() => todos ?? [], [todos]);
 
@@ -124,8 +126,13 @@ export const TodoListScreen = () => {
     );
   };
 
-  // 편집 화면 자체가 이번 스코프 밖이라 기존 동작(no-op)을 유지한다.
-  const handleEditChild = (_todo: Todo) => {};
+  const handleOpenDetail = (todo: Todo) => {
+    navigation.navigate("TodoDetail", { id: todo.id });
+  };
+
+  const handleAddChild = (parentId: string) => {
+    navigation.navigate("TodoForm", { parentId });
+  };
 
   if (isLoading) {
     return (
@@ -160,7 +167,7 @@ export const TodoListScreen = () => {
           title="할 일이 없습니다"
           description="새로운 할 일을 추가하고 생산적인 하루를 시작해보세요!"
           actionLabel="새 할일 추가"
-          onAction={() => navigation.navigate("TodoForm" as never)}
+          onAction={() => navigation.navigate("TodoForm")}
         />
       ) : (
         // 프로젝트 개수가 많지 않고(가상화로 얻는 이점이 작음), 펼치기 토글처럼
@@ -176,9 +183,11 @@ export const TodoListScreen = () => {
               data={card}
               isExpanded={expandedIds.has(card.todo.id)}
               onToggleExpand={handleToggleExpand}
+              onOpenDetail={handleOpenDetail}
               onOpenStatusSheet={handleOpenStatusSheet}
               onDelete={handleDeleteRequest}
-              onEditChild={handleEditChild}
+              onEditChild={handleOpenDetail}
+              onAddChild={handleAddChild}
               error={deleteErrors[card.todo.id]}
               childErrors={deleteErrors}
             />
@@ -187,7 +196,7 @@ export const TodoListScreen = () => {
       )}
 
       <Pressable
-        onPress={() => navigation.navigate("TodoForm" as never)}
+        onPress={() => navigation.navigate("TodoForm")}
         accessibilityRole="button"
         accessibilityLabel="할 일 추가"
         style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}

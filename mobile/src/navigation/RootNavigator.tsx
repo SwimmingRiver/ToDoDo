@@ -5,8 +5,16 @@ import { useAuthState } from "../auth/useAuthState";
 import { LoginScreen } from "../screens/LoginScreen";
 import { TodoListScreen } from "../screens/TodoListScreen";
 import { TodoFormScreen } from "../screens/TodoFormScreen";
+import { TodoDetailScreen } from "../screens/TodoDetailScreen";
 
-const Stack = createNativeStackNavigator();
+export type RootStackParamList = {
+  Login: undefined;
+  TodoList: undefined;
+  TodoForm: { parentId?: string } | undefined;
+  TodoDetail: { id: string };
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator = () => {
   const { user, loading } = useAuthState();
@@ -26,6 +34,7 @@ export const RootNavigator = () => {
           <Stack.Group>
             <Stack.Screen name="TodoList" component={TodoListScreen} options={{ title: "할 일" }} />
             <Stack.Screen name="TodoForm" component={TodoFormScreen} options={{ title: "할 일 추가" }} />
+            <Stack.Screen name="TodoDetail" component={TodoDetailScreen} options={{ title: "할 일 상세" }} />
           </Stack.Group>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />

@@ -591,6 +591,11 @@ interface PriorityChipsProps {
 ## 의사결정 확정 (2026-08-25, 사용자 승인 — TodoListScreen 재설계분)
 
 1. 카드 탭 → 펼치기/접기 토글로 흡수. **확정.**
+   **→ 2026-08-26 사용자 결정으로 번복됨(TodoDetailScreen 도입):** 카드 탭은 이제
+   상세 화면(TodoDetailScreen) 이동이고, 펼치기/접기는 화살표(chevron) 버튼 전용으로
+   분리됐다. 자식 카드의 편집(연필) 아이콘도 이 시점부터 no-op이 아니라 그 자식의
+   상세로 이동한다. 하위 할 일 추가 버튼도 함께 추가됨(펼친 카드 하단 + 상세 화면
+   하위 섹션). 반복 시리즈 편집은 이번에도 범위 밖으로 유지, 별도 태스크로 이관.
 2. 자식 목록은 기존처럼 인라인 유지(웹의 `<768px` BottomSheet 변형 미채택). **확정.**
 3. `packages/core/src/types/todo.ts`의 `Todo` 타입에 `recurrenceId`/`overdueArchived`/
    `recurrence` optional 필드 추가. **확정** (client와 동일 타입으로 맞추는 순수 추가, 하위
