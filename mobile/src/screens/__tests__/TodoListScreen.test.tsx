@@ -18,8 +18,9 @@ jest.mock("../../hooks/useUpdateTodo", () => ({
   useUpdateTodo: () => ({ mutate: mockUpdateTodoMutate, isPending: mockUpdateTodoIsPending }),
 }));
 
+const mockNavigate = jest.fn();
 jest.mock("@react-navigation/native", () => ({
-  useNavigation: () => ({ navigate: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
 type AlertButton = { text: string; style?: string; onPress?: () => void };
@@ -68,6 +69,7 @@ describe("TodoListScreen", () => {
     mockDeleteTodoMutateAsync.mockReset();
     mockUpdateTodoMutate.mockReset();
     mockUpdateTodoIsPending = false;
+    mockNavigate.mockReset();
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
     (Alert.alert as jest.Mock).mockClear();
   });
@@ -106,7 +108,7 @@ describe("TodoListScreen", () => {
     expect(await screen.findByText("하위 할 일")).toBeTruthy();
   });
 
-  it("카드 제목 영역을 탭해도 펼치기/접기가 토글된다(웹 상세 이동을 흡수)", async () => {
+  it("카드 제목 영역을 탭하면 상세 화면으로 이동한다(펼치기/접기는 화살표 전용)", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -117,14 +119,9 @@ describe("TodoListScreen", () => {
     await render(<TodoListScreen />);
 
     fireEvent.press(screen.getByTestId("toggle-expand-title-root-1"));
-    expect(await screen.findByText("하위 할 일")).toBeTruthy();
-    expect(screen.getByLabelText("프로젝트 접기")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("toggle-expand-title-root-1"));
-    await waitFor(() => {
-      expect(screen.queryByText("하위 할 일")).toBeNull();
-    });
-    expect(screen.getByLabelText("프로젝트 펼치기")).toBeTruthy();
+    expect(mockNavigate).toHaveBeenCalledWith("TodoDetail", { id: "root-1" });
+    expect(screen.queryByText("하위 할 일")).toBeNull();
   });
 
   it("펼쳤는데 하위 항목이 없으면 안내 문구를 보여준다", async () => {
@@ -407,7 +404,7 @@ describe("TodoListScreen", () => {
     expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
   });
 
-  it("자식의 편집 버튼은 접근성 라벨을 갖고 눌러도 아무 요청도 보내지 않는다(no-op)", async () => {
+  it("자식의 편집 버튼을 누르면 그 자식의 상세 화면으로 이동한다", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -420,8 +417,24 @@ describe("TodoListScreen", () => {
     fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
     fireEvent.press(await screen.findByTestId("edit-child-child-1"));
 
+    expect(mockNavigate).toHaveBeenCalledWith("TodoDetail", { id: "child-1" });
     expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
     expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
-    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it("펼친 카드의 하위 할 일 추가 버튼을 누르면 TodoForm으로 parentId와 함께 이동한다", async () => {
+    mockUseTodos.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [rootTodo()],
+    });
+
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+
+    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
+    fireEvent.press(await screen.findByLabelText("하위 할 일 추가"));
+
+    expect(mockNavigate).toHaveBeenCalledWith("TodoForm", { parentId: "root-1" });
   });
 });

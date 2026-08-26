@@ -10,7 +10,7 @@ import { radius, spacing } from "../../../theme/spacing";
 interface ChildTodoCardProps {
   todo: Todo;
   onOpenStatusSheet: (todo: Todo) => void;
-  /** 현재는 no-op — 편집 화면 자체가 이번 스코프 밖이라 기존 동작을 유지한다. */
+  /** TodoDetailScreen으로 이동시킨다(연필 아이콘 = 상세/편집 진입점). */
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   /** 삭제 실패 시 카드 하단에 보여줄 에러 메시지 */
