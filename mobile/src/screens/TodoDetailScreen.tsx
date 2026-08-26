@@ -16,7 +16,7 @@ import { ChildTodoCard } from "../shared/ui/childTodoCard/ChildTodoCard";
 import { ProgressBar } from "../shared/ui/progressBar/ProgressBar";
 import { RecurrenceBadge } from "../shared/ui/recurrenceBadge/RecurrenceBadge";
 import { getTodoDateValidationError } from "../shared/utils/todoDateValidation";
-import { getProjectProgress } from "../shared/utils/projectUtils";
+import { getProjectOverdue, getProjectProgress } from "../shared/utils/projectUtils";
 import { colors } from "../theme/colors";
 import { type Status } from "../theme/statusColors";
 import { radius, spacing } from "../theme/spacing";
@@ -38,7 +38,11 @@ export const TodoDetailScreen = () => {
   const { id } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { data: todos } = useTodos();
-  const { mutateAsync: updateTodo, isPending: isSaving } = useUpdateTodo();
+  const {
+    mutateAsync: updateTodo,
+    mutate: updateTodoStatus,
+    isPending: isSaving,
+  } = useUpdateTodo();
   const { mutateAsync: deleteTodo } = useDeleteTodo();
 
   const allTodos = todos ?? [];
@@ -141,9 +145,14 @@ export const TodoDetailScreen = () => {
     );
   };
 
+  const handleOpenStatusSheet = (target: Todo) => {
+    if (isSaving) return;
+    setStatusSheetTodo(target);
+  };
+
   const handleSelectStatus = (status: Status) => {
     if (!statusSheetTodo) return;
-    updateTodo({
+    updateTodoStatus({
       id: statusSheetTodo.id,
       fields: { status, doneAt: status === "done" ? new Date().toISOString() : null },
     });
@@ -154,11 +163,17 @@ export const TodoDetailScreen = () => {
   };
 
   const handleOpenChild = (child: Todo) => {
-    navigation.navigate("TodoDetail", { id: child.id });
+    // navigation.navigate("TodoDetail", ...)를 쓰면 이미 포커스된 같은 라우트
+    // 이름이라 React Navigation이 새 화면을 쌓지 않고 기존 인스턴스를 재사용한다
+    // (params만 교체, key는 그대로) — 그러면 title/description 등 useState로 시딩된
+    // 필드가 새 자식으로 리셋되지 않아 저장 시 부모 값으로 자식을 덮어쓰게 된다.
+    // push는 항상 새 인스턴스를 만들어 이 문제를 피한다.
+    navigation.push("TodoDetail", { id: child.id });
   };
 
   const isRoot = todo.parentId === null;
   const progress = isRoot ? getProjectProgress(allTodos, todo.id) : 0;
+  const isOverdue = isRoot ? getProjectOverdue(allTodos, todo).isOverdue : false;
 
   return (
     <SafeAreaView style={styles.screen} edges={["bottom"]}>
@@ -167,7 +182,7 @@ export const TodoDetailScreen = () => {
           <View style={styles.badgeRow}>
             <Pressable
               testID="detail-status-badge"
-              onPress={() => setStatusSheetTodo(todo)}
+              onPress={() => handleOpenStatusSheet(todo)}
               style={styles.statusBadge}
               accessibilityRole="button"
               accessibilityLabel="상태 변경"
@@ -218,7 +233,7 @@ export const TodoDetailScreen = () => {
                   accessibilityLabel="하위 할 일 추가"
                 />
               </View>
-              <ProgressBar progress={progress} />
+              <ProgressBar progress={progress} isOverdue={isOverdue} />
               {childTodos.length === 0 ? (
                 <Text style={styles.emptyChild}>하위 항목이 없습니다</Text>
               ) : (
@@ -226,7 +241,7 @@ export const TodoDetailScreen = () => {
                   <ChildTodoCard
                     key={child.id}
                     todo={child}
-                    onOpenStatusSheet={setStatusSheetTodo}
+                    onOpenStatusSheet={handleOpenStatusSheet}
                     onEdit={handleOpenChild}
                     onDelete={handleDeleteChild}
                     error={childErrors[child.id]}

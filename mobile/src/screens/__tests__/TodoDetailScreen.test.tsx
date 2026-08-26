@@ -7,8 +7,14 @@ jest.mock("../../hooks/useTodos", () => ({
 }));
 
 const mockUpdateTodoMutateAsync = jest.fn<() => Promise<void>>();
+const mockUpdateTodoMutate = jest.fn();
+let mockUpdateTodoIsPending = false;
 jest.mock("../../hooks/useUpdateTodo", () => ({
-  useUpdateTodo: () => ({ mutateAsync: mockUpdateTodoMutateAsync, isPending: false }),
+  useUpdateTodo: () => ({
+    mutateAsync: mockUpdateTodoMutateAsync,
+    mutate: mockUpdateTodoMutate,
+    isPending: mockUpdateTodoIsPending,
+  }),
 }));
 
 const mockDeleteTodoMutateAsync = jest.fn<() => Promise<void>>();
@@ -18,9 +24,10 @@ jest.mock("../../hooks/useDeleteTodo", () => ({
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
+const mockPush = jest.fn();
 let mockRouteParams: { id: string } = { id: "root-1" };
 jest.mock("@react-navigation/native", () => ({
-  useNavigation: () => ({ goBack: mockGoBack, navigate: mockNavigate }),
+  useNavigation: () => ({ goBack: mockGoBack, navigate: mockNavigate, push: mockPush }),
   useRoute: () => ({ params: mockRouteParams }),
 }));
 
@@ -43,9 +50,12 @@ const rootTodo = (overrides: Record<string, unknown> = {}) => ({
 describe("TodoDetailScreen", () => {
   beforeEach(() => {
     mockUpdateTodoMutateAsync.mockReset();
+    mockUpdateTodoMutate.mockReset();
+    mockUpdateTodoIsPending = false;
     mockDeleteTodoMutateAsync.mockReset();
     mockGoBack.mockReset();
     mockNavigate.mockReset();
+    mockPush.mockReset();
     mockRouteParams = { id: "root-1" };
   });
 
@@ -129,10 +139,87 @@ describe("TodoDetailScreen", () => {
     fireEvent.press(screen.getByTestId("detail-status-badge"));
     fireEvent.press(await screen.findByText("진행 중"));
 
-    expect(mockUpdateTodoMutateAsync).toHaveBeenCalledWith({
+    expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
       id: "root-1",
       fields: { status: "doing", doneAt: null },
     });
+  });
+
+  it("이전 상태 변경이 진행 중이면 상태 배지를 눌러도 바텀시트가 열리지 않는다(더블탭 방지)", async () => {
+    mockUpdateTodoIsPending = true;
+    mockUseTodos.mockReturnValue({ data: [rootTodo({ status: "todo" })] });
+
+    const { TodoDetailScreen } = await import("../TodoDetailScreen");
+    await render(<TodoDetailScreen />);
+
+    fireEvent.press(screen.getByTestId("detail-status-badge"));
+
+    expect(screen.queryByText("상태 선택")).toBeNull();
+    expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
+  });
+
+  it("자식의 편집 아이콘을 누르면 push로 그 자식의 상세로 이동한다(같은 라우트 재사용으로 인한 상태 오염 방지)", async () => {
+    mockUseTodos.mockReturnValue({
+      data: [
+        rootTodo(),
+        rootTodo({ id: "child-1", title: "하위 항목", parentId: "root-1" }),
+      ],
+    });
+
+    const { TodoDetailScreen } = await import("../TodoDetailScreen");
+    await render(<TodoDetailScreen />);
+
+    fireEvent.press(screen.getByTestId("edit-child-child-1"));
+
+    expect(mockPush).toHaveBeenCalledWith("TodoDetail", { id: "child-1" });
+    expect(mockNavigate).not.toHaveBeenCalledWith("TodoDetail", expect.anything());
+  });
+
+  it("자식의 상태 점을 누르면 같은 바텀시트가 그 자식 기준으로 열린다", async () => {
+    mockUseTodos.mockReturnValue({
+      data: [
+        rootTodo(),
+        rootTodo({ id: "child-1", title: "하위 항목", parentId: "root-1", status: "todo" }),
+      ],
+    });
+
+    const { TodoDetailScreen } = await import("../TodoDetailScreen");
+    await render(<TodoDetailScreen />);
+
+    fireEvent.press(screen.getByTestId("status-dot-child-1"));
+    fireEvent.press(await screen.findByText("완료"));
+
+    expect(mockUpdateTodoMutate).toHaveBeenCalledWith({
+      id: "child-1",
+      fields: { status: "done", doneAt: expect.any(String) },
+    });
+  });
+
+  it("자식 삭제 버튼을 누르고 확정하면 그 자식이 삭제된다", async () => {
+    const { Alert } = require("react-native");
+    jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    mockUseTodos.mockReturnValue({
+      data: [
+        rootTodo(),
+        rootTodo({ id: "child-1", title: "하위 항목", parentId: "root-1" }),
+      ],
+    });
+    mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
+
+    const { TodoDetailScreen } = await import("../TodoDetailScreen");
+    await render(<TodoDetailScreen />);
+
+    fireEvent.press(screen.getByTestId("delete-child-child-1"));
+
+    const call = (Alert.alert as jest.Mock).mock.calls.at(-1) as [
+      string,
+      string,
+      { text: string; style?: string; onPress?: () => void }[],
+    ];
+    const destructive = call[2].find((button) => button.style === "destructive");
+    await destructive?.onPress?.();
+
+    expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("child-1");
   });
 
   it("삭제 버튼을 누르면 확인 다이얼로그를 띄우고, 확정하면 삭제 후 뒤로 간다", async () => {
