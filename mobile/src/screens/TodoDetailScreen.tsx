@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
@@ -57,6 +57,19 @@ export const TodoDetailScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusSheetTodo, setStatusSheetTodo] = useState<Todo | null>(null);
   const [childErrors, setChildErrors] = useState<Record<string, string>>({});
+
+  // 마운트 시점에 useTodos() 캐시가 아직 채워지지 않아 todo가 undefined였다가
+  // 나중에 도착하는 경우, useState 초기값만으로는 절대 갱신되지 않는다(초기화는
+  // 최초 렌더에서 딱 한 번만 실행됨). todo.id가 바뀔 때마다(최초 로딩 포함)
+  // 폼 값을 다시 시딩해 이 레이스를 방지한다.
+  useEffect(() => {
+    if (!todo) return;
+    setTitle(todo.title);
+    setDescription(todo.description ?? "");
+    setPriority(todo.priority);
+    setStartAt(todo.startAt);
+    setDueAt(todo.dueAt);
+  }, [todo?.id]);
 
   if (!todo) {
     return (
