@@ -68,6 +68,23 @@ describe("TodoDetailScreen", () => {
     expect(screen.getByText("할 일을 찾을 수 없습니다")).toBeTruthy();
   });
 
+  it("마운트 시점엔 캐시에 아직 없다가 나중에 데이터가 도착하면 폼 값이 갱신된다", async () => {
+    mockUseTodos.mockReturnValue({ data: [] });
+
+    const { TodoDetailScreen } = await import("../TodoDetailScreen");
+    const { rerender } = await render(<TodoDetailScreen />);
+
+    expect(screen.getByText("할 일을 찾을 수 없습니다")).toBeTruthy();
+
+    mockUseTodos.mockReturnValue({ data: [rootTodo()] });
+    await act(async () => {
+      rerender(<TodoDetailScreen />);
+    });
+
+    expect(await screen.findByDisplayValue("루트 할 일")).toBeTruthy();
+    expect(screen.getByDisplayValue("설명입니다")).toBeTruthy();
+  });
+
   it("기존 제목/설명/우선순위 값으로 폼이 채워진다", async () => {
     mockUseTodos.mockReturnValue({ data: [rootTodo({ priority: "high" })] });
 
