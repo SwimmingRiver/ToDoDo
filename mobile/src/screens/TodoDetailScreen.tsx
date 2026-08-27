@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Todo } from "@tododo/core";
-import type { RootStackParamList } from "../navigation/RootNavigator";
+import type { TodoListStackParamList } from "../navigation/types";
 import { useTodos } from "../hooks/useTodos";
 import { useUpdateTodo } from "../hooks/useUpdateTodo";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
@@ -34,9 +34,9 @@ const STATUS_LABEL: Record<Status, string> = {
 };
 
 export const TodoDetailScreen = () => {
-  const route = useRoute<RouteProp<RootStackParamList, "TodoDetail">>();
+  const route = useRoute<RouteProp<TodoListStackParamList, "TodoDetail">>();
   const { id } = route.params;
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<TodoListStackParamList>>();
   const { data: todos } = useTodos();
   const {
     mutateAsync: updateTodo,
@@ -73,7 +73,7 @@ export const TodoDetailScreen = () => {
 
   if (!todo) {
     return (
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <SafeAreaView style={styles.screen} edges={[]}>
         <View style={styles.notFound}>
           <Text style={styles.notFoundText}>할 일을 찾을 수 없습니다</Text>
         </View>
@@ -189,7 +189,7 @@ export const TodoDetailScreen = () => {
   const isOverdue = isRoot ? getProjectOverdue(allTodos, todo).isOverdue : false;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+    <SafeAreaView style={styles.screen} edges={[]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.badgeRow}>

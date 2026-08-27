@@ -5,7 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AlertCircle, ClipboardList, Plus } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
-import type { RootStackParamList } from "../navigation/RootNavigator";
+import type { TodoListStackParamList } from "../navigation/types";
 import { useTodos } from "../hooks/useTodos";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
 import { useUpdateTodo } from "../hooks/useUpdateTodo";
@@ -42,7 +42,7 @@ export const TodoListScreen = () => {
   const [statusSheetTodo, setStatusSheetTodo] = useState<Todo | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<TodoListStackParamList>>();
 
   const allTodos = useMemo(() => todos ?? [], [todos]);
 
@@ -136,7 +136,7 @@ export const TodoListScreen = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <SafeAreaView style={styles.screen} edges={[]}>
         <ListSkeleton count={5} />
       </SafeAreaView>
     );
@@ -144,7 +144,7 @@ export const TodoListScreen = () => {
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <SafeAreaView style={styles.screen} edges={[]}>
         <EmptyState
           icon={AlertCircle}
           title="할 일을 불러오지 못했습니다"
@@ -160,7 +160,7 @@ export const TodoListScreen = () => {
   const isEmpty = projectCards.length === 0;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+    <SafeAreaView style={styles.screen} edges={[]}>
       {isEmpty ? (
         <EmptyState
           icon={ClipboardList}
