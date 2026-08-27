@@ -47,9 +47,37 @@ RootNavigator (Stack, 인증 분기)
         └── CalendarScreen
 ```
 
-- `TodoDetailScreen`/`TodoFormScreen`은 특정 탭에 종속되지 않고 어느 탭에서 진입했든 그 탭의 Stack 위에 쌓인다 — React Navigation의 nested navigator 패턴대로, 각 탭 Stack의 `Screen` 목록에 `TodoDetail`/`TodoForm`을 등록한다. 세 탭 모두 이 두 화면을 등록하게 되어 `RootStackParamList`를 탭별로 쪼개거나, 공통 `TodoStackParamList`를 만들어 세 탭이 공유하는 형태 중 후자를 택한다(타입 중복 방지).
+- `TodoDetailScreen`/`TodoFormScreen`은 특정 탭에 종속되지 않고 어느 탭에서 진입했든 그 탭의 Stack 위에 쌓인다 — React Navigation의 nested navigator 패턴대로, 각 탭 Stack의 `Screen` 목록에 `TodoDetail`/`TodoForm`을 등록한다.
 - 탭 아이콘: `lucide-react-native`에서 웹과 동일하게 `Sun`(오늘) / `ListTodo`(목록) / `CalendarDays`(캘린더).
 - 로그인 화면은 지금처럼 Tab 밖의 최상위 Stack에 남는다 — 인증 분기 자체는 바꾸지 않음.
+
+**파라미터 타입: 탭별로 분리한다(공유 타입 대신).** 하나의 큰 `TodoStackParamList`를 세 탭이 공유하면 "오늘 탭 화면에서 타입상 목록 탭 전용 라우트로 navigate 가능"한 것처럼 보이는 부정확함이 생긴다. `TodoDetail`/`TodoForm`의 파라미터 모양만 공유 타입으로 뽑고, 탭별 스택 타입은 각자 선언한다:
+
+```ts
+// navigation/types.ts
+export type TodoDetailParams = { id: string };
+export type TodoFormParams = { parentId?: string; dueAt?: string } | undefined;
+
+export type TodayStackParamList = {
+  Today: undefined;
+  TodoDetail: TodoDetailParams;
+  TodoForm: TodoFormParams;
+};
+
+export type TodoListStackParamList = {
+  TodoList: undefined;
+  TodoForm: TodoFormParams;
+  TodoDetail: TodoDetailParams;
+};
+
+export type CalendarStackParamList = {
+  Calendar: undefined;
+  TodoDetail: TodoDetailParams;
+  TodoForm: TodoFormParams;
+};
+```
+
+`TodoFormParams`에 `dueAt`을 추가한 이유는 5절의 "빈 날짜에서 바로 추가" 때문이다 — 캘린더/오늘 화면에서 특정 날짜를 탭한 채로 추가 화면을 열면 그 날짜를 마감일로 미리 채워준다.
 
 ## 3. 공유 날짜 유틸리티 (`mobile/src/shared/utils/dateRange.ts`)
 
@@ -86,8 +114,11 @@ export const getDaysLeft = (dueAtIso: string): number;
 
 - `react-native-calendars`의 `Calendar` 컴포넌트, `markingType="multi-dot"`로 날짜별 점 표시.
   - 점 색상: overdue(마감 지났고 미완료) → `colors.danger.main`, 그 외 진행중 → 해당 `statusColors[status].main`, 완료만 있는 날은 표시하지 않음(웹 마커 정책과 동일하게 "위험 신호" 우선).
-  - 반복 항목이 있는 날은 점 옆에 작은 반복 아이콘 대신, RN 캘린더 셀 커스터마이징 제약을 고려해 `dotColor`를 반복 전용 색으로 구분하는 대신 **1차 구현에서는 생략**하고 날짜 탭 시 바텀시트 안에서만 반복 배지(`RecurrenceBadge` 상당 컴포넌트, 기존 목록 화면에 있는 것 재사용)를 보여준다. 셀 안에 아이콘까지 넣는 건 `react-native-calendars`의 `dayComponent` 커스텀이 필요해 복잡도 대비 가치가 낮다고 판단.
-- 날짜 탭(`onDayPress`) → `BottomSheet` 오픈, `isDateInTodoRange`로 그 날 항목 필터링해 목록 표시(오늘 화면의 `TodayTodoItem` 재사용).
+  - **반복 항목 전용 표시는 이번 스코프에서 완전히 제외한다** — 모바일은 아직 반복 할 일 생성/편집 UI 자체가 없고(웹에서 만든 반복 항목이 보이기만 하는 상태), 이 기능만을 위해 반복 배지·구분 색을 새로 만들 근거가 약하다. 반복 여부와 무관하게 상태/overdue 기준으로만 점을 찍는다.
+- 날짜 탭(`onDayPress`) → `BottomSheet` 오픈. 항목이 있든 없든 항상 연다.
+  - 항목이 있으면 `isDateInTodoRange`로 필터링한 목록(오늘 화면의 `TodayTodoItem` 재사용) + 상단/하단에 "할 일 추가" 버튼.
+  - 항목이 0건이면 `EmptyState`("이 날짜엔 할 일이 없어요") + 같은 "할 일 추가" 버튼.
+  - "할 일 추가" 버튼 → 바텀시트 닫고 `TodoForm`으로 네비게이트, `dueAt: selectedDate`를 파라미터로 넘겨 마감일을 미리 채운다(2절 `TodoFormParams.dueAt`).
 - 항목 탭 → 바텀시트 닫고 `TodoDetail`로 네비게이트.
 - 월 전환(`onMonthChange`)은 라이브러리 기본 동작 그대로 — 별도 데이터 재요청 없음(`useTodos()`가 이미 전체 목록을 들고 있음).
 
@@ -96,8 +127,9 @@ export const getDaysLeft = (dueAtIso: string): number;
 ## 6. 로딩/에러/빈 상태
 
 - `useTodos()`의 `isLoading`/`isError`는 기존 `TodoListScreen`과 동일한 컴포넌트(`ListSkeleton`, 에러 시 `EmptyState` + 재시도 안내)를 오늘/캘린더 화면에도 그대로 재사용한다.
-- 오늘 화면에서 선택 날짜에 할 일이 0건이면 `EmptyState`("오늘 할 일이 없어요" 톤).
-- 캘린더 바텀시트에서 해당 날짜에 할 일이 0건이면 바텀시트 자체를 열지 않고 무시(웹의 `handleDateClick`과 달리 빈 날짜를 탭했을 때 빈 바텀시트를 보여줄 필요가 없다고 판단 — 웹은 데스크톱이라 클릭 비용이 낮지만 모바일은 탭-닫기 왕복이 더 거슬림). *이 부분은 사용자 확인이 필요한 세부 결정이라 스펙 리뷰에서 확정한다.*
+- 오늘 화면에서 선택 날짜에 할 일이 0건이면 `EmptyState`("오늘 할 일이 없어요") + 5절과 동일한 "할 일 추가" 버튼(선택된 날짜를 `dueAt`으로 프리필). 캘린더와 인터랙션을 통일한다.
+- 캘린더 바텀시트에서 해당 날짜에 할 일이 0건이어도 바텀시트는 항상 연다(5절) — 빈 상태를 보여주는 것 자체가 "이 날짜에 추가하기" 진입점이 되도록.
+- `TodoFormScreen`은 이미 `route.params?.parentId` 방식으로 파라미터를 읽고 있어(`useRoute<RouteProp<..., "TodoForm">>()`), `dueAt`도 같은 패턴으로 추가해 초기값에 반영한다.
 
 ## 7. 테스트 계획
 
@@ -105,11 +137,12 @@ export const getDaysLeft = (dueAtIso: string): number;
 
 - `dateRange.ts`: 순수 함수 유닛 테스트, 타임존 경계 케이스 포함 (`personal-mac-low-disk`/CI와 무관하게 로컬 `Date`만 사용, [[absolute-date-test-fixtures]] 정책대로 시스템 시간 mock).
 - `TodayScreen`: `useTodos` mock으로 진행중/완료 분리, 진행률 계산, 체크박스 토글 mutation 호출 검증.
-- `CalendarScreen`: 마킹 색상 계산 로직(overdue/status 우선순위)과 날짜 탭 시 필터링 결과를 유닛 테스트로, 컴포넌트 렌더 테스트는 바텀시트 오픈/네비게이트 호출 여부만 얕게 검증.
+- `CalendarScreen`: 마킹 색상 계산 로직(overdue/status 우선순위)과 날짜 탭 시 필터링 결과를 유닛 테스트로, 컴포넌트 렌더 테스트는 바텀시트가 항목 유무와 무관하게 항상 열리는지, "할 일 추가" 버튼이 `dueAt` 파라미터를 채워 `TodoForm`으로 navigate하는지를 검증.
+- `TodoFormScreen`: 신규 `route.params.dueAt`이 초기 마감일 값에 반영되는지 회귀 테스트 추가.
 - 내비게이션 재구성: 기존 `RootNavigator` 관련 테스트(있다면)가 깨지지 않는지 확인 + 탭 전환 후 뒤로가기 스택이 꼬이지 않는지는 시뮬레이터 수동 확인([[e2e-local-java21]] 환경 제약 참고, 자동화 E2E는 8-Task 플랜에서도 이미 범위 밖으로 결정됨).
 
-## 8. 열린 질문 (스펙 리뷰에서 확정 필요)
+## 8. 스펙 리뷰 결정 (2026-08-27)
 
-1. 6절의 "빈 날짜 탭 시 바텀시트 무시" — 웹처럼 빈 바텀시트를 보여줄지, 아니면 아예 무시할지.
-2. 반복 항목 표시를 1차에서 셀 안 아이콘 없이 바텀시트로만 미룬 것에 동의하는지.
-3. `TodoStackParamList`를 세 탭이 공유하는 구조(2절)로 갈지, 탭별로 파라미터 타입을 분리할지.
+1. **빈 날짜 탭** → 바텀시트를 항상 열고, 빈 상태에도 "할 일 추가" 버튼을 둔다(5·6절 반영).
+2. **반복 항목 표시** → 이번 스코프에서 완전히 제외(5절 반영). 모바일에 반복 생성/편집 UI가 없는 상태라 지금 만들 근거가 없다.
+3. **내비게이션 타입** → 탭별로 분리(`TodayStackParamList`/`TodoListStackParamList`/`CalendarStackParamList`), `TodoDetail`/`TodoForm` 파라미터 모양만 공유 타입으로 추출(2절 반영).
