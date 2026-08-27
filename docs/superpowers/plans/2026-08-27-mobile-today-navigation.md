@@ -17,6 +17,7 @@
 - 반복(recurrence) 항목 전용 표시는 이번 계획에서 다루지 않는다(스펙 5절 결정, Today 화면에도 동일 적용).
 - 모든 신규 Pressable의 최소 터치 타겟은 44px (`MIN_TOUCH_TARGET`, `mobile/src/theme/spacing.ts`).
 - 테스트에서 "오늘"에 의존하는 로직은 `jest.useFakeTimers()` + `jest.setSystemTime(...)`으로 시스템 시간을 고정한다. 절대 날짜를 하드코딩한 채 mock 없이 통과시키지 않는다.
+- 이 프로젝트에 설치된 `@testing-library/react-native@14.0.1`의 `render()`와 `renderHook()`은 둘 다 **async 함수**다(`node_modules/@testing-library/react-native/dist/render.js`, `render-hook.js` 확인됨). 반드시 `await render(...)` / `await renderHook(...)`으로 호출하고 그 `it` 콜백도 `async`여야 한다 — await 없이 부르면 `screen`이 아직 렌더 결과를 못 받은 상태라 쿼리가 실패한다. 기존 스크린 테스트(`TodoListScreen.test.tsx` 등)도 전부 이 패턴을 쓴다.
 
 ---
 
@@ -562,19 +563,21 @@ describe("Checkbox", () => {
   // SVG에 설정한다(node_modules/lucide-react-native/dist/cjs/Icon.js 확인됨) —
   // @testing-library/react-native의 getByTestId로 못 찾는다. accessibilityState로
   // 검증한다.
-  it("checked=false면 접근성 상태가 checked:false다", () => {
-    render(<Checkbox checked={false} onPress={jest.fn()} accessibilityLabel="완료 처리" />);
+  // @testing-library/react-native@14의 render()는 async 함수다 — 반드시 await하고
+  // it 콜백도 async여야 한다(실제 구현·커밋에서도 이렇게 처리됨).
+  it("checked=false면 접근성 상태가 checked:false다", async () => {
+    await render(<Checkbox checked={false} onPress={jest.fn()} accessibilityLabel="완료 처리" />);
     expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(false);
   });
 
-  it("checked=true면 접근성 상태가 checked:true다", () => {
-    render(<Checkbox checked={true} onPress={jest.fn()} accessibilityLabel="완료 처리" />);
+  it("checked=true면 접근성 상태가 checked:true다", async () => {
+    await render(<Checkbox checked={true} onPress={jest.fn()} accessibilityLabel="완료 처리" />);
     expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(true);
   });
 
-  it("탭하면 onPress가 호출된다", () => {
+  it("탭하면 onPress가 호출된다", async () => {
     const onPress = jest.fn();
-    render(<Checkbox checked={false} onPress={onPress} accessibilityLabel="완료 처리" />);
+    await render(<Checkbox checked={false} onPress={onPress} accessibilityLabel="완료 처리" />);
     fireEvent.press(screen.getByRole("checkbox"));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
@@ -672,8 +675,10 @@ import { describe, it, expect } from "@jest/globals";
 import { PeriodBadge } from "../PeriodBadge";
 
 describe("PeriodBadge", () => {
-  it("dayIndex/totalDays를 'n/총일차' 형태로 렌더링한다", () => {
-    render(<PeriodBadge dayIndex={2} totalDays={3} />);
+  // @testing-library/react-native@14의 render()는 async 함수다 — await 없이
+  // 호출하면 screen이 아직 렌더 결과를 못 받은 상태라 쿼리가 실패한다.
+  it("dayIndex/totalDays를 'n/총일차' 형태로 렌더링한다", async () => {
+    await render(<PeriodBadge dayIndex={2} totalDays={3} />);
     expect(screen.getByText("2/3일차")).toBeTruthy();
   });
 });
@@ -800,54 +805,56 @@ describe("TodayTodoItem", () => {
     jest.useRealTimers();
   });
 
-  it("제목을 렌더링한다", () => {
-    render(
+  // @testing-library/react-native@14의 render()는 async 함수다 — 반드시 await하고
+  // it 콜백도 async여야 한다(await 없이 부르면 screen이 렌더 결과를 못 받은 상태).
+  it("제목을 렌더링한다", async () => {
+    await render(
       <TodayTodoItem todo={baseTodo} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
     );
     expect(screen.getByText("테스트 할 일")).toBeTruthy();
   });
 
-  it("체크박스를 누르면 onToggleDone이 호출된다", () => {
+  it("체크박스를 누르면 onToggleDone이 호출된다", async () => {
     const onToggleDone = jest.fn();
-    render(
+    await render(
       <TodayTodoItem todo={baseTodo} selectedDate="2026-06-15" onToggleDone={onToggleDone} onPress={jest.fn()} />,
     );
     fireEvent.press(screen.getByRole("checkbox"));
     expect(onToggleDone).toHaveBeenCalledWith(baseTodo);
   });
 
-  it("본문(제목 영역)을 누르면 onPress가 호출된다", () => {
+  it("본문(제목 영역)을 누르면 onPress가 호출된다", async () => {
     const onPress = jest.fn();
-    render(
+    await render(
       <TodayTodoItem todo={baseTodo} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={onPress} />,
     );
     fireEvent.press(screen.getByText("테스트 할 일"));
     expect(onPress).toHaveBeenCalledWith(baseTodo);
   });
 
-  it("마감이 지났으면(danger) 초과 배지를 보여준다", () => {
+  it("마감이 지났으면(danger) 초과 배지를 보여준다", async () => {
     const overdue = { ...baseTodo, dueAt: new Date(2026, 5, 10, 9).toISOString() };
-    render(
+    await render(
       <TodayTodoItem todo={overdue} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
     );
     expect(screen.getByText("5일 초과")).toBeTruthy();
   });
 
-  it("기간(startAt~dueAt) 항목이면 진행 일차 배지를 보여준다", () => {
+  it("기간(startAt~dueAt) 항목이면 진행 일차 배지를 보여준다", async () => {
     const periodTodo = {
       ...baseTodo,
       startAt: new Date(2026, 5, 14, 9).toISOString(),
       dueAt: new Date(2026, 5, 16, 9).toISOString(),
     };
-    render(
+    await render(
       <TodayTodoItem todo={periodTodo} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
     );
     expect(screen.getByText("2/3일차")).toBeTruthy();
   });
 
-  it("완료된 항목은 체크박스가 checked 상태다", () => {
+  it("완료된 항목은 체크박스가 checked 상태다", async () => {
     const done = { ...baseTodo, status: "done" as const, doneAt: "2026-06-15T00:00:00.000Z" };
-    render(
+    await render(
       <TodayTodoItem todo={done} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
     );
     expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(true);
@@ -1024,37 +1031,39 @@ describe("WeekStrip", () => {
     onGoToToday: jest.fn(),
   };
 
-  it("windowStart부터 7일의 날짜를 렌더링한다", () => {
-    render(<WeekStrip {...defaultProps} />);
+  // @testing-library/react-native@14의 render()는 async 함수다 — 반드시 await하고
+  // it 콜백도 async여야 한다.
+  it("windowStart부터 7일의 날짜를 렌더링한다", async () => {
+    await render(<WeekStrip {...defaultProps} />);
     expect(screen.getByText("15")).toBeTruthy();
     expect(screen.getByText("21")).toBeTruthy();
   });
 
-  it("날짜를 누르면 onSelectDate가 호출된다", () => {
+  it("날짜를 누르면 onSelectDate가 호출된다", async () => {
     const onSelectDate = jest.fn();
-    render(<WeekStrip {...defaultProps} onSelectDate={onSelectDate} />);
+    await render(<WeekStrip {...defaultProps} onSelectDate={onSelectDate} />);
     fireEvent.press(screen.getByText("16"));
     expect(onSelectDate).toHaveBeenCalledWith("2026-06-16");
   });
 
-  it("왼쪽/오른쪽 화살표를 누르면 각각의 콜백이 호출된다", () => {
+  it("왼쪽/오른쪽 화살표를 누르면 각각의 콜백이 호출된다", async () => {
     const onShiftLeft = jest.fn();
     const onShiftRight = jest.fn();
-    render(<WeekStrip {...defaultProps} onShiftLeft={onShiftLeft} onShiftRight={onShiftRight} />);
+    await render(<WeekStrip {...defaultProps} onShiftLeft={onShiftLeft} onShiftRight={onShiftRight} />);
     fireEvent.press(screen.getByLabelText("이전 날짜"));
     fireEvent.press(screen.getByLabelText("다음 날짜"));
     expect(onShiftLeft).toHaveBeenCalledTimes(1);
     expect(onShiftRight).toHaveBeenCalledTimes(1);
   });
 
-  it("오늘이 스트립 안에 있으면 '오늘' 칩을 보여주지 않는다", () => {
-    render(<WeekStrip {...defaultProps} />);
+  it("오늘이 스트립 안에 있으면 '오늘' 칩을 보여주지 않는다", async () => {
+    await render(<WeekStrip {...defaultProps} />);
     expect(screen.queryByLabelText("오늘로 이동")).toBeNull();
   });
 
-  it("오늘이 스트립 밖이면 '오늘' 칩을 보여주고 누르면 onGoToToday가 호출된다", () => {
+  it("오늘이 스트립 밖이면 '오늘' 칩을 보여주고 누르면 onGoToToday가 호출된다", async () => {
     const onGoToToday = jest.fn();
-    render(
+    await render(
       <WeekStrip {...defaultProps} windowStart="2026-07-01" selectedDate="2026-07-01" onGoToToday={onGoToToday} />,
     );
     fireEvent.press(screen.getByLabelText("오늘로 이동"));
@@ -1258,14 +1267,16 @@ import { describe, it, expect } from "@jest/globals";
 import { DailyProgress } from "../DailyProgress";
 
 describe("DailyProgress", () => {
-  it("날짜 라벨과 완료/전체 카운트를 렌더링한다", () => {
-    render(<DailyProgress dateLabel="6월 15일, 오늘" doneCount={2} totalCount={5} />);
+  // @testing-library/react-native@14의 render()는 async 함수다 — 반드시 await하고
+  // it 콜백도 async여야 한다.
+  it("날짜 라벨과 완료/전체 카운트를 렌더링한다", async () => {
+    await render(<DailyProgress dateLabel="6월 15일, 오늘" doneCount={2} totalCount={5} />);
     expect(screen.getByText("6월 15일, 오늘")).toBeTruthy();
     expect(screen.getByText("2 / 5 완료")).toBeTruthy();
   });
 
-  it("totalCount가 0이어도 에러 없이 렌더링한다", () => {
-    render(<DailyProgress dateLabel="6월 15일, 오늘" doneCount={0} totalCount={0} />);
+  it("totalCount가 0이어도 에러 없이 렌더링한다", async () => {
+    await render(<DailyProgress dateLabel="6월 15일, 오늘" doneCount={0} totalCount={0} />);
     expect(screen.getByText("0 / 0 완료")).toBeTruthy();
   });
 });
@@ -1376,7 +1387,7 @@ git commit -m "feat: mobile DailyProgress 컴포넌트 추가"
 
 ```tsx
 import { renderHook } from "@testing-library/react-native";
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { Todo } from "@tododo/core";
 
 const mockUseTodos = jest.fn();
@@ -1402,6 +1413,21 @@ const makeTodo = (overrides: Partial<Todo>): Todo => ({
 });
 
 describe("useTodayTodos", () => {
+  // @testing-library/react-native@14의 renderHook()도 render()와 마찬가지로
+  // async 함수다 — 반드시 await한다(result.current를 즉시 읽으면 아직 준비 전).
+  //
+  // getDaysLeft(due.ts)가 실제 시스템 시각(new Date())을 기준으로 삼으므로,
+  // "2026-06-16 dueAt은 danger가 아니어야 한다" 같은 마커 판정이 실행 시점의
+  // 실제 날짜에 좌우되지 않도록 반드시 고정한다.
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 5, 15, 12, 0));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("선택 날짜에 해당하는 항목만 진행중/완료로 분리한다", async () => {
     mockUseTodos.mockReturnValue({
       data: [
@@ -1414,7 +1440,7 @@ describe("useTodayTodos", () => {
     });
 
     const { useTodayTodos } = await import("../useTodayTodos");
-    const { result } = renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
+    const { result } = await renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
 
     expect(result.current.inProgressTodos.map((t) => t.id)).toEqual(["a"]);
     expect(result.current.doneTodos.map((t) => t.id)).toEqual(["b"]);
@@ -1433,7 +1459,7 @@ describe("useTodayTodos", () => {
     });
 
     const { useTodayTodos } = await import("../useTodayTodos");
-    const { result } = renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
+    const { result } = await renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
 
     expect(result.current.markers["2026-06-10"]).toBe("danger");
     expect(result.current.markers["2026-06-16"]).toBe("normal");
@@ -1443,7 +1469,7 @@ describe("useTodayTodos", () => {
   it("toggleDone은 완료↔미완료 상태와 doneAt을 함께 갱신하도록 mutate를 호출한다", async () => {
     mockUseTodos.mockReturnValue({ data: [], isLoading: false, isError: false });
     const { useTodayTodos } = await import("../useTodayTodos");
-    const { result } = renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
+    const { result } = await renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
 
     const todo = makeTodo({ id: "a", status: "todo", title: "제목" });
     result.current.toggleDone(todo);
@@ -1644,7 +1670,7 @@ describe("TodayScreen", () => {
       markers: {}, isLoading: true, isError: false, toggleDone: jest.fn(),
     });
     const { TodayScreen } = await import("../TodayScreen");
-    render(<TodayScreen />);
+    await render(<TodayScreen />);
     expect(screen.getByTestId("list-skeleton")).toBeTruthy();
   });
 
@@ -1654,7 +1680,7 @@ describe("TodayScreen", () => {
       markers: {}, isLoading: false, isError: false, toggleDone: jest.fn(),
     });
     const { TodayScreen } = await import("../TodayScreen");
-    render(<TodayScreen />);
+    await render(<TodayScreen />);
     expect(screen.getByText("오늘 할 일이 없습니다")).toBeTruthy();
   });
 
@@ -1664,7 +1690,7 @@ describe("TodayScreen", () => {
       markers: {}, isLoading: false, isError: false, toggleDone: jest.fn(),
     });
     const { TodayScreen } = await import("../TodayScreen");
-    render(<TodayScreen />);
+    await render(<TodayScreen />);
     expect(screen.getByText("진행 중")).toBeTruthy();
     expect(screen.getByText("오늘 할 일")).toBeTruthy();
   });
@@ -1675,7 +1701,7 @@ describe("TodayScreen", () => {
       markers: {}, isLoading: false, isError: false, toggleDone: jest.fn(),
     });
     const { TodayScreen } = await import("../TodayScreen");
-    render(<TodayScreen />);
+    await render(<TodayScreen />);
     fireEvent.press(screen.getByText("오늘 할 일"));
     expect(mockNavigate).toHaveBeenCalledWith("TodoDetail", { id: "a" });
   });
@@ -1686,7 +1712,7 @@ describe("TodayScreen", () => {
       markers: {}, isLoading: false, isError: false, toggleDone: jest.fn(),
     });
     const { TodayScreen } = await import("../TodayScreen");
-    render(<TodayScreen />);
+    await render(<TodayScreen />);
     fireEvent.press(screen.getByText("할 일 추가"));
     expect(mockNavigate).toHaveBeenCalledWith("TodoForm", { dueAt: expect.any(String) });
   });
@@ -1697,7 +1723,7 @@ describe("TodayScreen", () => {
       markers: {}, isLoading: false, isError: true, toggleDone: jest.fn(),
     });
     const { TodayScreen } = await import("../TodayScreen");
-    render(<TodayScreen />);
+    await render(<TodayScreen />);
     expect(screen.getByText("할 일을 불러오지 못했습니다")).toBeTruthy();
   });
 });
@@ -1900,12 +1926,14 @@ git commit -m "feat: mobile TodayScreen 조립"
 ### Task 12: 내비게이션 재구성 (BottomTab + 탭별 Stack)
 
 **Files:**
-- Modify: `mobile/src/navigation/RootNavigator.tsx`
-- Modify: `mobile/src/screens/TodoListScreen.tsx` (import만 변경)
-- Modify: `mobile/src/screens/TodoFormScreen.tsx` (import 변경 + `dueAt` 프리필)
-- Modify: `mobile/src/screens/TodoDetailScreen.tsx` (import만 변경)
+- Modify: `mobile/src/navigation/RootNavigator.tsx` (전체 교체, Step 4)
+- Modify: `mobile/src/screens/TodoListScreen.tsx:8` (import), `:45` (`useNavigation` 제네릭)
+- Modify: `mobile/src/screens/TodoFormScreen.tsx:5` (import), `:19-20` (`useState` 순서), `:24-25` (route/parentId)
+- Modify: `mobile/src/screens/TodoDetailScreen.tsx:7` (import), `:37` (`useRoute` 제네릭), `:39` (`useNavigation` 제네릭)
 - Create: `mobile/src/screens/CalendarPlaceholderScreen.tsx` (후속 계획에서 실제 캘린더로 교체)
 - Modify: `mobile/package.json` (의존성 추가)
+
+(위 줄 번호는 이 계획 작성 시점의 실제 파일 기준이다 — Task 1~11에서 이 네 파일을 건드리는 Task는 없으므로 이 Task를 시작할 때도 그대로일 것으로 예상되지만, 적용 전 실제 파일을 열어 줄 번호가 여전히 맞는지 확인한다.)
 
 **Interfaces:**
 - Consumes: `TodayScreen`(Task 11), `TodayStackParamList`/`TodoListStackParamList`/`CalendarStackParamList`/`TodoFormParams`(Task 4)
