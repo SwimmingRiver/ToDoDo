@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel } from "../due";
+import { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel, getUrgency } from "../due";
 
 // client/src/shared/utils/__tests__/due.test.ts의 핵심 케이스를 그대로 포팅.
 describe("DUE_SOON_DAYS", () => {
@@ -41,5 +41,22 @@ describe("getDaysLeft", () => {
     const past = new Date(today);
     past.setDate(past.getDate() - 2);
     expect(getDaysLeft(past.toISOString())).toBe(-2);
+  });
+});
+
+describe("getUrgency", () => {
+  it("daysLeft가 0 이하이면 danger를 반환한다", () => {
+    expect(getUrgency(0)).toBe("danger");
+    expect(getUrgency(-1)).toBe("danger");
+  });
+
+  it("daysLeft가 1~3이면 soon을 반환한다", () => {
+    expect(getUrgency(1)).toBe("soon");
+    expect(getUrgency(3)).toBe("soon");
+  });
+
+  it("daysLeft가 4 이상이면 normal을 반환한다", () => {
+    expect(getUrgency(4)).toBe("normal");
+    expect(getUrgency(10)).toBe("normal");
   });
 });

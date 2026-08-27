@@ -31,3 +31,15 @@ export function getDueBadgeLabel(daysLeft: number): string {
   if (daysLeft === 0) return "D-day";
   return `D-${daysLeft}`;
 }
+
+export type Urgency = "normal" | "soon" | "danger";
+
+/**
+ * daysLeft(getDaysLeft 결과)를 3단계 긴급도로 분류한다. D-day(0)는 지난 것과
+ * 동일하게 "danger"로 묶는다(client/src/shared/utils/due.ts와 동일 정책).
+ */
+export function getUrgency(daysLeft: number): Urgency {
+  if (daysLeft <= 0) return "danger";
+  if (daysLeft <= DUE_SOON_DAYS) return "soon";
+  return "normal";
+}
