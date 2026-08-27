@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
 import { MenuIcon } from "lucide-react";
 import { colors } from "@/styles/colors";
-import FeedbackButton from "@/features/feedback/components/feedbackButton";
+import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 
 interface HeaderProps {
   onMenuOpen: () => void;
@@ -12,16 +12,16 @@ interface HeaderProps {
 
 const Header = ({ onMenuOpen }: HeaderProps) => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
     <HeaderContainer>
       <HeaderTitle onClick={() => navigate("/today")}>ToDoDo</HeaderTitle>
       <UserInfo>
-        <UserInfoText>{user?.displayName}</UserInfoText>
-        <UserInfoImage src={user?.photoURL || ""} alt="user" />
-        <FeedbackButton />
-        <LogoutButton onClick={logout}>로그아웃</LogoutButton>
+        <ProfileMenu>
+          <UserInfoText>{user?.displayName}</UserInfoText>
+          <UserInfoImage src={user?.photoURL || ""} alt="user" />
+        </ProfileMenu>
       </UserInfo>
       <HamburgerMenuButton onClick={onMenuOpen} aria-label="메뉴 열기">
         <MenuIcon size={20} />
@@ -52,18 +52,6 @@ const UserInfo = styled.div`
 const UserInfoText = styled.span`
   font-size: 14px;
   font-weight: 500;
-`;
-
-const LogoutButton = styled.button`
-  font-size: 14px;
-  background: none;
-  border: none;
-  color: ${colors.brand.strong};
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
 `;
 
 const UserInfoImage = styled.img`
