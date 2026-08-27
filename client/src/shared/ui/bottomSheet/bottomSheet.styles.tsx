@@ -28,7 +28,14 @@ const Overlay = styled.div<{ $isClosing: boolean }>`
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 9998;
+  /*
+   * 모바일 드로어(mobileDrawer.styles.tsx)의 DrawerContainer가 9999를 쓴다.
+   * BottomSheet는 document.body에 portal되는 "최상위" 오버레이라, 드로어가 열린
+   * 채로 그 안에서 BottomSheet를 띄우는 경우(예: ProfileMenu)에도 항상 드로어보다
+   * 위에 있어야 한다. 9998로는 드로어에 가려지는 회귀가 실제로 있었다 — Modal/
+   * FeedbackButton과 같은 10000을 써서 "최상위 오버레이" 값을 통일한다.
+   */
+  z-index: 10000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
