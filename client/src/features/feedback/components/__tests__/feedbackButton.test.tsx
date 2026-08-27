@@ -132,4 +132,21 @@ describe('FeedbackButton 컴포넌트', () => {
 
     expect(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요')).toHaveValue('새 의견')
   })
+
+  it('모달은 렌더링된 컨테이너가 아니라 document.body에 직접 portal되어야 한다', async () => {
+    // 모바일 드로어처럼 transform이 걸린 조상 안에 FeedbackButton이 렌더링돼도
+    // Overlay(position: fixed)가 그 조상을 containing block으로 삼지 않도록,
+    // 모달은 반드시 document.body의 자식으로 portal되어야 한다.
+    const user = userEvent.setup()
+    const { container } = render(<FeedbackButton />)
+
+    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
+
+    const textarea = screen.getByPlaceholderText('자유롭게 의견을 남겨주세요')
+
+    // render()가 만든 컨테이너 내부에는 모달이 없어야 한다 (portal되었으므로).
+    expect(container.contains(textarea)).toBe(false)
+    // 대신 document.body에 직접 속해 있어야 한다.
+    expect(document.body.contains(textarea)).toBe(true)
+  })
 })

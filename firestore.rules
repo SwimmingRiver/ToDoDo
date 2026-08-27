@@ -44,7 +44,9 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.email == request.auth.token.email
-                    && contentValid();
+                    && contentValid()
+                    && request.resource.data.keys().hasOnly(["userId", "email", "content", "createdAt"])
+                    && request.resource.data.createdAt is string;
       allow read, update, delete: if false;
     }
   }
