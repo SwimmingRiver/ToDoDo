@@ -3,8 +3,6 @@ import * as Sentry from "@sentry/react";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
 
-export const FEEDBACK_CONTENT_MAX_LENGTH = 1000;
-
 const feedbackRef = collection(db, "feedback");
 
 export const submitFeedback = async (content: string): Promise<void> => {

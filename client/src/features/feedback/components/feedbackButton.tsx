@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import useModal from "@/shared/hooks/useModal";
 import { useSubmitFeedback } from "../hooks";
-import { FEEDBACK_CONTENT_MAX_LENGTH } from "../api";
+import { FEEDBACK_CONTENT_MAX_LENGTH } from "../api/constants";
 import {
   TriggerButton,
   Overlay,

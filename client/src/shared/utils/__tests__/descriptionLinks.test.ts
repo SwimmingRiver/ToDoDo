@@ -6,7 +6,7 @@ import {
   toDescriptionSegments,
   DESCRIPTION_MAX_LENGTH,
 } from "../descriptionLinks";
-import { FEEDBACK_CONTENT_MAX_LENGTH } from "@/features/feedback/api/feedbackApi";
+import { FEEDBACK_CONTENT_MAX_LENGTH } from "@/features/feedback/api/constants";
 
 describe("extractLinks", () => {
   it("빈 값이면 빈 배열을 반환한다", () => {
