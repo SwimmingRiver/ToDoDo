@@ -1459,7 +1459,11 @@ describe("useTodayTodos", () => {
     });
 
     const { useTodayTodos } = await import("../useTodayTodos");
-    const { result } = await renderHook(() => useTodayTodos("2026-06-15", "2026-06-15"));
+    // windowStart는 getStripDates(windowStart, 7)의 시작점이다 — 아래서 검증하는
+    // 마커 키(06-10/06-12/06-16)가 전부 그 7일 창 안에 들어와야 하므로 selectedDate
+    // (06-15)와 다르게 06-10으로 잡는다(06-15로 두면 06-10/06-12가 창 밖이라 undefined가
+    // 나와 테스트가 깨진다).
+    const { result } = await renderHook(() => useTodayTodos("2026-06-15", "2026-06-10"));
 
     expect(result.current.markers["2026-06-10"]).toBe("danger");
     expect(result.current.markers["2026-06-16"]).toBe("normal");
