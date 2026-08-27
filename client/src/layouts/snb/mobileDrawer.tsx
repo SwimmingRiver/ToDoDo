@@ -6,6 +6,7 @@ import {
   Kanban,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
+import FeedbackButton from "@/features/feedback/components/feedbackButton";
 import {
   Overlay,
   DrawerContainer,
@@ -13,6 +14,7 @@ import {
   UserImage,
   UserInfo,
   UserName,
+  UserActions,
   LogoutButton,
   NavList,
   NavNavLink,
@@ -58,7 +60,10 @@ const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
           <UserImage src={user?.photoURL || ""} alt="user" />
           <UserInfo>
             <UserName>{user?.displayName}</UserName>
-            <LogoutButton onClick={logout}>로그아웃</LogoutButton>
+            <UserActions>
+              <FeedbackButton />
+              <LogoutButton onClick={logout}>로그아웃</LogoutButton>
+            </UserActions>
           </UserInfo>
         </UserSection>
         <NavList>

@@ -32,5 +32,22 @@ service cloud.firestore {
                     && (descriptionValid() || descriptionUnchanged());
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
+
+    match /feedback/{feedbackId} {
+      // 상한 1000은 클라이언트의 FEEDBACK_CONTENT_MAX_LENGTH
+      // (features/feedback/api/feedbackApi.ts)와 같은 값이어야 한다.
+      function contentValid() {
+        let c = request.resource.data.content;
+        return c is string && c.size() > 0 && c.size() <= 1000;
+      }
+
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.email == request.auth.token.email
+                    && contentValid()
+                    && request.resource.data.keys().hasOnly(["userId", "email", "content", "createdAt"])
+                    && request.resource.data.createdAt is string;
+      allow read, update, delete: if false;
+    }
   }
 }

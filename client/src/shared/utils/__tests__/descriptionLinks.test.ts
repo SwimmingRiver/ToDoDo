@@ -6,6 +6,7 @@ import {
   toDescriptionSegments,
   DESCRIPTION_MAX_LENGTH,
 } from "../descriptionLinks";
+import { FEEDBACK_CONTENT_MAX_LENGTH } from "@/features/feedback/api/constants";
 
 describe("extractLinks", () => {
   it("빈 값이면 빈 배열을 반환한다", () => {
@@ -90,15 +91,16 @@ describe("extractLinks", () => {
     });
   });
 
-  it("DESCRIPTION_MAX_LENGTH가 firestore.rules의 상한과 실제로 일치한다", () => {
+  it("firestore.rules의 모든 상한이 알려진 클라이언트 상수 중 하나와 일치한다", () => {
     // 주석으로만 동기화를 약속하면 한쪽만 바뀌었을 때 아무도 못 잡는다. 클라이언트는
     // 통과시키는데 서버가 permission-denied로 거부하는, 원인 파악이 어려운 상태가 된다.
     const rules = readFileSync(resolve(process.cwd(), "../firestore.rules"), "utf-8");
     const limits = [...rules.matchAll(/\.size\(\)\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
 
     expect(limits.length).toBeGreaterThan(0);
+    const knownLimits = [DESCRIPTION_MAX_LENGTH, FEEDBACK_CONTENT_MAX_LENGTH];
     for (const limit of limits) {
-      expect(limit).toBe(DESCRIPTION_MAX_LENGTH);
+      expect(knownLimits).toContain(limit);
     }
   });
 });

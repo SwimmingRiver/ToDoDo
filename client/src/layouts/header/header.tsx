@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
 import { MenuIcon } from "lucide-react";
 import { colors } from "@/styles/colors";
+import FeedbackButton from "@/features/feedback/components/feedbackButton";
 
 interface HeaderProps {
   onMenuOpen: () => void;
@@ -19,6 +20,7 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
       <UserInfo>
         <UserInfoText>{user?.displayName}</UserInfoText>
         <UserInfoImage src={user?.photoURL || ""} alt="user" />
+        <FeedbackButton />
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
       </UserInfo>
       <HamburgerMenuButton onClick={onMenuOpen} aria-label="메뉴 열기">

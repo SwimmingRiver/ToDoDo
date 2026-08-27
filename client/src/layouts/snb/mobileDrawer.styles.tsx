@@ -53,6 +53,13 @@ export const UserName = styled.p`
   margin: 0;
 `;
 
+export const UserActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+`;
+
 export const LogoutButton = styled.button`
   font-size: 13px;
   background: none;
@@ -60,7 +67,6 @@ export const LogoutButton = styled.button`
   color: #5f6368;
   cursor: pointer;
   padding: 0;
-  margin-top: 2px;
 
   &:hover {
     color: ${colors.brand.strong};
