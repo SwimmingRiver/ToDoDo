@@ -2,7 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
-import type { RootStackParamList } from "../navigation/RootNavigator";
+import type { TodoListStackParamList } from "../navigation/types";
 import { useCreateTodo } from "../hooks/useCreateTodo";
 import { useTodos } from "../hooks/useTodos";
 import { Button } from "../shared/ui/button/Button";
@@ -17,12 +17,12 @@ export const TodoFormScreen = () => {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [startAt, setStartAt] = useState<string | null>(null);
-  const [dueAt, setDueAt] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<RootStackParamList, "TodoForm">>();
+  const route = useRoute<RouteProp<TodoListStackParamList, "TodoForm">>();
   const parentId = route.params?.parentId ?? null;
+  const [dueAt, setDueAt] = useState<string | null>(route.params?.dueAt ?? null);
   const { mutateAsync, isPending } = useCreateTodo();
   const { data: todos } = useTodos();
 
