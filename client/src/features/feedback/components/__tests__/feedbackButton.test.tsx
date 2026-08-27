@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FeedbackButton from '../feedbackButton'
 
@@ -28,6 +28,10 @@ describe('FeedbackButton 컴포넌트', () => {
     mutationState.isPending = false
     mutationState.isSuccess = false
     mutationState.isError = false
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('트리거 버튼만 보이고 모달은 닫혀 있어야 한다', () => {
@@ -80,5 +84,52 @@ describe('FeedbackButton 컴포넌트', () => {
     await user.click(screen.getByRole('button', { name: '의견 보내기' }))
 
     expect(screen.getByText('전송에 실패했습니다. 잠시 후 다시 시도해주세요.')).toBeInTheDocument()
+  })
+
+  it('성공 후 자동 닫힘 전에 사용자가 직접 닫았다가 다시 열면, 지연된 타이머가 새로 입력한 내용을 지우지 않는다', async () => {
+    // 상호작용(클릭/타이핑) 자체는 실제 타이머로 진행하고, 컴포넌트 내부의
+    // setTimeout(자동 닫힘)만 가짜 타이머로 통제한다 — 둘을 섞으면 userEvent의
+    // 내부 대기가 fake timer에 걸려 멈춘다.
+    const user = userEvent.setup()
+
+    render(<FeedbackButton />)
+
+    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
+    await user.type(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요'), '좋아요')
+    await user.click(screen.getByRole('button', { name: '제출' }))
+
+    // mutate는 mock이라 실제로 성공하지 않으므로, 전달된 onSuccess 콜백을 직접 꺼내
+    // 실제 성공 시나리오(자동 닫힘 타이머 예약)를 시뮬레이션한다.
+    const onSuccess = mutate.mock.calls[0][1].onSuccess
+
+    vi.useFakeTimers()
+    act(() => {
+      mutationState.isSuccess = true
+      onSuccess()
+    })
+
+    // 사용자가 자동 닫힘(1.2초) 타이머가 끝나기 전에 직접 "닫기"를 누른다.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '닫기' }))
+      mutationState.isSuccess = false // handleClose가 호출한 reset()의 효과를 시뮬레이션
+    })
+
+    // 모달을 다시 열고 새 내용을 입력한다.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '의견 보내기' }))
+    })
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요'), {
+        target: { value: '새 의견' },
+      })
+    })
+
+    // 앞서 예약됐던 1.2초 타이머가 흘러도, 새로 입력한 내용이 지워지거나
+    // 모달이 강제로 닫혀서는 안 된다.
+    act(() => {
+      vi.advanceTimersByTime(1200)
+    })
+
+    expect(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요')).toHaveValue('새 의견')
   })
 })

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useModal from "@/shared/hooks/useModal";
 import { useSubmitFeedback } from "../hooks";
 import { FEEDBACK_CONTENT_MAX_LENGTH } from "../api";
@@ -19,8 +19,19 @@ const FeedbackButton = () => {
   const { isOpen, setIsOpen } = useModal();
   const [content, setContent] = useState("");
   const { mutate, isPending, isSuccess, isError, reset } = useSubmitFeedback();
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
 
   const handleClose = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
     setIsOpen(false);
     setContent("");
     reset();
@@ -30,7 +41,7 @@ const FeedbackButton = () => {
     if (!content.trim() || isPending) return;
     mutate(content, {
       onSuccess: () => {
-        setTimeout(handleClose, 1200);
+        closeTimeoutRef.current = setTimeout(handleClose, 1200);
       },
     });
   };
