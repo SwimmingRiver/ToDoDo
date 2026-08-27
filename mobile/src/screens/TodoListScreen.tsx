@@ -136,7 +136,7 @@ export const TodoListScreen = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <SafeAreaView style={styles.screen} edges={[]}>
         <ListSkeleton count={5} />
       </SafeAreaView>
     );
@@ -144,7 +144,7 @@ export const TodoListScreen = () => {
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <SafeAreaView style={styles.screen} edges={[]}>
         <EmptyState
           icon={AlertCircle}
           title="할 일을 불러오지 못했습니다"
@@ -160,7 +160,7 @@ export const TodoListScreen = () => {
   const isEmpty = projectCards.length === 0;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+    <SafeAreaView style={styles.screen} edges={[]}>
       {isEmpty ? (
         <EmptyState
           icon={ClipboardList}

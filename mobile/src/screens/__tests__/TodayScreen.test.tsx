@@ -87,7 +87,12 @@ describe("TodayScreen", () => {
     const { TodayScreen } = await import("../TodayScreen");
     await render(<TodayScreen />);
     fireEvent.press(screen.getByText("할 일 추가"));
-    expect(mockNavigate).toHaveBeenCalledWith("TodoForm", { dueAt: expect.any(String) });
+    // beforeEach에서 시스템 시간을 2026-06-15로 고정했으므로 selectedDate의 초기값은
+    // toDateKey(new Date())로 "2026-06-15"가 된다. parseLocalDateOnly가 반환하는
+    // 로컬 자정 Date를 실행 타임존 그대로 toISOString()한 값과 비교해야 한다
+    // (UTC 리터럴을 하드코딩하면 타임존에 따라 하루 밀려 보일 수 있다).
+    const expectedDueAt = new Date(2026, 5, 15).toISOString();
+    expect(mockNavigate).toHaveBeenCalledWith("TodoForm", { dueAt: expectedDueAt });
   });
 
   it("불러오기 실패 시 에러 상태를 보여준다", async () => {

@@ -73,7 +73,7 @@ export const TodoDetailScreen = () => {
 
   if (!todo) {
     return (
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <SafeAreaView style={styles.screen} edges={[]}>
         <View style={styles.notFound}>
           <Text style={styles.notFoundText}>할 일을 찾을 수 없습니다</Text>
         </View>
@@ -189,7 +189,7 @@ export const TodoDetailScreen = () => {
   const isOverdue = isRoot ? getProjectOverdue(allTodos, todo).isOverdue : false;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+    <SafeAreaView style={styles.screen} edges={[]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.badgeRow}>

@@ -38,7 +38,7 @@ export const WeekStrip = ({
 
   return (
     <View style={styles.container}>
-      <Pressable onPress={onShiftLeft} accessibilityRole="button" accessibilityLabel="이전 날짜" hitSlop={8}>
+      <Pressable onPress={onShiftLeft} accessibilityRole="button" accessibilityLabel="이전 날짜" hitSlop={13}>
         <ChevronLeft size={18} color={colors.text.secondary} />
       </Pressable>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -69,7 +69,7 @@ export const WeekStrip = ({
           );
         })}
       </ScrollView>
-      <Pressable onPress={onShiftRight} accessibilityRole="button" accessibilityLabel="다음 날짜" hitSlop={8}>
+      <Pressable onPress={onShiftRight} accessibilityRole="button" accessibilityLabel="다음 날짜" hitSlop={13}>
         <ChevronRight size={18} color={colors.text.secondary} />
       </Pressable>
       {!isTodayInStrip && (
@@ -134,6 +134,8 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: "center",
     borderRadius: radius.md,
     backgroundColor: colors.brand.tint,
   },

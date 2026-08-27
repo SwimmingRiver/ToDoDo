@@ -48,7 +48,7 @@ export const TodayScreen = () => {
   const hasTodos = inProgressTodos.length > 0 || doneTodos.length > 0;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+    <SafeAreaView style={styles.screen} edges={[]}>
       <WeekStrip
         selectedDate={selectedDate}
         windowStart={windowStart}

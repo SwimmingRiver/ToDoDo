@@ -19,7 +19,7 @@ export const Checkbox = ({ checked, onPress, accessibilityLabel, testID }: Check
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       accessibilityLabel={accessibilityLabel}
-      hitSlop={8}
+      hitSlop={11}
       style={[styles.base, checked && styles.checked]}
     >
       {checked && <Check size={14} color={colors.background.primary} />}

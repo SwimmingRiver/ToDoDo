@@ -12,7 +12,7 @@ jest.mock("../../hooks/useTodos", () => ({
 }));
 
 const mockGoBack = jest.fn();
-let mockRouteParams: { parentId?: string } | undefined = undefined;
+let mockRouteParams: { parentId?: string; dueAt?: string } | undefined = undefined;
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ goBack: mockGoBack }),
   useRoute: () => ({ params: mockRouteParams }),
@@ -115,6 +115,27 @@ describe("TodoFormScreen", () => {
 
     expect(mockMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ parentId: "root-1" }),
+    );
+  });
+
+  it("route.params.dueAt이 있으면 그 값을 dueAt으로 채워 생성 요청을 보낸다", async () => {
+    mockRouteParams = { dueAt: "2026-06-18T00:00:00.000Z" };
+
+    const { TodoFormScreen } = await import("../TodoFormScreen");
+    await render(<TodoFormScreen />);
+
+    // dueAt이 프리필되면 "더보기"를 누르지 않아도 날짜 필드가 바로 보여야 한다.
+    expect(screen.getByText("만료일시")).toBeTruthy();
+
+    fireEvent.changeText(screen.getByPlaceholderText("할 일 제목"), "프리필 할 일");
+    await screen.findByDisplayValue("프리필 할 일");
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("추가"));
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ dueAt: "2026-06-18T00:00:00.000Z" }),
     );
   });
 });
