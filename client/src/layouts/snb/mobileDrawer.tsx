@@ -6,7 +6,7 @@ import {
   Kanban,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
-import FeedbackButton from "@/features/feedback/components/feedbackButton";
+import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 import {
   Overlay,
   DrawerContainer,
@@ -14,8 +14,6 @@ import {
   UserImage,
   UserInfo,
   UserName,
-  UserActions,
-  LogoutButton,
   NavList,
   NavNavLink,
 } from "./mobileDrawer.styles";
@@ -33,7 +31,7 @@ const NAV_ITEMS = [
 
 const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
   const [isClosing, setIsClosing] = useState(false);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
@@ -57,14 +55,12 @@ const MobileDrawer = ({ isOpen, onClose }: MobileDrawerProps) => {
       <Overlay $isClosing={isClosing} onClick={handleClose} />
       <DrawerContainer $isClosing={isClosing}>
         <UserSection>
-          <UserImage src={user?.photoURL || ""} alt="user" />
-          <UserInfo>
-            <UserName>{user?.displayName}</UserName>
-            <UserActions>
-              <FeedbackButton />
-              <LogoutButton onClick={logout}>로그아웃</LogoutButton>
-            </UserActions>
-          </UserInfo>
+          <ProfileMenu>
+            <UserImage src={user?.photoURL || ""} alt="user" />
+            <UserInfo>
+              <UserName>{user?.displayName}</UserName>
+            </UserInfo>
+          </ProfileMenu>
         </UserSection>
         <NavList>
           {NAV_ITEMS.map(({ path, icon, label }) => (
