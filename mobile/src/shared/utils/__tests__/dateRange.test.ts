@@ -5,6 +5,7 @@ import {
   toDateKeyFromISO,
   isSameLocalDay,
   getStripDates,
+  getDateKeysInRange,
   isDateInTodoRange,
   getPeriodProgress,
 } from "../dateRange";
@@ -52,6 +53,20 @@ describe("getStripDates", () => {
 
   it("count를 넘기면 그 일수만큼 반환한다", () => {
     expect(getStripDates("2026-06-15", 3)).toHaveLength(3);
+  });
+});
+
+describe("getDateKeysInRange", () => {
+  it("시작~끝 날짜(양 끝 포함)의 yyyy-MM-dd 키 배열을 반환한다", () => {
+    expect(getDateKeysInRange("2026-06-14", "2026-06-16")).toEqual([
+      "2026-06-14",
+      "2026-06-15",
+      "2026-06-16",
+    ]);
+  });
+
+  it("시작과 끝이 같으면 하루짜리 배열을 반환한다", () => {
+    expect(getDateKeysInRange("2026-06-14", "2026-06-14")).toEqual(["2026-06-14"]);
   });
 });
 

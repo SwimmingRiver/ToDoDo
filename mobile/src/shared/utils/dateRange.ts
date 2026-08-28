@@ -36,6 +36,7 @@ export const isSameLocalDay = (a: Date, b: Date): boolean =>
   a.getDate() === b.getDate();
 
 export const STRIP_WINDOW_DAYS = 7;
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 /** startDateKey부터 count일 연속 Date를 반환한다. */
 export const getStripDates = (startDateKey: string, count: number = STRIP_WINDOW_DAYS): Date[] => {
@@ -44,6 +45,18 @@ export const getStripDates = (startDateKey: string, count: number = STRIP_WINDOW
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     return d;
+  });
+};
+
+/** startKey부터 endKey까지(양 끝 포함, 로컬 "yyyy-MM-dd") 날짜 키 배열을 반환한다. */
+export const getDateKeysInRange = (startKey: string, endKey: string): string[] => {
+  const start = parseLocalDateOnly(startKey);
+  const end = parseLocalDateOnly(endKey);
+  const dayCount = Math.round((end.getTime() - start.getTime()) / MS_PER_DAY) + 1;
+  return Array.from({ length: Math.max(dayCount, 0) }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return toDateKey(d);
   });
 };
 
@@ -71,8 +84,6 @@ export interface PeriodProgress {
   /** startAt~dueAt 총 일수(양 끝 포함) */
   totalDays: number;
 }
-
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 /** fromKey부터 toKey까지 며칠째인지(양 끝 포함, fromKey === toKey면 1) 계산한다. */
 function diffDaysInclusive(fromKey: string, toKey: string): number {
