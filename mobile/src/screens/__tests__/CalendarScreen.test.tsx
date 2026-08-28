@@ -23,6 +23,9 @@ jest.mock("react-native-calendars", () => {
         <Text>20</Text>
       </Pressable>
     ),
+    // CalendarScreen.tsx가 모듈 스코프에서 LocaleConfig.locales.ko를 등록하므로,
+    // 이 mock도 실제 라이브러리와 같은 모양(locales 객체)을 제공해야 한다.
+    LocaleConfig: { locales: {}, defaultLocale: "en" },
   };
 });
 

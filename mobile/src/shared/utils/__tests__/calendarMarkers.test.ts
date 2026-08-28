@@ -44,7 +44,9 @@ describe("buildCalendarMarkedDates", () => {
     const todos = [makeTodo({ dueAt: localISO(2026, 6, 20), status: "doing" })];
     const marked = buildCalendarMarkedDates(todos);
     expect(Object.keys(marked)).toEqual(["2026-06-20"]);
-    expect(marked["2026-06-20"].dots).toEqual([{ key: "doing", color: statusColors.doing.main }]);
+    expect(marked["2026-06-20"].dots).toEqual([
+      { key: "doing", color: statusColors.doing.main, selectedDotColor: colors.background.primary },
+    ]);
   });
 
   it("startAt~dueAt 구간의 모든 날짜에 점을 남긴다", () => {
@@ -53,7 +55,9 @@ describe("buildCalendarMarkedDates", () => {
     ];
     const marked = buildCalendarMarkedDates(todos);
     expect(Object.keys(marked).sort()).toEqual(["2026-06-20", "2026-06-21", "2026-06-22"]);
-    expect(marked["2026-06-21"].dots).toEqual([{ key: "doing", color: statusColors.doing.main }]);
+    expect(marked["2026-06-21"].dots).toEqual([
+      { key: "doing", color: statusColors.doing.main, selectedDotColor: colors.background.primary },
+    ]);
   });
 
   it("마감이 지난(overdue) 항목이 있으면 그 날짜는 danger 점 하나만 표시한다(다른 상태 무시)", () => {
@@ -64,7 +68,25 @@ describe("buildCalendarMarkedDates", () => {
       makeTodo({ id: "period", startAt: localISO(2026, 6, 9), dueAt: localISO(2026, 6, 11), status: "doing" }),
     ];
     const marked = buildCalendarMarkedDates(todos);
-    expect(marked["2026-06-10"].dots).toEqual([{ key: "overdue", color: colors.danger.main }]);
+    expect(marked["2026-06-10"].dots).toEqual([
+      { key: "overdue", color: colors.danger.main, selectedDotColor: colors.background.primary },
+    ]);
+  });
+
+  it("여러 날에 걸친 overdue 항목은 마감일에만 danger를, 그 전 날짜들엔 원래 상태색을 표시한다", () => {
+    const todos = [
+      makeTodo({ startAt: localISO(2026, 6, 8), dueAt: localISO(2026, 6, 10), status: "doing" }),
+    ];
+    const marked = buildCalendarMarkedDates(todos);
+    expect(marked["2026-06-08"].dots).toEqual([
+      { key: "doing", color: statusColors.doing.main, selectedDotColor: colors.background.primary },
+    ]);
+    expect(marked["2026-06-09"].dots).toEqual([
+      { key: "doing", color: statusColors.doing.main, selectedDotColor: colors.background.primary },
+    ]);
+    expect(marked["2026-06-10"].dots).toEqual([
+      { key: "overdue", color: colors.danger.main, selectedDotColor: colors.background.primary },
+    ]);
   });
 
   it("overdue 없이 서로 다른 상태의 항목이 겹치면 상태별 점을 todo→doing 순서로 각각 표시한다", () => {
@@ -74,8 +96,8 @@ describe("buildCalendarMarkedDates", () => {
     ];
     const marked = buildCalendarMarkedDates(todos);
     expect(marked["2026-06-20"].dots).toEqual([
-      { key: "todo", color: statusColors.todo.main },
-      { key: "doing", color: statusColors.doing.main },
+      { key: "todo", color: statusColors.todo.main, selectedDotColor: colors.background.primary },
+      { key: "doing", color: statusColors.doing.main, selectedDotColor: colors.background.primary },
     ]);
   });
 

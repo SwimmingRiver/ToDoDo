@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
   },
   list: {
     maxHeight: 360,
+    flexShrink: 1,
   },
   listContent: {
     paddingHorizontal: spacing.lg,

@@ -7,6 +7,8 @@ import { colors } from "../../theme/colors";
 export interface CalendarDot {
   key: string;
   color: string;
+  /** 선택된 날짜(어두운 브랜드색 배경) 위에서도 점이 보이도록 별도 지정하는 색. */
+  selectedDotColor?: string;
 }
 
 export type CalendarMarkedDates = Record<string, { dots: CalendarDot[]; selected?: boolean }>;
@@ -36,11 +38,16 @@ export function buildCalendarMarkedDates(todos: Todo[]): CalendarMarkedDates {
   for (const todo of todos) {
     if (todo.status === "done") continue;
     const overdue = isTodoOverdue(todo);
-    const colorKey = overdue ? "overdue" : todo.status;
-    const color = overdue ? colors.danger.main : statusColors[todo.status].main;
+    const dueKey = todo.dueAt ? toDateKeyFromISO(todo.dueAt) : null;
 
     for (const dateKey of getTodoDateKeys(todo)) {
       if (!byDate.has(dateKey)) byDate.set(dateKey, new Map());
+      // overdue 색은 이 todo의 마감일 자체에만 칠한다 — startAt~dueAt 구간 전체에
+      // 칠하면 장기간 todo 하나가 캘린더 여러 날을 통째로 danger로 덮어써 다른
+      // todo들의 점을 가려버린다(날짜별 우선순위 결정 로직은 아래에서 그대로 유지).
+      const isOverdueDay = overdue && dateKey === dueKey;
+      const colorKey = isOverdueDay ? "overdue" : todo.status;
+      const color = isOverdueDay ? colors.danger.main : statusColors[todo.status].main;
       byDate.get(dateKey)!.set(colorKey, color);
     }
   }
@@ -48,12 +55,21 @@ export function buildCalendarMarkedDates(todos: Todo[]): CalendarMarkedDates {
   const result: CalendarMarkedDates = {};
   for (const [dateKey, colorMap] of byDate) {
     if (colorMap.has("overdue")) {
-      result[dateKey] = { dots: [{ key: "overdue", color: colorMap.get("overdue")! }] };
+      result[dateKey] = {
+        dots: [
+          {
+            key: "overdue",
+            color: colorMap.get("overdue")!,
+            selectedDotColor: colors.background.primary,
+          },
+        ],
+      };
       continue;
     }
     const dots = DOT_ORDER.filter((key) => colorMap.has(key)).map((key) => ({
       key,
       color: colorMap.get(key)!,
+      selectedDotColor: colors.background.primary,
     }));
     result[dateKey] = { dots };
   }

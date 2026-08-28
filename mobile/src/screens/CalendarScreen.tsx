@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Calendar, type DateData } from "react-native-calendars";
+import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
 import { AlertCircle } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
 import type { CalendarStackParamList } from "../navigation/types";
@@ -15,6 +15,17 @@ import { formatTodayLabel } from "../shared/utils/formatToday";
 import { parseLocalDateOnly } from "../shared/utils/dateRange";
 import type { CalendarMarkedDates } from "../shared/utils/calendarMarkers";
 import { colors } from "../theme/colors";
+
+// react-native-calendars는 LocaleConfig 등록이 없으면 XDate의 영어 로케일로
+// 월/요일명을 그린다 — 앱 전체가 한국어이므로 모듈 로드 시 한 번 등록한다.
+LocaleConfig.locales.ko = {
+  monthNames: ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"],
+  monthNamesShort: ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"],
+  dayNames: ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"],
+  dayNamesShort: ["일", "월", "화", "수", "목", "금", "토"],
+  today: "오늘",
+};
+LocaleConfig.defaultLocale = "ko";
 
 const CALENDAR_THEME = {
   todayTextColor: colors.brand.strong,
@@ -37,6 +48,10 @@ export const CalendarScreen = () => {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<CalendarStackParamList>>();
   const { markedDates, isLoading, isError, getTodosForDate, toggleDone } = useCalendarTodos();
+  const markedDatesWithSelection = useMemo(
+    () => withSelection(markedDates, selectedDate),
+    [markedDates, selectedDate],
+  );
 
   const handleDayPress = (day: DateData) => {
     // day.dateString은 react-native-calendars가 이미 로컬 캘린더 날짜 기준
@@ -81,7 +96,7 @@ export const CalendarScreen = () => {
     <SafeAreaView style={styles.screen} edges={[]}>
       <Calendar
         markingType="multi-dot"
-        markedDates={withSelection(markedDates, selectedDate)}
+        markedDates={markedDatesWithSelection}
         onDayPress={handleDayPress}
         theme={CALENDAR_THEME}
       />
