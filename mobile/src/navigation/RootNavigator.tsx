@@ -9,7 +9,7 @@ import { TodayScreen } from "../screens/TodayScreen";
 import { TodoListScreen } from "../screens/TodoListScreen";
 import { TodoFormScreen } from "../screens/TodoFormScreen";
 import { TodoDetailScreen } from "../screens/TodoDetailScreen";
-import { CalendarPlaceholderScreen } from "../screens/CalendarPlaceholderScreen";
+import { CalendarScreen } from "../screens/CalendarScreen";
 import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList } from "./types";
 import { colors } from "../theme/colors";
 
@@ -36,7 +36,7 @@ const TodoListTabStack = () => (
 
 const CalendarTabStack = () => (
   <CalendarStack.Navigator>
-    <CalendarStack.Screen name="Calendar" component={CalendarPlaceholderScreen} options={{ title: "캘린더" }} />
+    <CalendarStack.Screen name="Calendar" component={CalendarScreen} options={{ title: "캘린더" }} />
     <CalendarStack.Screen name="TodoForm" component={TodoFormScreen} options={{ title: "할 일 추가" }} />
     <CalendarStack.Screen name="TodoDetail" component={TodoDetailScreen} options={{ title: "할 일 상세" }} />
   </CalendarStack.Navigator>
