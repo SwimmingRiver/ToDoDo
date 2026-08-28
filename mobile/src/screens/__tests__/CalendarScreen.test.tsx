@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
-import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, jest, afterEach } from "@jest/globals";
 import type { Todo } from "@tododo/core";
 
 const mockUseCalendarTodos = jest.fn();
@@ -42,13 +42,7 @@ const baseTodo: Todo = {
 };
 
 describe("CalendarScreen", () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date(2026, 5, 15, 12, 0));
-  });
-
   afterEach(() => {
-    jest.useRealTimers();
     jest.clearAllMocks();
   });
 
