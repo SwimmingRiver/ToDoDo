@@ -24,6 +24,8 @@ vi.mock("../../api", () => ({
   disconnectCalendar: vi.fn(),
 }));
 
+// queryClient를 함께 반환한다 — 테스트가 invalidateQueries 호출 여부를
+// spyOn으로 검증하려면 훅이 실제로 쓰는 인스턴스를 손에 쥐고 있어야 한다.
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
@@ -31,7 +33,7 @@ const createWrapper = () => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  return Wrapper;
+  return { Wrapper, queryClient };
 };
 
 describe("useCalendarIntegrationStatus", () => {
@@ -43,9 +45,8 @@ describe("useCalendarIntegrationStatus", () => {
     const { getDoc } = await import("firebase/firestore");
     vi.mocked(getDoc).mockResolvedValue({ exists: () => false } as never);
 
-    const { result } = renderHook(() => useCalendarIntegrationStatus(), {
-      wrapper: createWrapper(),
-    });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useCalendarIntegrationStatus(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ connected: false, status: "active" });
@@ -58,9 +59,8 @@ describe("useCalendarIntegrationStatus", () => {
       data: () => ({ connected: true, status: "active" }),
     } as never);
 
-    const { result } = renderHook(() => useCalendarIntegrationStatus(), {
-      wrapper: createWrapper(),
-    });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useCalendarIntegrationStatus(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ connected: true, status: "active" });
@@ -87,12 +87,14 @@ describe("useConnectCalendar", () => {
 });
 
 describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
-  it("disconnect는 api를 호출하고 Firestore 상태를 갱신한다", async () => {
+  it("disconnect는 api를 호출하고 Firestore 상태를 갱신한 뒤 연동 상태 쿼리를 무효화한다", async () => {
     const { disconnectCalendar } = await import("../../api");
     const { setDoc } = await import("firebase/firestore");
     vi.mocked(disconnectCalendar).mockResolvedValue(undefined);
 
-    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: createWrapper() });
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
     await result.current.disconnect(["event-1"]);
 
     expect(vi.mocked(disconnectCalendar)).toHaveBeenCalledWith(["event-1"]);
@@ -101,18 +103,26 @@ describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
       { connected: false, status: "active" },
       { merge: true },
     );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] });
   });
 
-  it("markConnected는 Firestore에 connected: true를 기록한다", async () => {
+  it("markConnected는 Firestore에 connected: true와 connectedAt을 기록하고 연동 상태 쿼리를 무효화한다", async () => {
     const { setDoc } = await import("firebase/firestore");
 
-    const { result } = renderHook(() => useMarkCalendarConnected(), { wrapper: createWrapper() });
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useMarkCalendarConnected(), { wrapper: Wrapper });
     await result.current.markConnected();
 
     expect(vi.mocked(setDoc)).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ connected: true, status: "active" }),
+      {
+        connected: true,
+        connectedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/),
+        status: "active",
+      },
       { merge: true },
     );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] });
   });
 });
