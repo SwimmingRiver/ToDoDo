@@ -4,3 +4,4 @@ export {
   useDisconnectCalendar,
   useMarkCalendarConnected,
 } from "./useCalendarIntegration";
+export { useSyncTodosToCalendar } from "./useSyncTodosToCalendar";
