@@ -76,6 +76,42 @@ describe("handleDisconnect", () => {
     expect(response.status).toBe(200);
   });
 
+  it("요청 바디가 비어 있거나 잘못된 JSON이어도 토큰은 반드시 지운다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
+    const { refreshAccessToken } = await import("../googleOAuth");
+    const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
+
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
+    vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
+    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([]);
+
+    const emptyBodyRequest = new Request("https://proxy.example.com/disconnect", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const response = await handleDisconnect(emptyBodyRequest, makeEnv());
+
+    expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(vi.mocked(syncTodosToGoogleCalendar)).toHaveBeenCalledWith([], "at");
+    const body = (await response.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  });
+
+  it("Authorization 헤더가 없으면 401을 반환하고 아무 것도 호출하지 않는다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    const { getTokenRecord } = await import("../tokenStore");
+
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("Invalid token"));
+
+    const request = new Request("https://proxy.example.com/disconnect", { method: "POST" });
+    const response = await handleDisconnect(request, makeEnv());
+
+    expect(response.status).toBe(401);
+    expect(vi.mocked(getTokenRecord)).not.toHaveBeenCalled();
+  });
+
   it("이미 연동 안 된 사용자면 바로 성공을 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord } = await import("../tokenStore");
