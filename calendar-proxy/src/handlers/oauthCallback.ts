@@ -1,13 +1,21 @@
 import type { Env } from "../env";
 import { exchangeCodeForTokens } from "../googleOAuth";
-import { setTokenRecord } from "../tokenStore";
+import { setTokenRecord, consumeOAuthState } from "../tokenStore";
 
 export const handleOAuthCallback = async (request: Request, env: Env): Promise<Response> => {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const uid = url.searchParams.get("state");
+  const state = url.searchParams.get("state");
 
-  if (!code || !uid) {
+  if (!code || !state) {
+    return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
+  }
+
+  // state는 /oauth/start가 발급한 1회용 토큰이다 — 여기서 실제 uid로 교환하고
+  // 즉시 소비한다. uid 자체를 state로 왕복시키면 Authorization 헤더가 없는 이
+  // 엔드포인트에서 누구든 다른 사용자의 uid를 흉내 낼 수 있다.
+  const uid = await consumeOAuthState(env.CALENDAR_TOKENS, state);
+  if (!uid) {
     return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
   }
 
