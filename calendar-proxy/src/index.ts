@@ -2,6 +2,7 @@ import type { Env } from "./env";
 import { handleOAuthStart } from "./handlers/oauthStart";
 import { handleOAuthCallback } from "./handlers/oauthCallback";
 import { handleSyncTodos } from "./handlers/syncTodos";
+import { handleGetEvents } from "./handlers/events";
 
 const ALLOWED_ORIGIN = "https://tododo-83576.web.app";
 
@@ -30,6 +31,9 @@ export default {
     }
     if (url.pathname === "/sync-todos" && request.method === "POST") {
       return withCors(await handleSyncTodos(request, env));
+    }
+    if (url.pathname === "/events" && request.method === "GET") {
+      return withCors(await handleGetEvents(request, env));
     }
 
     return withCors(new Response("Not Found", { status: 404 }));
