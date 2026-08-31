@@ -13,6 +13,7 @@ const {
   syncTodosToCalendar,
   getGoogleCalendarEvents,
   disconnectCalendar,
+  CalendarRevokedError,
 } = await import("../calendarProxyApi");
 
 describe("calendarProxyApi", () => {
@@ -64,6 +65,30 @@ describe("calendarProxyApi", () => {
 
   it("응답이 실패하면 에러를 던진다", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(syncTodosToCalendar([])).rejects.toThrow("동기화 실패");
+  });
+
+  it("401 응답이 {error: revoked}이면 CalendarRevokedError를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "revoked" }),
+      }),
+    );
+    await expect(syncTodosToCalendar([])).rejects.toThrow(CalendarRevokedError);
+  });
+
+  it("401 응답이어도 revoked가 아니면 일반 에러를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      }),
+    );
     await expect(syncTodosToCalendar([])).rejects.toThrow("동기화 실패");
   });
 

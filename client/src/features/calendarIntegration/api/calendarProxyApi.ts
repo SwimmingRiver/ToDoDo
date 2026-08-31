@@ -40,6 +40,17 @@ export interface SyncTodoResult {
   error?: string;
 }
 
+/** Worker가 리프레시 토큰 철회(invalid_grant)를 감지하면 401 `{error:"revoked"}`를
+ *  반환한다(Task 6). 일반 401(잘못된 ID Token)과 구분해야 호출부가 "다시
+ *  연결해주세요" 상태로 전환할지 판단할 수 있으므로, 이 경우만 별도 에러
+ *  타입으로 구분해서 던진다. */
+export class CalendarRevokedError extends Error {
+  constructor() {
+    super("구글 캘린더 연동이 해제되었습니다");
+    this.name = "CalendarRevokedError";
+  }
+}
+
 export const syncTodosToCalendar = async (
   todos: SyncTodoPayload[],
 ): Promise<SyncTodoResult[]> => {
@@ -48,6 +59,11 @@ export const syncTodosToCalendar = async (
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ todos }),
   });
+  if (res.status === 401) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === "revoked") throw new CalendarRevokedError();
+    throw new Error(`동기화 실패: ${res.status}`);
+  }
   if (!res.ok) throw new Error(`동기화 실패: ${res.status}`);
   const data = (await res.json()) as { results: SyncTodoResult[] };
   return data.results;

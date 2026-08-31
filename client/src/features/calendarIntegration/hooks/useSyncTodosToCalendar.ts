@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { doc, writeBatch } from "firebase/firestore";
+import * as Sentry from "@sentry/react";
+import { doc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/shared/lib/firestore";
+import { auth } from "@/shared/lib/firebase";
 import { useGetTodos } from "@/features/todo";
 import type { Todo } from "@/features/todo";
 import { toDateKeyFromISO } from "@/shared/utils/date";
-import { syncTodosToCalendar, type SyncTodoPayload } from "../api";
+import { syncTodosToCalendar, CalendarRevokedError, type SyncTodoPayload } from "../api";
 import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
 
 interface SyncedSnapshotEntry {
@@ -21,14 +23,22 @@ export const useSyncTodosToCalendar = (): void => {
   const queryClient = useQueryClient();
   const snapshotRef = useRef<Map<string, SyncedSnapshotEntry>>(new Map());
   const isRunningRef = useRef(false);
+  const pendingRerunRef = useRef(false);
+  // 진행 중인 동기화가 끝난 뒤 최신 todos로 다시 돌기 위한 트리거.
+  // deps에 이 값을 넣어 이펙트를 강제로 재실행시킨다(값 자체는 쓰지 않는다).
+  const [runToken, setRunToken] = useState(0);
 
   useEffect(() => {
     if (!integration?.connected || integration.status === "revoked") return;
     if (!todos) return;
-    if (isRunningRef.current) return;
+    if (isRunningRef.current) {
+      pendingRerunRef.current = true;
+      return;
+    }
 
     const snapshot = snapshotRef.current;
     const eligible = todos.filter(isSyncEligible);
+    const eligibleById = new Map(eligible.map((t) => [t.id, t]));
     const eligibleIds = new Set(eligible.map((t) => t.id));
 
     const upserts: SyncTodoPayload[] = eligible
@@ -57,13 +67,15 @@ export const useSyncTodosToCalendar = (): void => {
     if (batch.length === 0) return;
 
     isRunningRef.current = true;
-    let cancelled = false;
 
     (async () => {
       try {
         const results = await syncTodosToCalendar(batch);
-        if (cancelled) return;
 
+        // 여기서부터는 이펙트가 재실행/언마운트됐어도 절대 건너뛰지 않는다 —
+        // 구글에는 이미 이벤트가 만들어졌으므로, 그 결과를 스냅샷/Firestore에
+        // 반영하지 않으면 다음 실행이 googleEventId를 몰라 중복 이벤트를
+        // 만든다.
         const firestoreBatch = writeBatch(db);
         let hasWrites = false;
 
@@ -74,7 +86,7 @@ export const useSyncTodosToCalendar = (): void => {
             console.error(`캘린더 동기화 실패 (todo ${id}):`, error);
             return;
           }
-          const todo = eligible.find((t) => t.id === id);
+          const todo = eligibleById.get(id);
           if (todo) {
             snapshot.set(id, { updatedAt: todo.updatedAt, googleEventId });
             if (todo.googleEventId !== googleEventId) {
@@ -82,7 +94,16 @@ export const useSyncTodosToCalendar = (): void => {
               hasWrites = true;
             }
           } else {
+            // 삭제 성공. 스냅샷에서는 지우되, Todo 문서 자체가 아직 존재한다면
+            // (archived·dueAt 제거로 대상에서만 빠진 경우) googleEventId도
+            // 같이 지운다 — 안 지우면 나중에 다시 대상이 됐을 때 이미 삭제된
+            // 이벤트 id로 PATCH를 시도해 404로 계속 실패하고, 실패한 항목은
+            // 스냅샷이 갱신되지 않으니 영원히 같은 오류가 반복된다.
             snapshot.delete(id);
+            if (todos.some((t) => t.id === id)) {
+              firestoreBatch.update(doc(db, "todos", id), { googleEventId: null });
+              hasWrites = true;
+            }
           }
         });
 
@@ -91,14 +112,23 @@ export const useSyncTodosToCalendar = (): void => {
           queryClient.invalidateQueries({ queryKey: ["todos"] });
         }
       } catch (error) {
-        console.error("캘린더 동기화 실패:", error);
+        if (error instanceof CalendarRevokedError) {
+          const uid = auth.currentUser?.uid;
+          if (uid) {
+            await setDoc(doc(db, "calendarIntegrations", uid), { status: "revoked" }, { merge: true });
+            queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
+          }
+        } else {
+          console.error("캘린더 동기화 실패:", error);
+          Sentry.captureException(error);
+        }
       } finally {
         isRunningRef.current = false;
+        if (pendingRerunRef.current) {
+          pendingRerunRef.current = false;
+          setRunToken((n) => n + 1);
+        }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [todos, integration, queryClient]);
+  }, [todos, integration, queryClient, runToken]);
 };
