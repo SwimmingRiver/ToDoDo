@@ -72,4 +72,28 @@ describe("CalendarConnectionButton", () => {
     render(<CalendarConnectionButton />, { wrapper: createWrapper() });
     expect(screen.getByText(/다시 연결해주세요/)).toBeInTheDocument();
   });
+
+  it("연동 해제 버튼을 클릭하면 googleEventId가 있는 Todo만 골라 disconnect가 호출된다", async () => {
+    const { useCalendarIntegrationStatus, useDisconnectCalendar } = await import("../../hooks");
+    const { useGetTodos } = await import("@/features/todo");
+    const disconnect = vi.fn();
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect });
+    vi.mocked(useGetTodos).mockReturnValue({
+      data: [
+        { id: "todo-1", googleEventId: "event-1" },
+        { id: "todo-2", googleEventId: null },
+        { id: "todo-3", googleEventId: "event-3" },
+      ],
+    } as never);
+
+    render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+    fireEvent.click(screen.getByText("연동 해제"));
+
+    await waitFor(() => {
+      expect(disconnect).toHaveBeenCalledWith(["event-1", "event-3"]);
+    });
+  });
 });
