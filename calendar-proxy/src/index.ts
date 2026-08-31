@@ -3,6 +3,7 @@ import { handleOAuthStart } from "./handlers/oauthStart";
 import { handleOAuthCallback } from "./handlers/oauthCallback";
 import { handleSyncTodos } from "./handlers/syncTodos";
 import { handleGetEvents } from "./handlers/events";
+import { handleDisconnect } from "./handlers/disconnect";
 
 const ALLOWED_ORIGIN = "https://tododo-83576.web.app";
 
@@ -34,6 +35,9 @@ export default {
     }
     if (url.pathname === "/events" && request.method === "GET") {
       return withCors(await handleGetEvents(request, env));
+    }
+    if (url.pathname === "/disconnect" && request.method === "POST") {
+      return withCors(await handleDisconnect(request, env));
     }
 
     return withCors(new Response("Not Found", { status: 404 }));
