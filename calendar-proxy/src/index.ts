@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 import { handleOAuthStart } from "./handlers/oauthStart";
 import { handleOAuthCallback } from "./handlers/oauthCallback";
+import { handleSyncTodos } from "./handlers/syncTodos";
 
 const ALLOWED_ORIGIN = "https://tododo-83576.web.app";
 
@@ -26,6 +27,9 @@ export default {
     if (url.pathname === "/oauth/callback" && request.method === "GET") {
       // 구글 리다이렉트가 직접 호출하는 풀 페이지 네비게이션이라 CORS 불필요
       return handleOAuthCallback(request, env);
+    }
+    if (url.pathname === "/sync-todos" && request.method === "POST") {
+      return withCors(await handleSyncTodos(request, env));
     }
 
     return withCors(new Response("Not Found", { status: 404 }));
