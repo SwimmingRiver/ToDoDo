@@ -12,6 +12,13 @@ vi.mock('@/shared/lib/firestore', () => ({
   db: {},
 }))
 
+vi.mock("@/features/calendarIntegration/components/calendarConnectionButton", () => ({
+  default: () => null,
+}));
+vi.mock("@/features/calendarIntegration/hooks", () => ({
+  useMarkCalendarConnected: () => ({ markConnected: vi.fn() }),
+}));
+
 const { mockTodos } = vi.hoisted(() => {
   const d = new Date()
   const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(

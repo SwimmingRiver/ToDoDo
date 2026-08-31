@@ -2,7 +2,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGetTodos, useUpdateTodoDueAt, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
 import type { EventInput, EventClickArg, EventContentArg, MoreLinkArg } from "@fullcalendar/core/index.js";
@@ -31,6 +31,8 @@ import { isOverdue, getDropDates } from "../utils/calendarUtils";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
 import { toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 import { isDateInTodoRange } from "@/shared/utils/dateRange";
+import CalendarConnectionButton from "@/features/calendarIntegration/components/calendarConnectionButton";
+import { useMarkCalendarConnected } from "@/features/calendarIntegration/hooks";
 
 const statusLabels: Record<Status, string> = {
   todo: "할 일",
@@ -49,6 +51,27 @@ const Calendar = () => {
   const [calendarView, setCalendarView] = useState<"dayGridMonth" | "dayGridWeek">("dayGridMonth");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { markConnected } = useMarkCalendarConnected();
+
+  useEffect(() => {
+    if (searchParams.get("calendarConnected") === "1") {
+      markConnected();
+      toast.success("연동 완료", "구글 캘린더 연동이 완료됐습니다");
+      setSearchParams((prev) => {
+        prev.delete("calendarConnected");
+        return prev;
+      });
+    }
+    if (searchParams.get("calendarError") === "1") {
+      toast.error("연동 실패", "구글 캘린더 연동 중 오류가 발생했습니다");
+      setSearchParams((prev) => {
+        prev.delete("calendarError");
+        return prev;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const events = useMemo(() => {
     return todos
@@ -230,6 +253,7 @@ const Calendar = () => {
           >
             주간
           </ViewButton>
+          <CalendarConnectionButton />
         </ViewToggleRow>
         <FullCalendar
           ref={calendarRef}
