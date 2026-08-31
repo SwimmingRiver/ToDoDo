@@ -44,6 +44,9 @@ interface Todo {
    *  렌더링된다. 기존 문서엔 필드가 없을 수 있어 optional — 없으면 archived 아닌 것으로
    *  취급한다. */
   overdueArchived?: boolean;
+  /** 구글 캘린더에 매핑된 이벤트 ID. 연동 안 됐거나 아직 동기화 전이면 없음(optional).
+   *  useSyncTodosToCalendar가 /sync-todos 응답을 받아 기록한다. */
+  googleEventId?: string | null;
 }
 
 /** 칸반 같은 컬럼 내 드래그 재정렬 시 bulk write할 order 변경분. */
