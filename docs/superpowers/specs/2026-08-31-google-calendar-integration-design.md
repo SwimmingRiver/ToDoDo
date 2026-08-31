@@ -79,12 +79,12 @@ Workers**(무료 티어, 카드 등록 없이 시작 가능)에 별도로 둔다
                                         │
 클라이언트가 calendarIntegrations
 문서에 connected:true 직접 기록
-클라이언트가 소급 동기화 요청 ────▶ POST /sync-backfill ───────────▶ 이벤트 일괄 생성
-                                  (Authorization: Bearer <Firebase   (Batch API)
-                                   ID Token>, Todo 목록 포함)
-
-Firestore에 Todo 저장 성공 ──────▶ POST /sync-todo ───────────────▶ 이벤트 생성/수정/삭제
-  (client-direct, 그 직후 호출)   (Authorization: Bearer <ID Token>)
+                                        │
+useGetTodos() 결과가 바뀔 때마다 ──────▶ POST /sync-todos ──────────▶ 이벤트 생성/수정/삭제
+(연동 직후 최초 1회 = 소급 동기화     (Authorization: Bearer <ID     (동시 요청 수 제한,
+ 포함, 그 이후는 변경분만) 클라이언트   Token>, Todo 배열 포함)         예: 최대 10개씩 병렬)
+ 가 직전에 동기화한 상태와 diff해서
+ 대상만 골라 보냄 (useSyncTodosToCalendar)
 
 캘린더 화면 진입 ─────────────────▶ GET /events ────────────────────▶ 이벤트 목록 조회
                                   (온디맨드, 저장 안 함)
@@ -130,7 +130,7 @@ googleCalendarId }`. Firestore에도 브라우저에도 절대 노출되지 않�
 | `googleEventId` | string \| null (optional) | 매핑된 구글 이벤트 ID. 없으면 미동기화 상태. 기존 문서엔 필드가 없을 수 있어 optional. |
 
 `client/src/features/todo/types/todo.type.ts`의 `Todo` 인터페이스에 반영한다.
-이 필드는 `/sync-todo` 응답을 받은 클라이언트가 Firestore에 기록한다.
+이 필드는 `/sync-todos` 응답을 받은 클라이언트가 Firestore에 기록한다.
 
 ### 보안 규칙 (`firestore.rules`)
 
@@ -157,21 +157,37 @@ match /calendarIntegrations/{userId} {
 따라 **각 인스턴스를 구글에 개별 이벤트로 매핑**한다. 구글 RRULE로 변환하는
 방식은 채택하지 않는다 — ToDoDo의 반복 규칙과 RRULE 문법이 달라 변환 로직이
 필요하고, 규칙이 바뀔 때마다 구글 쪽도 재계산해야 해서 스코프가 커진다.
-대신 **API 호출 비용은 구글 캘린더 Batch API로 줄인다** — 소급 동기화나 반복
-호라이즌 연장으로 여러 인스턴스가 한꺼번에 생성될 때, 인스턴스 수만큼 개별
-요청을 보내지 않고 클라이언트가 하나의 `/sync-todo` 배치 호출로 묶어 보낸다.
+대신 **API 호출 비용은 동시 요청 수 제한으로 줄인다** — 소급 동기화나 반복
+호라이즌 연장으로 여러 인스턴스가 한꺼번에 생성될 때, 인스턴스 수만큼
+순차적으로 보내지 않고 클라이언트가 하나의 `/sync-todos` 배치 호출로 묶어
+보내면 Worker가 동시 요청 수를 제한(예: 최대 10개씩)하며 병렬로 처리한다.
 데이터 모델(개별 이벤트)은 그대로 유지하면서 레이트 리밋 부담만 줄이는
 절충안이다.
 
-**소급 동기화**: 연동을 처음 켜는 시점에, 그 순간 "동기화 대상 범위" 기준을
-만족하는 기존 Todo 전체를 클라이언트가 모아 `/sync-backfill`로 한 번에
-보낸다. Worker가 Batch API로 구글에 반영한다.
+원래는 구글 캘린더 Batch API(multipart/mixed 요청 하나로 묶기)를 검토했으나,
+구현 계획 단계에서 재검토해 제외했다 — 수동 multipart 파싱의 구현 복잡도와
+구글의 batch 엔드포인트 지원 지속 여부 불확실성 대비, 동시 요청 수 제한은
+구현이 훨씬 단순하면서도 이 앱 규모(개인용, 수십~수백 건)에서는 체감 효과가
+거의 같다. 아래 표의 엔드포인트도 이 판단에 맞춰 `/sync-todo`와
+`/sync-backfill`을 `/sync-todos`(배열을 받는 단일 엔드포인트) 하나로
+합쳤다 — 둘 다 로직이 사실상 동일해 분리할 이유가 없었다.
 
-**생명주기**:
-- Todo의 `dueAt` 변경/삭제 → 클라이언트가 Firestore 쓰기 성공 직후
-  `/sync-todo`를 호출해 매핑된 구글 이벤트를 수정/삭제
-- 반복 시리즈 규칙 변경 → 기존 재생성 로직에 따라 새로 생성되는 인스턴스만큼
-  클라이언트가 `/sync-todo`를 호출 (별도 로직 불필요, 자연히 따라감)
+**소급 동기화**: 연동을 처음 켜는 시점에, 그 순간 "동기화 대상 범위" 기준을
+만족하는 기존 Todo 전체를 클라이언트가 모아 `/sync-todos`로 한 번에 보낸다.
+
+**생명주기**: 개별 쓰기 시점마다 호출을 걸지 않고, `useSyncTodosToCalendar`
+훅 하나가 `useGetTodos()` 결과가 바뀔 때마다 반응해서 처리한다(아래 "클라이언트
+구조" 참고). 이 훅이 "동기화 대상 범위"에 해당하는 Todo 목록과, 이 세션에서
+마지막으로 성공 동기화한 `updatedAt` 스냅샷을 비교해 diff를 계산한다:
+- 새로 대상에 들어온 Todo(생성, 또는 `dueAt`이 새로 채워짐) → `/sync-todos`에
+  `action: "upsert"`로 포함
+- 대상에 남아있지만 `updatedAt`이 바뀐 Todo(제목/마감일 변경 등) →
+  동일하게 `action: "upsert"`로 포함 (Worker는 `googleEventId` 존재 여부로
+  생성/수정을 알아서 분기)
+- 대상에서 빠진 Todo(삭제, `dueAt` 제거, 아카이브) → 직전 스냅샷에 있던
+  `googleEventId`를 `action: "delete"`로 포함
+- 반복 시리즈 규칙 변경 → 기존 재생성 로직(문서 삭제 후 재생성)이 만들어내는
+  변화도 위 diff에 자연히 잡힌다. 별도 로직 불필요.
 - 연동 해제 → `/disconnect` 호출로 매핑된 구글 이벤트를 **일괄 삭제**한다.
   사용자가 해제 후에는 ToDoDo가 더 이상 이벤트를 갱신할 방법이 없어, 남겨두면
   영원히 갱신 안 되는 죽은 데이터가 되기 때문이다. 알려진 한계: 사용자가
@@ -201,10 +217,9 @@ scope)"로 분류한다. 테스트 사용자 범위를 벗어나 일반 사용�
 | --- | --- | --- |
 | `GET /oauth/start` | Firebase ID Token | OAuth 동의 URL 생성, `state`에 uid 포함 |
 | `GET /oauth/callback` | OAuth `state`로 uid 확인 | 인가 코드 → 토큰 교환, refresh token을 KV에 저장, 클라이언트로 리다이렉트 |
-| `POST /sync-backfill` | Firebase ID Token | 소급 동기화 대상 Todo 목록을 받아 Batch API로 이벤트 일괄 생성 |
-| `POST /sync-todo` | Firebase ID Token | 단일(또는 여러) Todo 변경분을 받아 이벤트 생성/수정/삭제 |
+| `POST /sync-todos` | Firebase ID Token | Todo 배열(각각 `action: "upsert" \| "delete"`)을 받아 이벤트 생성/수정/삭제. 동시 요청 수를 제한(예: 최대 10개씩)하며 병렬 처리. 소급 동기화와 평소 변경 동기화가 이 엔드포인트 하나를 공유한다 |
 | `GET /events` | Firebase ID Token | 온디맨드 구글 이벤트 조회 (저장 안 함) |
-| `POST /disconnect` | Firebase ID Token | 매핑된 이벤트 일괄 삭제(Batch API), KV에서 토큰 삭제 |
+| `POST /disconnect` | Firebase ID Token | 매핑된 이벤트 일괄 삭제(동시 요청 수 제한), KV에서 토큰 삭제 |
 
 ## 클라이언트 구조
 
@@ -217,9 +232,21 @@ scope)"로 분류한다. 테스트 사용자 범위를 벗어나 일반 사용�
   문서 구독), 연결/해제 mutation. 성공 시 Firestore 상태 문서를 직접 갱신.
 - `hooks/useGoogleCalendarEvents.ts`: 캘린더 화면 진입 시 `/events` 호출
   (TanStack Query, 캘린더 화면 마운트/월 이동 시에만 fetch)
-- `hooks/useSyncTodoToCalendar.ts`: 기존 Todo 생성/수정/삭제 mutation 성공
-  콜백에서 `/sync-todo`를 호출하는 얇은 훅. 연동 안 된 사용자는 조기 반환.
-- `components/calendarConnectionButton.tsx`: 연결/해제 버튼 + 상태 표시
+- `hooks/useSyncTodosToCalendar.ts`: `useGetTodos()` 결과를 관찰하는 단일
+  훅. 개별 mutation 호출부(생성/수정/삭제/반복 시리즈 등 8곳)를 일일이 건드리는
+  대신, "동기화 대상 범위" Todo 목록이 바뀔 때마다 이 훅 하나가 반응해서
+  `/sync-todos`를 호출한다 — 모든 mutation이 성공 시 이미 `["todos"]` 쿼리를
+  invalidate하고 있으므로(기존 관례), 그 결과 목록을 지켜보는 것만으로 모든
+  변경 경로를 놓치지 않고 잡아낼 수 있다. 연동 안 된 사용자는 조기 반환.
+  세션 내 마지막 동기화 스냅샷을 `useRef`로 들고 있어, 관련 없는 다른 Todo의
+  변경으로 목록 참조가 바뀌어도 실제로 바뀐 것만 골라 보낸다. 앱 진입 시
+  최초 실행이 곧 소급 동기화이자 재조정(reconciliation)을 겸한다 — 매 세션
+  시작마다 스냅샷이 비어 있는 상태로 시작하므로, 직전 세션에서 호출이
+  실패해 놓친 Todo도 다음 진입 때 다시 대상에 잡힌다.
+  `client/src/App.tsx`에 `useRunStartupMaintenance`와 나란히 마운트한다.
+- `components/calendarConnectionButton.tsx`: 연결/해제 버튼 + 상태 표시.
+  `features/dashboard/components/calendar.tsx`의 뷰 전환 버튼 옆에 배치한다
+  (전역 메뉴가 아니라 캘린더 화면 전용 기능이므로).
 - 기존 `features/dashboard/components/calendar.tsx`에 구글 이벤트를 읽기
   전용 레이어로 오버레이 표시하는 부분만 추가(수정 불가, 별도 스타일로 구분)
 
@@ -240,23 +267,21 @@ const isCalendarIntegrationUnlocked = true;
   Worker가 에러 코드를 반환하고, 클라이언트가 `calendarIntegrations.status`를
   `"revoked"`로 갱신한다. 클라이언트는 이 상태를 보고 "다시 연결해주세요"
   배너를 표시한다.
-- **레이트 리밋**: Batch API로 요청 수를 줄였지만, 그래도 429 응답을 받으면
+- **레이트 리밋**: 동시 요청 수를 제한해뒀지만, 그래도 429 응답을 받으면
   Worker가 지수 백오프로 재시도한다.
-- **`/sync-todo` 호출 유실 대비 재조정**: 클라이언트가 Firestore 쓰기 후
-  `/sync-todo` 호출에 실패하면(네트워크 오류 등) 그 Todo는 동기화가 안 된
-  채로 남는다. 기존 `useRunStartupMaintenance`(앱 진입 시 실행되는 정비
-  스윕)에 훅을 하나 추가한다 — "동기화 대상 범위"에 해당하지만
-  `googleEventId`가 없거나 `updatedAt`이 마지막 동기화 시각보다 최신인 Todo를
-  모아 `/sync-todo`를 재호출한다. 별도 폴링 인프라 없이 기존 진입 스윕
-  패턴을 재사용하는 것이라 스코프가 늘지 않는다.
+- **`/sync-todos` 호출 유실 대비 재조정**: 호출 자체가 네트워크 오류로
+  실패하면 그 배치는 동기화가 안 된 채로 남는다. 별도 재시도 큐를 만들지
+  않는다 — `useSyncTodosToCalendar`가 다음 `todos` 변경(사용자의 다음
+  조작)이나 다음 앱 진입(세션 재시작으로 스냅샷이 초기화됨) 때 같은 Todo를
+  다시 대상으로 잡아 자연히 재시도된다.
 
 ## 테스트
 
-- Worker 유닛 테스트: `Todo` → 구글 `Event` 변환 로직, 배치 청크 분할 로직,
-  ID 토큰 검증 로직, 연동 해제 시 일괄 삭제 로직 (Google API는 mock).
+- Worker 유닛 테스트: `Todo` → 구글 `Event` 변환 로직, 동시 요청 수 제한
+  로직, ID 토큰 검증 로직, 연동 해제 시 일괄 삭제 로직 (Google API는 mock).
 - 클라이언트: `useCalendarIntegration`/`useGoogleCalendarEvents`/
-  `useSyncTodoToCalendar` 훅 유닛 테스트(mock), `calendarConnectionButton`
-  렌더링 테스트, 재조정 스윕이 `googleEventId` 없는 대상만 골라내는지 검증.
+  `useSyncTodosToCalendar` 훅 유닛 테스트(mock), `calendarConnectionButton`
+  렌더링 테스트, diff 로직(생성/수정/삭제 판정)이 정확한지 검증.
 - E2E(Playwright): 이번 범위에서는 제외 — 실제 구글 OAuth 플로우를 테스트
   환경에서 재현하기 어렵다. 기존 관례(`feedback` 기능 스펙)와 동일하게
   판단.
