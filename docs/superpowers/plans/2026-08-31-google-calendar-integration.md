@@ -409,7 +409,9 @@ git commit -m "feat(calendar-proxy): 프로젝트 스캐폴드 + Firebase ID Tok
 
 **Interfaces:**
 - Consumes: 없음 (독립 모듈)
-- Produces: `interface CalendarTokenRecord { refreshToken: string }`, `getTokenRecord(kv, uid): Promise<CalendarTokenRecord | null>`, `setTokenRecord(kv, uid, record): Promise<void>`, `deleteTokenRecord(kv, uid): Promise<void>` — Task 5(콜백), 6(sync), 7(events), 8(disconnect)이 사용.
+- Produces: `interface CalendarTokenRecord { refreshToken: string }`, `getTokenRecord(kv, uid): Promise<CalendarTokenRecord | null>`, `setTokenRecord(kv, uid, record): Promise<void>`, `deleteTokenRecord(kv, uid): Promise<void>`, `createOAuthState(kv, uid): Promise<string>`, `consumeOAuthState(kv, state): Promise<string | null>` — Task 5(콜백), 6(sync), 7(events), 8(disconnect)이 사용. `createOAuthState`/`consumeOAuthState`는 Task 5의 OAuth `state` CSRF 방지용(아래 "왜 state에 uid를 직접 쓰면 안 되는가" 참고).
+
+**왜 state에 uid를 직접 쓰면 안 되는가**: `/oauth/start`가 `state`에 요청자의 uid를 그대로 실어 보내면, `/oauth/callback`은 그 값을 검증 없이 신뢰한다. 그런데 `/oauth/callback`은 구글이 브라우저 리다이렉트로 호출하는 엔드포인트라 Authorization 헤더가 없다 — 즉 **아무나** 자기 구글 계정으로 `/oauth/start`→동의까지 진행해 진짜 `code`를 얻은 뒤, `/oauth/callback?code=<자기 code>&state=<피해자 uid>`를 직접 호출하면 피해자의 KV 토큰 레코드를 공격자의 리프레시 토큰으로 덮어쓸 수 있다. 이후 피해자의 Todo가 공격자의 구글 캘린더로 동기화되는 심각한 정보 유출로 이어진다 — 이 프로젝트가 이미 한 번 겪은 "클라이언트가 제시한 uid를 검증 없이 신뢰"하는 버그 클래스(`firestore-rules-userid-gap`, 커밋 9f659ea)의 재현이다. `createOAuthState`는 `/oauth/start`가 이미 검증한 실제 uid를 서버 쪽(KV)에 짧은 TTL로 보관하고 무작위 토큰을 발급해 그걸 `state`로 내보낸다. `consumeOAuthState`는 `/oauth/callback`에서 그 무작위 토큰으로 원래 uid를 조회하고 즉시 삭제한다(1회용) — 공격자는 애초에 유효한 `state` 토큰 자체를 알아낼 방법이 없다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -426,7 +428,11 @@ class FakeKVNamespace {
     return this.store.get(key) ?? null;
   }
 
-  async put(key: string, value: string): Promise<void> {
+  // 세 번째 인자(TTL 등 옵션)는 실제 Workers KV의 만료 동작을 흉내 내지 않고
+  // 무시한다 — 이 스위트는 "TTL이 실제로 만료되는지"가 아니라 "TTL 옵션과 함께
+  // put이 호출되는지, 1회용 소비가 되는지"만 검증한다(만료 자체는 Cloudflare KV의
+  // 보장이라 유닛 테스트 대상이 아니다).
+  async put(key: string, value: string, _options?: { expirationTtl?: number }): Promise<void> {
     this.store.set(key, value);
   }
 
@@ -467,6 +473,38 @@ describe("tokenStore", () => {
     expect(await getTokenRecord(kv as never, "user-2")).toEqual({ refreshToken: "xyz" });
   });
 });
+
+describe("createOAuthState / consumeOAuthState", () => {
+  let kv: FakeKVNamespace;
+
+  beforeEach(() => {
+    kv = new FakeKVNamespace();
+  });
+
+  it("발급한 state로 원래 uid를 조회할 수 있다", async () => {
+    const state = await createOAuthState(kv as never, "user-1");
+    const uid = await consumeOAuthState(kv as never, state);
+    expect(uid).toBe("user-1");
+  });
+
+  it("한 번 소비한 state는 다시 쓸 수 없다(1회용)", async () => {
+    const state = await createOAuthState(kv as never, "user-1");
+    await consumeOAuthState(kv as never, state);
+    const second = await consumeOAuthState(kv as never, state);
+    expect(second).toBeNull();
+  });
+
+  it("존재하지 않는 state는 null을 반환한다", async () => {
+    const uid = await consumeOAuthState(kv as never, "forged-state-token");
+    expect(uid).toBeNull();
+  });
+
+  it("호출마다 서로 다른 state를 발급한다", async () => {
+    const state1 = await createOAuthState(kv as never, "user-1");
+    const state2 = await createOAuthState(kv as never, "user-1");
+    expect(state1).not.toBe(state2);
+  });
+});
 ```
 
 - [ ] **Step 2: 테스트 실행해서 실패 확인**
@@ -487,6 +525,12 @@ export interface CalendarTokenRecord {
 }
 
 const tokenKey = (uid: string): string => `token:${uid}`;
+const oauthStateKey = (state: string): string => `oauthState:${state}`;
+
+// OAuth state 토큰의 유효 기간. 사용자가 구글 동의 화면에서 시간을 끌어도
+// 충분하도록 10분으로 둔다 — 짧을수록 안전하지만, 너무 짧으면 정상 사용자도
+// 실패한다.
+const OAUTH_STATE_TTL_SECONDS = 600;
 
 export const getTokenRecord = async (
   kv: KVNamespace,
@@ -507,6 +551,30 @@ export const setTokenRecord = async (
 export const deleteTokenRecord = async (kv: KVNamespace, uid: string): Promise<void> => {
   await kv.delete(tokenKey(uid));
 };
+
+/**
+ * OAuth 플로우 시작 시점에 실제로 인증된 uid를 서버 쪽에 짧게 보관하고, 그 uid를
+ * 가리키는 무작위 1회용 토큰을 발급한다. 이 토큰이 `/oauth/start` 응답의 `state`
+ * 파라미터로 나간다 — `/oauth/callback`은 Authorization 헤더가 없는 리다이렉트
+ * 엔드포인트라 uid를 직접 검증할 방법이 없으므로, uid 그 자체가 아니라 이 무작위
+ * 토큰만 왕복시켜야 위조를 막을 수 있다.
+ */
+export const createOAuthState = async (kv: KVNamespace, uid: string): Promise<string> => {
+  const state = crypto.randomUUID();
+  await kv.put(oauthStateKey(state), uid, { expirationTtl: OAUTH_STATE_TTL_SECONDS });
+  return state;
+};
+
+/** state 토큰으로 원래 uid를 조회하고 즉시 삭제한다(재사용 방지). 없거나 이미
+ *  소비됐거나 만료됐으면 null. */
+export const consumeOAuthState = async (
+  kv: KVNamespace,
+  state: string,
+): Promise<string | null> => {
+  const uid = await kv.get(oauthStateKey(state));
+  if (uid) await kv.delete(oauthStateKey(state));
+  return uid;
+};
 ```
 
 - [ ] **Step 4: 테스트 실행해서 통과 확인**
@@ -515,7 +583,7 @@ export const deleteTokenRecord = async (kv: KVNamespace, uid: string): Promise<v
 cd calendar-proxy && npx vitest run src/__tests__/tokenStore.test.ts
 ```
 
-Expected: PASS (4 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: 커밋**
 
@@ -716,7 +784,11 @@ git commit -m "feat(calendar-proxy): 구글 OAuth 토큰 교환/갱신"
 
 **Interfaces:**
 - Consumes: 없음 (accessToken은 호출부가 Task 3으로 미리 발급)
-- Produces: `interface SyncTodoItem { id: string; title: string; dueAt: string; googleEventId: string | null; action: "upsert" | "delete" }`, `interface SyncResult { id: string; googleEventId: string | null }`, `syncTodosToGoogleCalendar(todos: SyncTodoItem[], accessToken: string, concurrency?: number): Promise<SyncResult[]>` — Task 6(sync-todos), 8(disconnect)이 사용.
+- Produces: `interface SyncTodoItem { id: string; title: string; dueAt: string; googleEventId: string | null; action: "upsert" | "delete" }` — **`dueAt`은 ISO 타임스탬프가 아니라 클라이언트가 이미 로컬 타임존 기준으로 계산해 보낸 `"YYYY-MM-DD"` 날짜 키다** (아래 "왜 dueAt이 날짜 키인가" 참고), `interface SyncResult { id: string; googleEventId: string | null; error?: string }` (실패한 항목만 `error`를 채운다), `syncTodosToGoogleCalendar(todos: SyncTodoItem[], accessToken: string, concurrency?: number): Promise<SyncResult[]>` — **개별 항목이 실패해도 절대 reject하지 않고 그 항목만 `error`를 채워 반환한다** (아래 "왜 부분 실패를 흡수하는가" 참고). Task 6(sync-todos), 8(disconnect)이 사용.
+
+**왜 dueAt이 날짜 키인가**: Cloudflare Workers는 항상 UTC로 동작해 "사용자의 로컬 타임존"이라는 개념이 없다. `Todo.dueAt`(Firestore 필드)은 UTC ISO 문자열로 저장되므로, Worker가 여기서 직접 `.slice(0, 10)`으로 날짜를 잘라내면 KST 자정~오전 8시59분 사이의 `dueAt`은 하루 전 날짜로 계산된다 — 이 프로젝트가 이미 한 번 겪고 고친 버그 클래스(`dueAt/startAt은 UTC Z 문자열 저장: 날짜 추출 시 split("T")[0] 금지, 로컬 변환 필수`)를 서버 쪽에서 재현하는 것이다. 유일하게 올바른 위치에서 변환하는 방법은 **사용자의 로컬 타임존을 실제로 아는 브라우저(클라이언트)가 미리 로컬 날짜 키로 변환해서 보내는 것**이다 — 클라이언트에는 이미 이 변환을 정확히 하는 `toDateKeyFromISO`(`client/src/shared/utils/date.ts`)가 있다(Task 13에서 사용). Worker는 이미 올바른 날짜 키를 받았다고 신뢰하고 그대로 쓴다.
+
+**왜 부분 실패를 흡수하는가**: 25건을 동기화하다 14번째가 일시적 500 에러로 실패했을 때 전체를 reject하면, 이미 성공한 13건의 `googleEventId`를 호출부가 영영 못 받는다 — 구글 쪽엔 이벤트가 이미 생겼는데 ToDoDo는 그 사실을 몰라서, 다음 동기화 때 그 13건을 또 새로 만들어 중복 이벤트가 생긴다(이 프로젝트가 이미 겪은 `recurring-calendar-duplicate` 버그와 같은 실패 양상). 각 항목을 독립적으로 성공/실패 처리해서, 실패한 항목만 다음 실행에서 자연히 재시도되게 한다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -741,7 +813,7 @@ describe("syncTodosToGoogleCalendar", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const todos: SyncTodoItem[] = [
-      { id: "todo-1", title: "테스트", dueAt: "2026-09-01T00:00:00.000Z", googleEventId: null, action: "upsert" },
+      { id: "todo-1", title: "테스트", dueAt: "2026-09-01", googleEventId: null, action: "upsert" },
     ];
 
     const results = await syncTodosToGoogleCalendar(todos, "access-token");
@@ -750,6 +822,11 @@ describe("syncTodosToGoogleCalendar", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(CALENDAR_API_BASE);
     expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      summary: "테스트",
+      start: { date: "2026-09-01" },
+      end: { date: "2026-09-02" },
+    });
   });
 
   it("googleEventId가 있으면 PATCH로 기존 이벤트를 수정한다", async () => {
@@ -763,7 +840,7 @@ describe("syncTodosToGoogleCalendar", () => {
       {
         id: "todo-1",
         title: "제목 변경",
-        dueAt: "2026-09-01T00:00:00.000Z",
+        dueAt: "2026-09-01",
         googleEventId: "existing-event-id",
         action: "upsert",
       },
@@ -822,7 +899,7 @@ describe("syncTodosToGoogleCalendar", () => {
     const todos: SyncTodoItem[] = Array.from({ length: 25 }, (_, i) => ({
       id: `todo-${i}`,
       title: `할 일 ${i}`,
-      dueAt: "2026-09-01T00:00:00.000Z",
+      dueAt: "2026-09-01",
       googleEventId: null,
       action: "upsert" as const,
     }));
@@ -830,6 +907,27 @@ describe("syncTodosToGoogleCalendar", () => {
     await syncTodosToGoogleCalendar(todos, "access-token", 5);
 
     expect(maxInFlight).toBeLessThanOrEqual(5);
+  });
+
+  it("일부 항목이 실패해도 나머지 결과는 그대로 반환한다(전체 reject 안 함)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "event-success" }) })
+      .mockResolvedValueOnce({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const todos: SyncTodoItem[] = [
+      { id: "todo-ok", title: "성공", dueAt: "2026-09-01", googleEventId: null, action: "upsert" },
+      { id: "todo-fail", title: "실패", dueAt: "2026-09-02", googleEventId: null, action: "upsert" },
+    ];
+
+    // concurrency 1로 고정해 mockResolvedValueOnce 순서와 실행 순서를 일치시킨다.
+    const results = await syncTodosToGoogleCalendar(todos, "access-token", 1);
+
+    expect(results).toEqual([
+      { id: "todo-ok", googleEventId: "event-success" },
+      { id: "todo-fail", googleEventId: null, error: expect.stringContaining("500") },
+    ]);
   });
 });
 ```
@@ -852,6 +950,11 @@ const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3/calendars/prim
 export interface SyncTodoItem {
   id: string;
   title: string;
+  /** "YYYY-MM-DD" 로컬 캘린더 날짜 키. ISO 타임스탬프가 아니다 — 클라이언트가
+   *  toDateKeyFromISO로 미리 변환해서 보낸 값을 그대로 신뢰한다. Worker는 UTC로만
+   *  동작해 사용자의 로컬 타임존을 알 방법이 없으므로, 여기서 직접 ISO를 슬라이싱하면
+   *  안 된다(자정 근처 시각에서 하루가 밀리는 버그). action이 "delete"면 빈 문자열이어도
+   *  무방하다(사용되지 않음). */
   dueAt: string;
   googleEventId: string | null;
   action: "upsert" | "delete";
@@ -860,15 +963,18 @@ export interface SyncTodoItem {
 export interface SyncResult {
   id: string;
   googleEventId: string | null;
+  /** 이 항목 처리가 실패했을 때만 채워진다. 있으면 googleEventId는 호출 전 값을
+   *  그대로 반영한 것이라 신뢰할 수 없다 — 호출부는 이 항목을 다음 실행에서 다시
+   *  시도해야 한다(스냅샷을 갱신하지 않는 방식으로). */
+  error?: string;
 }
 
 const toGoogleEventBody = (todo: SyncTodoItem) => {
-  const dateKey = todo.dueAt.slice(0, 10);
-  const nextDay = new Date(`${dateKey}T00:00:00Z`);
+  const nextDay = new Date(`${todo.dueAt}T00:00:00Z`);
   nextDay.setUTCDate(nextDay.getUTCDate() + 1);
   return {
     summary: todo.title,
-    start: { date: dateKey },
+    start: { date: todo.dueAt },
     end: { date: nextDay.toISOString().slice(0, 10) },
   };
 };
@@ -894,7 +1000,7 @@ export const runWithConcurrencyLimit = async <T, R>(
   return results;
 };
 
-const syncOne = async (todo: SyncTodoItem, accessToken: string): Promise<SyncResult> => {
+const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<SyncResult> => {
   if (todo.action === "delete") {
     if (!todo.googleEventId) return { id: todo.id, googleEventId: null };
     const res = await fetch(`${CALENDAR_API_BASE}/${todo.googleEventId}`, {
@@ -926,6 +1032,21 @@ const syncOne = async (todo: SyncTodoItem, accessToken: string): Promise<SyncRes
   return { id: todo.id, googleEventId: data.id };
 };
 
+// syncOneOrThrow가 던지는 에러를 여기서 흡수한다 — 한 항목의 실패가 나머지 항목의
+// 결과까지 지워버리면(Promise.all 전체 reject) 이미 구글에 반영된 항목의
+// googleEventId를 호출부가 영영 못 받아 다음 실행에서 중복 이벤트를 만든다.
+const syncOne = async (todo: SyncTodoItem, accessToken: string): Promise<SyncResult> => {
+  try {
+    return await syncOneOrThrow(todo, accessToken);
+  } catch (error) {
+    return {
+      id: todo.id,
+      googleEventId: todo.googleEventId,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
 export const syncTodosToGoogleCalendar = async (
   todos: SyncTodoItem[],
   accessToken: string,
@@ -940,7 +1061,7 @@ export const syncTodosToGoogleCalendar = async (
 cd calendar-proxy && npx vitest run src/__tests__/googleCalendar.test.ts
 ```
 
-Expected: PASS (5 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: 커밋**
 
@@ -961,8 +1082,10 @@ git commit -m "feat(calendar-proxy): Todo-구글 이벤트 매핑 + 동시 요�
 - Test: `calendar-proxy/src/__tests__/oauthCallback.test.ts`
 
 **Interfaces:**
-- Consumes: `verifyFirebaseIdToken` (Task 1), `getTokenRecord`/`setTokenRecord` (Task 2), `exchangeCodeForTokens` (Task 3), `Env` (Task 1)
+- Consumes: `verifyFirebaseIdToken` (Task 1), `getTokenRecord`/`setTokenRecord`/`createOAuthState`/`consumeOAuthState` (Task 2), `exchangeCodeForTokens` (Task 3), `Env` (Task 1)
 - Produces: `handleOAuthStart(request: Request, env: Env): Promise<Response>`, `handleOAuthCallback(request: Request, env: Env): Promise<Response>` — `index.ts`가 라우팅.
+
+**보안**: `state`에는 uid를 직접 담지 않는다. `/oauth/callback`은 구글이 리다이렉트로 호출하는 엔드포인트라 Authorization 헤더가 없어 uid를 검증할 방법이 없다 — uid를 그대로 신뢰하면 누구든 자기 `code`와 피해자의 uid를 조합해 피해자의 토큰 레코드를 덮어쓸 수 있다(Task 2의 "왜 state에 uid를 직접 쓰면 안 되는가" 참고). 대신 `createOAuthState`/`consumeOAuthState`(Task 2)로 발급한 1회용 무작위 토큰을 주고받는다.
 
 - [ ] **Step 1: 실패하는 테스트 작성 (oauthStart)**
 
@@ -975,6 +1098,9 @@ import type { Env } from "../env";
 
 vi.mock("../auth", () => ({
   verifyFirebaseIdToken: vi.fn().mockResolvedValue({ uid: "user-123" }),
+}));
+vi.mock("../tokenStore", () => ({
+  createOAuthState: vi.fn().mockResolvedValue("random-state-token"),
 }));
 
 const makeEnv = (): Env => ({
@@ -992,14 +1118,17 @@ describe("handleOAuthStart", () => {
     expect(response.status).toBe(401);
   });
 
-  it("유효한 요청이면 state에 uid가 담긴 authUrl을 반환한다", async () => {
+  it("유효한 요청이면 발급받은 state 토큰이 담긴 authUrl을 반환한다 (uid를 직접 담지 않는다)", async () => {
+    const { createOAuthState } = await import("../tokenStore");
     const request = new Request("https://proxy.example.com/oauth/start", {
       headers: { Authorization: "Bearer valid-token" },
     });
     const response = await handleOAuthStart(request, makeEnv());
     expect(response.status).toBe(200);
     const body = (await response.json()) as { authUrl: string };
-    expect(body.authUrl).toContain("state=user-123");
+    expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(expect.anything(), "user-123");
+    expect(body.authUrl).toContain("state=random-state-token");
+    expect(body.authUrl).not.toContain("state=user-123");
     expect(body.authUrl).toContain("scope=");
     expect(body.authUrl).toContain(encodeURIComponent("calendar.events"));
   });
@@ -1021,10 +1150,11 @@ Expected: FAIL — `../handlers/oauthStart` 모듈이 없음
 ```ts
 import type { Env } from "../env";
 import { verifyFirebaseIdToken } from "../auth";
+import { createOAuthState } from "../tokenStore";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
-export const buildAuthUrl = (uid: string, redirectUri: string, clientId: string): string => {
+export const buildAuthUrl = (state: string, redirectUri: string, clientId: string): string => {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -1032,7 +1162,7 @@ export const buildAuthUrl = (uid: string, redirectUri: string, clientId: string)
     access_type: "offline",
     prompt: "consent",
     scope: "https://www.googleapis.com/auth/calendar.events",
-    state: uid,
+    state,
   });
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 };
@@ -1048,9 +1178,10 @@ export const handleOAuthStart = async (request: Request, env: Env): Promise<Resp
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const state = await createOAuthState(env.CALENDAR_TOKENS, uid);
   const url = new URL(request.url);
   const redirectUri = `${url.origin}/oauth/callback`;
-  const authUrl = buildAuthUrl(uid, redirectUri, env.GOOGLE_CLIENT_ID);
+  const authUrl = buildAuthUrl(state, redirectUri, env.GOOGLE_CLIENT_ID);
 
   return new Response(JSON.stringify({ authUrl }), {
     headers: { "Content-Type": "application/json" },
@@ -1080,6 +1211,7 @@ vi.mock("../googleOAuth", () => ({
 }));
 vi.mock("../tokenStore", () => ({
   setTokenRecord: vi.fn(),
+  consumeOAuthState: vi.fn(),
 }));
 
 const makeEnv = (): Env => ({
@@ -1102,9 +1234,24 @@ describe("handleOAuthCallback", () => {
     expect(response.headers.get("Location")).toContain("calendarError=1");
   });
 
-  it("토큰 교환에 성공하면 저장하고 성공 페이지로 리다이렉트한다", async () => {
+  it("state가 유효하지 않으면(위조·만료·재사용) 에러 페이지로 리다이렉트하고 토큰 교환을 시도하지 않는다", async () => {
+    const { consumeOAuthState } = await import("../tokenStore");
     const { exchangeCodeForTokens } = await import("../googleOAuth");
-    const { setTokenRecord } = await import("../tokenStore");
+    vi.mocked(consumeOAuthState).mockResolvedValue(null);
+
+    const request = new Request(
+      "https://proxy.example.com/oauth/callback?code=auth-code&state=forged-or-expired",
+    );
+    const response = await handleOAuthCallback(request, makeEnv());
+
+    expect(response.headers.get("Location")).toContain("calendarError=1");
+    expect(vi.mocked(exchangeCodeForTokens)).not.toHaveBeenCalled();
+  });
+
+  it("토큰 교환에 성공하면 state가 가리키던 uid로 저장하고 성공 페이지로 리다이렉트한다", async () => {
+    const { exchangeCodeForTokens } = await import("../googleOAuth");
+    const { setTokenRecord, consumeOAuthState } = await import("../tokenStore");
+    vi.mocked(consumeOAuthState).mockResolvedValue("user-123");
     vi.mocked(exchangeCodeForTokens).mockResolvedValue({
       access_token: "at",
       refresh_token: "rt",
@@ -1112,10 +1259,11 @@ describe("handleOAuthCallback", () => {
     });
 
     const request = new Request(
-      "https://proxy.example.com/oauth/callback?code=auth-code&state=user-123",
+      "https://proxy.example.com/oauth/callback?code=auth-code&state=random-state-token",
     );
     const response = await handleOAuthCallback(request, makeEnv());
 
+    expect(vi.mocked(consumeOAuthState)).toHaveBeenCalledWith(expect.anything(), "random-state-token");
     expect(vi.mocked(setTokenRecord)).toHaveBeenCalledWith(
       expect.anything(),
       "user-123",
@@ -1127,13 +1275,15 @@ describe("handleOAuthCallback", () => {
 
   it("refresh_token이 없으면 에러 페이지로 리다이렉트한다", async () => {
     const { exchangeCodeForTokens } = await import("../googleOAuth");
+    const { consumeOAuthState } = await import("../tokenStore");
+    vi.mocked(consumeOAuthState).mockResolvedValue("user-123");
     vi.mocked(exchangeCodeForTokens).mockResolvedValue({
       access_token: "at",
       expires_in: 3600,
     });
 
     const request = new Request(
-      "https://proxy.example.com/oauth/callback?code=auth-code&state=user-123",
+      "https://proxy.example.com/oauth/callback?code=auth-code&state=random-state-token",
     );
     const response = await handleOAuthCallback(request, makeEnv());
     expect(response.headers.get("Location")).toContain("calendarError=1");
@@ -1141,10 +1291,12 @@ describe("handleOAuthCallback", () => {
 
   it("토큰 교환이 실패하면 에러 페이지로 리다이렉트한다", async () => {
     const { exchangeCodeForTokens } = await import("../googleOAuth");
+    const { consumeOAuthState } = await import("../tokenStore");
+    vi.mocked(consumeOAuthState).mockResolvedValue("user-123");
     vi.mocked(exchangeCodeForTokens).mockRejectedValue(new Error("토큰 교환 실패: 400"));
 
     const request = new Request(
-      "https://proxy.example.com/oauth/callback?code=auth-code&state=user-123",
+      "https://proxy.example.com/oauth/callback?code=auth-code&state=random-state-token",
     );
     const response = await handleOAuthCallback(request, makeEnv());
     expect(response.headers.get("Location")).toContain("calendarError=1");
@@ -1167,14 +1319,22 @@ Expected: FAIL — `../handlers/oauthCallback` 모듈이 없음
 ```ts
 import type { Env } from "../env";
 import { exchangeCodeForTokens } from "../googleOAuth";
-import { setTokenRecord } from "../tokenStore";
+import { setTokenRecord, consumeOAuthState } from "../tokenStore";
 
 export const handleOAuthCallback = async (request: Request, env: Env): Promise<Response> => {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const uid = url.searchParams.get("state");
+  const state = url.searchParams.get("state");
 
-  if (!code || !uid) {
+  if (!code || !state) {
+    return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
+  }
+
+  // state는 /oauth/start가 발급한 1회용 토큰이다 — 여기서 실제 uid로 교환하고
+  // 즉시 소비한다. uid 자체를 state로 왕복시키면 Authorization 헤더가 없는 이
+  // 엔드포인트에서 누구든 다른 사용자의 uid를 흉내 낼 수 있다.
+  const uid = await consumeOAuthState(env.CALENDAR_TOKENS, state);
+  if (!uid) {
     return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
   }
 
@@ -1204,7 +1364,7 @@ export const handleOAuthCallback = async (request: Request, env: Env): Promise<R
 cd calendar-proxy && npx vitest run src/__tests__/oauthCallback.test.ts
 ```
 
-Expected: PASS (4 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 9: 라우터(index.ts) 작성 — 지금까지 만든 두 핸들러만 연결**
 
@@ -1343,7 +1503,7 @@ describe("handleSyncTodos", () => {
     ]);
 
     const todos = [
-      { id: "todo-1", title: "제목", dueAt: "2026-09-01T00:00:00.000Z", googleEventId: null, action: "upsert" as const },
+      { id: "todo-1", title: "제목", dueAt: "2026-09-01", googleEventId: null, action: "upsert" as const },
     ];
     const response = await handleSyncTodos(makeRequest({ todos }), makeEnv());
 
@@ -1789,6 +1949,39 @@ describe("handleDisconnect", () => {
     expect(response.status).toBe(200);
   });
 
+  it("요청 바디가 비어 있거나 잘못된 JSON이어도 토큰은 반드시 지운다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
+    const { refreshAccessToken } = await import("../googleOAuth");
+    const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
+
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
+    vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
+    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([]);
+
+    const emptyBodyRequest = new Request("https://proxy.example.com/disconnect", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const response = await handleDisconnect(emptyBodyRequest, makeEnv());
+
+    expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(vi.mocked(syncTodosToGoogleCalendar)).toHaveBeenCalledWith([], "at");
+    const body = (await response.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  });
+
+  it("Authorization 헤더가 없으면 401을 반환하고 아무 것도 호출하지 않는다", async () => {
+    const { getTokenRecord } = await import("../tokenStore");
+
+    const request = new Request("https://proxy.example.com/disconnect", { method: "POST" });
+    const response = await handleDisconnect(request, makeEnv());
+
+    expect(response.status).toBe(401);
+    expect(vi.mocked(getTokenRecord)).not.toHaveBeenCalled();
+  });
+
   it("이미 연동 안 된 사용자면 바로 성공을 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord } = await import("../tokenStore");
@@ -1843,15 +2036,20 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
     return jsonResponse({ ok: true });
   }
 
-  const { googleEventIds } = (await request.json()) as { googleEventIds: string[] };
-
+  // 요청 바디 파싱(빈 바디, 잘못된 JSON, googleEventIds 누락)까지 이 try 안에
+  // 넣는다 — "연동 해제는 반드시 끝까지 진행된다"는 불변식이 구글 API 실패뿐
+  // 아니라 바디 파싱 실패에도 깨지면 안 되기 때문이다. 파싱에 실패하면 삭제할
+  // 이벤트가 없다고 보고 빈 배열로 진행한다.
   try {
+    const { googleEventIds } = (await request.json().catch(() => ({}))) as {
+      googleEventIds?: string[];
+    };
     const refreshed = await refreshAccessToken(
       tokenRecord.refreshToken,
       env.GOOGLE_CLIENT_ID,
       env.GOOGLE_CLIENT_SECRET,
     );
-    const deleteItems: SyncTodoItem[] = googleEventIds.map((googleEventId) => ({
+    const deleteItems: SyncTodoItem[] = (googleEventIds ?? []).map((googleEventId) => ({
       id: googleEventId,
       title: "",
       dueAt: "",
@@ -1877,7 +2075,7 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
 cd calendar-proxy && npx vitest run src/__tests__/disconnect.test.ts
 ```
 
-Expected: PASS (3 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: index.ts에 라우트 추가하고 전체 Worker 테스트 실행**
 
@@ -1969,7 +2167,7 @@ git commit -m "feat(client): Todo에 googleEventId 필드, calendarIntegrations 
 
 **Interfaces:**
 - Consumes: `auth` (from `@/shared/lib/firebase`)
-- Produces: `getOAuthStartUrl(): Promise<string>`, `interface SyncTodoPayload`, `interface SyncTodoResult`, `syncTodosToCalendar(todos: SyncTodoPayload[]): Promise<SyncTodoResult[]>`, `interface GoogleCalendarEvent`, `getGoogleCalendarEvents(): Promise<GoogleCalendarEvent[]>`, `disconnectCalendar(googleEventIds: string[]): Promise<void>` — Task 11, 13, 14가 사용.
+- Produces: `getOAuthStartUrl(): Promise<string>`, `interface SyncTodoPayload`, `interface SyncTodoResult`, `syncTodosToCalendar(todos: SyncTodoPayload[]): Promise<SyncTodoResult[]>`, `interface GoogleCalendarEvent`, `getGoogleCalendarEvents(): Promise<GoogleCalendarEvent[]>`, `disconnectCalendar(googleEventIds: string[]): Promise<void>` — Task 11, 13, 14가 사용. `SyncTodoPayload.dueAt`은 Task 4의 `SyncTodoItem.dueAt`과 동일하게 **`"YYYY-MM-DD"` 로컬 날짜 키**다(ISO 타임스탬프 아님) — Task 13이 `toDateKeyFromISO`로 변환해서 채운다. `SyncTodoResult.error?: string`도 Task 4의 `SyncResult`와 동일하게 실패한 항목에만 채워진다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -1985,7 +2183,13 @@ vi.mock("@/shared/lib/firebase", () => ({
 
 vi.stubEnv("VITE_CALENDAR_PROXY_URL", "https://proxy.example.com");
 
-import { syncTodosToCalendar, getGoogleCalendarEvents, disconnectCalendar } from "../calendarProxyApi";
+import {
+  getOAuthStartUrl,
+  syncTodosToCalendar,
+  getGoogleCalendarEvents,
+  disconnectCalendar,
+  CalendarRevokedError,
+} from "../calendarProxyApi";
 
 describe("calendarProxyApi", () => {
   beforeEach(() => {
@@ -1996,6 +2200,26 @@ describe("calendarProxyApi", () => {
     vi.unstubAllGlobals();
   });
 
+  it("getOAuthStartUrl은 Authorization 헤더를 붙여 /oauth/start를 호출하고 authUrl을 반환한다", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ authUrl: "https://accounts.google.com/consent" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const authUrl = await getOAuthStartUrl();
+
+    expect(authUrl).toBe("https://accounts.google.com/consent");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://proxy.example.com/oauth/start");
+    expect(init.headers.Authorization).toBe("Bearer id-token");
+  });
+
+  it("getOAuthStartUrl은 응답이 실패하면 에러를 던진다", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+    await expect(getOAuthStartUrl()).rejects.toThrow("OAuth 시작 실패");
+  });
+
   it("syncTodosToCalendar는 Authorization 헤더를 붙여 /sync-todos를 호출한다", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -2004,7 +2228,7 @@ describe("calendarProxyApi", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const todos = [
-      { id: "todo-1", title: "제목", dueAt: "2026-09-01T00:00:00.000Z", googleEventId: null, action: "upsert" as const },
+      { id: "todo-1", title: "제목", dueAt: "2026-09-01", googleEventId: null, action: "upsert" as const },
     ];
     const result = await syncTodosToCalendar(todos);
 
@@ -2014,20 +2238,56 @@ describe("calendarProxyApi", () => {
     expect(init.headers.Authorization).toBe("Bearer id-token");
   });
 
-  it("getGoogleCalendarEvents는 /events를 호출해 이벤트 목록을 반환한다", async () => {
+  it("응답이 실패하면 에러를 던진다", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(syncTodosToCalendar([])).rejects.toThrow("동기화 실패");
+  });
+
+  it("401 응답이 {error: revoked}이면 CalendarRevokedError를 던진다", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ events: [{ id: "g-1", title: "회의", start: "2026-09-05", end: "2026-09-06" }] }),
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "revoked" }),
       }),
     );
-
-    const events = await getGoogleCalendarEvents();
-    expect(events).toEqual([{ id: "g-1", title: "회의", start: "2026-09-05", end: "2026-09-06" }]);
+    await expect(syncTodosToCalendar([])).rejects.toThrow(CalendarRevokedError);
   });
 
-  it("disconnectCalendar는 googleEventIds를 담아 /disconnect를 호출한다", async () => {
+  it("401 응답이어도 revoked가 아니면 일반 에러를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      }),
+    );
+    await expect(syncTodosToCalendar([])).rejects.toThrow("동기화 실패");
+  });
+
+  it("getGoogleCalendarEvents는 Authorization 헤더를 붙여 /events를 호출해 이벤트 목록을 반환한다", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ events: [{ id: "g-1", title: "회의", start: "2026-09-05", end: "2026-09-06" }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const events = await getGoogleCalendarEvents();
+
+    expect(events).toEqual([{ id: "g-1", title: "회의", start: "2026-09-05", end: "2026-09-06" }]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://proxy.example.com/events");
+    expect(init.headers.Authorization).toBe("Bearer id-token");
+  });
+
+  it("getGoogleCalendarEvents는 응답이 실패하면 에러를 던진다", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502 }));
+    await expect(getGoogleCalendarEvents()).rejects.toThrow("이벤트 조회 실패");
+  });
+
+  it("disconnectCalendar는 Authorization 헤더를 붙이고 googleEventIds를 담아 /disconnect를 호출한다", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -2035,12 +2295,13 @@ describe("calendarProxyApi", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://proxy.example.com/disconnect");
+    expect(init.headers.Authorization).toBe("Bearer id-token");
     expect(JSON.parse(init.body)).toEqual({ googleEventIds: ["event-1", "event-2"] });
   });
 
-  it("응답이 실패하면 에러를 던진다", async () => {
+  it("disconnectCalendar는 응답이 실패하면 에러를 던진다", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
-    await expect(syncTodosToCalendar([])).rejects.toThrow("동기화 실패");
+    await expect(disconnectCalendar([])).rejects.toThrow("연동 해제 실패");
   });
 });
 ```
@@ -2085,6 +2346,8 @@ export const getOAuthStartUrl = async (): Promise<string> => {
 export interface SyncTodoPayload {
   id: string;
   title: string;
+  /** "YYYY-MM-DD" 로컬 캘린더 날짜 키. ISO 타임스탬프가 아니다 — 호출부(useSyncTodosToCalendar)가
+   *  toDateKeyFromISO로 변환해서 채운다. */
   dueAt: string;
   googleEventId: string | null;
   action: "upsert" | "delete";
@@ -2093,6 +2356,20 @@ export interface SyncTodoPayload {
 export interface SyncTodoResult {
   id: string;
   googleEventId: string | null;
+  /** 이 항목이 실패했을 때만 채워진다. 있으면 googleEventId는 신뢰하지 말고,
+   *  이 항목은 다음 동기화 실행에서 다시 시도되도록 둔다(스냅샷 갱신 안 함). */
+  error?: string;
+}
+
+/** Worker가 리프레시 토큰 철회(invalid_grant)를 감지하면 401 `{error:"revoked"}`를
+ *  반환한다(Task 6). 일반 401(잘못된 ID Token)과 구분해야 호출부가 "다시
+ *  연결해주세요" 상태로 전환할지 판단할 수 있으므로, 이 경우만 별도 에러
+ *  타입으로 구분해서 던진다. */
+export class CalendarRevokedError extends Error {
+  constructor() {
+    super("구글 캘린더 연동이 해제되었습니다");
+    this.name = "CalendarRevokedError";
+  }
 }
 
 export const syncTodosToCalendar = async (
@@ -2103,6 +2380,11 @@ export const syncTodosToCalendar = async (
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ todos }),
   });
+  if (res.status === 401) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === "revoked") throw new CalendarRevokedError();
+    throw new Error(`동기화 실패: ${res.status}`);
+  }
   if (!res.ok) throw new Error(`동기화 실패: ${res.status}`);
   const data = (await res.json()) as { results: SyncTodoResult[] };
   return data.results;
@@ -2144,7 +2426,7 @@ export * from "./calendarProxyApi";
 cd client && npx vitest run src/features/calendarIntegration/api/__tests__/calendarProxyApi.test.ts
 ```
 
-Expected: PASS (4 tests)
+Expected: PASS (10 tests)
 
 - [ ] **Step 5: 환경변수 문서화**
 
@@ -2209,6 +2491,8 @@ vi.mock("../../api", () => ({
   disconnectCalendar: vi.fn(),
 }));
 
+// queryClient를 함께 반환한다 — 테스트가 invalidateQueries 호출 여부를
+// spyOn으로 검증하려면 훅이 실제로 쓰는 인스턴스를 손에 쥐고 있어야 한다.
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
@@ -2216,7 +2500,7 @@ const createWrapper = () => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  return Wrapper;
+  return { Wrapper, queryClient };
 };
 
 describe("useCalendarIntegrationStatus", () => {
@@ -2228,9 +2512,8 @@ describe("useCalendarIntegrationStatus", () => {
     const { getDoc } = await import("firebase/firestore");
     vi.mocked(getDoc).mockResolvedValue({ exists: () => false } as never);
 
-    const { result } = renderHook(() => useCalendarIntegrationStatus(), {
-      wrapper: createWrapper(),
-    });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useCalendarIntegrationStatus(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ connected: false, status: "active" });
@@ -2243,9 +2526,8 @@ describe("useCalendarIntegrationStatus", () => {
       data: () => ({ connected: true, status: "active" }),
     } as never);
 
-    const { result } = renderHook(() => useCalendarIntegrationStatus(), {
-      wrapper: createWrapper(),
-    });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useCalendarIntegrationStatus(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ connected: true, status: "active" });
@@ -2272,12 +2554,14 @@ describe("useConnectCalendar", () => {
 });
 
 describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
-  it("disconnect는 api를 호출하고 Firestore 상태를 갱신한다", async () => {
+  it("disconnect는 api를 호출하고 Firestore 상태를 갱신한 뒤 연동 상태 쿼리를 무효화한다", async () => {
     const { disconnectCalendar } = await import("../../api");
     const { setDoc } = await import("firebase/firestore");
     vi.mocked(disconnectCalendar).mockResolvedValue(undefined);
 
-    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: createWrapper() });
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
     await result.current.disconnect(["event-1"]);
 
     expect(vi.mocked(disconnectCalendar)).toHaveBeenCalledWith(["event-1"]);
@@ -2286,19 +2570,27 @@ describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
       { connected: false, status: "active" },
       { merge: true },
     );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] });
   });
 
-  it("markConnected는 Firestore에 connected: true를 기록한다", async () => {
+  it("markConnected는 Firestore에 connected: true와 connectedAt을 기록하고 연동 상태 쿼리를 무효화한다", async () => {
     const { setDoc } = await import("firebase/firestore");
 
-    const { result } = renderHook(() => useMarkCalendarConnected(), { wrapper: createWrapper() });
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useMarkCalendarConnected(), { wrapper: Wrapper });
     await result.current.markConnected();
 
     expect(vi.mocked(setDoc)).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ connected: true, status: "active" }),
+      {
+        connected: true,
+        connectedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/),
+        status: "active",
+      },
       { merge: true },
     );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] });
   });
 });
 ```
@@ -2507,6 +2799,30 @@ describe("CalendarConnectionButton", () => {
     render(<CalendarConnectionButton />, { wrapper: createWrapper() });
     expect(screen.getByText(/다시 연결해주세요/)).toBeInTheDocument();
   });
+
+  it("연동 해제 버튼을 클릭하면 googleEventId가 있는 Todo만 골라 disconnect가 호출된다", async () => {
+    const { useCalendarIntegrationStatus, useDisconnectCalendar } = await import("../../hooks");
+    const { useGetTodos } = await import("@/features/todo");
+    const disconnect = vi.fn();
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect });
+    vi.mocked(useGetTodos).mockReturnValue({
+      data: [
+        { id: "todo-1", googleEventId: "event-1" },
+        { id: "todo-2", googleEventId: null },
+        { id: "todo-3", googleEventId: "event-3" },
+      ],
+    } as never);
+
+    render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+    fireEvent.click(screen.getByText("연동 해제"));
+
+    await waitFor(() => {
+      expect(disconnect).toHaveBeenCalledWith(["event-1", "event-3"]);
+    });
+  });
 });
 ```
 
@@ -2567,7 +2883,11 @@ export const DisconnectButton = styled.button`
 
 export const RevokedNotice = styled.span`
   font-size: 12px;
-  color: ${colors.danger.main};
+  /* danger.main(#E24B4A)은 흰 배경 대비 3.93:1로 WCAG AA 텍스트 기준(4.5:1)에
+     미달한다. 이 코드베이스는 텍스트에 danger.text(#C53A39, 5.2:1)를 쓰고
+     danger.main은 장식(테두리·아이콘·배경)에만 쓰는 관례가 이미 있다
+     (statusColors AA 정비, PR #85와 동일 원칙). */
+  color: ${colors.danger.text};
 `;
 ```
 
@@ -2625,7 +2945,7 @@ export default CalendarConnectionButton;
 cd client && npx vitest run src/features/calendarIntegration/components/__tests__/calendarConnectionButton.test.tsx
 ```
 
-Expected: PASS (4 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 6: calendar.tsx에 배치 + OAuth 콜백 쿼리 파라미터 처리**
 
@@ -2730,11 +3050,23 @@ git commit -m "feat(client): 캘린더 연동 버튼 UI + calendar.tsx 배치"
 - Create: `client/src/features/calendarIntegration/hooks/useSyncTodosToCalendar.ts`
 - Modify: `client/src/features/calendarIntegration/hooks/index.ts`
 - Modify: `client/src/App.tsx`
+- Modify: `client/src/features/calendarIntegration/api/calendarProxyApi.ts` (Task 10, 이미 완료됨) — `CalendarRevokedError` 클래스 추가, `syncTodosToCalendar`가 401 `{error:"revoked"}` 응답을 구분해서 던지도록 확장. 이 훅이 그 에러를 받아 연동 상태를 revoked로 기록하는 유일한 소비처라 여기서 함께 다룬다.
+- Modify: `client/src/features/calendarIntegration/api/__tests__/calendarProxyApi.test.ts` (Task 10) — revoked/일반 401 구분 테스트 2건 추가
 - Test: `client/src/features/calendarIntegration/hooks/__tests__/useSyncTodosToCalendar.test.tsx`
 
 **Interfaces:**
-- Consumes: `useGetTodos` (기존), `useCalendarIntegrationStatus` (Task 11), `syncTodosToCalendar` (Task 10)
+- Consumes: `useGetTodos` (기존), `useCalendarIntegrationStatus` (Task 11), `syncTodosToCalendar`/`CalendarRevokedError` (Task 10), `toDateKeyFromISO` (`@/shared/utils/date`, 기존), `auth` (`@/shared/lib/firebase`, 기존)
 - Produces: `useSyncTodosToCalendar(): void` — `App.tsx`에 부작용으로만 마운트, 반환값 없음.
+
+**왜 `toDateKeyFromISO`를 반드시 거쳐야 하는가**: `Todo.dueAt`은 UTC ISO 타임스탬프(예: `"2026-08-31T16:00:00.000Z"`)로 저장되는데, 이는 KST 기준 `2026-09-01 01:00`이다. Cloudflare Workers(Task 4)는 UTC로만 동작해 이 타임스탬프에서 "로컬 캘린더 날짜"를 알아낼 방법이 없다. 사용자의 로컬 타임존을 실제로 아는 건 브라우저뿐이므로, **여기서(클라이언트) 반드시 `toDateKeyFromISO`로 변환한 `"YYYY-MM-DD"` 날짜 키를 보내야 한다** — 그렇지 않으면 Worker가 `dueAt`을 그대로 슬라이싱해 KST 자정~오전 8시59분 사이의 Todo가 하루 전 날짜로 구글 캘린더에 반영되는 버그가 생긴다.
+
+**세 가지 설계 결정 — 왜 이렇게 하는가**:
+
+1. **`await` 이후 `cancelled` 체크로 결과를 버리면 안 된다.** 구글에 이벤트가 이미 만들어진 뒤(POST/PATCH 응답을 받은 뒤) 이펙트가 재실행/언마운트됐다고 그 결과를 버리면, 스냅샷도 Firestore도 새 `googleEventId`를 모르게 된다. 다음 실행은 `googleEventId: null`로 다시 보내 구글에 **중복 이벤트**를 만든다 — 이 프로젝트가 이미 겪은 `recurring-calendar-duplicate`와 같은 실패 양상이다. React 18 `<StrictMode>`(운영 앱은 `main.tsx`에서 이미 감싸고 있음)는 개발 모드에서 이펙트를 마운트→클린업→재마운트하므로, "await 직후 취소 체크"가 있으면 **개발 환경의 첫 동기화마다 항상** 이 경로를 타 실제 중복 이벤트를 만든다. 그래서 이 훅은 취소 플래그를 아예 두지 않는다 — 스냅샷/Firestore 갱신은 항상 수행하고, 재요청(`invalidateQueries`)만 해도 안전하므로 굳이 막을 필요가 없다.
+2. **동기화 도중 들어온 변경은 유실하지 않고 완료 후 다시 돈다.** `isRunningRef`로 겹쳐 실행만 막으면, 그 사이에 들어온 `todos` 변경은 다음 "관련 없는" 변경이 생길 때까지 무기한 보류된다. 진행 중 변경을 감지하면 `pendingRerunRef`에 표시해두고, 현재 실행이 끝나는 즉시(`finally`) `runToken`을 올려 이펙트를 최신 `todos`로 다시 돌린다.
+3. **대상에서 빠졌지만 문서가 살아있으면 `googleEventId`도 지운다.** 삭제(action: "delete")가 성공하면 스냅샷에서는 지우지만, 그 Todo 문서 자체가 아직 존재한다면(예: 마감일만 지워서 대상에서 빠진 경우) `googleEventId` 필드를 남겨두면 안 된다 — 나중에 다시 대상이 됐을 때 이미 구글에서 삭제된 이벤트 id로 PATCH를 시도해 404로 실패하고, 실패한 항목은 스냅샷이 안 갱신되니 **영원히 같은 오류가 반복**된다.
+
+**연동 철회(revoked) 감지**: `syncTodosToCalendar`가 `CalendarRevokedError`를 던지면(Worker가 리프레시 토큰 철회를 감지한 경우), 여기서 `calendarIntegrations/{uid}` 문서에 `status: "revoked"`를 기록한다. 이게 없으면 Task 12의 "다시 연결해주세요" UI 분기가 영원히 도달 불가능한 죽은 코드로 남는다 — 아무도 그 상태를 기록하지 않기 때문이다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -2747,10 +3079,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { Todo } from "@/features/todo";
 import { useSyncTodosToCalendar } from "../useSyncTodosToCalendar";
+import { CalendarRevokedError } from "../../api";
 
 vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
+vi.mock("@/shared/lib/firebase", () => ({
+  auth: { currentUser: { uid: "user-1" } },
+  googleProvider: {},
+}));
 vi.mock("firebase/firestore", () => ({
   doc: vi.fn(() => ({})),
+  setDoc: vi.fn().mockResolvedValue(undefined),
   writeBatch: vi.fn(),
 }));
 vi.mock("@/features/todo", () => ({
@@ -2759,9 +3097,23 @@ vi.mock("@/features/todo", () => ({
 vi.mock("../useCalendarIntegration", () => ({
   useCalendarIntegrationStatus: vi.fn(),
 }));
-vi.mock("../../api", () => ({
-  syncTodosToCalendar: vi.fn(),
-}));
+vi.mock("../../api", async () => {
+  const actual = await vi.importActual("../../api");
+  return { ...actual, syncTodosToCalendar: vi.fn() };
+});
+
+// toDateKeyFromISO와 동일한 로컬 게터 방식으로 기대값을 계산한다 — 테스트 실행
+// 환경의 TZ(로컬 개발 환경은 Asia/Seoul 고정 — client/src/test/setup.ts, CI는
+// 추가로 America/New_York에서도 한 번 더 돈다)와 무관하게 항상 올바른 기대값과
+// 비교하기 위함이다. "2026-09-01" 같은 하드코딩된 문자열은 음수 오프셋
+// 타임존(America/New_York)에서 값이 달라져 CI의 두 번째 실행에서 실패한다.
+const toLocalDateKey = (iso: string): string => {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 
 const baseTodo = (overrides: Partial<Todo>): Todo => ({
   id: "todo-1",
@@ -2816,12 +3168,19 @@ describe("useSyncTodosToCalendar", () => {
     expect(vi.mocked(syncTodosToCalendar)).not.toHaveBeenCalled();
   });
 
-  it("dueAt이 있는 대상 Todo를 upsert로 동기화한다", async () => {
+  it("dueAt이 있는 대상 Todo를 upsert로 동기화한다 (로컬 날짜 키로 변환해서 보낸다)", async () => {
     const { useGetTodos } = await import("@/features/todo");
     const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
     const { syncTodosToCalendar } = await import("../../api");
 
-    vi.mocked(useGetTodos).mockReturnValue({ data: [baseTodo({})] } as never);
+    // UTC 16:00 = KST(+9) 기준 다음날 01:00. dueAt을 그대로 슬라이싱하면(버그)
+    // 항상 "2026-08-31"이 나오지만, 로컬 변환을 거치면 실행 환경의 로컬
+    // 타임존에 맞는 날짜가 나와야 한다 — toLocalDateKey가 그 기대값을 실행
+    // 환경 기준으로 직접 계산한다.
+    const inputIso = "2026-08-31T16:00:00.000Z";
+    vi.mocked(useGetTodos).mockReturnValue({
+      data: [baseTodo({ dueAt: inputIso })],
+    } as never);
     vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
       data: { connected: true, status: "active" },
     } as never);
@@ -2833,8 +3192,125 @@ describe("useSyncTodosToCalendar", () => {
 
     await waitFor(() => {
       expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledWith([
-        { id: "todo-1", title: "제목", dueAt: "2026-09-01T00:00:00.000Z", googleEventId: null, action: "upsert" },
+        {
+          id: "todo-1",
+          title: "제목",
+          dueAt: toLocalDateKey(inputIso),
+          googleEventId: null,
+          action: "upsert",
+        },
       ]);
+    });
+  });
+
+  it("동기화 결과 중 실패한 항목은 스냅샷을 갱신하지 않아 다음 실행에서 재시도된다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+
+    const todo = baseTodo({});
+    vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
+      { id: "todo-1", googleEventId: null, error: "이벤트 POST 실패 (todo todo-1): 500" },
+    ]);
+
+    const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+    // 실패한 항목이라 Firestore에 googleEventId를 쓰지 않는다.
+    const { writeBatch } = await import("firebase/firestore");
+    const firstBatch = vi.mocked(writeBatch).mock.results[0]?.value as {
+      update: ReturnType<typeof vi.fn>;
+    };
+    expect(firstBatch.update).not.toHaveBeenCalled();
+
+    // 스냅샷이 갱신되지 않았으므로, updatedAt이 그대로인 같은 Todo로 다시
+    // 렌더링해도(참조만 바뀜) 동일하게 재전송 대상이 되어야 한다 — 이게 이
+    // 훅이 제공하는 재시도 계약이다.
+    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
+      { id: "todo-1", googleEventId: "event-1" },
+    ]);
+    vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
+    rerender();
+
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+      {
+        id: "todo-1",
+        title: "제목",
+        dueAt: toLocalDateKey(todo.dueAt as string),
+        googleEventId: null,
+        action: "upsert",
+      },
+    ]);
+  });
+
+  it("변경 없는 Todo는 다시 렌더링돼도 재전송하지 않는다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    const todo = baseTodo({});
+    vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+    vi.mocked(syncTodosToCalendar).mockResolvedValue([{ id: "todo-1", googleEventId: "event-1" }]);
+
+    const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+    // updatedAt이 동일한 내용으로 참조만 바꿔 다시 렌더링 — 재전송되면 안 된다.
+    vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
+    rerender();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1);
+  });
+
+  it("대상에서 빠진 Todo는 매핑된 이벤트를 삭제 요청하고, 문서가 남아있으면 googleEventId도 지운다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+    const { writeBatch } = await import("firebase/firestore");
+
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+
+    const todo = baseTodo({ googleEventId: "event-1" });
+    vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
+      { id: "todo-1", googleEventId: "event-1" },
+    ]);
+
+    const updateSpy = vi.fn();
+    vi.mocked(writeBatch).mockReturnValue({
+      update: updateSpy,
+      commit: vi.fn().mockResolvedValue(undefined),
+    } as never);
+
+    const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+    // dueAt을 지워 대상에서만 빠지게 한다(문서 자체는 그대로 남아있음).
+    const stillExistingTodo = { ...todo, dueAt: null, updatedAt: "2026-08-02T00:00:00.000Z" };
+    vi.mocked(useGetTodos).mockReturnValue({ data: [stillExistingTodo] } as never);
+    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([{ id: "todo-1", googleEventId: null }]);
+    rerender();
+
+    await waitFor(() => {
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+        { id: "todo-1", title: "", dueAt: "", googleEventId: "event-1", action: "delete" },
+      ]);
+    });
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(expect.anything(), { googleEventId: null });
     });
   });
 
@@ -2873,6 +3349,29 @@ describe("useSyncTodosToCalendar", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(vi.mocked(syncTodosToCalendar)).not.toHaveBeenCalled();
   });
+
+  it("동기화 도중 CalendarRevokedError가 나면 연동 상태를 revoked로 기록한다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+
+    vi.mocked(useGetTodos).mockReturnValue({ data: [baseTodo({})] } as never);
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(syncTodosToCalendar).mockRejectedValue(new CalendarRevokedError());
+
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(vi.mocked(setDoc)).toHaveBeenCalledWith(
+        expect.anything(),
+        { status: "revoked" },
+        { merge: true },
+      );
+    });
+  });
 });
 ```
 
@@ -2889,13 +3388,16 @@ Expected: FAIL — `../useSyncTodosToCalendar` 모듈이 없음
 `client/src/features/calendarIntegration/hooks/useSyncTodosToCalendar.ts`:
 
 ```ts
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { doc, writeBatch } from "firebase/firestore";
+import * as Sentry from "@sentry/react";
+import { doc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/shared/lib/firestore";
+import { auth } from "@/shared/lib/firebase";
 import { useGetTodos } from "@/features/todo";
 import type { Todo } from "@/features/todo";
-import { syncTodosToCalendar, type SyncTodoPayload } from "../api";
+import { toDateKeyFromISO } from "@/shared/utils/date";
+import { syncTodosToCalendar, CalendarRevokedError, type SyncTodoPayload } from "../api";
 import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
 
 interface SyncedSnapshotEntry {
@@ -2911,14 +3413,22 @@ export const useSyncTodosToCalendar = (): void => {
   const queryClient = useQueryClient();
   const snapshotRef = useRef<Map<string, SyncedSnapshotEntry>>(new Map());
   const isRunningRef = useRef(false);
+  const pendingRerunRef = useRef(false);
+  // 진행 중인 동기화가 끝난 뒤 최신 todos로 다시 돌기 위한 트리거.
+  // deps에 이 값을 넣어 이펙트를 강제로 재실행시킨다(값 자체는 쓰지 않는다).
+  const [runToken, setRunToken] = useState(0);
 
   useEffect(() => {
     if (!integration?.connected || integration.status === "revoked") return;
     if (!todos) return;
-    if (isRunningRef.current) return;
+    if (isRunningRef.current) {
+      pendingRerunRef.current = true;
+      return;
+    }
 
     const snapshot = snapshotRef.current;
     const eligible = todos.filter(isSyncEligible);
+    const eligibleById = new Map(eligible.map((t) => [t.id, t]));
     const eligibleIds = new Set(eligible.map((t) => t.id));
 
     const upserts: SyncTodoPayload[] = eligible
@@ -2926,7 +3436,9 @@ export const useSyncTodosToCalendar = (): void => {
       .map((t) => ({
         id: t.id,
         title: t.title,
-        dueAt: t.dueAt as string,
+        // Worker는 UTC로만 동작해 로컬 캘린더 날짜를 모른다 — 여기서 반드시
+        // 로컬 타임존 기준으로 변환해서 보낸다 (dueAt을 그대로 슬라이싱 금지).
+        dueAt: toDateKeyFromISO(t.dueAt as string),
         googleEventId: t.googleEventId ?? snapshot.get(t.id)?.googleEventId ?? null,
         action: "upsert" as const,
       }));
@@ -2945,18 +3457,26 @@ export const useSyncTodosToCalendar = (): void => {
     if (batch.length === 0) return;
 
     isRunningRef.current = true;
-    let cancelled = false;
 
     (async () => {
       try {
         const results = await syncTodosToCalendar(batch);
-        if (cancelled) return;
 
+        // 여기서부터는 이펙트가 재실행/언마운트됐어도 절대 건너뛰지 않는다 —
+        // 구글에는 이미 이벤트가 만들어졌으므로, 그 결과를 스냅샷/Firestore에
+        // 반영하지 않으면 다음 실행이 googleEventId를 몰라 중복 이벤트를
+        // 만든다(위 "왜 이렇게 하는가" 1번 참고).
         const firestoreBatch = writeBatch(db);
         let hasWrites = false;
 
-        results.forEach(({ id, googleEventId }) => {
-          const todo = eligible.find((t) => t.id === id);
+        results.forEach(({ id, googleEventId, error }) => {
+          if (error) {
+            // 스냅샷을 갱신하지 않는다 — 다음 실행(todos 변경 또는 다음 앱 진입)에서
+            // updatedAt이 그대로 다르게 남아 이 항목이 다시 동기화 대상에 잡힌다.
+            console.error(`캘린더 동기화 실패 (todo ${id}):`, error);
+            return;
+          }
+          const todo = eligibleById.get(id);
           if (todo) {
             snapshot.set(id, { updatedAt: todo.updatedAt, googleEventId });
             if (todo.googleEventId !== googleEventId) {
@@ -2964,7 +3484,16 @@ export const useSyncTodosToCalendar = (): void => {
               hasWrites = true;
             }
           } else {
+            // 삭제 성공. 스냅샷에서는 지우되, Todo 문서 자체가 아직 존재한다면
+            // (archived·dueAt 제거로 대상에서만 빠진 경우) googleEventId도
+            // 같이 지운다 — 안 지우면 나중에 다시 대상이 됐을 때 이미 삭제된
+            // 이벤트 id로 PATCH를 시도해 404로 계속 실패하고, 실패한 항목은
+            // 스냅샷이 갱신되지 않으니 영원히 같은 오류가 반복된다.
             snapshot.delete(id);
+            if (todos.some((t) => t.id === id)) {
+              firestoreBatch.update(doc(db, "todos", id), { googleEventId: null });
+              hasWrites = true;
+            }
           }
         });
 
@@ -2973,16 +3502,25 @@ export const useSyncTodosToCalendar = (): void => {
           queryClient.invalidateQueries({ queryKey: ["todos"] });
         }
       } catch (error) {
-        console.error("캘린더 동기화 실패:", error);
+        if (error instanceof CalendarRevokedError) {
+          const uid = auth.currentUser?.uid;
+          if (uid) {
+            await setDoc(doc(db, "calendarIntegrations", uid), { status: "revoked" }, { merge: true });
+            queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
+          }
+        } else {
+          console.error("캘린더 동기화 실패:", error);
+          Sentry.captureException(error);
+        }
       } finally {
         isRunningRef.current = false;
+        if (pendingRerunRef.current) {
+          pendingRerunRef.current = false;
+          setRunToken((n) => n + 1);
+        }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [todos, integration, queryClient]);
+  }, [todos, integration, queryClient, runToken]);
 };
 ```
 
@@ -2998,7 +3536,7 @@ export { useSyncTodosToCalendar } from "./useSyncTodosToCalendar";
 cd client && npx vitest run src/features/calendarIntegration/hooks/__tests__/useSyncTodosToCalendar.test.tsx
 ```
 
-Expected: PASS (4 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: App.tsx에 마운트**
 
@@ -3039,7 +3577,9 @@ Expected: 전부 PASS
 - [ ] **Step 8: 커밋**
 
 ```bash
-git add client/src/features/calendarIntegration/hooks/ client/src/App.tsx
+git add client/src/features/calendarIntegration/hooks/ client/src/App.tsx \
+  client/src/features/calendarIntegration/api/calendarProxyApi.ts \
+  client/src/features/calendarIntegration/api/__tests__/calendarProxyApi.test.ts
 git commit -m "feat(client): useSyncTodosToCalendar diff 동기화 훅 + App.tsx 마운트"
 ```
 
@@ -3180,6 +3720,8 @@ import { useGoogleCalendarEvents } from "@/features/calendarIntegration/hooks";
 
 `events` `useMemo`를 구글 이벤트까지 병합하도록 수정 (기존 Todo 이벤트 계산 로직은 그대로 두고, 반환 직전에 병합):
 
+**왜 `syncedGoogleEventIds`로 걸러야 하는가**: Task 13의 `useSyncTodosToCalendar`가 마감일 있는 Todo를 이미 이 사용자의 기본 캘린더에 이벤트로 밀어 넣고 있다(`Todo.googleEventId`에 그 이벤트 id를 저장). 이 온디맨드 조회(`/events`)는 **같은 기본 캘린더**를 그대로 훑어오므로, 아무 필터 없이 합치면 ToDoDo가 방금 자기가 만든 이벤트를 "외부 일정"인 것처럼 다시 보여줘 — 마감일 있는 Todo마다 캘린더에 **두 번**(색깔 있는 원래 Todo 이벤트 + 회색 "google-" 읽기 전용 사본) 나타난다. 연동을 켠 사용자에게는 예외가 아니라 기본 동작이 되므로 반드시 걸러야 한다. `todos[].googleEventId`는 이미 클라이언트가 들고 있으므로, Worker나 스펙을 손대지 않고 여기서 클라이언트 쪽 필터링만으로 해결한다.
+
 ```tsx
   const events = useMemo(() => {
     const todoEvents = todos
@@ -3212,20 +3754,30 @@ import { useGoogleCalendarEvents } from "@/features/calendarIntegration/hooks";
         };
       }) ?? [];
 
-    const googleOnlyEvents = (googleEvents ?? []).map((event) => ({
-      id: `google-${event.id}`,
-      title: event.title,
-      start: event.start,
-      end: event.end,
-      color: colors.text.secondary,
-      editable: false,
-      extendedProps: {
-        status: "todo" as const,
-        overdue: false,
-        isRecurring: false,
-        source: "google" as const,
-      },
-    }));
+    // ToDoDo가 이미 이 이벤트들을 만든 장본인이다 — 온디맨드 조회 결과에서
+    // 제외해 같은 Todo가 두 번 표시되는 걸 막는다.
+    const syncedGoogleEventIds = new Set(
+      (todos ?? [])
+        .map((t) => t.googleEventId)
+        .filter((id): id is string => !!id),
+    );
+
+    const googleOnlyEvents = (googleEvents ?? [])
+      .filter((event) => !syncedGoogleEventIds.has(event.id))
+      .map((event) => ({
+        id: `google-${event.id}`,
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        color: colors.text.secondary,
+        editable: false,
+        extendedProps: {
+          status: "todo" as const,
+          overdue: false,
+          isRecurring: false,
+          source: "google" as const,
+        },
+      }));
 
     return [...todoEvents, ...googleOnlyEvents];
   }, [todos, googleEvents]);
@@ -3308,24 +3860,64 @@ import { AlertCircle, Plus, Repeat, CalendarDays } from "lucide-react";
   }, [todos, updateTodoDueAt, toast]);
 ```
 
-- [ ] **Step 6: 기존 calendar.test.tsx에 오버레이 mock 추가 + 회귀 확인**
+- [ ] **Step 6: 기존 calendar.test.tsx에 오버레이 mock 추가 + 읽기 전용 검증 테스트 + 회귀 확인**
 
-`client/src/features/dashboard/components/__tests__/calendar.test.tsx` 상단(Task 12에서 추가한 mock 옆)에 추가:
+`client/src/features/dashboard/components/__tests__/calendar.test.tsx` 상단(Task 12에서 추가한 mock 옆)의 기존 mock을 아래로 교체 — `useGoogleCalendarEvents`를 `vi.fn()`으로 감싸 테스트별로 반환값을 바꿀 수 있게 한다:
 
 ```tsx
 vi.mock("@/features/calendarIntegration/hooks", () => ({
   useMarkCalendarConnected: () => ({ markConnected: vi.fn() }),
-  useGoogleCalendarEvents: () => ({ data: [] }),
+  useGoogleCalendarEvents: vi.fn(() => ({ data: [] })),
 }));
 ```
 
-(Task 12에서 이미 `@/features/calendarIntegration/hooks`를 mock했다면, 그 mock 객체에 `useGoogleCalendarEvents` 항목만 추가한다 — 같은 경로를 두 번 `vi.mock`하지 않는다.)
+(Task 12에서 이미 `@/features/calendarIntegration/hooks`를 mock했다면, 그 mock 객체를 이 내용으로 교체한다 — 같은 경로를 두 번 `vi.mock`하지 않는다.)
+
+파일 상단, 다른 `vi.mock` 호출들 옆에 `useNavigate`를 스파이로 바꾸는 mock을 추가한다 — 구글 이벤트를 클릭했을 때 실제로 페이지 이동을 시도하지 않는지 검증하려면 `navigate` 호출 자체를 가로채야 한다:
+
+```tsx
+const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }))
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>()
+  return { ...actual, useNavigate: () => mockNavigate }
+})
+```
+
+파일 맨 아래, 기존 `describe` 블록들 뒤에 새 블록을 추가한다:
+
+```tsx
+describe('Calendar 구글 이벤트 읽기 전용', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+  })
+
+  it('구글 이벤트를 클릭해도 상세 페이지로 이동하지 않는다', async () => {
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    const d = new Date()
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`
+    vi.mocked(useGoogleCalendarEvents).mockReturnValue({
+      data: [{ id: 'g-1', title: '외부 회의', start: todayStr, end: todayStr }],
+    } as never)
+
+    renderCalendar()
+    const googleEventTitle = await screen.findByText('외부 회의')
+    fireEvent.click(googleEventTitle)
+
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+})
+```
+
+`vi.hoisted`로 끌어올린 `beforeEach` import는 파일 상단에 이미 있는 `describe`/`it`/`expect`/`vi`/`beforeAll`/`afterAll` import에 `beforeEach`만 추가하면 된다 (다른 `describe` 블록들은 `beforeEach`를 안 쓰므로 영향 없음).
 
 ```bash
 cd client && npx vitest run src/features/dashboard/components/__tests__/calendar.test.tsx
 ```
 
-Expected: PASS (4 tests, 기존과 동일)
+Expected: PASS (5 tests, 기존 4개 + 신규 1개)
 
 - [ ] **Step 7: 전체 클라이언트 테스트 + 타입체크**
 
