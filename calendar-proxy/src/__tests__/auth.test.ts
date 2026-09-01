@@ -17,7 +17,7 @@ const encodeJson = (obj: unknown): string =>
 async function makeSignedToken(
   payloadOverrides: Record<string, unknown> = {},
 ): Promise<{ token: string; jwk: JsonWebKey }> {
-  const keyPair = await crypto.subtle.generateKey(
+  const keyPair = (await crypto.subtle.generateKey(
     {
       name: "RSASSA-PKCS1-v1_5",
       modulusLength: 2048,
@@ -26,7 +26,7 @@ async function makeSignedToken(
     },
     true,
     ["sign", "verify"],
-  );
+  )) as CryptoKeyPair;
   const jwk = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)) as JsonWebKey & {
     kid?: string;
   };

@@ -67,10 +67,11 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
   }
 
   const body = JSON.stringify(toGoogleEventBody(todo));
-  const url = todo.googleEventId ? `${CALENDAR_API_BASE}/${todo.googleEventId}` : CALENDAR_API_BASE;
-  const method = todo.googleEventId ? "PATCH" : "POST";
+  const hasExistingId = !!todo.googleEventId;
+  const url = hasExistingId ? `${CALENDAR_API_BASE}/${todo.googleEventId}` : CALENDAR_API_BASE;
+  const method = hasExistingId ? "PATCH" : "POST";
 
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     method,
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -78,6 +79,22 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
     },
     body,
   });
+
+  // PATCH 대상 이벤트가 구글 쪽에서 이미 사라졌다면(사용자가 직접 삭제했거나,
+  // 연동 해제 후 재연결해 예전 googleEventId가 가리키던 이벤트가 없어진 경우)
+  // 계속 실패로 남기지 않고 새로 생성한다 — 그러지 않으면 이 Todo는 영원히
+  // 같은 404로 재시도만 반복하게 된다.
+  if (hasExistingId && !res.ok && (res.status === 404 || res.status === 410)) {
+    res = await fetch(CALENDAR_API_BASE, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    });
+  }
+
   if (!res.ok) {
     throw new Error(`이벤트 ${method} 실패 (todo ${todo.id}): ${res.status}`);
   }

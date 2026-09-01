@@ -84,6 +84,35 @@ describe("syncTodosToGoogleCalendar", () => {
     expect(results).toEqual([{ id: "todo-1", googleEventId: null }]);
   });
 
+  it("PATCH 대상 이벤트가 이미 삭제됐으면(404) 새로 생성한다", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "new-event-id" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const todos: SyncTodoItem[] = [
+      {
+        id: "todo-1",
+        title: "제목",
+        dueAt: "2026-09-01",
+        googleEventId: "deleted-event-id",
+        action: "upsert",
+      },
+    ];
+
+    const results = await syncTodosToGoogleCalendar(todos, "access-token", 1);
+
+    expect(results).toEqual([{ id: "todo-1", googleEventId: "new-event-id" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [firstUrl, firstInit] = fetchMock.mock.calls[0];
+    expect(firstUrl).toBe("https://www.googleapis.com/calendar/v3/calendars/primary/events/deleted-event-id");
+    expect(firstInit.method).toBe("PATCH");
+    const [secondUrl, secondInit] = fetchMock.mock.calls[1];
+    expect(secondUrl).toBe("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+    expect(secondInit.method).toBe("POST");
+  });
+
   it("동시 요청 수를 제한한다", async () => {
     let inFlight = 0;
     let maxInFlight = 0;

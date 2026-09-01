@@ -69,7 +69,8 @@ Workers**(무료 티어, 카드 등록 없이 시작 가능)에 별도로 둔다
 ```
 [클라이언트]                      [Cloudflare Worker]              [Google Calendar API]
 연결 버튼 클릭  ─────────────────▶ GET /oauth/start
-                                  (동의 URL 생성, state에 uid 포함)
+                                  (동의 URL 생성, state는 서버가 발급한
+                                   1회용 무작위 토큰 — uid 자체는 아님)
                                         │
 사용자가 구글 동의 화면에서 승인
                                         ▼
@@ -97,8 +98,13 @@ useGetTodos() 결과가 바뀔 때마다 ──────▶ POST /sync-todos 
 `Authorization: Bearer` 헤더로 받아, 구글의 공개 JWKS로 서명을 검증하고
 `uid`를 추출한다. Firebase Admin SDK 없이도 가능한 방식이라 Blaze나 별도
 서비스 계정 키 배포 없이 호출자 신원을 확인할 수 있다. `/oauth/start`,
-`/oauth/callback`은 예외로, OAuth `state` 파라미터에 uid를 실어 왕복시킨다
-(구글 리다이렉트는 커스텀 헤더를 못 붙이므로).
+`/oauth/callback`은 예외다 — 구글 리다이렉트는 커스텀 헤더를 못 붙이므로
+Authorization 헤더 대신 OAuth `state` 파라미터로 신원을 넘겨야 하는데,
+`/oauth/start`가 `createOAuthState`로 발급한 1회용 무작위 토큰을 `state`로
+내보내고 `/oauth/callback`이 `consumeOAuthState`로 그 토큰을 소비해 원래
+uid를 복원한다(uid 자체는 왕복시키지 않음). Authorization 헤더가 없는
+콜백 엔드포인트에서 uid를 신뢰 없이 그대로 받으면 임의로 다른 사용자의
+uid를 지어내 위조할 수 있었던 문제를 막기 위함이다.
 
 ## 데이터 모델
 
@@ -215,8 +221,8 @@ scope)"로 분류한다. 테스트 사용자 범위를 벗어나 일반 사용�
 
 | 엔드포인트 | 인증 | 역할 |
 | --- | --- | --- |
-| `GET /oauth/start` | Firebase ID Token | OAuth 동의 URL 생성, `state`에 uid 포함 |
-| `GET /oauth/callback` | OAuth `state`로 uid 확인 | 인가 코드 → 토큰 교환, refresh token을 KV에 저장, 클라이언트로 리다이렉트 |
+| `GET /oauth/start` | Firebase ID Token | OAuth 동의 URL 생성, `createOAuthState`로 발급한 1회용 무작위 토큰을 `state`로 내보냄(uid는 KV에만 보관, state에는 담지 않음) |
+| `GET /oauth/callback` | OAuth `state` 토큰을 `consumeOAuthState`로 소비해 uid 복원 | 인가 코드 → 토큰 교환, refresh token을 KV에 저장, 클라이언트로 리다이렉트 |
 | `POST /sync-todos` | Firebase ID Token | Todo 배열(각각 `action: "upsert" \| "delete"`)을 받아 이벤트 생성/수정/삭제. 동시 요청 수를 제한(예: 최대 10개씩)하며 병렬 처리. 소급 동기화와 평소 변경 동기화가 이 엔드포인트 하나를 공유한다 |
 | `GET /events` | Firebase ID Token | 온디맨드 구글 이벤트 조회 (저장 안 함) |
 | `POST /disconnect` | Firebase ID Token | 매핑된 이벤트 일괄 삭제(동시 요청 수 제한), KV에서 토큰 삭제 |
@@ -267,8 +273,11 @@ const isCalendarIntegrationUnlocked = true;
   Worker가 에러 코드를 반환하고, 클라이언트가 `calendarIntegrations.status`를
   `"revoked"`로 갱신한다. 클라이언트는 이 상태를 보고 "다시 연결해주세요"
   배너를 표시한다.
-- **레이트 리밋**: 동시 요청 수를 제한해뒀지만, 그래도 429 응답을 받으면
-  Worker가 지수 백오프로 재시도한다.
+- **레이트 리밋**: 동시 요청 수를 제한해뒀지만, 그래도 429 응답을 받는
+  항목이 있을 수 있다. 인위적인 지연·백오프는 구현하지 않는다(스코프
+  밖으로 판단) — 실패한 항목은 다른 실패와 동일하게 `error` 필드로
+  반환되고, 아래 재조정 로직에 따라 다음 정기 동기화 패스(Todo 변경 또는
+  다음 앱 진입)에서 자연히 재시도된다.
 - **`/sync-todos` 호출 유실 대비 재조정**: 호출 자체가 네트워크 오류로
   실패하면 그 배치는 동기화가 안 된 채로 남는다. 별도 재시도 큐를 만들지
   않는다 — `useSyncTodosToCalendar`가 다음 `todos` 변경(사용자의 다음

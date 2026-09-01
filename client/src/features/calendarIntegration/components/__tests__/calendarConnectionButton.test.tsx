@@ -13,6 +13,15 @@ vi.mock("@/features/todo", () => ({
   useGetTodos: vi.fn(() => ({ data: [] })),
 }));
 
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
+vi.mock("@/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/shared")>();
+  return {
+    ...actual,
+    useToast: () => ({ error: toastErrorMock, success: vi.fn() }),
+  };
+});
+
 const createWrapper = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: { children: ReactNode }) => (
@@ -24,6 +33,7 @@ const createWrapper = () => {
 describe("CalendarConnectionButton", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    toastErrorMock.mockClear();
     const { useConnectCalendar, useDisconnectCalendar } = await import("../../hooks");
     vi.mocked(useConnectCalendar).mockReturnValue({ connect: vi.fn() });
     vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect: vi.fn() });
@@ -95,5 +105,33 @@ describe("CalendarConnectionButton", () => {
     await waitFor(() => {
       expect(disconnect).toHaveBeenCalledWith(["event-1", "event-3"]);
     });
+  });
+
+  it("connect가 실패하면 에러 토스트를 보여준다", async () => {
+    const { useCalendarIntegrationStatus, useConnectCalendar } = await import("../../hooks");
+    const connect = vi.fn().mockRejectedValue(new Error("start failed"));
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: false, status: "active" },
+    } as never);
+    vi.mocked(useConnectCalendar).mockReturnValue({ connect });
+
+    render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+    fireEvent.click(screen.getByText("구글 캘린더 연동"));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+  });
+
+  it("disconnect가 실패하면 에러 토스트를 보여준다", async () => {
+    const { useCalendarIntegrationStatus, useDisconnectCalendar } = await import("../../hooks");
+    const disconnect = vi.fn().mockRejectedValue(new Error("disconnect failed"));
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect });
+
+    render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+    fireEvent.click(screen.getByText("연동 해제"));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
   });
 });

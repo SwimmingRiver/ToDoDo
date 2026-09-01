@@ -69,6 +69,7 @@ const createWrapper = () => {
 
 describe("useSyncTodosToCalendar", () => {
   beforeEach(async () => {
+    localStorage.clear();
     vi.clearAllMocks();
     const { writeBatch } = await import("firebase/firestore");
     vi.mocked(writeBatch).mockReturnValue({
@@ -273,6 +274,40 @@ describe("useSyncTodosToCalendar", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(vi.mocked(syncTodosToCalendar)).not.toHaveBeenCalled();
+  });
+
+  it("스냅샷이 localStorage에 저장되어 새로고침(새 훅 마운트) 후에도 대상에서 빠진 Todo를 정리한다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+
+    const todo = baseTodo({ googleEventId: "event-1" });
+    vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
+      { id: "todo-1", googleEventId: "event-1" },
+    ]);
+
+    const { unmount } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+    unmount();
+
+    // 새 훅 인스턴스(=새 페이지 로드를 흉내) — Todo가 아카이브/삭제돼 대상에서
+    // 완전히 사라졌다. localStorage에 저장된 스냅샷이 없다면 이 훅은 이 Todo가
+    // 있었다는 사실 자체를 몰라 정리 요청을 보낼 수 없다.
+    vi.mocked(useGetTodos).mockReturnValue({ data: [] } as never);
+    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([{ id: "todo-1", googleEventId: null }]);
+
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+        { id: "todo-1", title: "", dueAt: "", googleEventId: "event-1", action: "delete" },
+      ]);
+    });
   });
 
   it("동기화 도중 CalendarRevokedError가 나면 연동 상태를 revoked로 기록한다", async () => {
