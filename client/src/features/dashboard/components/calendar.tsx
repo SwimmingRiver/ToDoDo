@@ -2,7 +2,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGetTodos, useUpdateTodoDueAt, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
 import type { EventInput, EventClickArg, EventContentArg, MoreLinkArg } from "@fullcalendar/core/index.js";
@@ -24,13 +24,15 @@ import {
 } from "./calendar.styles";
 import { statusColors, type Status } from "../../../styles/statusColors";
 import { BottomSheet, EmptyState, Modal, RecurrenceBadge, useToast } from "@/shared";
-import { AlertCircle, Plus, Repeat } from "lucide-react";
+import { AlertCircle, Plus, Repeat, CalendarDays } from "lucide-react";
 import styled, { keyframes } from "styled-components";
 import { colors } from "@/styles/colors";
 import { isOverdue, getDropDates } from "../utils/calendarUtils";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
 import { toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 import { isDateInTodoRange } from "@/shared/utils/dateRange";
+import CalendarConnectionButton from "@/features/calendarIntegration/components/calendarConnectionButton";
+import { useMarkCalendarConnected, useGoogleCalendarEvents } from "@/features/calendarIntegration/hooks";
 
 const statusLabels: Record<Status, string> = {
   todo: "할 일",
@@ -44,14 +46,36 @@ const Calendar = () => {
   const navigate = useNavigate();
   const updateTodoDueAt = useUpdateTodoDueAt();
   const { data: todos, isLoading, isError } = useGetTodos();
+  const { data: googleEvents } = useGoogleCalendarEvents();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"dayGridMonth" | "dayGridWeek">("dayGridMonth");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { markConnected } = useMarkCalendarConnected();
+
+  useEffect(() => {
+    if (searchParams.get("calendarConnected") === "1") {
+      markConnected();
+      toast.success("연동 완료", "구글 캘린더 연동이 완료됐습니다");
+      setSearchParams((prev) => {
+        prev.delete("calendarConnected");
+        return prev;
+      });
+    }
+    if (searchParams.get("calendarError") === "1") {
+      toast.error("연동 실패", "구글 캘린더 연동 중 오류가 발생했습니다");
+      setSearchParams((prev) => {
+        prev.delete("calendarError");
+        return prev;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const events = useMemo(() => {
-    return todos
+    const todoEvents = todos
       ?.filter((todo: Todo) => !!todo.startAt || !!todo.dueAt)
       .map((todo: Todo) => {
         const overdue = isOverdue(todo);
@@ -85,15 +109,47 @@ const Calendar = () => {
             status: todo.status,
             overdue,
             isRecurring: todo.recurrenceId != null,
+            source: "todo" as const,
           },
         };
-      });
-  }, [todos]);
+      }) ?? [];
+
+    // ToDoDo가 이미 이 이벤트들을 만든 장본인이다 — 온디맨드 조회 결과에서
+    // 제외해 같은 Todo가 두 번 표시되는 걸 막는다.
+    const syncedGoogleEventIds = new Set(
+      (todos ?? [])
+        .map((t) => t.googleEventId)
+        .filter((id): id is string => !!id),
+    );
+
+    const googleOnlyEvents = (googleEvents ?? [])
+      .filter((event) => !syncedGoogleEventIds.has(event.id))
+      .map((event) => ({
+        id: `google-${event.id}`,
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        color: colors.text.secondary,
+        editable: false,
+        extendedProps: {
+          status: "todo" as const,
+          overdue: false,
+          isRecurring: false,
+          source: "google" as const,
+        },
+      }));
+
+    return [...todoEvents, ...googleOnlyEvents];
+  }, [todos, googleEvents]);
 
   const renderEventContent = useCallback((arg: EventContentArg) => (
     <EventContentWrapper>
-      {arg.event.extendedProps.isRecurring && (
-        <Repeat size={10} color="#ffffff" aria-hidden="true" />
+      {arg.event.extendedProps.source === "google" ? (
+        <CalendarDays size={10} color="#ffffff" aria-hidden="true" />
+      ) : (
+        arg.event.extendedProps.isRecurring && (
+          <Repeat size={10} color="#ffffff" aria-hidden="true" />
+        )
       )}
       <span>{arg.event.title}</span>
     </EventContentWrapper>
@@ -124,10 +180,16 @@ const Calendar = () => {
   }, []);
 
   const handleEventClick = useCallback((info: EventClickArg) => {
+    if (info.event.extendedProps.source === "google") return;
     navigate(`/todo/${info.event.id}`);
   }, [navigate]);
 
   const handleEventDrop = useCallback((info: EventDropArg) => {
+    if (info.event.extendedProps.source === "google") {
+      info.revert();
+      return;
+    }
+
     const todo = todos?.find((t: Todo) => t.id === info.event.id);
     if (!todo) {
       info.revert();
@@ -230,6 +292,7 @@ const Calendar = () => {
           >
             주간
           </ViewButton>
+          <CalendarConnectionButton />
         </ViewToggleRow>
         <FullCalendar
           ref={calendarRef}

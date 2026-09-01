@@ -1,0 +1,12 @@
+name = "tododo-calendar-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "tododo-83576"
+CLIENT_APP_URL = "https://tododo-83576.web.app"
+
+# 아래 값은 Step 2에서 실제 네임스페이스 id로 교체한다.
+kv_namespaces = [
+  { binding = "CALENDAR_TOKENS", id = "PENDING" }
+]
