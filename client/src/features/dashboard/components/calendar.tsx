@@ -114,20 +114,30 @@ const Calendar = () => {
         };
       }) ?? [];
 
-    const googleOnlyEvents = (googleEvents ?? []).map((event) => ({
-      id: `google-${event.id}`,
-      title: event.title,
-      start: event.start,
-      end: event.end,
-      color: colors.text.secondary,
-      editable: false,
-      extendedProps: {
-        status: "todo" as const,
-        overdue: false,
-        isRecurring: false,
-        source: "google" as const,
-      },
-    }));
+    // ToDoDo가 이미 이 이벤트들을 만든 장본인이다 — 온디맨드 조회 결과에서
+    // 제외해 같은 Todo가 두 번 표시되는 걸 막는다.
+    const syncedGoogleEventIds = new Set(
+      (todos ?? [])
+        .map((t) => t.googleEventId)
+        .filter((id): id is string => !!id),
+    );
+
+    const googleOnlyEvents = (googleEvents ?? [])
+      .filter((event) => !syncedGoogleEventIds.has(event.id))
+      .map((event) => ({
+        id: `google-${event.id}`,
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        color: colors.text.secondary,
+        editable: false,
+        extendedProps: {
+          status: "todo" as const,
+          overdue: false,
+          isRecurring: false,
+          source: "google" as const,
+        },
+      }));
 
     return [...todoEvents, ...googleOnlyEvents];
   }, [todos, googleEvents]);

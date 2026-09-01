@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import Calendar from '../calendar'
@@ -17,8 +17,15 @@ vi.mock("@/features/calendarIntegration/components/calendarConnectionButton", ()
 }));
 vi.mock("@/features/calendarIntegration/hooks", () => ({
   useMarkCalendarConnected: () => ({ markConnected: vi.fn() }),
-  useGoogleCalendarEvents: () => ({ data: [] }),
+  useGoogleCalendarEvents: vi.fn(() => ({ data: [] })),
 }));
+
+const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }))
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>()
+  return { ...actual, useNavigate: () => mockNavigate }
+})
 
 const { mockTodos } = vi.hoisted(() => {
   const d = new Date()
@@ -170,5 +177,28 @@ describe('Calendar 타임존: 자정 마감 할 일', () => {
 
     const dueCell = document.querySelector(`[data-date="${dueDateKey}"]`)
     expect(dueCell?.textContent).toContain('자정 마감 할 일')
+  })
+})
+
+describe('Calendar 구글 이벤트 읽기 전용', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+  })
+
+  it('구글 이벤트를 클릭해도 상세 페이지로 이동하지 않는다', async () => {
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    const d = new Date()
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`
+    vi.mocked(useGoogleCalendarEvents).mockReturnValue({
+      data: [{ id: 'g-1', title: '외부 회의', start: todayStr, end: todayStr }],
+    } as never)
+
+    renderCalendar()
+    const googleEventTitle = await screen.findByText('외부 회의')
+    fireEvent.click(googleEventTitle)
+
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 })
