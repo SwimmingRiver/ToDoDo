@@ -17,6 +17,7 @@ vi.mock("@/features/calendarIntegration/components/calendarConnectionButton", ()
 }));
 vi.mock("@/features/calendarIntegration/hooks", () => ({
   useMarkCalendarConnected: () => ({ markConnected: vi.fn() }),
+  useGoogleCalendarEvents: () => ({ data: [] }),
 }));
 
 const { mockTodos } = vi.hoisted(() => {
