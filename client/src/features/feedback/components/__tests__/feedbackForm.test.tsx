@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import FeedbackButton from '../feedbackButton'
+import FeedbackForm from '../feedbackForm'
 
 // vi.mock 팩토리는 이 파일의 다른 import보다 먼저(모듈 로드 시점에) 실행되므로,
 // 나중에 선언되는 일반 let 변수를 참조하면 TDZ 에러가 난다. todoListItem.test.tsx가
@@ -22,7 +22,7 @@ vi.mock('../../hooks', () => ({
   }),
 }))
 
-describe('FeedbackButton 컴포넌트', () => {
+describe('FeedbackForm 컴포넌트', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mutationState.isPending = false
@@ -34,18 +34,14 @@ describe('FeedbackButton 컴포넌트', () => {
     vi.useRealTimers()
   })
 
-  it('트리거 버튼만 보이고 모달은 닫혀 있어야 한다', () => {
-    render(<FeedbackButton />)
+  it('isOpen이 false면 아무것도 렌더링하지 않는다', () => {
+    render(<FeedbackForm isOpen={false} onClose={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: '의견 보내기' })).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('자유롭게 의견을 남겨주세요')).not.toBeInTheDocument()
   })
 
-  it('트리거 버튼을 클릭하면 모달이 열리고 제출 버튼은 비어있는 동안 비활성화된다', async () => {
-    const user = userEvent.setup()
-    render(<FeedbackButton />)
-
-    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
+  it('isOpen이 true면 입력 폼을 보여주고 제출 버튼은 비어있는 동안 비활성화된다', () => {
+    render(<FeedbackForm isOpen onClose={vi.fn()} />)
 
     expect(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '제출' })).toBeDisabled()
@@ -53,9 +49,8 @@ describe('FeedbackButton 컴포넌트', () => {
 
   it('내용을 입력하면 제출 버튼이 활성화되고, 클릭하면 mutate가 호출된다', async () => {
     const user = userEvent.setup()
-    render(<FeedbackButton />)
+    render(<FeedbackForm isOpen onClose={vi.fn()} />)
 
-    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
     await user.type(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요'), '좋아요')
 
     const submitButton = screen.getByRole('button', { name: '제출' })
@@ -66,24 +61,30 @@ describe('FeedbackButton 컴포넌트', () => {
     expect(mutate).toHaveBeenCalledWith('좋아요', expect.anything())
   })
 
-  it('isSuccess가 true면 성공 메시지를 보여준다', async () => {
+  it('isSuccess가 true면 성공 메시지를 보여준다', () => {
     mutationState.isSuccess = true
-    const user = userEvent.setup()
-    render(<FeedbackButton />)
-
-    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
+    render(<FeedbackForm isOpen onClose={vi.fn()} />)
 
     expect(screen.getByText('감사합니다! 의견이 전달되었습니다.')).toBeInTheDocument()
   })
 
-  it('isError가 true면 에러 메시지를 보여준다', async () => {
+  it('isError가 true면 에러 메시지를 보여준다', () => {
     mutationState.isError = true
-    const user = userEvent.setup()
-    render(<FeedbackButton />)
-
-    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
+    render(<FeedbackForm isOpen onClose={vi.fn()} />)
 
     expect(screen.getByText('전송에 실패했습니다. 잠시 후 다시 시도해주세요.')).toBeInTheDocument()
+  })
+
+  it('닫기를 누르면 onClose가 호출되고 입력 상태가 초기화된다', async () => {
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<FeedbackForm isOpen onClose={onClose} />)
+
+    await user.type(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요'), '초안')
+    await user.click(screen.getByRole('button', { name: '닫기' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(reset).toHaveBeenCalledTimes(1)
   })
 
   it('성공 후 자동 닫힘 전에 사용자가 직접 닫았다가 다시 열면, 지연된 타이머가 새로 입력한 내용을 지우지 않는다', async () => {
@@ -91,10 +92,10 @@ describe('FeedbackButton 컴포넌트', () => {
     // setTimeout(자동 닫힘)만 가짜 타이머로 통제한다 — 둘을 섞으면 userEvent의
     // 내부 대기가 fake timer에 걸려 멈춘다.
     const user = userEvent.setup()
+    const onClose = vi.fn()
 
-    render(<FeedbackButton />)
+    const { rerender } = render(<FeedbackForm isOpen onClose={onClose} />)
 
-    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
     await user.type(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요'), '좋아요')
     await user.click(screen.getByRole('button', { name: '제출' }))
 
@@ -109,15 +110,16 @@ describe('FeedbackButton 컴포넌트', () => {
     })
 
     // 사용자가 자동 닫힘(1.2초) 타이머가 끝나기 전에 직접 "닫기"를 누른다.
+    // (FeedbackForm은 제어 컴포넌트이므로, 실제로는 onClose를 받은 부모가
+    // isOpen을 false로 내려서 닫힌다 — 여기서는 그 상태 변화를 rerender로 재현한다.)
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: '닫기' }))
       mutationState.isSuccess = false // handleClose가 호출한 reset()의 효과를 시뮬레이션
     })
+    rerender(<FeedbackForm isOpen={false} onClose={onClose} />)
 
     // 모달을 다시 열고 새 내용을 입력한다.
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '의견 보내기' }))
-    })
+    rerender(<FeedbackForm isOpen onClose={onClose} />)
     act(() => {
       fireEvent.change(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요'), {
         target: { value: '새 의견' },
@@ -133,20 +135,15 @@ describe('FeedbackButton 컴포넌트', () => {
     expect(screen.getByPlaceholderText('자유롭게 의견을 남겨주세요')).toHaveValue('새 의견')
   })
 
-  it('모달은 렌더링된 컨테이너가 아니라 document.body에 직접 portal되어야 한다', async () => {
-    // 모바일 드로어처럼 transform이 걸린 조상 안에 FeedbackButton이 렌더링돼도
+  it('모달은 렌더링된 컨테이너가 아니라 document.body에 직접 portal되어야 한다', () => {
+    // 모바일 드로어/사이드바처럼 transform이 걸린 조상 안에서 열려도
     // Overlay(position: fixed)가 그 조상을 containing block으로 삼지 않도록,
     // 모달은 반드시 document.body의 자식으로 portal되어야 한다.
-    const user = userEvent.setup()
-    const { container } = render(<FeedbackButton />)
-
-    await user.click(screen.getByRole('button', { name: '의견 보내기' }))
+    const { container } = render(<FeedbackForm isOpen onClose={vi.fn()} />)
 
     const textarea = screen.getByPlaceholderText('자유롭게 의견을 남겨주세요')
 
-    // render()가 만든 컨테이너 내부에는 모달이 없어야 한다 (portal되었으므로).
     expect(container.contains(textarea)).toBe(false)
-    // 대신 document.body에 직접 속해 있어야 한다.
     expect(document.body.contains(textarea)).toBe(true)
   })
 })
