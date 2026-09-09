@@ -77,6 +77,33 @@ export const NavItem = styled.div<{ $active?: boolean }>`
   }
 `;
 
+/**
+ * 계정/탐색 액션과 성격이 다른 부가 항목임을 드러내기 위해 NavList(flex: 1)의
+ * 형제로 두어 자연스럽게 드로어 맨 하단에 위치시키고, 구분선으로 시각적으로도
+ * 분리한다.
+ */
+export const FeedbackNavRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 22px;
+  border: none;
+  border-top: 1px solid #f0f0f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: ${colors.text.secondary};
+  background-color: transparent;
+  text-align: left;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: #f1f3f4;
+  }
+`;
+
 export const NavNavLink = styled(NavLink)`
   display: flex;
   align-items: center;

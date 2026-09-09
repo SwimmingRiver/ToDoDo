@@ -8,19 +8,6 @@ const scaleIn = keyframes`
   to { opacity: 1; transform: scale(1); }
 `;
 
-export const TriggerButton = styled.button`
-  font-size: 13px;
-  background: none;
-  border: none;
-  color: ${colors.text.secondary};
-  cursor: pointer;
-  padding: 0;
-
-  &:hover {
-    color: ${colors.brand.strong};
-  }
-`;
-
 export const Overlay = styled.div`
   position: fixed;
   inset: 0;
