@@ -2,10 +2,10 @@ name = "tododo-calendar-proxy"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
-[vars]
-FIREBASE_PROJECT_ID = "tododo-83576"
-CLIENT_APP_URL = "https://tododo-83576.web.app"
-
 kv_namespaces = [
   { binding = "CALENDAR_TOKENS", id = "aaeff7ad62814d4d8d3172a84f94d401" }
 ]
+
+[vars]
+FIREBASE_PROJECT_ID = "tododo-83576"
+CLIENT_APP_URL = "https://tododo-83576.web.app"

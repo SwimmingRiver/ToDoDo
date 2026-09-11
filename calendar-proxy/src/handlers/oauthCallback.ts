@@ -8,7 +8,7 @@ export const handleOAuthCallback = async (request: Request, env: Env): Promise<R
   const state = url.searchParams.get("state");
 
   if (!code || !state) {
-    return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
+    return Response.redirect(`${env.CLIENT_APP_URL}/calendar?calendarError=1`, 302);
   }
 
   // state는 /oauth/start가 발급한 1회용 토큰이다 — 여기서 실제 uid로 교환하고
@@ -16,7 +16,7 @@ export const handleOAuthCallback = async (request: Request, env: Env): Promise<R
   // 엔드포인트에서 누구든 다른 사용자의 uid를 흉내 낼 수 있다.
   const uid = await consumeOAuthState(env.CALENDAR_TOKENS, state);
   if (!uid) {
-    return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
+    return Response.redirect(`${env.CLIENT_APP_URL}/calendar?calendarError=1`, 302);
   }
 
   try {
@@ -31,9 +31,9 @@ export const handleOAuthCallback = async (request: Request, env: Env): Promise<R
       throw new Error("refresh_token 없음");
     }
     await setTokenRecord(env.CALENDAR_TOKENS, uid, { refreshToken: tokens.refresh_token });
-    return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarConnected=1`, 302);
+    return Response.redirect(`${env.CLIENT_APP_URL}/calendar?calendarConnected=1`, 302);
   } catch (error) {
     console.error("OAuth 콜백 실패:", error);
-    return Response.redirect(`${env.CLIENT_APP_URL}/dashboard/calendar?calendarError=1`, 302);
+    return Response.redirect(`${env.CLIENT_APP_URL}/calendar?calendarError=1`, 302);
   }
 };
