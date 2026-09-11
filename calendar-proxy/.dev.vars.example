@@ -1,0 +1,5 @@
+# 로컬 개발 전용. 이 파일을 .dev.vars로 복사하면(gitignore됨) `npx wrangler dev`가
+# 자동으로 읽어 wrangler.toml의 [vars] 값을 덮어쓴다.
+# 로컬 클라이언트(보통 http://localhost:5173, Vite 기본 포트)를 CORS로 막지
+# 않으려면 실제 로컬 클라이언트 URL로 맞춰서 채운다.
+CLIENT_APP_URL=http://localhost:5173
