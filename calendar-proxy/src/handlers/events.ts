@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { verifyFirebaseIdToken } from "../auth";
-import { getTokenRecord, deleteTokenRecord, type CalendarTokenRecord } from "../tokenStore";
+import { getTokenRecord, deleteTokenRecord } from "../tokenStore";
 import { refreshAccessToken } from "../googleOAuth";
 
 interface GoogleEventItem {
@@ -27,13 +27,7 @@ export const handleGetEvents = async (request: Request, env: Env): Promise<Respo
     return new Response("Unauthorized", { status: 401 });
   }
 
-  let tokenRecord: CalendarTokenRecord | null;
-  try {
-    tokenRecord = await getTokenRecord(env.CALENDAR_TOKENS, uid);
-  } catch (error) {
-    console.error("이벤트 조회 중 토큰 조회 실패(KV 바인딩 확인 필요):", error);
-    throw error;
-  }
+  const tokenRecord = await getTokenRecord(env.CALENDAR_TOKENS, uid);
   if (!tokenRecord) {
     return jsonResponse({ events: [] });
   }

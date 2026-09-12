@@ -11,17 +11,17 @@ import { handleDisconnect } from "./handlers/disconnect";
 // VITE_CALENDAR_PROXY_URL), localhost 개발 서버 origin도 허용해야 한다. CORS는
 // 브라우저의 응답 열람만 막을 뿐 서버 접근 자체를 막지 않고 모든 엔드포인트가
 // Firebase ID 토큰 검증을 거치므로, localhost origin을 허용해도 보안 저하는 없다.
-const isAllowedOrigin = (origin: string | null, clientAppUrl: string): origin is string => {
+const isAllowedOrigin = (origin: string | null, env: Env): origin is string => {
   if (!origin) return false;
-  if (origin === clientAppUrl) return true;
-  if (origin === "https://tododo-83576.firebaseapp.com") return true;
+  if (origin === env.CLIENT_APP_URL) return true;
+  if (origin === `https://${env.FIREBASE_PROJECT_ID}.firebaseapp.com`) return true;
   if (/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return true;
   return false;
 };
 
 const withCors = (response: Response, requestOrigin: string | null, env: Env): Response => {
   const headers = new Headers(response.headers);
-  if (isAllowedOrigin(requestOrigin, env.CLIENT_APP_URL)) {
+  if (isAllowedOrigin(requestOrigin, env)) {
     headers.set("Access-Control-Allow-Origin", requestOrigin);
   }
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
@@ -61,7 +61,9 @@ export default {
       // 라우팅된 핸들러가 예상치 못한 예외를 던지면(예: KV 바인딩 누락) 여기서
       // 잡지 않는 한 CORS 헤더 없이 죽어서 브라우저에는 CORS 에러로만 보이고
       // 진짜 원인(500)이 가려진다 — 반드시 CORS가 붙은 응답으로 변환해서 내보낸다.
-      console.error("처리되지 않은 예외:", error);
+      // 어느 라우트에서 터졌는지 알아야 KV 바인딩 문제 같은 원인을 빨리 찾을 수
+      // 있으므로 pathname을 같이 남긴다(핸들러마다 중복으로 try/catch하지 않는다).
+      console.error(`처리되지 않은 예외 (${url.pathname}):`, error);
       return withCors(new Response("Internal Server Error", { status: 500 }), origin, env);
     }
   },

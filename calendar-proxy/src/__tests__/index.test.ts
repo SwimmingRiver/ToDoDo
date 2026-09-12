@@ -34,14 +34,14 @@ describe("fetch", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5174");
   });
 
-  it("firebaseapp.com 기본 도메인 origin도 허용한다", async () => {
+  it("FIREBASE_PROJECT_ID로부터 유도된 firebaseapp.com 기본 도메인 origin도 허용한다", async () => {
     const request = new Request("https://proxy.example.com/disconnect", {
       method: "OPTIONS",
-      headers: { Origin: "https://tododo-83576.firebaseapp.com" },
+      headers: { Origin: "https://tododo-test.firebaseapp.com" },
     });
     const response = await worker.fetch(request, makeEnv());
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
-      "https://tododo-83576.firebaseapp.com",
+      "https://tododo-test.firebaseapp.com",
     );
   });
 
