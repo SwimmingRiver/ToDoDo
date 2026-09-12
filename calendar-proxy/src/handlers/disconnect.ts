@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { verifyFirebaseIdToken } from "../auth";
-import { getTokenRecord, deleteTokenRecord } from "../tokenStore";
+import { getTokenRecord, deleteTokenRecord, type CalendarTokenRecord } from "../tokenStore";
 import { refreshAccessToken } from "../googleOAuth";
 import { syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";
 
@@ -21,7 +21,13 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const tokenRecord = await getTokenRecord(env.CALENDAR_TOKENS, uid);
+  let tokenRecord: CalendarTokenRecord | null;
+  try {
+    tokenRecord = await getTokenRecord(env.CALENDAR_TOKENS, uid);
+  } catch (error) {
+    console.error("연동 해제 중 토큰 조회 실패(KV 바인딩 확인 필요):", error);
+    throw error;
+  }
   if (!tokenRecord) {
     return jsonResponse({ ok: true });
   }

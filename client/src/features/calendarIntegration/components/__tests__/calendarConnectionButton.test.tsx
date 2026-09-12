@@ -13,12 +13,15 @@ vi.mock("@/features/todo", () => ({
   useGetTodos: vi.fn(() => ({ data: [] })),
 }));
 
-const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
+const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
+}));
 vi.mock("@/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/shared")>();
   return {
     ...actual,
-    useToast: () => ({ error: toastErrorMock, success: vi.fn() }),
+    useToast: () => ({ error: toastErrorMock, success: toastSuccessMock }),
   };
 });
 
@@ -34,6 +37,7 @@ describe("CalendarConnectionButton", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     toastErrorMock.mockClear();
+    toastSuccessMock.mockClear();
     const { useConnectCalendar, useDisconnectCalendar } = await import("../../hooks");
     vi.mocked(useConnectCalendar).mockReturnValue({ connect: vi.fn() });
     vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect: vi.fn() });
@@ -119,6 +123,20 @@ describe("CalendarConnectionButton", () => {
     fireEvent.click(screen.getByText("구글 캘린더 연동"));
 
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+  });
+
+  it("disconnect가 성공하면 완료 토스트를 보여준다", async () => {
+    const { useCalendarIntegrationStatus, useDisconnectCalendar } = await import("../../hooks");
+    const disconnect = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect });
+
+    render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+    fireEvent.click(screen.getByText("연동 해제"));
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
   });
 
   it("disconnect가 실패하면 에러 토스트를 보여준다", async () => {

@@ -39,6 +39,7 @@ const CalendarConnectionButton = () => {
         .map((t: Todo) => t.googleEventId)
         .filter((id): id is string => !!id);
       await disconnect(googleEventIds);
+      toast.success("연동 해제 완료", "구글 캘린더 연동이 해제되었습니다");
     } catch (error) {
       console.error("구글 캘린더 연동 해제 실패:", error);
       toast.error("연동 해제 실패", "잠시 후 다시 시도해주세요");
