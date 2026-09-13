@@ -112,16 +112,20 @@ describe("calendarProxyApi", () => {
     await expect(getGoogleCalendarEvents()).rejects.toThrow("이벤트 조회 실패");
   });
 
-  it("disconnectCalendar는 Authorization 헤더를 붙이고 googleEventIds를 담아 /disconnect를 호출한다", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  it("disconnectCalendar는 Authorization 헤더를 붙이고 googleEventIds를 담아 /disconnect를 호출하며, 실제로 삭제 확인된 id 목록을 반환한다", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, deletedGoogleEventIds: ["event-1"] }),
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    await disconnectCalendar(["event-1", "event-2"]);
+    const result = await disconnectCalendar(["event-1", "event-2"]);
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://proxy.example.com/disconnect");
     expect(init.headers.Authorization).toBe("Bearer id-token");
     expect(JSON.parse(init.body)).toEqual({ googleEventIds: ["event-1", "event-2"] });
+    expect(result).toEqual({ deletedGoogleEventIds: ["event-1"] });
   });
 
   it("disconnectCalendar는 응답이 실패하면 에러를 던진다", async () => {

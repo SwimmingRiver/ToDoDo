@@ -14,10 +14,15 @@ vi.mock("@/shared/lib/firebase", () => ({
   googleProvider: {},
 }));
 vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
+const { batchUpdateMock, batchCommitMock } = vi.hoisted(() => ({
+  batchUpdateMock: vi.fn(),
+  batchCommitMock: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("firebase/firestore", () => ({
   doc: vi.fn(() => ({})),
   getDoc: vi.fn(),
   setDoc: vi.fn(),
+  writeBatch: vi.fn(() => ({ update: batchUpdateMock, commit: batchCommitMock })),
 }));
 vi.mock("../../api", () => ({
   getOAuthStartUrl: vi.fn(),
@@ -87,23 +92,60 @@ describe("useConnectCalendar", () => {
 });
 
 describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
-  it("disconnect는 api를 호출하고 Firestore 상태를 갱신한 뒤 연동 상태 쿼리를 무효화한다", async () => {
+  beforeEach(() => {
+    batchUpdateMock.mockClear();
+    batchCommitMock.mockClear();
+  });
+
+  it("disconnect는 api를 호출하고 Firestore 상태를 갱신한 뒤 연동 상태 쿼리를 무효화하며, 삭제 확인된 이벤트만 googleEventId를 지운다", async () => {
     const { disconnectCalendar } = await import("../../api");
     const { setDoc } = await import("firebase/firestore");
-    vi.mocked(disconnectCalendar).mockResolvedValue(undefined);
+    vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1"] });
 
     const { Wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
-    await result.current.disconnect(["event-1"]);
+    const outcome = await result.current.disconnect([
+      { id: "todo-1", googleEventId: "event-1" },
+      { id: "todo-2", googleEventId: "event-2" },
+    ]);
 
-    expect(vi.mocked(disconnectCalendar)).toHaveBeenCalledWith(["event-1"]);
+    expect(vi.mocked(disconnectCalendar)).toHaveBeenCalledWith(["event-1", "event-2"]);
+    // event-1(성공)만 지우고, event-2(실패)는 다음에 다시 시도할 수 있도록 그대로 둔다.
+    expect(batchUpdateMock).toHaveBeenCalledTimes(1);
+    expect(batchUpdateMock).toHaveBeenCalledWith(expect.anything(), { googleEventId: null });
+    expect(batchCommitMock).toHaveBeenCalled();
     expect(vi.mocked(setDoc)).toHaveBeenCalledWith(
       expect.anything(),
       { connected: false, status: "active" },
       { merge: true },
     );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos"] });
+    expect(outcome).toEqual({ allDeleted: false });
+  });
+
+  it("disconnect는 googleCalendarEvents 캐시를 지워 연동 해제 후 이미 지워진 이벤트가 화면에 남아있지 않게 한다", async () => {
+    const { disconnectCalendar } = await import("../../api");
+    vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1"] });
+
+    const { Wrapper, queryClient } = createWrapper();
+    const removeSpy = vi.spyOn(queryClient, "removeQueries");
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
+    await result.current.disconnect([{ id: "todo-1", googleEventId: "event-1" }]);
+
+    expect(removeSpy).toHaveBeenCalledWith({ queryKey: ["googleCalendarEvents"] });
+  });
+
+  it("모든 이벤트가 삭제 확인되면 allDeleted: true를 반환한다", async () => {
+    const { disconnectCalendar } = await import("../../api");
+    vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1"] });
+
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
+    const outcome = await result.current.disconnect([{ id: "todo-1", googleEventId: "event-1" }]);
+
+    expect(outcome).toEqual({ allDeleted: true });
   });
 
   it("markConnected는 Firestore에 connected: true와 connectedAt을 기록하고 연동 상태 쿼리를 무효화한다", async () => {
