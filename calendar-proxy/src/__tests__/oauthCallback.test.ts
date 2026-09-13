@@ -44,10 +44,13 @@ describe("handleOAuthCallback", () => {
     expect(vi.mocked(exchangeCodeForTokens)).not.toHaveBeenCalled();
   });
 
-  it("토큰 교환에 성공하면 state가 가리키던 uid로 저장하고 성공 페이지로 리다이렉트한다", async () => {
+  it("토큰 교환에 성공하면 state가 가리키던 uid로 저장하고, state가 가리키던 returnOrigin(연동을 시작한 환경)으로 리다이렉트한다", async () => {
     const { exchangeCodeForTokens } = await import("../googleOAuth");
     const { setTokenRecord, consumeOAuthState } = await import("../tokenStore");
-    vi.mocked(consumeOAuthState).mockResolvedValue("user-123");
+    vi.mocked(consumeOAuthState).mockResolvedValue({
+      uid: "user-123",
+      returnOrigin: "http://localhost:5173",
+    });
     vi.mocked(exchangeCodeForTokens).mockResolvedValue({
       access_token: "at",
       refresh_token: "rt",
@@ -66,13 +69,16 @@ describe("handleOAuthCallback", () => {
       { refreshToken: "rt" },
     );
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toContain("calendarConnected=1");
+    expect(response.headers.get("Location")).toBe("http://localhost:5173/calendar?calendarConnected=1");
   });
 
-  it("refresh_token이 없으면 에러 페이지로 리다이렉트한다", async () => {
+  it("refresh_token이 없으면 returnOrigin의 에러 페이지로 리다이렉트한다", async () => {
     const { exchangeCodeForTokens } = await import("../googleOAuth");
     const { consumeOAuthState } = await import("../tokenStore");
-    vi.mocked(consumeOAuthState).mockResolvedValue("user-123");
+    vi.mocked(consumeOAuthState).mockResolvedValue({
+      uid: "user-123",
+      returnOrigin: "http://localhost:5173",
+    });
     vi.mocked(exchangeCodeForTokens).mockResolvedValue({
       access_token: "at",
       expires_in: 3600,
@@ -82,19 +88,22 @@ describe("handleOAuthCallback", () => {
       "https://proxy.example.com/oauth/callback?code=auth-code&state=random-state-token",
     );
     const response = await handleOAuthCallback(request, makeEnv());
-    expect(response.headers.get("Location")).toContain("calendarError=1");
+    expect(response.headers.get("Location")).toBe("http://localhost:5173/calendar?calendarError=1");
   });
 
-  it("토큰 교환이 실패하면 에러 페이지로 리다이렉트한다", async () => {
+  it("토큰 교환이 실패하면 returnOrigin의 에러 페이지로 리다이렉트한다", async () => {
     const { exchangeCodeForTokens } = await import("../googleOAuth");
     const { consumeOAuthState } = await import("../tokenStore");
-    vi.mocked(consumeOAuthState).mockResolvedValue("user-123");
+    vi.mocked(consumeOAuthState).mockResolvedValue({
+      uid: "user-123",
+      returnOrigin: "http://localhost:5173",
+    });
     vi.mocked(exchangeCodeForTokens).mockRejectedValue(new Error("토큰 교환 실패: 400"));
 
     const request = new Request(
       "https://proxy.example.com/oauth/callback?code=auth-code&state=random-state-token",
     );
     const response = await handleOAuthCallback(request, makeEnv());
-    expect(response.headers.get("Location")).toContain("calendarError=1");
+    expect(response.headers.get("Location")).toBe("http://localhost:5173/calendar?calendarError=1");
   });
 });
