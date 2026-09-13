@@ -53,6 +53,17 @@ export const runWithConcurrencyLimit = async <T, R>(
   return results;
 };
 
+// Workers 런타임은 응답 바디를 읽지 않은 fetch가 일정 개수 이상 동시에 쌓이면
+// 데드락 방지를 위해 가장 오래된 요청을 강제로 취소한다 — 이 취소는 아직
+// 응답을 안 읽은 "죽은" 요청뿐 아니라 마침 진행 중이던 다른(정상적인) 요청까지
+// 덮칠 수 있다. 연동 해제처럼 한 번에 수십 건을 동시에(concurrency 10) 처리할
+// 때 이걸 안 지키면, 오래전에 이미 지워진 이벤트들의 처리되지 않은 응답이
+// 쌓이면서 방금 만든 진짜 이벤트의 삭제 요청까지 강제로 취소당할 수 있다.
+// 그래서 성공/실패/404 모든 분기에서 바디를 반드시 읽거나 취소한다.
+const drainBody = async (res: Response): Promise<void> => {
+  await res.body?.cancel();
+};
+
 const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<SyncResult> => {
   if (todo.action === "delete") {
     if (!todo.googleEventId) return { id: todo.id, googleEventId: null };
@@ -61,8 +72,10 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok && res.status !== 404 && res.status !== 410) {
-      throw new Error(`이벤트 삭제 실패 (todo ${todo.id}): ${res.status}`);
+      const errText = await res.text().catch(() => "");
+      throw new Error(`이벤트 삭제 실패 (todo ${todo.id}): ${res.status} ${errText}`);
     }
+    await drainBody(res);
     return { id: todo.id, googleEventId: null };
   }
 
@@ -85,6 +98,7 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
   // 계속 실패로 남기지 않고 새로 생성한다 — 그러지 않으면 이 Todo는 영원히
   // 같은 404로 재시도만 반복하게 된다.
   if (hasExistingId && !res.ok && (res.status === 404 || res.status === 410)) {
+    await drainBody(res);
     res = await fetch(CALENDAR_API_BASE, {
       method: "POST",
       headers: {
@@ -96,7 +110,8 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
   }
 
   if (!res.ok) {
-    throw new Error(`이벤트 ${method} 실패 (todo ${todo.id}): ${res.status}`);
+    const errText = await res.text().catch(() => "");
+    throw new Error(`이벤트 ${method} 실패 (todo ${todo.id}): ${res.status} ${errText}`);
   }
   const data = (await res.json()) as { id: string };
   return { id: todo.id, googleEventId: data.id };
@@ -109,6 +124,10 @@ const syncOne = async (todo: SyncTodoItem, accessToken: string): Promise<SyncRes
   try {
     return await syncOneOrThrow(todo, accessToken);
   } catch (error) {
+    // 항목별 실패는 결과 배열의 error 필드에만 담겨 호출부(disconnect.ts 등)로
+    // 조용히 전달되던 것을 여기서도 로그로 남긴다 — 그러지 않으면 어떤 이벤트가
+    // 왜 실패했는지 wrangler tail로도 확인할 방법이 없다.
+    console.error(`캘린더 이벤트 처리 실패 (todo ${todo.id}, action ${todo.action}):`, error);
     return {
       id: todo.id,
       googleEventId: todo.googleEventId,

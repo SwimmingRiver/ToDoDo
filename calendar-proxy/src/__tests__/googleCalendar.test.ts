@@ -145,7 +145,7 @@ describe("syncTodosToGoogleCalendar", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "event-success" }) })
-      .mockResolvedValueOnce({ ok: false, status: 500 });
+      .mockResolvedValueOnce({ ok: false, status: 500, text: async () => "Internal Server Error" });
     vi.stubGlobal("fetch", fetchMock);
 
     const todos: SyncTodoItem[] = [

@@ -83,11 +83,21 @@ export const getGoogleCalendarEvents = async (): Promise<GoogleCalendarEvent[]> 
   return data.events;
 };
 
-export const disconnectCalendar = async (googleEventIds: string[]): Promise<void> => {
+export interface DisconnectResult {
+  /** 구글에서 실제로 삭제(또는 이미 없었음) 확인된 이벤트 id만 담긴다 — 호출부는
+   *  이 목록에 있는 것만 Firestore의 googleEventId를 지워야 한다. 실패한 항목의
+   *  id까지 지우면, 구글에 여전히 남아있는 이벤트를 다음부터는 추적할 방법이
+   *  없어진다. */
+  deletedGoogleEventIds: string[];
+}
+
+export const disconnectCalendar = async (googleEventIds: string[]): Promise<DisconnectResult> => {
   const res = await authorizedFetch("/disconnect", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ googleEventIds }),
   });
   if (!res.ok) throw new Error("연동 해제 실패");
+  const data = (await res.json().catch(() => ({}))) as { deletedGoogleEventIds?: string[] };
+  return { deletedGoogleEventIds: data.deletedGoogleEventIds ?? [] };
 };

@@ -61,27 +61,27 @@ describe("createOAuthState / consumeOAuthState", () => {
     kv = new FakeKVNamespace();
   });
 
-  it("발급한 state로 원래 uid를 조회할 수 있다", async () => {
-    const state = await createOAuthState(kv as never, "user-1");
-    const uid = await consumeOAuthState(kv as never, state);
-    expect(uid).toBe("user-1");
+  it("발급한 state로 원래 uid·returnOrigin을 조회할 수 있다", async () => {
+    const state = await createOAuthState(kv as never, "user-1", "https://app.example.com");
+    const record = await consumeOAuthState(kv as never, state);
+    expect(record).toEqual({ uid: "user-1", returnOrigin: "https://app.example.com" });
   });
 
   it("한 번 소비한 state는 다시 쓸 수 없다(1회용)", async () => {
-    const state = await createOAuthState(kv as never, "user-1");
+    const state = await createOAuthState(kv as never, "user-1", "https://app.example.com");
     await consumeOAuthState(kv as never, state);
     const second = await consumeOAuthState(kv as never, state);
     expect(second).toBeNull();
   });
 
   it("존재하지 않는 state는 null을 반환한다", async () => {
-    const uid = await consumeOAuthState(kv as never, "forged-state-token");
-    expect(uid).toBeNull();
+    const record = await consumeOAuthState(kv as never, "forged-state-token");
+    expect(record).toBeNull();
   });
 
   it("호출마다 서로 다른 state를 발급한다", async () => {
-    const state1 = await createOAuthState(kv as never, "user-1");
-    const state2 = await createOAuthState(kv as never, "user-1");
+    const state1 = await createOAuthState(kv as never, "user-1", "https://app.example.com");
+    const state2 = await createOAuthState(kv as never, "user-1", "https://app.example.com");
     expect(state1).not.toBe(state2);
   });
 });

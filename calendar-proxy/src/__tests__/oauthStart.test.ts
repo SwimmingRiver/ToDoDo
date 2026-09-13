@@ -32,10 +32,40 @@ describe("handleOAuthStart", () => {
     const response = await handleOAuthStart(request, makeEnv());
     expect(response.status).toBe(200);
     const body = (await response.json()) as { authUrl: string };
-    expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(expect.anything(), "user-123");
+    expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-123",
+      "https://app.example.com",
+    );
     expect(body.authUrl).toContain("state=random-state-token");
     expect(body.authUrl).not.toContain("state=user-123");
     expect(body.authUrl).toContain("scope=");
     expect(body.authUrl).toContain(encodeURIComponent("calendar.events"));
+  });
+
+  it("Origin이 허용 목록(localhost 개발 서버)에 있으면 그 origin으로 되돌아가도록 저장한다", async () => {
+    const { createOAuthState } = await import("../tokenStore");
+    const request = new Request("https://proxy.example.com/oauth/start", {
+      headers: { Authorization: "Bearer valid-token", Origin: "http://localhost:5173" },
+    });
+    await handleOAuthStart(request, makeEnv());
+    expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-123",
+      "http://localhost:5173",
+    );
+  });
+
+  it("Origin이 허용 목록에 없으면 CLIENT_APP_URL로 되돌아가도록 저장한다(오픈 리다이렉트 방지)", async () => {
+    const { createOAuthState } = await import("../tokenStore");
+    const request = new Request("https://proxy.example.com/oauth/start", {
+      headers: { Authorization: "Bearer valid-token", Origin: "https://evil.example.com" },
+    });
+    await handleOAuthStart(request, makeEnv());
+    expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-123",
+      "https://app.example.com",
+    );
   });
 });

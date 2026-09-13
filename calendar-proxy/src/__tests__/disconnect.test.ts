@@ -36,7 +36,7 @@ describe("handleDisconnect", () => {
     vi.clearAllMocks();
   });
 
-  it("매핑된 이벤트를 모두 삭제 요청한 뒤 토큰을 지운다", async () => {
+  it("매핑된 이벤트를 모두 삭제 요청한 뒤 토큰을 지우고, 실제로 삭제 확인된 id만 응답에 담는다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
@@ -45,7 +45,10 @@ describe("handleDisconnect", () => {
     vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
-    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([]);
+    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([
+      { id: "event-1", googleEventId: null },
+      { id: "event-2", googleEventId: null },
+    ]);
 
     const response = await handleDisconnect(makeRequest(["event-1", "event-2"]), makeEnv());
 
@@ -57,11 +60,32 @@ describe("handleDisconnect", () => {
       "at",
     );
     expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
-    const body = (await response.json()) as { ok: boolean };
+    const body = (await response.json()) as { ok: boolean; deletedGoogleEventIds: string[] };
     expect(body.ok).toBe(true);
+    expect(body.deletedGoogleEventIds).toEqual(["event-1", "event-2"]);
   });
 
-  it("이벤트 삭제 중 에러가 나도 토큰은 반드시 지운다", async () => {
+  it("일부 이벤트 삭제가 실패하면 그 id는 deletedGoogleEventIds에서 제외한다(호출부가 Firestore에서 stale id를 지우지 않도록)", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    const { getTokenRecord } = await import("../tokenStore");
+    const { refreshAccessToken } = await import("../googleOAuth");
+    const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
+
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
+    vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
+    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([
+      { id: "event-ok", googleEventId: null },
+      { id: "event-fail", googleEventId: "event-fail", error: "이벤트 삭제 실패: 500" },
+    ]);
+
+    const response = await handleDisconnect(makeRequest(["event-ok", "event-fail"]), makeEnv());
+    const body = (await response.json()) as { ok: boolean; deletedGoogleEventIds: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.deletedGoogleEventIds).toEqual(["event-ok"]);
+  });
+
+  it("이벤트 삭제 중 에러가 나도 토큰은 반드시 지우고, 삭제 확인된 id는 없다고 응답한다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
@@ -74,6 +98,8 @@ describe("handleDisconnect", () => {
 
     expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
     expect(response.status).toBe(200);
+    const body = (await response.json()) as { deletedGoogleEventIds: string[] };
+    expect(body.deletedGoogleEventIds).toEqual([]);
   });
 
   it("요청 바디가 비어 있거나 잘못된 JSON이어도 토큰은 반드시 지운다", async () => {

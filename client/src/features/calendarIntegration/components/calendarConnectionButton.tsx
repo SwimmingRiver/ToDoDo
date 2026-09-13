@@ -35,10 +35,18 @@ const CalendarConnectionButton = () => {
     if (isPending) return;
     setIsPending(true);
     try {
-      const googleEventIds = (todos ?? [])
-        .map((t: Todo) => t.googleEventId)
-        .filter((id): id is string => !!id);
-      await disconnect(googleEventIds);
+      const todosWithEvent = (todos ?? [])
+        .filter((t: Todo): t is Todo & { googleEventId: string } => !!t.googleEventId)
+        .map((t) => ({ id: t.id, googleEventId: t.googleEventId }));
+      const { allDeleted } = await disconnect(todosWithEvent);
+      if (allDeleted) {
+        toast.success("연동 해제 완료", "구글 캘린더 연동이 해제되었습니다");
+      } else {
+        toast.error(
+          "일부 이벤트가 남아있습니다",
+          "연동은 해제됐지만 일부 이벤트가 구글 캘린더에 그대로 남아있을 수 있습니다. 직접 삭제해주세요",
+        );
+      }
     } catch (error) {
       console.error("구글 캘린더 연동 해제 실패:", error);
       toast.error("연동 해제 실패", "잠시 후 다시 시도해주세요");
