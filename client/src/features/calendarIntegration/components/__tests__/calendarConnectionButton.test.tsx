@@ -12,6 +12,24 @@ vi.mock("../../hooks", () => ({
 vi.mock("@/features/todo", () => ({
   useGetTodos: vi.fn(() => ({ data: [] })),
 }));
+// @/features/entitlement를 importOriginal로 실행하려면 그 안에서 정적으로 물고
+// 있는 @/shared/lib/firebase(getAuth 호출)까지 실제로 로드된다 — CI에는 .env가
+// 없어 getAuth()가 auth/invalid-api-key로 던진다(로컬은 .env의 실제 키로
+// 우연히 통과했었다). 다른 firebase 의존 테스트들과 동일하게 목으로 대체한다.
+vi.mock("@/shared/lib/firebase", () => ({
+  auth: { currentUser: { uid: "user-1" } },
+  googleProvider: {},
+}));
+// PremiumGate/PremiumLockedNotice/useUpgradeInterest는 실제 구현을 그대로 쓴다
+// (전부 이번 세션에서 만든 공용 로직이라, 여기서 목킹하면 그 재사용 자체가
+// 검증되지 않는다). useIsPremium만 시나리오별로 덮어쓴다.
+vi.mock("@/features/entitlement", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/entitlement")>();
+  return { ...actual, useIsPremium: vi.fn() };
+});
+vi.mock("@/features/feedback/hooks", () => ({
+  useSubmitFeedback: vi.fn(),
+}));
 
 const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(),
@@ -39,8 +57,14 @@ describe("CalendarConnectionButton", () => {
     toastErrorMock.mockClear();
     toastSuccessMock.mockClear();
     const { useConnectCalendar, useDisconnectCalendar } = await import("../../hooks");
+    const { useIsPremium } = await import("@/features/entitlement");
+    const { useSubmitFeedback } = await import("@/features/feedback/hooks");
     vi.mocked(useConnectCalendar).mockReturnValue({ connect: vi.fn() });
     vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect: vi.fn() });
+    // 대부분의 테스트는 기존 프리미엄 사용자 시나리오(연동/해제)를 다루므로
+    // 기본값을 premium으로 두고, 잠금 상태 테스트에서만 개별적으로 덮어쓴다.
+    vi.mocked(useIsPremium).mockReturnValue({ isPremium: true, isLoading: false });
+    vi.mocked(useSubmitFeedback).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
   });
 
   it("연동 안 됐으면 '구글 캘린더 연동' 버튼을 보여준다", async () => {
@@ -169,5 +193,47 @@ describe("CalendarConnectionButton", () => {
     fireEvent.click(screen.getByText("연동 해제"));
 
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+  });
+
+  describe("프리미엄이 아닌 사용자", () => {
+    it("연동 상태와 무관하게 잠금 안내를 보여주고 연동/해제 버튼을 렌더링하지 않는다", async () => {
+      const { useCalendarIntegrationStatus } = await import("../../hooks");
+      const { useIsPremium } = await import("@/features/entitlement");
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: undefined,
+      } as never);
+      vi.mocked(useIsPremium).mockReturnValue({ isPremium: false, isLoading: false });
+
+      render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+
+      expect(screen.getByText("구글 캘린더 연동 (프리미엄)")).toBeInTheDocument();
+      expect(screen.queryByText("연동 해제")).not.toBeInTheDocument();
+    });
+
+    it("엔타이틀먼트 로딩 중이면 아무것도 렌더링하지 않는다", async () => {
+      const { useIsPremium } = await import("@/features/entitlement");
+      vi.mocked(useIsPremium).mockReturnValue({ isPremium: false, isLoading: true });
+
+      const { container } = render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it("'관심 있어요'를 클릭하면 프리미엄 관심 피드백을 제출하고 성공 토스트를 보여준다", async () => {
+      const { useIsPremium } = await import("@/features/entitlement");
+      const { useSubmitFeedback } = await import("@/features/feedback/hooks");
+      const mutate = vi.fn((_content, options) => options?.onSuccess?.());
+      vi.mocked(useIsPremium).mockReturnValue({ isPremium: false, isLoading: false });
+      vi.mocked(useSubmitFeedback).mockReturnValue({ mutate, isPending: false } as never);
+
+      render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+      fireEvent.click(screen.getByText("관심 있어요"));
+
+      expect(mutate).toHaveBeenCalledWith(
+        expect.stringContaining("구글 캘린더 연동"),
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+      await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
+    });
   });
 });

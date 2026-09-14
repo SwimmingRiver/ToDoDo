@@ -2,10 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { doc, getDoc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/shared/lib/firestore";
 import { auth } from "@/shared/lib/firebase";
+import { useIsPremium } from "@/features/entitlement";
 import { getOAuthStartUrl, disconnectCalendar } from "../api";
-
-// 지금은 전원 무료 제공. 유료 전환을 결정하면 실제 구독 상태 체크로 교체한다.
-const isCalendarIntegrationUnlocked = true;
 
 interface CalendarIntegrationStatus {
   connected: boolean;
@@ -16,6 +14,7 @@ const getIntegrationDocRef = (uid: string) => doc(db, "calendarIntegrations", ui
 
 export const useCalendarIntegrationStatus = () => {
   const uid = auth.currentUser?.uid;
+  const { isPremium } = useIsPremium();
   return useQuery({
     queryKey: ["calendarIntegration", uid],
     queryFn: async (): Promise<CalendarIntegrationStatus> => {
@@ -25,7 +24,7 @@ export const useCalendarIntegrationStatus = () => {
       const data = snap.data() as Partial<CalendarIntegrationStatus>;
       return { connected: !!data.connected, status: data.status ?? "active" };
     },
-    enabled: !!uid && isCalendarIntegrationUnlocked,
+    enabled: !!uid && isPremium,
   });
 };
 

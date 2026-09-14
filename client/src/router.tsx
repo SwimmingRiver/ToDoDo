@@ -6,6 +6,7 @@ import CheckboxSkeleton from "@/shared/ui/skeleton/checkboxSkeleton";
 import KanbanSkeleton from "@/shared/ui/skeleton/kanbanSkeleton";
 import TodayItemSkeleton from "@/shared/ui/skeleton/todayItemSkeleton";
 import CalendarSkeleton from "@/shared/ui/skeleton/calendarSkeleton";
+import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
 
 // 라우트 컴포넌트는 전부 lazy로 둔다. 정적 import 하나만 되살아나도 해당 라우트의
 // 의존성(FullCalendar, dnd-kit, Firestore 등)이 통째로 초기 청크로 딸려온다.
@@ -30,6 +31,7 @@ const CalendarPage = lazy(
   () => import("@/features/dashboard/Pages/calendarPage"),
 );
 const KanbanPage = lazy(() => import("@/features/kanban/pages/kanbanPage"));
+const InsightsPage = lazy(() => import("@/features/insights/pages/insightsPage"));
 
 // 청크를 받는 동안 보여줄 것. fallback이 null인 곳은 ProtectedRoute/RootGate가
 // 인증 로딩 중 null을 반환하는 기존 컨벤션과 맞춘 것이다(깜빡임 방지).
@@ -76,6 +78,10 @@ export const router = createBrowserRouter([
       {
         path: "kanban",
         element: withSuspense(<KanbanPage />, <KanbanSkeleton />),
+      },
+      {
+        path: "insights",
+        element: withSuspense(<InsightsPage />, <InsightsSkeleton />),
       },
     ],
   },

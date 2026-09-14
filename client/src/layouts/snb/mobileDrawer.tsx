@@ -4,6 +4,7 @@ import {
   ListTodo,
   CalendarDays,
   Kanban,
+  BarChart3,
   MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { path: "/todo", icon: <ListTodo size={20} />, label: "목록" },
   { path: "/calendar", icon: <CalendarDays size={20} />, label: "캘린더" },
   { path: "/kanban", icon: <Kanban size={20} />, label: "칸반" },
+  { path: "/insights", icon: <BarChart3 size={20} />, label: "인사이트" },
 ];
 
 const MobileDrawer = ({ isOpen, onClose, onFeedbackClick }: MobileDrawerProps) => {
