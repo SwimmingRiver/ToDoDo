@@ -12,6 +12,14 @@ vi.mock("../../hooks", () => ({
 vi.mock("@/features/todo", () => ({
   useGetTodos: vi.fn(() => ({ data: [] })),
 }));
+// @/features/entitlement를 importOriginal로 실행하려면 그 안에서 정적으로 물고
+// 있는 @/shared/lib/firebase(getAuth 호출)까지 실제로 로드된다 — CI에는 .env가
+// 없어 getAuth()가 auth/invalid-api-key로 던진다(로컬은 .env의 실제 키로
+// 우연히 통과했었다). 다른 firebase 의존 테스트들과 동일하게 목으로 대체한다.
+vi.mock("@/shared/lib/firebase", () => ({
+  auth: { currentUser: { uid: "user-1" } },
+  googleProvider: {},
+}));
 // PremiumGate/PremiumLockedNotice/useUpgradeInterest는 실제 구현을 그대로 쓴다
 // (전부 이번 세션에서 만든 공용 로직이라, 여기서 목킹하면 그 재사용 자체가
 // 검증되지 않는다). useIsPremium만 시나리오별로 덮어쓴다.

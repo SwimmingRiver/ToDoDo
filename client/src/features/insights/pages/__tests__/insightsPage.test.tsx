@@ -4,6 +4,14 @@ import InsightsPage from "../insightsPage";
 
 vi.mock("../../hooks", () => ({ useProductivityMetrics: vi.fn() }));
 vi.mock("@/features/feedback/hooks", () => ({ useSubmitFeedback: vi.fn() }));
+// @/features/entitlement를 importOriginal로 실행하면 그 안에서 정적으로 물고 있는
+// @/shared/lib/firebase(getAuth 호출)까지 실제로 로드된다 — CI에는 .env가 없어
+// getAuth()가 auth/invalid-api-key로 던진다(로컬은 .env의 실제 키로 우연히
+// 통과했었다). 다른 firebase 의존 테스트들과 동일하게 목으로 대체한다.
+vi.mock("@/shared/lib/firebase", () => ({
+  auth: { currentUser: { uid: "user-1" } },
+  googleProvider: {},
+}));
 vi.mock("@/features/entitlement", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/features/entitlement")>();
   return { ...actual, useIsPremium: vi.fn() };
