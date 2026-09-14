@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/shared";
 import { useGetTodos } from "@/features/todo";
 import type { Todo } from "@/features/todo";
+import { useIsPremium, useUpgradeInterest, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
 import {
   useCalendarIntegrationStatus,
   useConnectCalendar,
@@ -10,10 +11,12 @@ import {
 import { Wrapper, ConnectButton, DisconnectButton, RevokedNotice } from "./calendarConnectionButton.styles";
 
 const CalendarConnectionButton = () => {
+  const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
   const { data: integration } = useCalendarIntegrationStatus();
   const { connect } = useConnectCalendar();
   const { disconnect } = useDisconnectCalendar();
   const { data: todos } = useGetTodos();
+  const { submitInterest } = useUpgradeInterest("구글 캘린더 연동 기능");
   const toast = useToast();
   const [isPending, setIsPending] = useState(false);
 
@@ -55,17 +58,13 @@ const CalendarConnectionButton = () => {
     }
   };
 
-  if (!integration?.connected) {
-    return (
-      <Wrapper>
-        <ConnectButton onClick={handleConnect} disabled={isPending}>
-          구글 캘린더 연동
-        </ConnectButton>
-      </Wrapper>
-    );
-  }
-
-  return (
+  const unlockedContent = !integration?.connected ? (
+    <Wrapper>
+      <ConnectButton onClick={handleConnect} disabled={isPending}>
+        구글 캘린더 연동
+      </ConnectButton>
+    </Wrapper>
+  ) : (
     <Wrapper>
       {integration.status === "revoked" && (
         <RevokedNotice>연동이 끊겼습니다. 다시 연결해주세요</RevokedNotice>
@@ -74,6 +73,26 @@ const CalendarConnectionButton = () => {
         연동 해제
       </DisconnectButton>
     </Wrapper>
+  );
+
+  return (
+    <PremiumGate
+      isPremium={isPremium}
+      isLoading={isEntitlementLoading}
+      fallback={
+        <Wrapper>
+          <PremiumLockedNotice
+            compact
+            title="구글 캘린더 연동 (프리미엄)"
+            description="할 일을 구글 캘린더와 양방향으로 동기화하려면 프리미엄 구독이 필요합니다"
+            ctaLabel="관심 있어요"
+            onCtaClick={submitInterest}
+          />
+        </Wrapper>
+      }
+    >
+      {unlockedContent}
+    </PremiumGate>
   );
 };
 

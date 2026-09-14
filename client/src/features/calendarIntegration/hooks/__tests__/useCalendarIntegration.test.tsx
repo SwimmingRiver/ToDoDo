@@ -28,6 +28,7 @@ vi.mock("../../api", () => ({
   getOAuthStartUrl: vi.fn(),
   disconnectCalendar: vi.fn(),
 }));
+vi.mock("@/features/entitlement", () => ({ useIsPremium: vi.fn() }));
 
 // queryClient를 함께 반환한다 — 테스트가 invalidateQueries 호출 여부를
 // spyOn으로 검증하려면 훅이 실제로 쓰는 인스턴스를 손에 쥐고 있어야 한다.
@@ -42,8 +43,10 @@ const createWrapper = () => {
 };
 
 describe("useCalendarIntegrationStatus", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { useIsPremium } = await import("@/features/entitlement");
+    vi.mocked(useIsPremium).mockReturnValue({ isPremium: true, isLoading: false });
   });
 
   it("문서가 없으면 connected: false를 반환한다", async () => {
@@ -69,6 +72,19 @@ describe("useCalendarIntegrationStatus", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ connected: true, status: "active" });
+  });
+
+  it("프리미엄이 아니면 쿼리가 비활성화되어 Firestore를 조회하지 않는다", async () => {
+    const { useIsPremium } = await import("@/features/entitlement");
+    const { getDoc } = await import("firebase/firestore");
+    vi.mocked(useIsPremium).mockReturnValue({ isPremium: false, isLoading: false });
+
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useCalendarIntegrationStatus(), { wrapper: Wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(result.current.data).toBeUndefined();
+    expect(getDoc).not.toHaveBeenCalled();
   });
 });
 

@@ -1,0 +1,1 @@
+export { getEntitlement } from "./entitlementApi";

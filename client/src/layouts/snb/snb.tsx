@@ -4,6 +4,7 @@ import {
   ListTodo,
   CalendarDays,
   Kanban,
+  BarChart3,
   MessageSquare,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { path: "/todo", icon: <ListTodo size={16} />, label: "목록" },
   { path: "/calendar", icon: <CalendarDays size={16} />, label: "캘린더" },
   { path: "/kanban", icon: <Kanban size={16} />, label: "칸반" },
+  { path: "/insights", icon: <BarChart3 size={16} />, label: "인사이트" },
 ];
 
 const SNB = ({
