@@ -27,10 +27,18 @@ export const handleOAuthStart = async (request: Request, env: Env): Promise<Resp
   }
 
   let uid: string;
+  let premium: boolean;
   try {
-    ({ uid } = await verifyFirebaseIdToken(idToken, env.FIREBASE_PROJECT_ID));
+    ({ uid, premium } = await verifyFirebaseIdToken(idToken, env.FIREBASE_PROJECT_ID));
   } catch {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  if (!premium) {
+    return new Response(JSON.stringify({ error: "PREMIUM_REQUIRED" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   // 로컬 개발(localhost)에서 연동을 시작해도 구글 동의 후 정확히 그 환경으로
