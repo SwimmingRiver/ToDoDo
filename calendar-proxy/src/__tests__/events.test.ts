@@ -38,7 +38,7 @@ describe("handleGetEvents", () => {
   it("연동되지 않은 사용자면 빈 이벤트 배열을 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord } = await import("../tokenStore");
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue(null);
 
     const response = await handleGetEvents(makeRequest(), makeEnv());
@@ -51,7 +51,7 @@ describe("handleGetEvents", () => {
     const { getTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
     vi.stubGlobal(

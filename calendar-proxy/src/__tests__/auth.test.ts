@@ -124,4 +124,20 @@ describe("verifyFirebaseIdToken", () => {
       "Malformed ID token",
     );
   });
+
+  it("premium 클레임이 true면 premium:true를 반환한다", async () => {
+    const { token, jwk } = await makeSignedToken({ premium: true });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.premium).toBe(true);
+  });
+
+  it("premium 클레임이 없으면 premium:false를 반환한다", async () => {
+    const { token, jwk } = await makeSignedToken();
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.premium).toBe(false);
+  });
 });
