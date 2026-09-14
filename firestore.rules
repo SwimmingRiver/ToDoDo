@@ -51,7 +51,8 @@ service cloud.firestore {
     }
 
     match /calendarIntegrations/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId
+                          && request.auth.token.premium == true;
     }
 
     match /entitlements/{userId} {
