@@ -42,6 +42,11 @@ const run = async () => {
   const db = getFirestore();
   const auth = getAuth();
 
+  // uid 존재 여부를 먼저 확인한다 — 여기서 실패하면(오타 등) Firestore 문서를
+  // 쓰기 전에 중단되므로, "문서는 premium인데 클레임은 없는" 불일치 상태가
+  // 생기지 않는다. 기존 커스텀 클레임도 함께 얻어 아래에서 병합한다.
+  const existingClaims = (await auth.getUser(uid)).customClaims ?? {};
+
   await db.doc(`entitlements/${uid}`).set(
     {
       plan,
@@ -53,8 +58,12 @@ const run = async () => {
   );
   console.log(`entitlements/${uid} 문서 갱신 완료 (plan: ${plan})`);
 
-  await auth.setCustomUserClaims(uid, { premium: isPremium });
+  await auth.setCustomUserClaims(uid, { ...existingClaims, premium: isPremium });
   console.log(`${uid} 커스텀 클레임 갱신 완료 (premium: ${isPremium})`);
+
+  console.log(
+    "클라이언트는 ID 토큰이 갱신되어야(최대 1시간, 또는 재로그인) 이 변경을 반영한다.",
+  );
 };
 
 run().catch((error) => {

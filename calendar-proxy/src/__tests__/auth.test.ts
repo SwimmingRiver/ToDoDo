@@ -140,4 +140,20 @@ describe("verifyFirebaseIdToken", () => {
     const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
     expect(result.premium).toBe(false);
   });
+
+  it("premium 클레임이 false면 premium:false를 반환한다", async () => {
+    const { token, jwk } = await makeSignedToken({ premium: false });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.premium).toBe(false);
+  });
+
+  it("premium 클레임이 boolean이 아니면 premium:false를 반환한다", async () => {
+    const { token, jwk } = await makeSignedToken({ premium: "true" });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.premium).toBe(false);
+  });
 });
