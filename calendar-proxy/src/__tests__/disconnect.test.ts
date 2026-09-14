@@ -148,4 +148,16 @@ describe("handleDisconnect", () => {
     const body = (await response.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
   });
+
+  it("premium이 아니어도(엔타이틀먼트 무관) 연동 해제는 항상 허용된다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    const { getTokenRecord } = await import("../tokenStore");
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
+    vi.mocked(getTokenRecord).mockResolvedValue(null);
+
+    const response = await handleDisconnect(makeRequest([]), makeEnv());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  });
 });
