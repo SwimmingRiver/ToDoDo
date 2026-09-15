@@ -38,7 +38,7 @@ describe("handleGetEvents", () => {
   it("연동되지 않은 사용자면 빈 이벤트 배열을 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord } = await import("../tokenStore");
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
     vi.mocked(getTokenRecord).mockResolvedValue(null);
 
     const response = await handleGetEvents(makeRequest(), makeEnv());
@@ -51,7 +51,7 @@ describe("handleGetEvents", () => {
     const { getTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
     vi.stubGlobal(
@@ -76,5 +76,15 @@ describe("handleGetEvents", () => {
     expect(body.events).toEqual([
       { id: "g-event-1", title: "팀 회의", start: "2026-09-05", end: "2026-09-06" },
     ]);
+  });
+
+  it("premium이 아니면 403 PREMIUM_REQUIRED를 반환한다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
+
+    const response = await handleGetEvents(makeRequest(), makeEnv());
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("PREMIUM_REQUIRED");
   });
 });

@@ -51,13 +51,15 @@ service cloud.firestore {
     }
 
     match /calendarIntegrations/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId
+                          && request.auth.token.premium == true;
     }
 
     match /entitlements/{userId} {
       // 구독 상태는 클라이언트가 절대 스스로 쓰지 못하게 막는다. 지금은 운영자가
-      // Firestore 콘솔에서 직접 값을 넣고, 나중에 결제 웹훅을 붙이면 Admin SDK로
-      // 쓰는데 Admin SDK는 이 규칙을 우회하므로 write:false로 막아도 문제없다.
+      // scripts/grantEntitlement.ts로 이 문서와 커스텀 클레임을 함께 설정하고,
+      // 나중에 결제 웹훅을 붙이면 Admin SDK로 쓰는데 Admin SDK는 이 규칙을
+      // 우회하므로 write:false로 막아도 문제없다.
       // write를 허용하면 브라우저 devtools에서 자기 자신의 plan을 premium으로
       // 바꿔치기하는 게 가능해진다.
       allow read: if request.auth != null && request.auth.uid == userId;

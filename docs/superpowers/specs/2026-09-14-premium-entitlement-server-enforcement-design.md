@@ -40,8 +40,8 @@ match /calendarIntegrations/{userId} {
 
 사용법:
 ```
-GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant-entitlement -- --uid <uid> --plan premium
-GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant-entitlement -- --uid <uid> --plan free
+GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan premium
+GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan free
 ```
 
 동작 (admin SDK, 한 프로세스 안에서 순서대로):

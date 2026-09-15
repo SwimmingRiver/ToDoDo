@@ -21,10 +21,15 @@ export const handleGetEvents = async (request: Request, env: Env): Promise<Respo
   const idToken = authHeader.replace(/^Bearer\s+/i, "");
 
   let uid: string;
+  let premium: boolean;
   try {
-    ({ uid } = await verifyFirebaseIdToken(idToken, env.FIREBASE_PROJECT_ID));
+    ({ uid, premium } = await verifyFirebaseIdToken(idToken, env.FIREBASE_PROJECT_ID));
   } catch {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  if (!premium) {
+    return jsonResponse({ error: "PREMIUM_REQUIRED" }, 403);
   }
 
   const tokenRecord = await getTokenRecord(env.CALENDAR_TOKENS, uid);

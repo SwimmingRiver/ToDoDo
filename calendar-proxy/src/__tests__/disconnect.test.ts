@@ -42,7 +42,7 @@ describe("handleDisconnect", () => {
     const { refreshAccessToken } = await import("../googleOAuth");
     const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
     vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([
@@ -71,7 +71,7 @@ describe("handleDisconnect", () => {
     const { refreshAccessToken } = await import("../googleOAuth");
     const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
     vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([
@@ -90,7 +90,7 @@ describe("handleDisconnect", () => {
     const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockRejectedValue(new Error("google down"));
 
@@ -108,7 +108,7 @@ describe("handleDisconnect", () => {
     const { refreshAccessToken } = await import("../googleOAuth");
     const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
     vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([]);
@@ -141,10 +141,22 @@ describe("handleDisconnect", () => {
   it("이미 연동 안 된 사용자면 바로 성공을 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("../auth");
     const { getTokenRecord } = await import("../tokenStore");
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1" });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
     vi.mocked(getTokenRecord).mockResolvedValue(null);
 
     const response = await handleDisconnect(makeRequest([]), makeEnv());
+    const body = (await response.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  });
+
+  it("premium이 아니어도(엔타이틀먼트 무관) 연동 해제는 항상 허용된다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    const { getTokenRecord } = await import("../tokenStore");
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
+    vi.mocked(getTokenRecord).mockResolvedValue(null);
+
+    const response = await handleDisconnect(makeRequest([]), makeEnv());
+    expect(response.status).toBe(200);
     const body = (await response.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
   });
