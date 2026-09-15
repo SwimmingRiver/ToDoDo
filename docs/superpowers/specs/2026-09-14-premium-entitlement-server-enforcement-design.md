@@ -30,7 +30,8 @@ match /calendarIntegrations/{userId} {
 ## calendar-proxy 변경
 
 - `calendar-proxy/src/auth.ts`의 `verifyFirebaseIdToken`이 `{ uid }` 대신 `{ uid, premium }`을 반환하도록 확장한다. `premium`은 이미 파싱하는 JWT payload에서 `premium` 커스텀 클레임을 읽고, 없으면 `false`로 취급한다.
-- 게이트 대상 핸들러: `oauthStart`, `oauthCallback`, `events`(조회), `syncTodos`. `verifyFirebaseIdToken` 성공 후 `premium`이 `false`면 `403 { error: "PREMIUM_REQUIRED" }`를 반환한다.
+- 게이트 대상 핸들러: `oauthStart`, `events`(조회), `syncTodos`. `verifyFirebaseIdToken` 성공 후 `premium`이 `false`면 `403 { error: "PREMIUM_REQUIRED" }`를 반환한다.
+- **`oauthCallback`은 게이트하지 않는다 (계획 단계에서 발견한 기술적 제약)**: 이 핸들러는 구글이 브라우저를 리다이렉트시켜 호출하는 엔드포인트라 `Authorization` 헤더 자체가 없다 — ID 토큰을 검증할 방법이 없다. 대신 `/oauth/start`가 발급한 1회용 `state` 토큰(이미 검증된 uid에 묶여 있음)만으로 uid를 식별한다. `oauthStart`에서 이미 프리미엄이 아니면 state 자체를 발급하지 않으므로, 정상 흐름에서 비프리미엄 사용자는 `oauthCallback`에 도달할 유효한 state를 가질 수 없다.
 - `disconnect` 핸들러는 게이트하지 않는다 — 프리미엄이 아니어도 언제든 연동을 끊을 수 있어야 한다. firestore.rules 쪽에서 감수하기로 한 트레이드오프와 반대 방향 결정이며, 여기서는 비용이 적으니 명확히 열어둔다.
 
 ## 부여/회수 스크립트
