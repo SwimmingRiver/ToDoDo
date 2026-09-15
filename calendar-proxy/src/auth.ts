@@ -5,6 +5,7 @@ const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1시간
 
 interface VerifiedToken {
   uid: string;
+  premium: boolean;
 }
 
 interface JwksCache {
@@ -68,6 +69,7 @@ export const verifyFirebaseIdToken = async (
     iss?: string;
     exp?: number;
     sub?: string;
+    premium?: boolean;
   };
 
   if (payload.aud !== firebaseProjectId) throw new Error("Invalid audience");
@@ -104,5 +106,5 @@ export const verifyFirebaseIdToken = async (
   );
   if (!isValid) throw new Error("Invalid signature");
 
-  return { uid: payload.sub };
+  return { uid: payload.sub, premium: payload.premium === true };
 };

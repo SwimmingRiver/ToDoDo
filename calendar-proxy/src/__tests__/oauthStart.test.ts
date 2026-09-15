@@ -3,7 +3,7 @@ import { handleOAuthStart } from "../handlers/oauthStart";
 import type { Env } from "../env";
 
 vi.mock("../auth", () => ({
-  verifyFirebaseIdToken: vi.fn().mockResolvedValue({ uid: "user-123" }),
+  verifyFirebaseIdToken: vi.fn().mockResolvedValue({ uid: "user-123", premium: true }),
 }));
 vi.mock("../tokenStore", () => ({
   createOAuthState: vi.fn().mockResolvedValue("random-state-token"),
@@ -67,5 +67,19 @@ describe("handleOAuthStart", () => {
       "user-123",
       "https://app.example.com",
     );
+  });
+
+  it("premium이 아니면 403 PREMIUM_REQUIRED를 반환한다", async () => {
+    const { verifyFirebaseIdToken } = await import("../auth");
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValueOnce({ uid: "user-123", premium: false });
+
+    const request = new Request("https://proxy.example.com/oauth/start", {
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const response = await handleOAuthStart(request, makeEnv());
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("PREMIUM_REQUIRED");
   });
 });
