@@ -4,6 +4,8 @@ import {
   ListTodo,
   CalendarDays,
   Kanban,
+  BarChart3,
+  MessageSquare,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import styled from "styled-components";
@@ -14,33 +16,49 @@ const NAV_ITEMS = [
   { path: "/todo", icon: <ListTodo size={16} />, label: "목록" },
   { path: "/calendar", icon: <CalendarDays size={16} />, label: "캘린더" },
   { path: "/kanban", icon: <Kanban size={16} />, label: "칸반" },
+  { path: "/insights", icon: <BarChart3 size={16} />, label: "인사이트" },
 ];
 
 const SNB = ({
   isopen,
   setIsOpen,
+  onFeedbackClick,
 }: {
   isopen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  onFeedbackClick: () => void;
 }) => {
   return (
     <SNBContainer $isopen={isopen}>
-      {NAV_ITEMS.map(({ path, icon, label }) => (
-        <SidebarNavLink key={path} to={path} $isopen={isopen}>
-          {({ isActive }) => (
-            <>
-              <IconWrapper
-                $isopen={isopen}
-                $active={isActive}
-                aria-label={!isopen ? label : undefined}
-              >
-                {icon}
-              </IconWrapper>
-              {isopen && <span>{label}</span>}
-            </>
-          )}
-        </SidebarNavLink>
-      ))}
+      <NavGroup>
+        {NAV_ITEMS.map(({ path, icon, label }) => (
+          <SidebarNavLink key={path} to={path} $isopen={isopen}>
+            {({ isActive }) => (
+              <>
+                <IconWrapper
+                  $isopen={isopen}
+                  $active={isActive}
+                  aria-label={!isopen ? label : undefined}
+                >
+                  {icon}
+                </IconWrapper>
+                {isopen && <span>{label}</span>}
+              </>
+            )}
+          </SidebarNavLink>
+        ))}
+      </NavGroup>
+      <FeedbackTrigger
+        type="button"
+        $isopen={isopen}
+        onClick={onFeedbackClick}
+        aria-label={!isopen ? "의견 보내기" : undefined}
+      >
+        <IconWrapper $isopen={isopen} $active={false}>
+          <MessageSquare size={16} />
+        </IconWrapper>
+        {isopen && <span>의견 보내기</span>}
+      </FeedbackTrigger>
       <SidebarButton
         onClick={() => setIsOpen(!isopen)}
         aria-label={isopen ? "사이드바 닫기" : "사이드바 열기"}
@@ -52,6 +70,8 @@ const SNB = ({
 };
 
 const SNBContainer = styled.div<{ $isopen: boolean }>`
+  display: flex;
+  flex-direction: column;
   height: 100%;
   width: ${({ $isopen }) => ($isopen ? "200px" : "40px")};
   background-color: #f1f3f4;
@@ -61,6 +81,36 @@ const SNBContainer = styled.div<{ $isopen: boolean }>`
 
   ${media.tablet} {
     display: none;
+  }
+`;
+
+const NavGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const FeedbackTrigger = styled.button<{ $isopen: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: ${({ $isopen }) => ($isopen ? "10px" : "0")};
+  padding: ${({ $isopen }) => ($isopen ? "10px" : "4px")};
+  justify-content: ${({ $isopen }) => ($isopen ? "flex-start" : "center")};
+  margin-top: auto;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${colors.text.secondary};
+  background: none;
+  border: none;
+  border-radius: 8px;
+  text-align: left;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: #e0ede8;
+    color: ${colors.brand.strong};
   }
 `;
 

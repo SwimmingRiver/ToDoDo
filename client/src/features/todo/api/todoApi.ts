@@ -41,7 +41,9 @@ const getUserId = () => {
   return user.uid;
 };
 
-const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
+// insights 피처의 getAllTodosForStats()도 이 매핑을 그대로 재사용한다 —
+// 필드 매핑 로직이 두 곳에서 각자 따로 관리되면 드리프트가 생기기 쉽다.
+export const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
   ({ id, ...data }) as Todo;
 
 /**
@@ -669,8 +671,10 @@ const deleteRecurringSeriesImpl = async (recurrenceId: string): Promise<void> =>
 };
 
 /** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
- *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
-const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
+ *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다.
+ *  insights 피처의 getAllTodosForStats()도 같은 이유(통계에 아카이브 이력 필요)로
+ *  이 함수를 그대로 재사용한다. */
+export const fetchAllUserTodos = async (userId: string): Promise<Todo[]> => {
   const snapshot = await getDocs(query(todosRef, where("userId", "==", userId)));
   return snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
 };
