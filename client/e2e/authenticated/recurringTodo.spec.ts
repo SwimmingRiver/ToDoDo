@@ -32,7 +32,7 @@ test.describe('반복 할 일 생성', () => {
     await recurrenceCheckbox.check()
 
     // 반복 주기는 기본값(매일)을 그대로 사용한다.
-    await page.getByRole('button', { name: 'Submit' }).click()
+    await page.getByRole('button', { name: '저장' }).click()
     await expect(titleInput).not.toBeVisible({ timeout: 10000 })
 
     await expect(page.getByText(title, { exact: true })).toBeVisible({ timeout: 10000 })

@@ -25,7 +25,7 @@ const Modal = ({
   return createPortal(
     <>
       <ModalBackground onClick={handleClose}>
-        <ModalContainer onClick={(e) => e.stopPropagation()}>
+        <ModalContainer role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
           <ModalHeader>
             <ModalCloseButton onClick={handleClose} aria-label="모달 닫기">X</ModalCloseButton>
           </ModalHeader>
