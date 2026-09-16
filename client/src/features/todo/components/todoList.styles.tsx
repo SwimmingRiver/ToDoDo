@@ -8,6 +8,7 @@ const TodoListContainer = styled.div`
   display: flex;
   flex-direction: column;
   padding: 8px;
+  overflow: hidden;
 
   ${media.mobile} {
     padding: 12px 8px;
@@ -74,6 +75,7 @@ const NewProjectLink = styled.button`
 
 const ListWrapper = styled.div`
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

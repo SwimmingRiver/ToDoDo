@@ -4,7 +4,7 @@ import { EmptyState } from "@/shared";
 import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
 import { useProductivityMetrics } from "../hooks";
 import { InsightsSummaryCards, StreakCard, PriorityDistribution, CompletionTrend } from "../components";
-import { PageContainer, SecondaryGrid } from "./insightsPage.styles";
+import { PageContainer, InsightsBody, SecondaryGrid } from "./insightsPage.styles";
 
 const InsightsPage = () => {
   const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
@@ -43,19 +43,21 @@ const InsightsPage = () => {
 
   return (
     <PageContainer>
-      <PremiumGate
-        isPremium={isPremium}
-        fallback={
-          <PremiumLockedNotice
-            title="완료 통계는 프리미엄 기능입니다"
-            description="완료율, 연속 달성일, 우선순위별 분포 등 나만의 생산성 인사이트를 확인하려면 프리미엄 구독이 필요합니다"
-            ctaLabel="관심 있어요"
-            onCtaClick={submitInterest}
-          />
-        }
-      >
-        {renderContent()}
-      </PremiumGate>
+      <InsightsBody>
+        <PremiumGate
+          isPremium={isPremium}
+          fallback={
+            <PremiumLockedNotice
+              title="완료 통계는 프리미엄 기능입니다"
+              description="완료율, 연속 달성일, 우선순위별 분포 등 나만의 생산성 인사이트를 확인하려면 프리미엄 구독이 필요합니다"
+              ctaLabel="관심 있어요"
+              onCtaClick={submitInterest}
+            />
+          }
+        >
+          {renderContent()}
+        </PremiumGate>
+      </InsightsBody>
     </PageContainer>
   );
 };
