@@ -2,15 +2,18 @@ import { styled } from "styled-components";
 import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
 
-const Container = styled.div`
+const TodayContainer = styled.div`
   position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  overflow: hidden;
 `;
 
-const ScrollArea = styled.div`
+const TodayBody = styled.div`
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -69,4 +72,4 @@ const Fab = styled.button`
   }
 `;
 
-export { Container, ScrollArea, List, Fab };
+export { TodayContainer, TodayBody, List, Fab };

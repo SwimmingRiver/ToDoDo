@@ -1,6 +1,17 @@
 import { styled } from "styled-components";
 
 const PageContainer = styled.div`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`;
+
+const InsightsBody = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -13,4 +24,4 @@ const SecondaryGrid = styled.div`
   gap: 12px;
 `;
 
-export { PageContainer, SecondaryGrid };
+export { PageContainer, InsightsBody, SecondaryGrid };

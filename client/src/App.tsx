@@ -72,9 +72,14 @@ const App = () => {
   );
 };
 
+// overflow:hidden이 핵심이다 — 이게 없으면 어느 라우트든 콘텐츠가 깊이 중첩된
+// flex 체인(Container→ContentContainer→Main→페이지 컨테이너)의 자동 최소 크기
+// 규칙에 걸려 이 요소가 shrink되지 못하고, Footer/BottomTabBar가 화면 밖으로
+// 밀려나는 문제가 생긴다(실측으로 확인된 원인).
 const ContentContainer = styled.div`
   display: flex;
   height: 100%;
+  overflow: hidden;
 `;
 
 export default App;
