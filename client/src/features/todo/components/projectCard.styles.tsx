@@ -165,7 +165,7 @@ export const ChildCardWrapper = styled.div<{
   $priority: Todo["priority"];
 }>`
   border-radius: 10px;
-  border: 0.5px solid ${({ $status }) => statusColors[$status].border};
+  border: 1px solid ${({ $status }) => statusColors[$status].border};
   overflow: hidden;
   flex-shrink: 0;
   background: ${colors.background.primary};

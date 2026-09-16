@@ -22,14 +22,14 @@ describe('statusColors', () => {
       expect(statusColors.todo.main).toBe('#4b5563')
     })
 
-    it('doing 상태는 파란색 계열 색상을 가져야 한다', () => {
-      expect(statusColors.doing.main).toBe('#1d4ed8')
+    it('doing 상태는 초록색 계열 색상을 가져야 한다', () => {
+      // brand.fill(#1D9E75, hue160.9°)과 거의 같은 색상군(hue 160°)이다.
+      expect(statusColors.doing.main).toBe('#117453')
     })
 
-    it('done 상태는 초록색 계열 색상을 가져야 한다', () => {
-      // brand.fill(#1D9E75)은 텍스트로 쓸 수 없어(colors.ts, brandContrast.test.ts)
-      // 할 일 상태 배지 텍스트로는 더 어두운 별도 값을 쓴다.
-      expect(statusColors.done.main).toBe('#065f46')
+    it('done 상태는 보라색 계열 색상을 가져야 한다', () => {
+      // doing(그린)·todo(회색)와 명확히 구분되는 완료/종결 톤이다.
+      expect(statusColors.done.main).toBe('#6d28d9')
     })
   })
 
