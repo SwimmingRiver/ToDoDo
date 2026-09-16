@@ -31,7 +31,7 @@ const Modal = ({
           </ModalHeader>
           <ModalBody>{children}</ModalBody>
           <ModalFooter>
-            <ModalSubmitButton type="submit" form="todo-form">Submit</ModalSubmitButton>
+            <ModalSubmitButton type="submit" form="todo-form">저장</ModalSubmitButton>
           </ModalFooter>
         </ModalContainer>
       </ModalBackground>

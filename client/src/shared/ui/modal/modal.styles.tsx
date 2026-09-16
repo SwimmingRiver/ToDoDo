@@ -80,6 +80,7 @@ const ModalSubmitButton = styled.button`
   font-size: 16px;
   font-weight: bold;
   border: none;
+  border-radius: 12px;
   cursor: pointer;
 `;
 
