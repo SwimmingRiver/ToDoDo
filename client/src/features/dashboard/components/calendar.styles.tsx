@@ -5,6 +5,9 @@ import { colors } from "@/styles/colors";
 const CalendarContainer = styled.div`
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px;
 
   ${media.mobile} {
@@ -89,6 +92,11 @@ const CalendarContainer = styled.div`
   }
 `;
 
+const CalendarBody = styled.div`
+  flex: 1;
+  min-height: 0;
+`;
+
 const DayDetailList = styled.ul`
   list-style: none;
   margin: 0;
@@ -149,6 +157,7 @@ const EmptyMessage = styled.p`
 const ViewToggleRow = styled.div`
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   margin-bottom: 8px;
   padding: 0 4px;
 `;
@@ -213,6 +222,7 @@ const AddButton = styled.button`
 
 export {
   CalendarContainer,
+  CalendarBody,
   DayDetailList,
   DayDetailItem,
   DayDetailTitleRow,

@@ -22,6 +22,12 @@ const TitleGroup = styled.div`
   gap: 8px;
 `;
 
+const LogoMark = styled.img`
+  width: 28px;
+  height: 28px;
+  border-radius: ${radius.md};
+`;
+
 const Logo = styled.span`
   font-size: 18px;
   font-weight: 700;
@@ -63,4 +69,4 @@ const LoginButton = styled.button`
   }
 `;
 
-export { HeaderContainer, TitleGroup, Logo, ModeBadge, LoginButton };
+export { HeaderContainer, TitleGroup, LogoMark, Logo, ModeBadge, LoginButton };

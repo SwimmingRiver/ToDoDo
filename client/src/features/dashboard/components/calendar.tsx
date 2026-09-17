@@ -10,6 +10,7 @@ import type { DateClickArg } from "@fullcalendar/interaction";
 import type { EventDropArg } from "@fullcalendar/core";
 import {
   CalendarContainer,
+  CalendarBody,
   DayDetailList,
   DayDetailItem,
   DayDetailTitleRow,
@@ -294,33 +295,35 @@ const Calendar = () => {
           </ViewButton>
           <CalendarConnectionButton />
         </ViewToggleRow>
-        <FullCalendar
-          ref={calendarRef}
-          plugins={[dayGridPlugin, interactionPlugin]}
-          initialView={calendarView}
-          events={events as EventInput[]}
-          height="100%"
-          displayEventTime={false}
-          dateClick={handleDateClick}
-          eventClick={handleEventClick}
-          /* 높이 기반 자동(true)은 이벤트 바가 압축된 이 앱(특히 모바일 6px 바)에서는
-             현실적인 건수(3~6건)로 임계치에 닿지 않아 +N개가 표시되지 않는다.
-             디자인 스펙(최대 3개 + +N)대로 고정 상한을 사용한다.
-             주간 뷰는 세로 공간이 충분하므로 높이 기반 자동을 유지한다. */
-          dayMaxEvents={3}
-          views={{ dayGridWeek: { dayMaxEvents: true } }}
-          /* 기본 정렬(긴 이벤트 우선)은 기간 바가 상단 3개 슬롯을 독점해
-             마감일만 있는 단일일 할 일이 전부 +N개 뒤로 숨는다.
-             짧은 이벤트 우선으로 마감일 항목이 항상 해당 날짜에 노출되게 한다. */
-          eventOrder="duration,start,title"
-          moreLinkContent={(arg) => `+${arg.num}개`}
-          moreLinkClick={handleMoreLinkClick}
-          moreLinkHint={(num) => `할 일 ${num}개 더 보기`}
-          eventContent={renderEventContent}
-          editable={true}
-          eventDrop={handleEventDrop}
-          longPressDelay={1000}
-        />
+        <CalendarBody>
+          <FullCalendar
+            ref={calendarRef}
+            plugins={[dayGridPlugin, interactionPlugin]}
+            initialView={calendarView}
+            events={events as EventInput[]}
+            height="100%"
+            displayEventTime={false}
+            dateClick={handleDateClick}
+            eventClick={handleEventClick}
+            /* 높이 기반 자동(true)은 이벤트 바가 압축된 이 앱(특히 모바일 6px 바)에서는
+               현실적인 건수(3~6건)로 임계치에 닿지 않아 +N개가 표시되지 않는다.
+               디자인 스펙(최대 3개 + +N)대로 고정 상한을 사용한다.
+               주간 뷰는 세로 공간이 충분하므로 높이 기반 자동을 유지한다. */
+            dayMaxEvents={3}
+            views={{ dayGridWeek: { dayMaxEvents: true } }}
+            /* 기본 정렬(긴 이벤트 우선)은 기간 바가 상단 3개 슬롯을 독점해
+               마감일만 있는 단일일 할 일이 전부 +N개 뒤로 숨는다.
+               짧은 이벤트 우선으로 마감일 항목이 항상 해당 날짜에 노출되게 한다. */
+            eventOrder="duration,start,title"
+            moreLinkContent={(arg) => `+${arg.num}개`}
+            moreLinkClick={handleMoreLinkClick}
+            moreLinkHint={(num) => `할 일 ${num}개 더 보기`}
+            eventContent={renderEventContent}
+            editable={true}
+            eventDrop={handleEventDrop}
+            longPressDelay={1000}
+          />
+        </CalendarBody>
       </CalendarContainer>
 
       <BottomSheet

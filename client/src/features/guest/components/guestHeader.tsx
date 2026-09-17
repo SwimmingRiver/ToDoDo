@@ -1,6 +1,8 @@
+import logo from "@/assets/logo.png";
 import {
   HeaderContainer,
   TitleGroup,
+  LogoMark,
   Logo,
   ModeBadge,
   LoginButton,
@@ -14,6 +16,7 @@ const GuestHeader = ({ onLoginClick }: GuestHeaderProps) => {
   return (
     <HeaderContainer>
       <TitleGroup>
+        <LogoMark src={logo} alt="" />
         <Logo>ToDoDo</Logo>
         <ModeBadge>체험 모드</ModeBadge>
       </TitleGroup>

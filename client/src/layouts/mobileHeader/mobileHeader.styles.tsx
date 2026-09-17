@@ -19,11 +19,10 @@ const LogoGroup = styled.div`
   cursor: pointer;
 `;
 
-const LogoMark = styled.span`
+const LogoMark = styled.img`
   width: 24px;
   height: 24px;
   border-radius: ${radius.md};
-  background-color: ${colors.brand.strong};
 `;
 
 const LogoText = styled.span`

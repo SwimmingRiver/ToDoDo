@@ -10,7 +10,7 @@ import WeekStrip from "../components/weekStrip";
 import DailyProgress from "../components/dailyProgress";
 import TodaySection from "../components/todaySection";
 import TodayTodoItem from "../components/todayTodoItem";
-import { Container, ScrollArea, List, Fab } from "./todayPage.styles";
+import { TodayContainer, TodayBody, List, Fab } from "./todayPage.styles";
 
 const TodayPage = () => {
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
@@ -46,7 +46,7 @@ const TodayPage = () => {
   const hasTodos = inProgressTodos.length > 0 || doneTodos.length > 0;
 
   return (
-    <Container>
+    <TodayContainer>
       <WeekStrip
         selectedDate={selectedDate}
         windowStart={windowStart}
@@ -62,7 +62,7 @@ const TodayPage = () => {
         totalCount={totalCount}
       />
 
-      <ScrollArea>
+      <TodayBody>
         {isLoading && <TodayItemSkeleton />}
 
         {!isLoading && isError && (
@@ -116,7 +116,7 @@ const TodayPage = () => {
             )}
           </>
         )}
-      </ScrollArea>
+      </TodayBody>
 
       <Fab onClick={() => setIsAddOpen(true)}>
         <Plus size={16} aria-hidden="true" />
@@ -133,7 +133,7 @@ const TodayPage = () => {
           />
         }
       />
-    </Container>
+    </TodayContainer>
   );
 };
 

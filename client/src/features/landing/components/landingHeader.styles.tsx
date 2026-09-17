@@ -1,6 +1,7 @@
 import { styled } from "styled-components";
 import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
+import { radius } from "@/styles/radius";
 
 const HeaderContainer = styled.header`
   width: 100%;
@@ -13,6 +14,18 @@ const HeaderContainer = styled.header`
   ${media.mobile} {
     padding: 12px 20px;
   }
+`;
+
+const LogoGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const LogoMark = styled.img`
+  width: 28px;
+  height: 28px;
+  border-radius: ${radius.md};
 `;
 
 const Logo = styled.span`
@@ -37,4 +50,4 @@ const LoginLink = styled.button`
   }
 `;
 
-export { HeaderContainer, Logo, LoginLink };
+export { HeaderContainer, LogoGroup, LogoMark, Logo, LoginLink };

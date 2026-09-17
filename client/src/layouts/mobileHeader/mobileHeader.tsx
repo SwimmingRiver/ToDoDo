@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
+import logo from "@/assets/logo.png";
 import {
   HeaderContainer,
   LogoGroup,
@@ -20,8 +21,8 @@ const MobileHeader = ({ onAvatarClick }: MobileHeaderProps) => {
   return (
     <HeaderContainer>
       <LogoGroup onClick={() => navigate("/today")}>
-        <LogoMark aria-hidden="true" />
-        <LogoText>tododo</LogoText>
+        <LogoMark src={logo} alt="" aria-hidden="true" />
+        <LogoText>ToDoDo</LogoText>
       </LogoGroup>
       <AvatarButton onClick={onAvatarClick} aria-label="사용자 메뉴 열기">
         <AvatarImage src={user?.photoURL || ""} alt="" />
