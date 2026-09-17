@@ -37,7 +37,7 @@ export async function createTodo(page: Page, { title, dueToday }: CreateTodoOpti
     await dueAtInput.fill(todayDateTimeLocal())
   }
 
-  await page.getByRole('button', { name: 'Submit' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '저장' }).click()
 
   // 모달이 닫히면(=폼이 사라지면) 생성이 완료된 것으로 본다.
   await expect(titleInput).not.toBeVisible({ timeout: 10000 })

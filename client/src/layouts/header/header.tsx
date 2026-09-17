@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
 import { MenuIcon } from "lucide-react";
 import { colors } from "@/styles/colors";
+import { radius } from "@/styles/radius";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
+import logo from "@/assets/logo.png";
 
 interface HeaderProps {
   onMenuOpen: () => void;
@@ -16,7 +18,10 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
 
   return (
     <HeaderContainer>
-      <HeaderTitle onClick={() => navigate("/today")}>ToDoDo</HeaderTitle>
+      <LogoGroup onClick={() => navigate("/today")}>
+        <LogoMark src={logo} alt="" />
+        <HeaderTitle>ToDoDo</HeaderTitle>
+      </LogoGroup>
       <UserInfo>
         <ProfileMenu>
           <UserInfoText>{user?.displayName}</UserInfoText>
@@ -32,11 +37,26 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
 
 export default Header;
 
-const HeaderTitle = styled.h1`
+const LogoGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
-  &:hover {
+
+  &:hover h1 {
     color: ${colors.brand.strong};
   }
+`;
+
+const LogoMark = styled.img`
+  width: 32px;
+  height: 32px;
+  border-radius: ${radius.md};
+`;
+
+const HeaderTitle = styled.h1`
+  font-size: 20px;
+  font-weight: 700;
 `;
 
 const UserInfo = styled.div`

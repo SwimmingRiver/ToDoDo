@@ -22,7 +22,7 @@ test.describe('하위 할 일 생성', () => {
     await expect(childTitleInput).toBeVisible()
     const childTitle = `하위 할일 ${Date.now()}`
     await childTitleInput.fill(childTitle)
-    await page.getByRole('button', { name: 'Submit' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '저장' }).click()
     await expect(childTitleInput).not.toBeVisible({ timeout: 10000 })
 
     await expect(page.getByText(childTitle, { exact: true })).toBeVisible({ timeout: 10000 })
