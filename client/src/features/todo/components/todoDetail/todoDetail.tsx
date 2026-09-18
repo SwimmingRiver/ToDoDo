@@ -190,6 +190,8 @@ const TodoDetailView = ({ id }: { id: string }) => {
   const [isSubtaskExpanded, setIsSubtaskExpanded] = useState(true);
   const { isOpen: isAddChildOpen, setIsOpen: setIsAddChildOpen } = useModal();
   const { isOpen: isEditChildOpen, setIsOpen: setIsEditChildOpen } = useModal();
+  const [isAddChildSubmitting, setIsAddChildSubmitting] = useState(false);
+  const [isEditChildSubmitting, setIsEditChildSubmitting] = useState(false);
   const [editingChildTodo, setEditingChildTodo] = useState<Todo | null>(null);
 
   const handleEditChild = (childTodo: Todo) => {
@@ -291,6 +293,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
 
   const onSubmit = (data: TodoFormData) => {
     if (!todo) return;
+    if (updateTodo.isPending || createRecurringTodo.isPending || deleteTodo.isPending) return;
 
     const dateValidationError = getTodoDateValidationError(
       data.startAt ?? null,
@@ -610,7 +613,12 @@ const TodoDetailView = ({ id }: { id: string }) => {
             <Button type="button" onClick={handleClose}>
               취소
             </Button>
-            <Button type="submit" form="todo-detail-form" $variant="primary">
+            <Button
+              type="submit"
+              form="todo-detail-form"
+              $variant="primary"
+              disabled={updateTodo.isPending || createRecurringTodo.isPending || deleteTodo.isPending}
+            >
               저장
             </Button>
           </PanelFooterActions>
@@ -645,14 +653,19 @@ const TodoDetailView = ({ id }: { id: string }) => {
         onCancel={() => setIsDeleteConfirmOpen(false)}
       />
 
-      <Modal isOpen={isAddChildOpen} setIsOpen={setIsAddChildOpen}>
-        <TodoForm parentId={todo.id} onClose={() => setIsAddChildOpen(false)} />
+      <Modal isOpen={isAddChildOpen} setIsOpen={setIsAddChildOpen} disabled={isAddChildSubmitting}>
+        <TodoForm
+          parentId={todo.id}
+          onClose={() => setIsAddChildOpen(false)}
+          onSubmittingChange={setIsAddChildSubmitting}
+        />
       </Modal>
 
-      <Modal isOpen={isEditChildOpen} setIsOpen={setIsEditChildOpen}>
+      <Modal isOpen={isEditChildOpen} setIsOpen={setIsEditChildOpen} disabled={isEditChildSubmitting}>
         <TodoForm
           todo={editingChildTodo || undefined}
           onClose={() => setIsEditChildOpen(false)}
+          onSubmittingChange={setIsEditChildSubmitting}
         />
       </Modal>
     </>
