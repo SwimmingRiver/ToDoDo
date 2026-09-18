@@ -13,10 +13,12 @@ const Modal = ({
   children,
   isOpen,
   setIsOpen,
+  disabled,
 }: {
   children: React.ReactNode;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  disabled?: boolean;
 }) => {
   if (!isOpen) return null;
   const handleClose = () => {
@@ -31,7 +33,7 @@ const Modal = ({
           </ModalHeader>
           <ModalBody>{children}</ModalBody>
           <ModalFooter>
-            <ModalSubmitButton type="submit" form="todo-form">저장</ModalSubmitButton>
+            <ModalSubmitButton type="submit" form="todo-form" disabled={disabled}>저장</ModalSubmitButton>
           </ModalFooter>
         </ModalContainer>
       </ModalBackground>

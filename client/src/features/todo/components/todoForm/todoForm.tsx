@@ -48,9 +48,10 @@ interface TodoFormProps {
   parentId?: string;
   initialDueAt?: string;
   onClose?: () => void;
+  onSubmittingChange?: (isSubmitting: boolean) => void;
 }
 
-const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
+const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }: TodoFormProps) => {
   const [showMore, setShowMore] = useState(false);
   const toast = useToast();
   const {
@@ -78,6 +79,18 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
   const editRecurringSeries = useEditRecurringSeries();
   const deleteTodo = useDeleteTodo();
   const { data: allTodos } = useGetTodos();
+
+  const isSubmitting =
+    createTodo.isPending ||
+    updateTodo.isPending ||
+    createChildTodo.isPending ||
+    createRecurringTodo.isPending ||
+    deleteTodo.isPending;
+
+  useEffect(() => {
+    onSubmittingChange?.(isSubmitting);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubmitting]);
 
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
@@ -153,6 +166,8 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose }: TodoFormProps) => {
   };
 
   const onSubmit = (data: TodoFormData) => {
+    if (isSubmitting) return;
+
     const dateValidationError = getTodoDateValidationError(
       data.startAt ?? null,
       data.dueAt ?? null,

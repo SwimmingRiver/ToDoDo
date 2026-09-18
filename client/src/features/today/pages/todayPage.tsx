@@ -16,6 +16,7 @@ const TodayPage = () => {
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
   const [windowStart, setWindowStart] = useState(() => toDateKey(new Date()));
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isAddSubmitting, setIsAddSubmitting] = useState(false);
 
   const shiftWindow = useCallback((days: number) => {
     setWindowStart((prev) => {
@@ -126,10 +127,12 @@ const TodayPage = () => {
       <Modal
         isOpen={isAddOpen}
         setIsOpen={setIsAddOpen}
+        disabled={isAddSubmitting}
         children={
           <TodoForm
             initialDueAt={`${selectedDate}T00:00`}
             onClose={() => setIsAddOpen(false)}
+            onSubmittingChange={setIsAddSubmitting}
           />
         }
       />

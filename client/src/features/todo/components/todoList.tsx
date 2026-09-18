@@ -35,6 +35,9 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const { isOpen, setIsOpen } = useModal();
   const { isOpen: isEditOpen, setIsOpen: setIsEditOpen } = useModal();
   const { isOpen: isAddChildOpen, setIsOpen: setIsAddChildOpen } = useModal();
+  const [isAddSubmitting, setIsAddSubmitting] = useState(false);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [isAddChildSubmitting, setIsAddChildSubmitting] = useState(false);
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -156,15 +159,23 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       <Modal
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        children={<TodoForm onClose={() => setIsOpen(false)} />}
+        disabled={isAddSubmitting}
+        children={
+          <TodoForm
+            onClose={() => setIsOpen(false)}
+            onSubmittingChange={setIsAddSubmitting}
+          />
+        }
       />
       <Modal
         isOpen={isEditOpen}
         setIsOpen={setIsEditOpen}
+        disabled={isEditSubmitting}
         children={
           <TodoForm
             todo={editingTodo || undefined}
             onClose={() => setIsEditOpen(false)}
+            onSubmittingChange={setIsEditSubmitting}
           />
         }
       />
@@ -200,10 +211,12 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       <Modal
         isOpen={isAddChildOpen}
         setIsOpen={setIsAddChildOpen}
+        disabled={isAddChildSubmitting}
         children={
           <TodoForm
             parentId={parentTodoId ?? undefined}
             onClose={() => { setIsAddChildOpen(false); setParentTodoId(null); }}
+            onSubmittingChange={setIsAddChildSubmitting}
           />
         }
       />

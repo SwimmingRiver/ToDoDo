@@ -52,6 +52,7 @@ const Calendar = () => {
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"dayGridMonth" | "dayGridWeek">("dayGridMonth");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { markConnected } = useMarkCalendarConnected();
@@ -372,10 +373,11 @@ const Calendar = () => {
         </AddButton>
       </BottomSheet>
 
-      <Modal isOpen={isCreateModalOpen} setIsOpen={setIsCreateModalOpen}>
+      <Modal isOpen={isCreateModalOpen} setIsOpen={setIsCreateModalOpen} disabled={isCreateSubmitting}>
         <TodoForm
           initialDueAt={selectedDate ? `${selectedDate}T00:00` : undefined}
           onClose={() => setIsCreateModalOpen(false)}
+          onSubmittingChange={setIsCreateSubmitting}
         />
       </Modal>
     </>
