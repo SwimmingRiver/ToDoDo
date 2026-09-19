@@ -8,6 +8,12 @@
  * 실행 전 GOOGLE_APPLICATION_CREDENTIALS 환경변수에 서비스 계정 키 파일 경로를 설정해야 한다.
  * (Firebase 콘솔 > 프로젝트 설정 > 서비스 계정 > 새 비공개 키 생성)
  *
+ * 그 서비스 계정(firebase-adminsdk-*@<project>.iam.gserviceaccount.com)에는 GCP IAM에서
+ * 다음 두 역할이 모두 있어야 한다 — 콘솔에서 지연 생성된 계정은 둘 다 비어 있을 수 있다:
+ *   - Firebase Admin SDK Administrator Service Agent (Auth 사용자 조회·커스텀 클레임 설정)
+ *   - Cloud Datastore User (entitlements 문서 쓰기)
+ * 하나만 있으면 각각 auth/insufficient-permission, 7 PERMISSION_DENIED로 실패한다.
+ *
  * 사용법:
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan premium
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan free
