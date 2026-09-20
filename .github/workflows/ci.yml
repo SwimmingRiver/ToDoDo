@@ -29,6 +29,11 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          # push 이벤트에서 base를 비우면 레포 기본 브랜치(develop)와 비교한다 —
+          # main은 develop을 그대로 병합한 상태라 diff가 항상 0이 되어 main push
+          # 에서 경로 필터 job이 전부 skip됐다. 현재 브랜치를 base로 주면 push
+          # 직전 커밋과 비교한다(pull_request 이벤트에서는 이 값이 무시됨).
+          base: ${{ github.ref_name }}
           filters: |
             server:
               - 'server/**'
@@ -220,7 +225,12 @@ jobs:
     name: Calendar Proxy
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.calendarProxy == 'true'
+    # main push에는 경로 변경과 무관하게 항상 실행한다 — Worker 배포는 멱등이라
+    # 프로덕션 Worker가 항상 main과 일치함을 보장하는 편이 경로 감지에 기대는
+    # 것보다 안전하다.
+    if: >-
+      needs.changes.outputs.calendarProxy == 'true' ||
+      (github.ref == 'refs/heads/main' && github.event_name == 'push')
     defaults:
       run:
         working-directory: calendar-proxy
