@@ -184,6 +184,25 @@ describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
     expect(integrationWhenTodosInvalidated).toEqual({ connected: false, status: "active" });
   });
 
+  // 스냅샷에만 남은 고아 이벤트(Todo는 삭제됐는데 이벤트 삭제가 실패해 대기 중)는
+  // 구글에서는 지워야 하지만 Firestore 문서가 없으므로 googleEventId 정리 대상에
+  // 넣으면 batch.update가 실패한다 — Worker에만 보낸다.
+  it("disconnect는 고아 googleEventId도 Worker에 함께 보내되 Firestore 정리 대상에는 넣지 않는다", async () => {
+    const { disconnectCalendar } = await import("../../api");
+    vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1", "orphan-9"] });
+
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
+    const outcome = await result.current.disconnect(
+      [{ id: "todo-1", googleEventId: "event-1" }],
+      ["orphan-9"],
+    );
+
+    expect(vi.mocked(disconnectCalendar)).toHaveBeenCalledWith(["event-1", "orphan-9"]);
+    expect(batchUpdateMock).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ allDeleted: true });
+  });
+
   it("disconnect는 googleCalendarEvents 캐시를 지워 연동 해제 후 이미 지워진 이벤트가 화면에 남아있지 않게 한다", async () => {
     const { disconnectCalendar } = await import("../../api");
     vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1"] });

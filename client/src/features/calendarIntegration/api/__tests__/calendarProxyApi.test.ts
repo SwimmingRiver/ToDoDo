@@ -14,6 +14,7 @@ const {
   getGoogleCalendarEvents,
   disconnectCalendar,
   CalendarRevokedError,
+  CalendarNotConnectedError,
 } = await import("../calendarProxyApi");
 
 const anyRange = { timeMin: "2026-08-30T15:00:00.000Z", timeMax: "2026-10-10T15:00:00.000Z" };
@@ -80,6 +81,17 @@ describe("calendarProxyApi", () => {
       }),
     );
     await expect(syncTodosToCalendar([])).rejects.toThrow(CalendarRevokedError);
+  });
+
+  // Worker는 토큰 레코드가 없으면(연동 해제 뒤) 409 {error:"not_connected"}를 준다.
+  // 다른 탭에서 해제한 뒤 이 탭의 연동 캐시가 아직 stale하면 동기화가 이 응답을
+  // 만나는데, 일반 에러로 뭉개면 Sentry에 오탐이 쌓인다.
+  it("syncTodosToCalendar는 409 응답이 {error: not_connected}이면 CalendarNotConnectedError를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: "not_connected" }) }),
+    );
+    await expect(syncTodosToCalendar([])).rejects.toBeInstanceOf(CalendarNotConnectedError);
   });
 
   it("401 응답이어도 revoked가 아니면 일반 에러를 던진다", async () => {
