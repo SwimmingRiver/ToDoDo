@@ -370,6 +370,62 @@ describe("useSyncTodosToCalendar", () => {
     consoleError.mockRestore();
   });
 
+  // 해제가 Worker 단계(토큰 삭제)까지 끝나고 Firestore 단계에서 실패하면 Firestore는
+  // connected:true, Worker는 토큰 없음인 어긋난 상태가 된다. 재조회해도 같은 값이라
+  // 이펙트가 안 돌고 동기화만 조용히 멈추므로, Worker를 진실로 보고 Firestore를 맞춘다.
+  it("409 뒤 재조회해도 여전히 connected:true면 Firestore를 connected:false로 맞춘다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    vi.mocked(useGetTodos).mockReturnValue({ data: [baseTodo({})] } as never);
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(syncTodosToCalendar).mockRejectedValue(new CalendarNotConnectedError());
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // 옵저버가 없어 invalidate가 재조회를 일으키지 않는다 = "재조회해도 그대로"를 흉내
+    queryClient.setQueryData(["calendarIntegration", "user-1"], { connected: true, status: "active" });
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: Wrapper });
+
+    await waitFor(() =>
+      expect(vi.mocked(setDoc)).toHaveBeenCalledWith(
+        expect.anything(),
+        { connected: false, status: "active" },
+        { merge: true },
+      ),
+    );
+    consoleWarn.mockRestore();
+  });
+
+  // 어떤 경로로 해제되든(버튼, 타탭, 409) 이미 삭제된 구글 이벤트가 화면에 유령처럼
+  // 남지 않도록 연동 해제 상태를 보면 이벤트 캐시를 지운다.
+  it("연동 해제 상태를 보면 googleCalendarEvents 캐시를 지운다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    vi.mocked(useGetTodos).mockReturnValue({ data: [] } as never);
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: false, status: "active" },
+    } as never);
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(["googleCalendarEvents", "a", "b"], [{ id: "g-1" }]);
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: Wrapper });
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(["googleCalendarEvents", "a", "b"])).toBeUndefined(),
+    );
+  });
+
   // 연동 해제는 구글 이벤트를 지우고 Firestore googleEventId만 null로 만들 뿐
   // updatedAt은 안 바꾼다. 스냅샷이 그대로 남아 있으면 재연결 후 기존 Todo가
   // "변경 없음"으로 걸러져 영원히 다시 올라가지 않는다(사용자 보고: 재연결 후

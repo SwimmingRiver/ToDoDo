@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
-import { doc, writeBatch } from "firebase/firestore";
+import { doc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/shared/lib/firestore";
 import { auth } from "@/shared/lib/firebase";
 import { useGetTodos } from "@/features/todo";
@@ -18,6 +18,27 @@ import { markCalendarRevoked } from "./markCalendarRevoked";
 import { loadSnapshot, saveSnapshot, clearSnapshot, type SyncSnapshot } from "./syncSnapshot";
 
 const isSyncEligible = (todo: Todo): boolean => !!todo.dueAt && !todo.archived;
+
+/** Worker가 409 not_connected를 줬을 때 연동 상태를 다시 읽고, 그래도 Firestore가
+ *  connected:true라면(해제가 Worker 단계 뒤 Firestore 단계에서 실패한 경우) Worker를
+ *  진실로 보고 Firestore를 맞춘다 — 안 맞추면 재조회 값이 같아 이펙트가 안 돌고
+ *  동기화만 조용히 영원히 멈춘다. 절대 throw하지 않는다. */
+const reconcileNotConnected = async (queryClient: QueryClient): Promise<void> => {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  const key = ["calendarIntegration", uid];
+  try {
+    await queryClient.invalidateQueries({ queryKey: key });
+    const latest = queryClient.getQueryData<{ connected: boolean }>(key);
+    if (!latest?.connected) return;
+    console.warn("Worker에 토큰이 없는데 Firestore는 connected:true — 연동 해제로 맞춥니다");
+    await setDoc(doc(db, "calendarIntegrations", uid), { connected: false, status: "active" }, { merge: true });
+    queryClient.invalidateQueries({ queryKey: key });
+  } catch (error) {
+    console.error("연동 상태 재조정 실패:", error);
+    Sentry.captureException(error);
+  }
+};
 
 export const useSyncTodosToCalendar = (): void => {
   const { data: todos } = useGetTodos();
@@ -46,6 +67,10 @@ export const useSyncTodosToCalendar = (): void => {
     if (integration && !integration.connected) {
       snapshotRef.current = new Map();
       if (uid) clearSnapshot(uid);
+      // 어떤 경로로 해제됐든(버튼, 타탭, 409) 이미 삭제된 구글 이벤트가 화면에
+      // 유령처럼 남지 않게 이벤트 캐시도 지운다. 조회 훅은 enabled:false가
+      // 될 뿐 캐시를 스스로 버리지 않는다.
+      queryClient.removeQueries({ queryKey: ["googleCalendarEvents"] });
       return;
     }
     if (!integration?.connected || integration.status === "revoked") return;
@@ -150,8 +175,7 @@ export const useSyncTodosToCalendar = (): void => {
           // 다른 탭/기기에서 이미 해제됐는데 이 탭의 연동 캐시가 stale한 경우 —
           // 오류가 아니라 상태 변화 신호다. 다시 읽으면 connected:false가 되어
           // 이 훅이 스냅샷을 비우고 멈춘다.
-          const uid = auth.currentUser?.uid;
-          if (uid) queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
+          await reconcileNotConnected(queryClient);
         } else {
           console.error("캘린더 동기화 실패:", error);
           Sentry.captureException(error);
