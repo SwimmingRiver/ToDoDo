@@ -7,54 +7,23 @@ import { auth } from "@/shared/lib/firebase";
 import { useGetTodos } from "@/features/todo";
 import type { Todo } from "@/features/todo";
 import { toDateKeyFromISO } from "@/shared/utils/date";
-import { syncTodosToCalendar, CalendarRevokedError, type SyncTodoPayload } from "../api";
+import {
+  syncTodosToCalendar,
+  CalendarRevokedError,
+  CalendarNotConnectedError,
+  type SyncTodoPayload,
+} from "../api";
 import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
 import { markCalendarRevoked } from "./markCalendarRevoked";
-
-interface SyncedSnapshotEntry {
-  updatedAt: string;
-  googleEventId: string | null;
-}
+import { loadSnapshot, saveSnapshot, clearSnapshot, type SyncSnapshot } from "./syncSnapshot";
 
 const isSyncEligible = (todo: Todo): boolean => !!todo.dueAt && !todo.archived;
-
-const snapshotStorageKey = (uid: string): string => `calendarSyncSnapshot:${uid}`;
-
-const loadSnapshot = (uid: string): Map<string, SyncedSnapshotEntry> => {
-  try {
-    const raw = localStorage.getItem(snapshotStorageKey(uid));
-    if (!raw) return new Map();
-    return new Map(JSON.parse(raw) as [string, SyncedSnapshotEntry][]);
-  } catch {
-    // localStorage 접근 불가(프라이빗 브라우징, 손상된 값 등) — 빈 스냅샷으로
-    // 시작한다. 이 세션 안에서는 정상 동작하지만, 페이지를 새로고침하기 전까지는
-    // 이번 세션에서 아카이브/삭제된 Todo의 이벤트 정리를 다음 로드까지 놓칠 수 있다.
-    return new Map();
-  }
-};
-
-const saveSnapshot = (uid: string, snapshot: Map<string, SyncedSnapshotEntry>): void => {
-  try {
-    localStorage.setItem(snapshotStorageKey(uid), JSON.stringify(Array.from(snapshot.entries())));
-  } catch {
-    // 위와 동일한 이유로 조용히 넘어간다 — 메모리 상의 스냅샷은 이미 최신이므로
-    // 이번 세션의 동작 자체는 계속 정상이다.
-  }
-};
-
-const clearSnapshot = (uid: string): void => {
-  try {
-    localStorage.removeItem(snapshotStorageKey(uid));
-  } catch {
-    // 위와 동일.
-  }
-};
 
 export const useSyncTodosToCalendar = (): void => {
   const { data: todos } = useGetTodos();
   const { data: integration } = useCalendarIntegrationStatus();
   const queryClient = useQueryClient();
-  const snapshotRef = useRef<Map<string, SyncedSnapshotEntry>>(new Map());
+  const snapshotRef = useRef<SyncSnapshot>(new Map());
   const loadedUidRef = useRef<string | null>(null);
   const isRunningRef = useRef(false);
   const pendingRerunRef = useRef(false);
@@ -177,6 +146,12 @@ export const useSyncTodosToCalendar = (): void => {
       } catch (error) {
         if (error instanceof CalendarRevokedError) {
           await markCalendarRevoked(queryClient);
+        } else if (error instanceof CalendarNotConnectedError) {
+          // 다른 탭/기기에서 이미 해제됐는데 이 탭의 연동 캐시가 stale한 경우 —
+          // 오류가 아니라 상태 변화 신호다. 다시 읽으면 connected:false가 되어
+          // 이 훅이 스냅샷을 비우고 멈춘다.
+          const uid = auth.currentUser?.uid;
+          if (uid) queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
         } else {
           console.error("캘린더 동기화 실패:", error);
           Sentry.captureException(error);

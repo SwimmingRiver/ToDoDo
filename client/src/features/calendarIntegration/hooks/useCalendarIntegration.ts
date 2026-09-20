@@ -46,10 +46,15 @@ export const useDisconnectCalendar = () => {
     /** 반환하는 allDeleted가 false면 일부 이벤트가 구글 캘린더에 여전히
      *  남아있을 수 있다는 뜻이다 — 호출부는 이 경우 "연동 해제 완료"라고
      *  단정하지 말고 사용자에게 알려야 한다. */
-    disconnect: async (todosWithEvent: DisconnectTodoRef[]): Promise<{ allDeleted: boolean }> => {
+    disconnect: async (
+      todosWithEvent: DisconnectTodoRef[],
+      // Todo 문서는 이미 없는데 스냅샷에만 남은 이벤트 — 구글에서는 지워야 하지만
+      // Firestore 정리 대상엔 넣지 않는다(문서가 없어 batch.update가 실패한다).
+      orphanGoogleEventIds: string[] = [],
+    ): Promise<{ allDeleted: boolean }> => {
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error("Not authenticated");
-      const googleEventIds = todosWithEvent.map((t) => t.googleEventId);
+      const googleEventIds = [...todosWithEvent.map((t) => t.googleEventId), ...orphanGoogleEventIds];
       const { deletedGoogleEventIds } = await disconnectCalendar(googleEventIds);
 
       // 실제로 삭제 확인된 것만 Firestore에서 googleEventId를 지운다 — 실패한

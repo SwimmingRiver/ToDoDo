@@ -4,7 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { Todo } from "@/features/todo";
 import { useSyncTodosToCalendar } from "../useSyncTodosToCalendar";
-import { CalendarRevokedError } from "../../api";
+import { CalendarRevokedError, CalendarNotConnectedError } from "../../api";
+import * as Sentry from "@sentry/react";
+
+vi.mock("@sentry/react", () => ({ captureException: vi.fn() }));
 
 vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
 vi.mock("@/shared/lib/firebase", () => ({
@@ -334,6 +337,37 @@ describe("useSyncTodosToCalendar", () => {
         { merge: true },
       );
     });
+  });
+
+  // 다른 탭에서 해제한 뒤 이 탭의 연동 캐시(staleTime 60초)가 아직 connected:true면
+  // Todo 수정 한 번에 전체 upsert가 나가고 Worker가 409 not_connected를 준다.
+  // 이건 오류가 아니라 "연동 상태가 바뀌었다"는 신호다 — Sentry 대신 연동 상태를
+  // 다시 읽어 훅이 스스로 멈추게 한다.
+  it("동기화가 CalendarNotConnectedError로 실패하면 Sentry에 보고하지 않고 연동 상태 쿼리를 무효화한다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+    vi.mocked(Sentry.captureException).mockClear();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    vi.mocked(useGetTodos).mockReturnValue({ data: [baseTodo({})] } as never);
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(syncTodosToCalendar).mockRejectedValue(new CalendarNotConnectedError());
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: Wrapper });
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] }),
+    );
+    expect(vi.mocked(Sentry.captureException)).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   // 연동 해제는 구글 이벤트를 지우고 Firestore googleEventId만 null로 만들 뿐

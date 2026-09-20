@@ -8,6 +8,8 @@ import {
   useConnectCalendar,
   useDisconnectCalendar,
 } from "../hooks";
+import { auth } from "@/shared/lib/firebase";
+import { loadSnapshot, findOrphanGoogleEventIds } from "../hooks/syncSnapshot";
 import { Wrapper, ConnectButton, DisconnectButton, RevokedNotice } from "./calendarConnectionButton.styles";
 
 const CalendarConnectionButton = () => {
@@ -41,7 +43,13 @@ const CalendarConnectionButton = () => {
       const todosWithEvent = (todos ?? [])
         .filter((t: Todo): t is Todo & { googleEventId: string } => !!t.googleEventId)
         .map((t) => ({ id: t.id, googleEventId: t.googleEventId }));
-      const { allDeleted } = await disconnect(todosWithEvent);
+      // Todo는 지워졌는데 이벤트 삭제가 실패해 스냅샷에만 남은 고아 이벤트도 같이
+      // 보낸다 — 해제 후 스냅샷이 비워지면 이 기록은 영영 사라지기 때문이다.
+      const uid = auth.currentUser?.uid;
+      const orphanGoogleEventIds = uid
+        ? findOrphanGoogleEventIds(loadSnapshot(uid), todosWithEvent.map((t) => t.googleEventId))
+        : [];
+      const { allDeleted } = await disconnect(todosWithEvent, orphanGoogleEventIds);
       if (allDeleted) {
         toast.success("연동 해제 완료", "구글 캘린더 연동이 해제되었습니다");
       } else {
