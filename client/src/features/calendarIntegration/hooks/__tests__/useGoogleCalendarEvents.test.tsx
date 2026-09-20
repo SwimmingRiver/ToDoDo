@@ -3,21 +3,35 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useGoogleCalendarEvents } from "../useGoogleCalendarEvents";
+import { CalendarRevokedError } from "../../api";
 
-vi.mock("../../api", () => ({
-  getGoogleCalendarEvents: vi.fn(),
+vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
+vi.mock("@/shared/lib/firebase", () => ({
+  auth: { currentUser: { uid: "user-1" } },
+  googleProvider: {},
 }));
+vi.mock("firebase/firestore", () => ({
+  doc: vi.fn(() => ({})),
+  setDoc: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../../api", async () => {
+  const actual = await vi.importActual("../../api");
+  return { ...actual, getGoogleCalendarEvents: vi.fn() };
+});
 vi.mock("../useCalendarIntegration", () => ({
   useCalendarIntegrationStatus: vi.fn(),
 }));
 
 const createWrapper = () => {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // 기본 retry(3회)를 살려둔다 — revoked 에러는 재시도하지 않아야 한다는 것도 검증 대상.
+  const queryClient = new QueryClient();
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
   return Wrapper;
 };
+
+const anyRange = { start: "2026-08-30T15:00:00.000Z", end: "2026-10-10T15:00:00.000Z" };
 
 describe("useGoogleCalendarEvents", () => {
   beforeEach(() => {
@@ -31,7 +45,7 @@ describe("useGoogleCalendarEvents", () => {
       data: { connected: false, status: "active" },
     } as never);
 
-    const { result } = renderHook(() => useGoogleCalendarEvents(), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useGoogleCalendarEvents(anyRange), { wrapper: createWrapper() });
 
     expect(result.current.fetchStatus).toBe("idle");
     expect(vi.mocked(getGoogleCalendarEvents)).not.toHaveBeenCalled();
@@ -47,11 +61,105 @@ describe("useGoogleCalendarEvents", () => {
       { id: "g-1", title: "회의", start: "2026-09-05", end: "2026-09-06" },
     ]);
 
-    const { result } = renderHook(() => useGoogleCalendarEvents(), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useGoogleCalendarEvents(anyRange), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([
       { id: "g-1", title: "회의", start: "2026-09-05", end: "2026-09-06" },
     ]);
+  });
+
+  // 토큰이 철회되면 sync 경로(useSyncTodosToCalendar)와 똑같이 Firestore에
+  // status:"revoked"를 기록해야 연결 버튼이 "다시 연결" 안내를 띄운다.
+  it("조회가 CalendarRevokedError로 실패하면 연동 상태를 revoked로 기록하고 재시도하지 않는다", async () => {
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { getGoogleCalendarEvents } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(getGoogleCalendarEvents).mockRejectedValue(new CalendarRevokedError());
+
+    const { result } = renderHook(() => useGoogleCalendarEvents(anyRange), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(vi.mocked(setDoc)).toHaveBeenCalledWith(
+      expect.anything(),
+      { status: "revoked" },
+      { merge: true },
+    );
+    expect(vi.mocked(getGoogleCalendarEvents)).toHaveBeenCalledTimes(1);
+  });
+
+  // 오버레이가 "오늘+30일"에 고정되지 않고 캘린더가 보여주는 달을 따라가려면
+  // 뷰 범위가 쿼리 키와 요청 파라미터에 들어가야 한다.
+  it("뷰 범위를 받아 timeMin/timeMax로 조회하고, 범위가 바뀌면 다시 조회한다", async () => {
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { getGoogleCalendarEvents } = await import("../../api");
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(getGoogleCalendarEvents).mockResolvedValue([]);
+
+    const { result, rerender } = renderHook(
+      ({ range }) => useGoogleCalendarEvents(range),
+      {
+        wrapper: createWrapper(),
+        initialProps: {
+          range: { start: "2026-08-30T15:00:00.000Z", end: "2026-10-10T15:00:00.000Z" },
+        },
+      },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(vi.mocked(getGoogleCalendarEvents)).toHaveBeenCalledWith({
+      timeMin: "2026-08-30T15:00:00.000Z",
+      timeMax: "2026-10-10T15:00:00.000Z",
+    });
+
+    rerender({ range: { start: "2026-09-27T15:00:00.000Z", end: "2026-11-07T15:00:00.000Z" } });
+
+    await waitFor(() =>
+      expect(vi.mocked(getGoogleCalendarEvents)).toHaveBeenCalledWith({
+        timeMin: "2026-09-27T15:00:00.000Z",
+        timeMax: "2026-11-07T15:00:00.000Z",
+      }),
+    );
+  });
+
+  it("뷰 범위를 아직 모르면(null) 조회하지 않는다", async () => {
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { getGoogleCalendarEvents } = await import("../../api");
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+
+    const { result } = renderHook(() => useGoogleCalendarEvents(null), { wrapper: createWrapper() });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(vi.mocked(getGoogleCalendarEvents)).not.toHaveBeenCalled();
+  });
+
+  // Worker는 invalid_grant를 만나면 토큰을 지우고 401 revoked를 "딱 한 번"만 준다 —
+  // 다음 호출부터는 토큰이 없어 200 빈 배열이다. 그래서 revoked 기록(Firestore 쓰기)이
+  // 실패해도 원래 CalendarRevokedError를 유지해 재시도로 흘리면 안 된다. 재시도가
+  // 200으로 성공해버리면 연동 상태가 영원히 active로 남아 "다시 연결" 안내가 안 뜬다.
+  it("revoked 기록이 실패해도 CalendarRevokedError를 유지하고 재시도하지 않는다", async () => {
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { getGoogleCalendarEvents } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(getGoogleCalendarEvents).mockRejectedValue(new CalendarRevokedError());
+    vi.mocked(setDoc).mockRejectedValueOnce(new Error("firestore offline"));
+
+    const { result } = renderHook(() => useGoogleCalendarEvents(anyRange), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(CalendarRevokedError);
+    expect(vi.mocked(getGoogleCalendarEvents)).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
   });
 });
