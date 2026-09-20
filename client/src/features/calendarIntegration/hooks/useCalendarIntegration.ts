@@ -68,7 +68,10 @@ export const useDisconnectCalendar = () => {
         { connected: false, status: "active" },
         { merge: true },
       );
-      queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
+      // 연동 상태가 disconnected로 확정된 뒤에 todos를 무효화한다 — 순서가
+      // 뒤집히면 동기화 훅이 캐시된 connected:true를 보고, googleEventId가
+      // 비워진 Todo 전부를 upsert하러 나가 Worker 409(토큰 이미 삭제)를 맞는다.
+      await queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
       if (toClear.length > 0) queryClient.invalidateQueries({ queryKey: ["todos"] });
       // enabled가 connected 기준이라 무효화만으로는 재조회가 안 일어나 캐시가
       // 그대로 남는다 — 연동 해제 뒤 화면에 이미 지워졌을 수도 있는 옛 구글

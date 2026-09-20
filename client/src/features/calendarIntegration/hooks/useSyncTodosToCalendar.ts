@@ -103,7 +103,11 @@ export const useSyncTodosToCalendar = (): void => {
         // Worker는 UTC로만 동작해 로컬 캘린더 날짜를 모른다 — 여기서 반드시
         // 로컬 타임존 기준으로 변환해서 보낸다 (dueAt을 그대로 슬라이싱 금지).
         dueAt: toDateKeyFromISO(t.dueAt as string),
-        googleEventId: t.googleEventId ?? snapshot.get(t.id)?.googleEventId ?? null,
+        // Firestore의 id만 믿고 스냅샷 id로는 폴백하지 않는다 — 연동 해제로 지워진
+        // 이벤트는 404가 아니라 tombstone(200 + cancelled)이라, 스냅샷의 옛 id로
+        // PATCH하면 성공처럼 보이면서 캘린더엔 영영 안 나타난다. null이면 Worker가
+        // 결정론적 id로 POST→409→되살리기 경로를 타 같은 이벤트로 수렴한다.
+        googleEventId: t.googleEventId ?? null,
         action: "upsert" as const,
       }));
 
@@ -161,7 +165,10 @@ export const useSyncTodosToCalendar = (): void => {
           }
         });
 
-        if (uid) saveSnapshot(uid, snapshot);
+        // 동기화 도중 연동이 해제돼 snapshotRef가 교체됐다면, 이 클로저의 옛
+        // 스냅샷을 되돌려 쓰지 않는다 — 되돌려 쓰면 해제 시점의 clear가 무효가
+        // 되고 재연결 후 stale id가 그대로 복원된다.
+        if (uid && snapshotRef.current === snapshot) saveSnapshot(uid, snapshot);
 
         if (hasWrites) {
           await firestoreBatch.commit();

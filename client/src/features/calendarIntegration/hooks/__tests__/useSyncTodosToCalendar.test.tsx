@@ -397,9 +397,47 @@ describe("useSyncTodosToCalendar", () => {
       renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+      // 스냅샷의 옛 id("event-1")는 지워진 이벤트의 tombstone을 가리킨다 — 그 id로
+      // PATCH하면 구글이 200을 주면서도 cancelled 그대로라 영영 안 보인다. null을
+      // 보내 Worker의 결정론적 POST→409→되살리기 경로를 타게 해야 한다.
       expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
-        expect.objectContaining({ id: "todo-1", action: "upsert" }),
+        expect.objectContaining({ id: "todo-1", action: "upsert", googleEventId: null }),
       ]);
+    });
+
+    // 진행 중인 동기화가 끝나면서 클로저에 잡힌 옛 스냅샷을 localStorage에 되돌려
+    // 쓰면 해제 시점의 clear가 무효가 되고, 재연결(OAuth 전체 새로고침) 후
+    // loadSnapshot이 stale id를 그대로 복원한다.
+    it("동기화 진행 중에 해제되면, 끝난 동기화가 옛 스냅샷을 localStorage에 되돌려 쓰지 않는다", async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+
+      let resolveSync!: (v: { id: string; googleEventId: string }[]) => void;
+      vi.mocked(syncTodosToCalendar).mockReturnValue(
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        }),
+      );
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [baseTodo({})] } as never);
+
+      const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+      // 동기화가 아직 안 끝난 상태에서 연동 해제
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: false, status: "active" },
+      } as never);
+      rerender();
+      await waitFor(() => expect(localStorage.getItem("calendarSyncSnapshot:user-1")).toBeNull());
+
+      resolveSync([{ id: "todo-1", googleEventId: "event-1" }]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(localStorage.getItem("calendarSyncSnapshot:user-1")).toBeNull();
     });
 
     it("연동 해제 상태를 보면 localStorage 스냅샷을 비운다", async () => {

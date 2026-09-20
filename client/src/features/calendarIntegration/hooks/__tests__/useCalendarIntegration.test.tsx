@@ -141,6 +141,49 @@ describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
     expect(outcome).toEqual({ allDeleted: false });
   });
 
+  // todos 재조회가 연동 상태 재조회보다 먼저 끝나면, 동기화 훅이 캐시된
+  // connected:true를 보고 googleEventId가 비워진 Todo 전부를 upsert하러 나간다
+  // (Worker는 토큰을 이미 지워 409). 연동 상태가 먼저 disconnected로 확정된 뒤에
+  // todos를 무효화해야 한다.
+  it("disconnect는 연동 상태 쿼리 재조회가 끝난 뒤에 todos를 무효화한다", async () => {
+    const { disconnectCalendar } = await import("../../api");
+    const { getDoc } = await import("firebase/firestore");
+    const { useIsPremium } = await import("@/features/entitlement");
+    vi.mocked(useIsPremium).mockReturnValue({ isPremium: true, isLoading: false });
+    vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1"] });
+    // 마운트 시 첫 조회는 connected:true, 해제 후 재조회는 connected:false
+    vi.mocked(getDoc)
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ connected: true, status: "active" }),
+      } as never)
+      .mockResolvedValue({
+        exists: () => true,
+        data: () => ({ connected: false, status: "active" }),
+      } as never);
+
+    const { Wrapper, queryClient } = createWrapper();
+    let integrationWhenTodosInvalidated: unknown = "not-called";
+    const original = queryClient.invalidateQueries.bind(queryClient);
+    vi.spyOn(queryClient, "invalidateQueries").mockImplementation((filters, ...rest) => {
+      if (JSON.stringify(filters?.queryKey) === JSON.stringify(["todos"])) {
+        integrationWhenTodosInvalidated = queryClient.getQueryData(["calendarIntegration", "user-1"]);
+      }
+      return original(filters, ...rest);
+    });
+
+    // 실제 앱처럼 연동 상태 쿼리에 옵저버가 마운트돼 있어야 invalidate가 재조회를 일으킨다.
+    const { result } = renderHook(
+      () => ({ status: useCalendarIntegrationStatus(), actions: useDisconnectCalendar() }),
+      { wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.status.data).toEqual({ connected: true, status: "active" }));
+
+    await result.current.actions.disconnect([{ id: "todo-1", googleEventId: "event-1" }]);
+
+    expect(integrationWhenTodosInvalidated).toEqual({ connected: false, status: "active" });
+  });
+
   it("disconnect는 googleCalendarEvents 캐시를 지워 연동 해제 후 이미 지워진 이벤트가 화면에 남아있지 않게 한다", async () => {
     const { disconnectCalendar } = await import("../../api");
     vi.mocked(disconnectCalendar).mockResolvedValue({ deletedGoogleEventIds: ["event-1"] });
