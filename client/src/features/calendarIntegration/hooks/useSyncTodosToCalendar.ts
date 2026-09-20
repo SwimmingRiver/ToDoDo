@@ -42,6 +42,14 @@ const saveSnapshot = (uid: string, snapshot: Map<string, SyncedSnapshotEntry>): 
   }
 };
 
+const clearSnapshot = (uid: string): void => {
+  try {
+    localStorage.removeItem(snapshotStorageKey(uid));
+  } catch {
+    // 위와 동일.
+  }
+};
+
 export const useSyncTodosToCalendar = (): void => {
   const { data: todos } = useGetTodos();
   const { data: integration } = useCalendarIntegrationStatus();
@@ -61,6 +69,16 @@ export const useSyncTodosToCalendar = (): void => {
       loadedUidRef.current = uid;
     }
 
+    // 연동 해제는 구글 이벤트를 지우고 Firestore googleEventId만 null로 만들 뿐
+    // updatedAt은 안 바꾼다. 스냅샷을 그대로 두면 재연결 후 기존 Todo가 "변경
+    // 없음"으로 걸러져 영원히 다시 올라가지 않으므로, 해제 상태를 보는 즉시
+    // 메모리·localStorage 양쪽을 비운다. (revoked는 connected가 여전히 true고
+    // 구글 이벤트도 남아 있으므로 해당 없음.)
+    if (integration && !integration.connected) {
+      snapshotRef.current = new Map();
+      if (uid) clearSnapshot(uid);
+      return;
+    }
     if (!integration?.connected || integration.status === "revoked") return;
     if (!todos) return;
     if (isRunningRef.current) {
@@ -73,8 +91,12 @@ export const useSyncTodosToCalendar = (): void => {
     const eligibleById = new Map(eligible.map((t) => [t.id, t]));
     const eligibleIds = new Set(eligible.map((t) => t.id));
 
+    // Firestore에 googleEventId가 없으면 스냅샷이 뭐라 하든 미동기화 상태다 —
+    // 다른 기기에서 연동을 해제했거나 localStorage가 어긋난 경우에도 앱 진입
+    // 시 스스로 복구되게 한다(스냅샷이 stale한 id를 주면 Worker가 PATCH 404 →
+    // 결정론적 id로 재생성 폴백해 수렴한다).
     const upserts: SyncTodoPayload[] = eligible
-      .filter((t) => snapshot.get(t.id)?.updatedAt !== t.updatedAt)
+      .filter((t) => !t.googleEventId || snapshot.get(t.id)?.updatedAt !== t.updatedAt)
       .map((t) => ({
         id: t.id,
         title: t.title,
