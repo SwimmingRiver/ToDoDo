@@ -31,6 +31,11 @@ const toGoogleEventBody = (todo: SyncTodoItem) => {
     summary: todo.title,
     start: { date: todo.dueAt },
     end: { date: nextDay.toISOString().slice(0, 10) },
+    // 삭제된 이벤트는 404가 아니라 tombstone(GET/PATCH 200 + status: cancelled)이다.
+    // status 없이 PATCH하면 성공처럼 200이 오면서도 cancelled 그대로 남아 캘린더에
+    // 영영 안 보이므로, 모든 upsert에 confirmed를 실어 tombstone을 자동으로 되살린다.
+    // 살아있는 이벤트에는 no-op.
+    status: "confirmed" as const,
   };
 };
 
