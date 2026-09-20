@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, createMemoryRouter, RouterProvider } from 'react-router-dom'
 import Calendar from '../calendar'
 
 vi.mock('@/shared/lib/firebase', () => ({
@@ -245,6 +245,18 @@ describe('Calendar OAuth 콜백 파라미터 처리', () => {
     await waitFor(() => expect(mockToast.error).toHaveBeenCalledTimes(1))
     expect(mockToast.success).not.toHaveBeenCalled()
     consoleError.mockRestore()
+  })
+
+  // 파라미터 제거가 push 내비게이션이면 히스토리에 ?calendarConnected=1 이 남아
+  // 뒤로가기 후 새로고침/링크 복사 시 markConnected와 토스트가 다시 실행된다.
+  it('콜백 파라미터 제거는 히스토리 항목을 교체(replace)한다', async () => {
+    const router = createMemoryRouter([{ path: '/calendar', element: <Calendar /> }], {
+      initialEntries: ['/calendar?calendarConnected=1'],
+    })
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+    expect(router.state.historyAction).toBe('REPLACE')
   })
 
   it('calendarError=1 이면 StrictMode에서도 실패 토스트가 한 번만 뜬다', async () => {

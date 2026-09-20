@@ -74,11 +74,16 @@ const Calendar = () => {
     if (!connected && !failed) return;
     oauthCallbackHandledRef.current = true;
 
-    setSearchParams((prev) => {
-      prev.delete("calendarConnected");
-      prev.delete("calendarError");
-      return prev;
-    });
+    // replace가 아니면 히스토리에 ?calendarConnected=1 항목이 남아, 뒤로가기 후
+    // 새로고침하면 콜백 처리가 다시 실행된다.
+    setSearchParams(
+      (prev) => {
+        prev.delete("calendarConnected");
+        prev.delete("calendarError");
+        return prev;
+      },
+      { replace: true },
+    );
 
     if (failed) {
       toast.error("연동 실패", "구글 캘린더 연동 중 오류가 발생했습니다");

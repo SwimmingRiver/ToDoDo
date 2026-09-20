@@ -139,4 +139,27 @@ describe("useGoogleCalendarEvents", () => {
     expect(result.current.fetchStatus).toBe("idle");
     expect(vi.mocked(getGoogleCalendarEvents)).not.toHaveBeenCalled();
   });
+
+  // Worker는 invalid_grant를 만나면 토큰을 지우고 401 revoked를 "딱 한 번"만 준다 —
+  // 다음 호출부터는 토큰이 없어 200 빈 배열이다. 그래서 revoked 기록(Firestore 쓰기)이
+  // 실패해도 원래 CalendarRevokedError를 유지해 재시도로 흘리면 안 된다. 재시도가
+  // 200으로 성공해버리면 연동 상태가 영원히 active로 남아 "다시 연결" 안내가 안 뜬다.
+  it("revoked 기록이 실패해도 CalendarRevokedError를 유지하고 재시도하지 않는다", async () => {
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { getGoogleCalendarEvents } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(getGoogleCalendarEvents).mockRejectedValue(new CalendarRevokedError());
+    vi.mocked(setDoc).mockRejectedValueOnce(new Error("firestore offline"));
+
+    const { result } = renderHook(() => useGoogleCalendarEvents(anyRange), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(CalendarRevokedError);
+    expect(vi.mocked(getGoogleCalendarEvents)).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
 });
