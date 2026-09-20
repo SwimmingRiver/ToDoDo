@@ -51,6 +51,16 @@ export class CalendarRevokedError extends Error {
   }
 }
 
+/** Worker는 토큰 레코드가 없으면(연동 해제 뒤) 409 {error:"not_connected"}를 준다.
+ *  다른 탭에서 해제한 뒤 이 탭의 연동 캐시가 stale할 때 만나는 정상 경로라
+ *  Sentry 오탐이 되지 않도록 별도 타입으로 구분한다. */
+export class CalendarNotConnectedError extends Error {
+  constructor() {
+    super("구글 캘린더가 연동되어 있지 않습니다");
+    this.name = "CalendarNotConnectedError";
+  }
+}
+
 export const syncTodosToCalendar = async (
   todos: SyncTodoPayload[],
 ): Promise<SyncTodoResult[]> => {
@@ -62,6 +72,11 @@ export const syncTodosToCalendar = async (
   if (res.status === 401) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     if (body.error === "revoked") throw new CalendarRevokedError();
+    throw new Error(`동기화 실패: ${res.status}`);
+  }
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === "not_connected") throw new CalendarNotConnectedError();
     throw new Error(`동기화 실패: ${res.status}`);
   }
   if (!res.ok) throw new Error(`동기화 실패: ${res.status}`);

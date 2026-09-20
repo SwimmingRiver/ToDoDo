@@ -131,11 +131,48 @@ describe("CalendarConnectionButton", () => {
     fireEvent.click(screen.getByText("연동 해제"));
 
     await waitFor(() => {
-      expect(disconnect).toHaveBeenCalledWith([
-        { id: "todo-1", googleEventId: "event-1" },
-        { id: "todo-3", googleEventId: "event-3" },
-      ]);
+      expect(disconnect).toHaveBeenCalledWith(
+        [
+          { id: "todo-1", googleEventId: "event-1" },
+          { id: "todo-3", googleEventId: "event-3" },
+        ],
+        [],
+      );
     });
+  });
+
+  // Todo가 삭제됐는데 이벤트 삭제가 실패해 스냅샷에만 남은 고아 이벤트는 현재
+  // Todo 목록엔 없다 — 스냅샷에서 읽어 함께 보내지 않으면 해제 후 스냅샷이
+  // 비워지면서 그 이벤트는 구글에 영영 남는다.
+  it("연동 해제 시 스냅샷에만 남은 고아 이벤트 id도 함께 보낸다", async () => {
+    const { useCalendarIntegrationStatus, useDisconnectCalendar } = await import("../../hooks");
+    const { useGetTodos } = await import("@/features/todo");
+    const disconnect = vi.fn().mockResolvedValue({ allDeleted: true });
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    vi.mocked(useDisconnectCalendar).mockReturnValue({ disconnect });
+    vi.mocked(useGetTodos).mockReturnValue({
+      data: [{ id: "todo-1", googleEventId: "event-1" }],
+    } as never);
+    localStorage.setItem(
+      "calendarSyncSnapshot:user-1",
+      JSON.stringify([
+        ["todo-1", { updatedAt: "x", googleEventId: "event-1" }],
+        ["deleted-todo", { updatedAt: "x", googleEventId: "orphan-9" }],
+      ]),
+    );
+
+    render(<CalendarConnectionButton />, { wrapper: createWrapper() });
+    fireEvent.click(screen.getByText("연동 해제"));
+
+    await waitFor(() => {
+      expect(disconnect).toHaveBeenCalledWith(
+        [{ id: "todo-1", googleEventId: "event-1" }],
+        ["orphan-9"],
+      );
+    });
+    localStorage.clear();
   });
 
   it("connect가 실패하면 에러 토스트를 보여준다", async () => {
