@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
-import { doc, setDoc, writeBatch } from "firebase/firestore";
+import { doc, writeBatch } from "firebase/firestore";
 import { db } from "@/shared/lib/firestore";
 import { auth } from "@/shared/lib/firebase";
 import { useGetTodos } from "@/features/todo";
@@ -9,6 +9,7 @@ import type { Todo } from "@/features/todo";
 import { toDateKeyFromISO } from "@/shared/utils/date";
 import { syncTodosToCalendar, CalendarRevokedError, type SyncTodoPayload } from "../api";
 import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
+import { markCalendarRevoked } from "./markCalendarRevoked";
 
 interface SyncedSnapshotEntry {
   updatedAt: string;
@@ -146,11 +147,7 @@ export const useSyncTodosToCalendar = (): void => {
         }
       } catch (error) {
         if (error instanceof CalendarRevokedError) {
-          const uid = auth.currentUser?.uid;
-          if (uid) {
-            await setDoc(doc(db, "calendarIntegrations", uid), { status: "revoked" }, { merge: true });
-            queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });
-          }
+          await markCalendarRevoked(queryClient);
         } else {
           console.error("캘린더 동기화 실패:", error);
           Sentry.captureException(error);

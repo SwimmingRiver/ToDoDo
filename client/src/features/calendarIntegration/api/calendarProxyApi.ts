@@ -76,8 +76,22 @@ export interface GoogleCalendarEvent {
   end: string;
 }
 
-export const getGoogleCalendarEvents = async (): Promise<GoogleCalendarEvent[]> => {
-  const res = await authorizedFetch("/events");
+export interface GoogleCalendarEventsRange {
+  /** ISO 타임스탬프. 구글 API와 같이 timeMax는 배타적(exclusive)이다. */
+  timeMin: string;
+  timeMax: string;
+}
+
+export const getGoogleCalendarEvents = async (
+  range: GoogleCalendarEventsRange,
+): Promise<GoogleCalendarEvent[]> => {
+  const params = new URLSearchParams({ timeMin: range.timeMin, timeMax: range.timeMax });
+  const res = await authorizedFetch(`/events?${params.toString()}`);
+  if (res.status === 401) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === "revoked") throw new CalendarRevokedError();
+    throw new Error("이벤트 조회 실패: 401");
+  }
   if (!res.ok) throw new Error("이벤트 조회 실패");
   const data = (await res.json()) as { events: GoogleCalendarEvent[] };
   return data.events;
