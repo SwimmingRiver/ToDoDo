@@ -107,6 +107,31 @@ describe("calendarProxyApi", () => {
     expect(init.headers.Authorization).toBe("Bearer id-token");
   });
 
+  // /events도 Worker가 리프레시 토큰 철회를 감지하면 401 {error:"revoked"}를
+  // 반환한다(events.ts). 여기서 일반 에러로 뭉개면 sync 경로가 돌기 전까지
+  // "다시 연결" 상태 전환이 안 일어난다.
+  it("getGoogleCalendarEvents는 401 응답이 {error: revoked}이면 CalendarRevokedError를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "revoked" }),
+      }),
+    );
+    await expect(getGoogleCalendarEvents()).rejects.toBeInstanceOf(CalendarRevokedError);
+  });
+
+  it("getGoogleCalendarEvents는 401 응답이어도 revoked가 아니면 일반 에러를 던진다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }),
+    );
+    const err = await getGoogleCalendarEvents().catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(CalendarRevokedError);
+  });
+
   it("getGoogleCalendarEvents는 응답이 실패하면 에러를 던진다", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502 }));
     await expect(getGoogleCalendarEvents()).rejects.toThrow("이벤트 조회 실패");

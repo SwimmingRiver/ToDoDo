@@ -78,6 +78,11 @@ export interface GoogleCalendarEvent {
 
 export const getGoogleCalendarEvents = async (): Promise<GoogleCalendarEvent[]> => {
   const res = await authorizedFetch("/events");
+  if (res.status === 401) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === "revoked") throw new CalendarRevokedError();
+    throw new Error("이벤트 조회 실패: 401");
+  }
   if (!res.ok) throw new Error("이벤트 조회 실패");
   const data = (await res.json()) as { events: GoogleCalendarEvent[] };
   return data.events;
