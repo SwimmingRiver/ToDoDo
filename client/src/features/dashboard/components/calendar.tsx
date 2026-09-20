@@ -35,6 +35,7 @@ import { toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 import { isDateInTodoRange } from "@/shared/utils/dateRange";
 import CalendarConnectionButton from "@/features/calendarIntegration/components/calendarConnectionButton";
 import { useMarkCalendarConnected, useGoogleCalendarEvents } from "@/features/calendarIntegration/hooks";
+import type { CalendarVisibleRange } from "@/features/calendarIntegration/hooks";
 
 const statusLabels: Record<Status, string> = {
   todo: "할 일",
@@ -48,7 +49,10 @@ const Calendar = () => {
   const navigate = useNavigate();
   const updateTodoDueAt = useUpdateTodoDueAt();
   const { data: todos, isLoading, isError } = useGetTodos();
-  const { data: googleEvents } = useGoogleCalendarEvents();
+  // FullCalendar가 datesSet으로 알려주는 실제 표시 범위. 구글 이벤트 오버레이가
+  // 이 범위를 따라가야 지난달/다음달로 이동해도 구글 일정이 보인다.
+  const [visibleRange, setVisibleRange] = useState<CalendarVisibleRange | null>(null);
+  const { data: googleEvents } = useGoogleCalendarEvents(visibleRange);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<"dayGridMonth" | "dayGridWeek">("dayGridMonth");
@@ -326,6 +330,9 @@ const Calendar = () => {
             height="100%"
             displayEventTime={false}
             dateClick={handleDateClick}
+            datesSet={(arg) =>
+              setVisibleRange({ start: arg.start.toISOString(), end: arg.end.toISOString() })
+            }
             eventClick={handleEventClick}
             /* 높이 기반 자동(true)은 이벤트 바가 압축된 이 앱(특히 모바일 6px 바)에서는
                현실적인 건수(3~6건)로 임계치에 닿지 않아 +N개가 표시되지 않는다.

@@ -253,3 +253,42 @@ describe('Calendar OAuth 콜백 파라미터 처리', () => {
     expect(mockMarkConnected).not.toHaveBeenCalled()
   })
 })
+
+// 구글 이벤트 오버레이가 "오늘+30일" 고정이 아니라 캘린더가 실제로 보여주는
+// 날짜 범위를 조회해야 지난달/다음달로 이동했을 때도 구글 일정이 보인다.
+describe('Calendar 구글 이벤트 오버레이 조회 범위', () => {
+  beforeEach(async () => {
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    vi.mocked(useGoogleCalendarEvents).mockClear()
+    vi.mocked(useGoogleCalendarEvents).mockReturnValue({ data: [] } as never)
+  })
+
+  const lastRangeArg = async () => {
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    const calls = vi.mocked(useGoogleCalendarEvents).mock.calls
+    return calls[calls.length - 1][0] as { start: string; end: string } | null
+  }
+
+  it('마운트 후 현재 보이는 달의 범위로 구글 이벤트를 조회한다', async () => {
+    renderCalendar()
+    await waitFor(async () => expect(await lastRangeArg()).not.toBeNull())
+
+    const range = (await lastRangeArg())!
+    const now = Date.now()
+    expect(new Date(range.start).getTime()).toBeLessThanOrEqual(now)
+    expect(new Date(range.end).getTime()).toBeGreaterThan(now)
+  })
+
+  it('다음 달로 이동하면 조회 범위도 다음 달로 바뀐다', async () => {
+    renderCalendar()
+    await waitFor(async () => expect(await lastRangeArg()).not.toBeNull())
+    const before = (await lastRangeArg())!
+
+    fireEvent.click(document.querySelector('.fc-next-button')!)
+
+    await waitFor(async () => {
+      const after = (await lastRangeArg())!
+      expect(new Date(after.start).getTime()).toBeGreaterThan(new Date(before.start).getTime())
+    })
+  })
+})
