@@ -191,8 +191,11 @@ describe("useSyncTodosToCalendar", () => {
     const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
     await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
 
-    // updatedAt이 동일한 내용으로 참조만 바꿔 다시 렌더링 — 재전송되면 안 된다.
-    vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
+    // 동기화 후 Firestore 갱신으로 googleEventId가 채워진 채, updatedAt이 동일한
+    // 내용으로 참조만 바꿔 다시 렌더링 — 재전송되면 안 된다.
+    vi.mocked(useGetTodos).mockReturnValue({
+      data: [{ ...todo, googleEventId: "event-1" }],
+    } as never);
     rerender();
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -330,6 +333,129 @@ describe("useSyncTodosToCalendar", () => {
         { status: "revoked" },
         { merge: true },
       );
+    });
+  });
+
+  // 연동 해제는 구글 이벤트를 지우고 Firestore googleEventId만 null로 만들 뿐
+  // updatedAt은 안 바꾼다. 스냅샷이 그대로 남아 있으면 재연결 후 기존 Todo가
+  // "변경 없음"으로 걸러져 영원히 다시 올라가지 않는다(사용자 보고: 재연결 후
+  // 새 Todo만 동기화됨).
+  describe("연동 해제 → 재연결", () => {
+    it("해제 후 재연결하면 이전에 동기화됐던 기존 Todo를 다시 upsert한다", async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+
+      const todo = baseTodo({});
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+      vi.mocked(syncTodosToCalendar).mockResolvedValue([{ id: "todo-1", googleEventId: "event-1" }]);
+
+      const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+      // 연동 해제: 구글 이벤트 삭제됨, Firestore googleEventId null, updatedAt 그대로
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: false, status: "active" },
+      } as never);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo, googleEventId: null }] } as never);
+      rerender();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1);
+
+      // 재연결
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      rerender();
+
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+        expect.objectContaining({ id: "todo-1", action: "upsert" }),
+      ]);
+    });
+
+    it("스냅샷의 updatedAt이 같아도 Firestore에 googleEventId가 없으면 다시 upsert한다 (다른 기기에서 해제한 경우)", async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+
+      const todo = baseTodo({ googleEventId: null });
+      // 이 기기의 localStorage 스냅샷은 여전히 "동기화 완료"라고 믿고 있다.
+      localStorage.setItem(
+        "calendarSyncSnapshot:user-1",
+        JSON.stringify([["todo-1", { updatedAt: todo.updatedAt, googleEventId: "event-1" }]]),
+      );
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+      vi.mocked(syncTodosToCalendar).mockResolvedValue([{ id: "todo-1", googleEventId: "event-1" }]);
+
+      renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+      // 스냅샷의 옛 id("event-1")는 지워진 이벤트의 tombstone을 가리킨다 — 그 id로
+      // PATCH하면 구글이 200을 주면서도 cancelled 그대로라 영영 안 보인다. null을
+      // 보내 Worker의 결정론적 POST→409→되살리기 경로를 타게 해야 한다.
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+        expect.objectContaining({ id: "todo-1", action: "upsert", googleEventId: null }),
+      ]);
+    });
+
+    // 진행 중인 동기화가 끝나면서 클로저에 잡힌 옛 스냅샷을 localStorage에 되돌려
+    // 쓰면 해제 시점의 clear가 무효가 되고, 재연결(OAuth 전체 새로고침) 후
+    // loadSnapshot이 stale id를 그대로 복원한다.
+    it("동기화 진행 중에 해제되면, 끝난 동기화가 옛 스냅샷을 localStorage에 되돌려 쓰지 않는다", async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+
+      let resolveSync!: (v: { id: string; googleEventId: string }[]) => void;
+      vi.mocked(syncTodosToCalendar).mockReturnValue(
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        }),
+      );
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [baseTodo({})] } as never);
+
+      const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+      // 동기화가 아직 안 끝난 상태에서 연동 해제
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: false, status: "active" },
+      } as never);
+      rerender();
+      await waitFor(() => expect(localStorage.getItem("calendarSyncSnapshot:user-1")).toBeNull());
+
+      resolveSync([{ id: "todo-1", googleEventId: "event-1" }]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(localStorage.getItem("calendarSyncSnapshot:user-1")).toBeNull();
+    });
+
+    it("연동 해제 상태를 보면 localStorage 스냅샷을 비운다", async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+
+      localStorage.setItem(
+        "calendarSyncSnapshot:user-1",
+        JSON.stringify([["todo-1", { updatedAt: "2026-08-01T00:00:00.000Z", googleEventId: "event-1" }]]),
+      );
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: false, status: "active" },
+      } as never);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [] } as never);
+
+      renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(localStorage.getItem("calendarSyncSnapshot:user-1")).toBeNull());
     });
   });
 });

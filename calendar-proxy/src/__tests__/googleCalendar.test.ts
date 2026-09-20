@@ -31,6 +31,7 @@ describe("syncTodosToGoogleCalendar", () => {
       summary: "테스트",
       start: { date: "2026-09-01" },
       end: { date: "2026-09-02" },
+      status: "confirmed",
     });
   });
 
@@ -165,6 +166,26 @@ describe("syncTodosToGoogleCalendar", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${CALENDAR_API_BASE}/existing-event-id`);
     expect(init.method).toBe("PATCH");
+  });
+
+  // 삭제된 이벤트는 404가 아니라 tombstone(status: cancelled)이라 그 id로 PATCH하면
+  // 200이 오면서도 cancelled 그대로 남는다 — 사용자가 구글에서 직접 지운 이벤트나
+  // 연동 해제로 지워진 이벤트를 stale id로 수정하면 캘린더에 영영 안 보인다.
+  // 모든 upsert PATCH에 status: confirmed를 실어 tombstone을 자동으로 되살린다.
+  it("PATCH 본문에 status: confirmed를 실어 tombstone을 되살린다", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "existing-event-id" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await syncTodosToGoogleCalendar(
+      [{ id: "todo-1", title: "제목", dueAt: "2026-09-01", googleEventId: "existing-event-id", action: "upsert" }],
+      "access-token",
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).status).toBe("confirmed");
   });
 
   it("action이 delete면 DELETE 요청을 보내고 googleEventId null을 반환한다", async () => {

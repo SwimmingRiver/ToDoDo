@@ -42,6 +42,14 @@ const saveSnapshot = (uid: string, snapshot: Map<string, SyncedSnapshotEntry>): 
   }
 };
 
+const clearSnapshot = (uid: string): void => {
+  try {
+    localStorage.removeItem(snapshotStorageKey(uid));
+  } catch {
+    // 위와 동일.
+  }
+};
+
 export const useSyncTodosToCalendar = (): void => {
   const { data: todos } = useGetTodos();
   const { data: integration } = useCalendarIntegrationStatus();
@@ -61,6 +69,16 @@ export const useSyncTodosToCalendar = (): void => {
       loadedUidRef.current = uid;
     }
 
+    // 연동 해제는 구글 이벤트를 지우고 Firestore googleEventId만 null로 만들 뿐
+    // updatedAt은 안 바꾼다. 스냅샷을 그대로 두면 재연결 후 기존 Todo가 "변경
+    // 없음"으로 걸러져 영원히 다시 올라가지 않으므로, 해제 상태를 보는 즉시
+    // 메모리·localStorage 양쪽을 비운다. (revoked는 connected가 여전히 true고
+    // 구글 이벤트도 남아 있으므로 해당 없음.)
+    if (integration && !integration.connected) {
+      snapshotRef.current = new Map();
+      if (uid) clearSnapshot(uid);
+      return;
+    }
     if (!integration?.connected || integration.status === "revoked") return;
     if (!todos) return;
     if (isRunningRef.current) {
@@ -73,15 +91,23 @@ export const useSyncTodosToCalendar = (): void => {
     const eligibleById = new Map(eligible.map((t) => [t.id, t]));
     const eligibleIds = new Set(eligible.map((t) => t.id));
 
+    // Firestore에 googleEventId가 없으면 스냅샷이 뭐라 하든 미동기화 상태다 —
+    // 다른 기기에서 연동을 해제했거나 localStorage가 어긋난 경우에도 앱 진입
+    // 시 스스로 복구되게 한다(스냅샷이 stale한 id를 주면 Worker가 PATCH 404 →
+    // 결정론적 id로 재생성 폴백해 수렴한다).
     const upserts: SyncTodoPayload[] = eligible
-      .filter((t) => snapshot.get(t.id)?.updatedAt !== t.updatedAt)
+      .filter((t) => !t.googleEventId || snapshot.get(t.id)?.updatedAt !== t.updatedAt)
       .map((t) => ({
         id: t.id,
         title: t.title,
         // Worker는 UTC로만 동작해 로컬 캘린더 날짜를 모른다 — 여기서 반드시
         // 로컬 타임존 기준으로 변환해서 보낸다 (dueAt을 그대로 슬라이싱 금지).
         dueAt: toDateKeyFromISO(t.dueAt as string),
-        googleEventId: t.googleEventId ?? snapshot.get(t.id)?.googleEventId ?? null,
+        // Firestore의 id만 믿고 스냅샷 id로는 폴백하지 않는다 — 연동 해제로 지워진
+        // 이벤트는 404가 아니라 tombstone(200 + cancelled)이라, 스냅샷의 옛 id로
+        // PATCH하면 성공처럼 보이면서 캘린더엔 영영 안 나타난다. null이면 Worker가
+        // 결정론적 id로 POST→409→되살리기 경로를 타 같은 이벤트로 수렴한다.
+        googleEventId: t.googleEventId ?? null,
         action: "upsert" as const,
       }));
 
@@ -139,7 +165,10 @@ export const useSyncTodosToCalendar = (): void => {
           }
         });
 
-        if (uid) saveSnapshot(uid, snapshot);
+        // 동기화 도중 연동이 해제돼 snapshotRef가 교체됐다면, 이 클로저의 옛
+        // 스냅샷을 되돌려 쓰지 않는다 — 되돌려 쓰면 해제 시점의 clear가 무효가
+        // 되고 재연결 후 stale id가 그대로 복원된다.
+        if (uid && snapshotRef.current === snapshot) saveSnapshot(uid, snapshot);
 
         if (hasWrites) {
           await firestoreBatch.commit();
