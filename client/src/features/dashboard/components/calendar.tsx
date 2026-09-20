@@ -27,6 +27,7 @@ import { statusColors, type Status } from "../../../styles/statusColors";
 import { BottomSheet, EmptyState, Modal, RecurrenceBadge, useToast } from "@/shared";
 import { AlertCircle, Plus, Repeat, CalendarDays } from "lucide-react";
 import styled, { keyframes } from "styled-components";
+import * as Sentry from "@sentry/react";
 import { colors } from "@/styles/colors";
 import { isOverdue, getDropDates } from "../utils/calendarUtils";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
@@ -56,23 +57,43 @@ const Calendar = () => {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { markConnected } = useMarkCalendarConnected();
+  // setSearchParams로 파라미터를 지워도 라우터 내비게이션이라 비동기다 —
+  // StrictMode 이중 실행이나 리마운트 시 같은 클로저의 searchParams를 다시
+  // 읽어 토스트가 두 번 뜨므로, ref로 1회 처리를 보장한다(ref는 StrictMode
+  // 이중 실행 사이에도 유지된다).
+  const oauthCallbackHandledRef = useRef(false);
 
   useEffect(() => {
-    if (searchParams.get("calendarConnected") === "1") {
-      markConnected();
-      toast.success("연동 완료", "구글 캘린더 연동이 완료됐습니다");
-      setSearchParams((prev) => {
-        prev.delete("calendarConnected");
-        return prev;
-      });
-    }
-    if (searchParams.get("calendarError") === "1") {
+    if (oauthCallbackHandledRef.current) return;
+    const connected = searchParams.get("calendarConnected") === "1";
+    const failed = searchParams.get("calendarError") === "1";
+    if (!connected && !failed) return;
+    oauthCallbackHandledRef.current = true;
+
+    setSearchParams((prev) => {
+      prev.delete("calendarConnected");
+      prev.delete("calendarError");
+      return prev;
+    });
+
+    if (failed) {
       toast.error("연동 실패", "구글 캘린더 연동 중 오류가 발생했습니다");
-      setSearchParams((prev) => {
-        prev.delete("calendarError");
-        return prev;
-      });
+      return;
     }
+
+    // OAuth 자체는 성공했어도 Firestore에 연동 상태를 못 쓰면 동기화가 시작되지
+    // 않는다 — 그 상태에서 성공 토스트를 띄우면 사용자는 "됐다"고 믿게 되므로
+    // 쓰기 성공을 확인한 뒤에만 띄운다.
+    (async () => {
+      try {
+        await markConnected();
+        toast.success("연동 완료", "구글 캘린더 연동이 완료됐습니다");
+      } catch (error) {
+        console.error("캘린더 연동 상태 저장 실패:", error);
+        Sentry.captureException(error);
+        toast.error("연동 상태 저장 실패", "구글 캘린더를 다시 연결해주세요");
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import Calendar from '../calendar'
 
@@ -15,8 +16,13 @@ vi.mock('@/shared/lib/firestore', () => ({
 vi.mock("@/features/calendarIntegration/components/calendarConnectionButton", () => ({
   default: () => null,
 }));
+const { mockMarkConnected, mockToast } = vi.hoisted(() => ({
+  mockMarkConnected: vi.fn(async () => {}),
+  mockToast: { error: vi.fn(), success: vi.fn() },
+}))
+
 vi.mock("@/features/calendarIntegration/hooks", () => ({
-  useMarkCalendarConnected: () => ({ markConnected: vi.fn() }),
+  useMarkCalendarConnected: () => ({ markConnected: mockMarkConnected }),
   useGoogleCalendarEvents: vi.fn(() => ({ data: [] })),
 }));
 
@@ -61,7 +67,7 @@ vi.mock('@/shared', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/shared')>()
   return {
     ...actual,
-    useToast: () => ({ error: vi.fn(), success: vi.fn() }),
+    useToast: () => mockToast,
   }
 })
 
@@ -200,5 +206,50 @@ describe('Calendar 구글 이벤트 읽기 전용', () => {
     fireEvent.click(googleEventTitle)
 
     expect(mockNavigate).not.toHaveBeenCalled()
+  })
+})
+
+// OAuth 콜백은 /calendar?calendarConnected=1 로 돌아온다. 마운트 이펙트가
+// 파라미터를 보고 markConnected + 토스트를 띄우는데, 파라미터 삭제는 라우터
+// 내비게이션이라 비동기다 — StrictMode 이중 실행이나 리마운트 시 같은 클로저의
+// searchParams를 다시 읽어 토스트가 두 번 뜬다. 또 markConnected(Firestore 쓰기)
+// 실패를 무시하고 성공 토스트를 띄우면 사용자는 "연동됐다"고 믿지만 상태는
+// 미연동으로 남는다.
+describe('Calendar OAuth 콜백 파라미터 처리', () => {
+  const renderWithParams = (search: string, strict = false) => {
+    const tree = (
+      <MemoryRouter initialEntries={[`/calendar${search}`]}>
+        <Calendar />
+      </MemoryRouter>
+    )
+    return render(strict ? <StrictMode>{tree}</StrictMode> : tree)
+  }
+
+  beforeEach(() => {
+    mockMarkConnected.mockReset()
+    mockMarkConnected.mockResolvedValue(undefined)
+    mockToast.success.mockReset()
+    mockToast.error.mockReset()
+  })
+
+  it('StrictMode 이중 마운트에서도 연동 완료 토스트는 한 번만 뜬다', async () => {
+    renderWithParams('?calendarConnected=1', true)
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledTimes(1))
+    expect(mockMarkConnected).toHaveBeenCalledTimes(1)
+  })
+
+  it('markConnected가 실패하면 성공 토스트 대신 에러 토스트를 띄운다', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockMarkConnected.mockRejectedValue(new Error('firestore down'))
+    renderWithParams('?calendarConnected=1')
+    await waitFor(() => expect(mockToast.error).toHaveBeenCalledTimes(1))
+    expect(mockToast.success).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
+  it('calendarError=1 이면 StrictMode에서도 실패 토스트가 한 번만 뜬다', async () => {
+    renderWithParams('?calendarError=1', true)
+    await waitFor(() => expect(mockToast.error).toHaveBeenCalledTimes(1))
+    expect(mockMarkConnected).not.toHaveBeenCalled()
   })
 })
