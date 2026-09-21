@@ -19,43 +19,9 @@ const Title = styled.h3`
   color: ${colors.text.primary};
 `;
 
-const Row = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
+const ChartArea = styled.div`
+  width: 100%;
+  min-width: 0;
 `;
 
-/** 텍스트가 범주(우선순위)를 나타낸다 — 막대는 단일 색상으로 크기(개수)만 인코딩한다. */
-const RowLabel = styled.span`
-  width: 40px;
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${colors.text.secondary};
-`;
-
-const BarTrack = styled.div`
-  flex: 1;
-  height: 8px;
-  border-radius: 4px;
-  background-color: ${colors.background.secondary};
-  overflow: hidden;
-`;
-
-const BarFill = styled.div`
-  height: 100%;
-  border-radius: 4px;
-  background-color: ${colors.brand.fill};
-  transition: width 0.2s ease;
-`;
-
-const RowCount = styled.span`
-  width: 24px;
-  flex-shrink: 0;
-  text-align: right;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${colors.text.primary};
-`;
-
-export { Card, Title, Row, RowLabel, BarTrack, BarFill, RowCount };
+export { Card, Title, ChartArea };

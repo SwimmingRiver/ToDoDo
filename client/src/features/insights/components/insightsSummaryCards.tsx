@@ -1,31 +1,22 @@
-import type { CompletionRateResult } from "../utils/computeCompletionRate";
+import type { CompletionRateResult } from "@tododo/core";
 import { Grid, Card, Label, Value, Sub } from "./insightsSummaryCards.styles";
 
 interface InsightsSummaryCardsProps {
-  completionRate7d: CompletionRateResult;
-  completionRate30d: CompletionRateResult;
+  /** "이번 달" 같은 기간 접두사. 카드 제목이 필터를 따라가게 한다. */
+  periodLabel: string;
+  completionRate: CompletionRateResult;
   dueAdherence: CompletionRateResult;
   recurringVsOneOff: { recurring: CompletionRateResult; oneOff: CompletionRateResult };
 }
 
 const toPercent = (rate: number): string => `${Math.round(rate * 100)}%`;
 
-const InsightsSummaryCards = ({
-  completionRate7d,
-  completionRate30d,
-  dueAdherence,
-  recurringVsOneOff,
-}: InsightsSummaryCardsProps) => {
+const InsightsSummaryCards = ({ periodLabel, completionRate, dueAdherence, recurringVsOneOff }: InsightsSummaryCardsProps) => {
   const cards = [
     {
-      label: "최근 7일 완료율",
-      value: toPercent(completionRate7d.rate),
-      sub: `${completionRate7d.completed} / ${completionRate7d.total}`,
-    },
-    {
-      label: "최근 30일 완료율",
-      value: toPercent(completionRate30d.rate),
-      sub: `${completionRate30d.completed} / ${completionRate30d.total}`,
+      label: `${periodLabel} 완료율`,
+      value: toPercent(completionRate.rate),
+      sub: `${completionRate.completed} / ${completionRate.total}`,
     },
     {
       label: "기한 준수율",

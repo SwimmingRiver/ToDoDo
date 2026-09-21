@@ -1,4 +1,5 @@
 import { AlertCircle } from "lucide-react";
+import { DEFAULT_INSIGHTS_FILTER, PERIOD_TITLE_LABELS } from "@tododo/core";
 import { useIsPremium, useUpgradeInterest, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
 import { EmptyState } from "@/shared";
 import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
@@ -8,8 +9,10 @@ import { PageContainer, InsightsBody, SecondaryGrid } from "./insightsPage.style
 
 const InsightsPage = () => {
   const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
-  const metrics = useProductivityMetrics();
+  const filter = DEFAULT_INSIGHTS_FILTER;
+  const metrics = useProductivityMetrics(filter);
   const { submitInterest } = useUpgradeInterest("완료 통계/인사이트 기능");
+  const periodLabel = PERIOD_TITLE_LABELS[filter.period];
 
   if (isEntitlementLoading) return <InsightsSkeleton />;
 
@@ -28,14 +31,14 @@ const InsightsPage = () => {
       <>
         <StreakCard streak={metrics.streak} />
         <InsightsSummaryCards
-          completionRate7d={metrics.completionRate7d}
-          completionRate30d={metrics.completionRate30d}
+          periodLabel={periodLabel}
+          completionRate={metrics.completionRate}
           dueAdherence={metrics.dueAdherence}
           recurringVsOneOff={metrics.recurringVsOneOff}
         />
         <SecondaryGrid>
-          <PriorityDistribution distribution={metrics.priorityDistribution} />
-          <CompletionTrend trend={metrics.trend} />
+          <PriorityDistribution distribution={metrics.priorityDistribution} title={`${periodLabel} 완료한 할 일의 우선순위 분포`} />
+          <CompletionTrend buckets={metrics.trend} title={`${periodLabel} 완료 추이`} />
         </SecondaryGrid>
       </>
     );
