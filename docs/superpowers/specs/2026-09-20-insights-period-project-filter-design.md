@@ -96,7 +96,7 @@ type PeriodRange = { startKey: string; endKey: string } | null;
 |---|---|---|
 | thisWeek | 일 | 일요일~오늘 (1~7) |
 | thisMonth | 일 | 1일~오늘 |
-| last90Days | 주(일요일 시작) | 13 |
+| last90Days | 7일 단위(범위 시작일부터, 일요일 정렬 안 함 — 정렬하면 13/14개로 흔들림) | 13 |
 | all | 월 | 첫 완료월 ~ 이번 달. 완료 0건이면 빈 배열 |
 
 빈 버킷은 0으로 채운다. 반환은 `{ key, label, count }[]` — `label`은 렌더러가 그대로 쓰는 짧은 축 라벨(일=`M/d`, 주=시작일 `M/d`, 월=`yyyy.M`).
