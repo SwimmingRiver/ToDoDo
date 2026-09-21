@@ -30,17 +30,14 @@ const HorizontalBars = ({ rows, width, ariaLabel }: HorizontalBarsProps) => {
         const y = i * ROW_HEIGHT;
         const valueText = `${row.value} (${Math.round(row.ratio * 100)}%)`;
         return (
-          <g key={row.label}>
+          <g key={i}>
             <text x={0} y={y + ROW_HEIGHT / 2} dominantBaseline="middle" fontSize={13} fontWeight={500} fill={colors.text.secondary}>
               {row.label}
             </text>
             <rect x={trackX} y={y + trackY} width={trackWidth} height={TRACK_HEIGHT} rx={4} fill={colors.background.secondary} />
-            {/* <title>은 svg의 직속 자식일 때만 인식되므로(rect 자식이면 안 잡힘)
-                채움 막대를 중첩 <svg>로 감싼다 — barChart/stackedBar와 같은 패턴. */}
-            <svg x={trackX} y={y + trackY} width={row.fillWidth} height={TRACK_HEIGHT}>
+            <rect x={trackX} y={y + trackY} width={row.fillWidth} height={TRACK_HEIGHT} rx={4} fill={colors.brand.strong}>
               <title>{`${row.label} ${valueText}`}</title>
-              <rect width={row.fillWidth} height={TRACK_HEIGHT} rx={4} fill={colors.brand.strong} />
-            </svg>
+            </rect>
             <text x={width} y={y + ROW_HEIGHT / 2} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={500} fill={colors.text.primary}>
               {valueText}
             </text>

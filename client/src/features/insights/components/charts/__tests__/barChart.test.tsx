@@ -17,9 +17,12 @@ describe("BarChart", () => {
   });
 
   it("막대마다 title로 값을 노출한다", () => {
-    render(<BarChart points={points} width={320} ariaLabel="추이" formatTitle={(label, value) => `${label}: ${value}건 완료`} />);
+    const { container } = render(
+      <BarChart points={points} width={320} ariaLabel="추이" formatTitle={(label, value) => `${label}: ${value}건 완료`} />,
+    );
 
-    expect(screen.getByTitle("9/3: 5건 완료")).toBeInTheDocument();
+    const titles = Array.from(container.querySelectorAll("title")).map((t) => t.textContent);
+    expect(titles).toContain("9/3: 5건 완료");
   });
 
   it("y 눈금 숫자와 x 라벨 텍스트를 그린다", () => {

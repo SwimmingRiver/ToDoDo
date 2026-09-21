@@ -32,19 +32,15 @@ const BarChart = ({ points, width, height = DEFAULT_HEIGHT, ariaLabel, formatTit
           </text>
         </g>
       ))}
-      {layout.bars.map((bar) => (
-        // <title>은 svg의 직속 자식일 때만 testing-library getByTitle/브라우저
-        // 네이티브 툴팁이 인식한다(rect 자식으로 두면 안 잡힘) — 막대마다 작은
-        // 중첩 <svg>로 감싸 x/y/width/height를 옮기고 그 안에 title+rect를 둔다.
-        <svg key={bar.label} x={bar.x} y={bar.y} width={bar.w} height={bar.h}>
+      {layout.bars.map((bar, index) => (
+        <rect key={index} x={bar.x} y={bar.y} width={bar.w} height={bar.h} rx={3} fill={colors.brand.strong}>
           <title>{formatTitle(bar.label, bar.value)}</title>
-          <rect width={bar.w} height={bar.h} rx={3} fill={colors.brand.strong} />
-        </svg>
+        </rect>
       ))}
       {layout.xLabels
         .filter((label) => label.visible)
-        .map((label) => (
-          <text key={label.text} x={label.x} y={layout.baselineY + 14} textAnchor="middle" fontSize={10} fill={colors.text.tertiary}>
+        .map((label, index) => (
+          <text key={index} x={label.x} y={layout.baselineY + 14} textAnchor="middle" fontSize={10} fill={colors.text.tertiary}>
             {label.text}
           </text>
         ))}
