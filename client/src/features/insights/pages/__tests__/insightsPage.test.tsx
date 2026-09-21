@@ -117,4 +117,49 @@ describe("InsightsPage", () => {
 
     expect(container.querySelector("[aria-hidden='true']")).toBeInTheDocument();
   });
+
+  it("기간 탭을 바꾸면 카드 제목이 따라간다", () => {
+    render(<InsightsPage />);
+
+    expect(screen.getByText("이번 달 완료율")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "이번 주" }));
+
+    expect(screen.getByText("이번 주 완료율")).toBeInTheDocument();
+    expect(screen.getByText("이번 주 완료 추이")).toBeInTheDocument();
+  });
+
+  it("프로젝트를 고르면 훅에 projectId가 전달되고 상태 구성 카드가 나타난다", async () => {
+    const { useProductivityMetrics } = await import("../../hooks");
+    vi.mocked(useProductivityMetrics).mockImplementation(
+      (filter) =>
+        ({
+          ...baseMetrics,
+          projects: [{ id: "p1", title: "이사 준비", isDone: false }],
+          statusBreakdown: filter.projectId === "p1" ? { todo: 1, doing: 1, done: 2 } : null,
+        }) as never,
+    );
+
+    render(<InsightsPage />);
+    expect(screen.queryByText("프로젝트 상태 구성")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "프로젝트" }), { target: { value: "p1" } });
+
+    expect(useProductivityMetrics).toHaveBeenLastCalledWith({ period: "thisMonth", projectId: "p1" });
+    expect(screen.getByText("프로젝트 상태 구성")).toBeInTheDocument();
+  });
+
+  it("선택한 프로젝트가 목록에서 사라지면 전체로 되돌린다", async () => {
+    const { useProductivityMetrics } = await import("../../hooks");
+    let projects = [{ id: "p1", title: "이사 준비", isDone: false }];
+    vi.mocked(useProductivityMetrics).mockImplementation(() => ({ ...baseMetrics, projects }) as never);
+
+    const { rerender } = render(<InsightsPage />);
+    fireEvent.change(screen.getByRole("combobox", { name: "프로젝트" }), { target: { value: "p1" } });
+    expect(useProductivityMetrics).toHaveBeenLastCalledWith({ period: "thisMonth", projectId: "p1" });
+
+    projects = [];
+    rerender(<InsightsPage />);
+
+    expect(useProductivityMetrics).toHaveBeenLastCalledWith({ period: "thisMonth", projectId: null });
+  });
 });

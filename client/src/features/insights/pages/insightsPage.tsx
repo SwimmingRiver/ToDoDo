@@ -1,18 +1,35 @@
+import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
-import { DEFAULT_INSIGHTS_FILTER, PERIOD_TITLE_LABELS } from "@tododo/core";
+import { DEFAULT_INSIGHTS_FILTER, PERIOD_TITLE_LABELS, type InsightsFilter } from "@tododo/core";
 import { useIsPremium, useUpgradeInterest, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
 import { EmptyState } from "@/shared";
 import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
 import { useProductivityMetrics } from "../hooks";
-import { InsightsSummaryCards, StreakCard, PriorityDistribution, CompletionTrend } from "../components";
+import {
+  InsightsFilterBar,
+  InsightsSummaryCards,
+  StreakCard,
+  PriorityDistribution,
+  CompletionTrend,
+  StatusBreakdownCard,
+} from "../components";
 import { PageContainer, InsightsBody, SecondaryGrid } from "./insightsPage.styles";
 
 const InsightsPage = () => {
   const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
-  const filter = DEFAULT_INSIGHTS_FILTER;
+  const [filter, setFilter] = useState<InsightsFilter>(DEFAULT_INSIGHTS_FILTER);
   const metrics = useProductivityMetrics(filter);
   const { submitInterest } = useUpgradeInterest("완료 통계/인사이트 기능");
   const periodLabel = PERIOD_TITLE_LABELS[filter.period];
+
+  // 선택한 프로젝트가 삭제되는 등 옵션에서 사라지면 전체로 되돌린다.
+  const { projectId } = filter;
+  const { projects } = metrics;
+  useEffect(() => {
+    if (projectId !== null && !projects.some((project) => project.id === projectId)) {
+      setFilter((prev) => ({ ...prev, projectId: null }));
+    }
+  }, [projectId, projects]);
 
   if (isEntitlementLoading) return <InsightsSkeleton />;
 
@@ -29,6 +46,7 @@ const InsightsPage = () => {
     }
     return (
       <>
+        <InsightsFilterBar filter={filter} projects={metrics.projects} onChange={setFilter} />
         <StreakCard streak={metrics.streak} />
         <InsightsSummaryCards
           periodLabel={periodLabel}
@@ -36,6 +54,7 @@ const InsightsPage = () => {
           dueAdherence={metrics.dueAdherence}
           recurringVsOneOff={metrics.recurringVsOneOff}
         />
+        {metrics.statusBreakdown && <StatusBreakdownCard breakdown={metrics.statusBreakdown} />}
         <SecondaryGrid>
           <PriorityDistribution distribution={metrics.priorityDistribution} title={`${periodLabel} 완료한 할 일의 우선순위 분포`} />
           <CompletionTrend buckets={metrics.trend} title={`${periodLabel} 완료 추이`} />
