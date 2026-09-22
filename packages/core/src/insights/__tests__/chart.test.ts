@@ -62,8 +62,8 @@ describe("layoutBarChart", () => {
 
   it("x 라벨은 폭이 좁으면 k개마다 보이고 마지막은 항상 보이며, 마지막과 k 미만으로 가까운 라벨은 숨긴다", () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ label: `d${i}`, value: 1 }));
-    // plotWidth 96, LABEL_WIDTH 32 → k = ceil(8*32/96) = 3
-    const layout = layoutBarChart({ points: many, width: 96, height: 50, padding: { top: 0, right: 0, bottom: 0, left: 0 } });
+    // plotWidth 120, LABEL_WIDTH 40 → k = ceil(8*40/120) = 3
+    const layout = layoutBarChart({ points: many, width: 120, height: 50, padding: { top: 0, right: 0, bottom: 0, left: 0 } });
     const visible = layout.xLabels.filter((l) => l.visible).map((l) => l.text);
     expect(visible).toEqual(["d0", "d3", "d7"]);
   });

@@ -19,11 +19,11 @@ describe("InsightsSummaryCards", () => {
     expect(screen.getByText("이번 달 완료율")).toBeInTheDocument();
     expect(screen.getByText("75%")).toBeInTheDocument();
     expect(screen.getByText("3 / 4")).toBeInTheDocument();
-    expect(screen.getByText("기한 준수율")).toBeInTheDocument();
+    expect(screen.getByText("이번 달 기한 준수율")).toBeInTheDocument();
     expect(screen.getByText("80%")).toBeInTheDocument();
-    expect(screen.getByText("반복 할 일 완료율")).toBeInTheDocument();
+    expect(screen.getByText("이번 달 반복 할 일 완료율")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByText("일반 할 일 완료율")).toBeInTheDocument();
+    expect(screen.getByText("이번 달 일반 할 일 완료율")).toBeInTheDocument();
     expect(screen.queryByText(/최근 7일/)).not.toBeInTheDocument();
   });
 });

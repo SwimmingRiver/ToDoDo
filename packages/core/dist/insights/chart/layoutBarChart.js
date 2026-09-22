@@ -4,8 +4,8 @@
  */
 /** 왼쪽은 y 눈금 숫자, 아래는 x 라벨 자리. */
 export const DEFAULT_BAR_CHART_PADDING = { top: 8, right: 8, bottom: 20, left: 28 };
-/** x 라벨 한 개가 차지한다고 보는 폭(px). "9/14" 4글자 10px 폰트 기준 여유 포함. */
-const LABEL_WIDTH = 32;
+/** x 라벨 한 개가 차지한다고 보는 폭(px). 가장 긴 라벨 "2026.10"(7글자)과 "9/14" 모두 10px 폰트 기준으로 담아야 한다. */
+const LABEL_WIDTH = 40;
 /** 슬롯 폭 중 막대 사이 간격 비율. */
 const BAR_GAP_RATIO = 0.3;
 /** y 눈금 목표 개수(0 제외). */

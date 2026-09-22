@@ -10,7 +10,8 @@ interface HorizontalBarsProps {
 
 const ROW_HEIGHT = 24;
 const LABEL_WIDTH = 40;
-const VALUE_WIDTH = 64;
+// "120 (100%)"까지 13px/500 굵기로 잘리지 않아야 하는 값 칸 너비
+const VALUE_WIDTH = 80;
 const GAP = 8;
 const TRACK_HEIGHT = 8;
 

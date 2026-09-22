@@ -24,6 +24,7 @@ describe("useElementWidth", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     lastCallback = null;
   });
 

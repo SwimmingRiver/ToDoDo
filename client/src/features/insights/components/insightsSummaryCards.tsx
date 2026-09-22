@@ -19,17 +19,17 @@ const InsightsSummaryCards = ({ periodLabel, completionRate, dueAdherence, recur
       sub: `${completionRate.completed} / ${completionRate.total}`,
     },
     {
-      label: "기한 준수율",
+      label: `${periodLabel} 기한 준수율`,
       value: toPercent(dueAdherence.rate),
       sub: `${dueAdherence.completed} / ${dueAdherence.total}`,
     },
     {
-      label: "반복 할 일 완료율",
+      label: `${periodLabel} 반복 할 일 완료율`,
       value: toPercent(recurringVsOneOff.recurring.rate),
       sub: `${recurringVsOneOff.recurring.completed} / ${recurringVsOneOff.recurring.total}`,
     },
     {
-      label: "일반 할 일 완료율",
+      label: `${periodLabel} 일반 할 일 완료율`,
       value: toPercent(recurringVsOneOff.oneOff.rate),
       sub: `${recurringVsOneOff.oneOff.completed} / ${recurringVsOneOff.oneOff.total}`,
     },
