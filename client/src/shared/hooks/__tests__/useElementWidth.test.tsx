@@ -40,4 +40,21 @@ describe("useElementWidth", () => {
     });
     expect(screen.getByTestId("probe")).toHaveTextContent("512");
   });
+
+  it("대상 요소가 나중에 마운트되어도 그 시점에 너비를 측정한다", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 300 } as DOMRect);
+    const LateProbe = ({ show }: { show: boolean }) => {
+      const { ref, width } = useElementWidth<HTMLDivElement>();
+      return (
+        <div>
+          <span data-testid="width">{width}</span>
+          {show && <div ref={ref} />}
+        </div>
+      );
+    };
+    const { rerender } = render(<LateProbe show={false} />);
+    expect(screen.getByTestId("width")).toHaveTextContent("0");
+    rerender(<LateProbe show />);
+    expect(screen.getByTestId("width")).toHaveTextContent("300");
+  });
 });

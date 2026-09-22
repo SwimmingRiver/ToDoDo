@@ -1,18 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * ref를 단 요소의 콘텐츠 너비를 ResizeObserver로 추적한다. SVG 차트가 컨테이너
  * 폭에 맞춰 기하를 다시 계산하도록 숫자 너비가 필요해서 만든 훅 —
  * dashboard/components/calendar.tsx가 인라인으로 쓰던 것과 같은 패턴.
- * 첫 렌더에서는 0이므로 호출부는 width 0일 때 차트를 그리지 않아야 한다.
+ * ref는 콜백 ref다: 대상 요소가 첫 렌더 이후에 마운트되거나(예: 빈 상태 →
+ * 데이터 상태 전환) 교체되어도 그 시점에 다시 관찰을 시작한다. 객체 ref +
+ * `useEffect([], …)` 조합은 첫 렌더에 요소가 없으면 영영 측정하지 않는다.
+ * 요소가 없는 동안 width는 0이므로 호출부는 0일 때 차트를 그리지 않아야 한다.
  */
 const useElementWidth = <T extends HTMLElement = HTMLDivElement>() => {
-  const ref = useRef<T | null>(null);
+  const [element, setElement] = useState<T | null>(null);
   const [width, setWidth] = useState(0);
 
+  const ref = useCallback((node: T | null) => {
+    setElement(node);
+  }, []);
+
   useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
+    if (!element) {
+      setWidth(0);
+      return;
+    }
 
     setWidth(element.getBoundingClientRect().width);
 
@@ -22,7 +31,7 @@ const useElementWidth = <T extends HTMLElement = HTMLDivElement>() => {
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [element]);
 
   return { ref, width };
 };
