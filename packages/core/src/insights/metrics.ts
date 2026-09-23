@@ -117,10 +117,17 @@ export interface ProjectOption {
   isDone: boolean;
 }
 
-/** 프로젝트 select 옵션: 루트만, 진행 중 먼저 → 완료 순, 각 그룹은 updatedAt 내림차순. */
-export const listProjectOptions = (todos: Todo[]): ProjectOption[] =>
-  todos
-    .filter((todo) => todo.parentId === null)
+/**
+ * 프로젝트 select 옵션: 하위 할 일이 하나라도 있는 루트만, 진행 중 먼저 → 완료 순,
+ * 각 그룹은 updatedAt 내림차순. 자식 없는 단독 할 일은 "프로젝트별로 기록을 본다"는
+ * 목적에 맞지 않고 옵션만 길어지므로 제외한다. 자식이 아카이브됐어도 통계는 전체
+ * 이력을 보므로(getAllTodosForStats) 부모는 옵션에 남는다.
+ */
+export const listProjectOptions = (todos: Todo[]): ProjectOption[] => {
+  const parentIds = new Set(todos.map((todo) => todo.parentId).filter((id): id is string => id !== null));
+
+  return todos
+    .filter((todo) => todo.parentId === null && parentIds.has(todo.id))
     .sort((a, b) => {
       const aDone = a.status === "done" ? 1 : 0;
       const bDone = b.status === "done" ? 1 : 0;
@@ -128,3 +135,4 @@ export const listProjectOptions = (todos: Todo[]): ProjectOption[] =>
       return b.updatedAt.localeCompare(a.updatedAt);
     })
     .map((todo) => ({ id: todo.id, title: todo.title, isDone: todo.status === "done" }));
+};

@@ -52,6 +52,23 @@ describe("useProductivityMetrics", () => {
         updatedAt: new Date().toISOString(),
         recurrence: null,
       },
+      // 하위 할 일이 있어야 프로젝트 옵션에 오른다(listProjectOptions). dueAt/doneAt이
+      // 없어 기간 스코프 밖이므로 아래 완료율·분포 단언에는 영향을 주지 않는다.
+      {
+        id: "1-1",
+        userId: "user-1",
+        title: "하위 할 일",
+        status: "todo",
+        priority: "medium",
+        startAt: null,
+        dueAt: null,
+        doneAt: null,
+        parentId: "1",
+        order: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        recurrence: null,
+      },
     ];
     vi.mocked(useTodosForStats).mockReturnValue({
       data: todos,

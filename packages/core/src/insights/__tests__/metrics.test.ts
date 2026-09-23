@@ -137,12 +137,15 @@ describe("computeStatusBreakdown", () => {
 });
 
 describe("listProjectOptions", () => {
-  it("루트만, 진행 중 먼저 → 완료 순, 각 그룹은 updatedAt 내림차순", () => {
+  it("하위 할 일이 있는 루트만, 진행 중 먼저 → 완료 순, 각 그룹은 updatedAt 내림차순", () => {
     const todos = [
       makeTodo({ id: "done-old", status: "done", title: "완료 오래됨", updatedAt: "2026-07-01T00:00:00.000Z" }),
-      makeTodo({ id: "child", parentId: "active-new", title: "자식" }),
+      makeTodo({ id: "c1", parentId: "done-old" }),
+      makeTodo({ id: "c2", parentId: "active-new" }),
       makeTodo({ id: "active-old", status: "todo", title: "진행 오래됨", updatedAt: "2026-08-01T00:00:00.000Z" }),
+      makeTodo({ id: "c3", parentId: "active-old" }),
       makeTodo({ id: "done-new", status: "done", title: "완료 최근", updatedAt: "2026-09-01T00:00:00.000Z" }),
+      makeTodo({ id: "c4", parentId: "done-new" }),
       makeTodo({ id: "active-new", status: "doing", title: "진행 최근", updatedAt: "2026-09-10T00:00:00.000Z" }),
     ];
     expect(listProjectOptions(todos)).toEqual([
@@ -151,5 +154,22 @@ describe("listProjectOptions", () => {
       { id: "done-new", title: "완료 최근", isDone: true },
       { id: "done-old", title: "완료 오래됨", isDone: true },
     ]);
+  });
+
+  it("하위 할 일이 없는 루트(단독 할 일)는 제외한다", () => {
+    const todos = [
+      makeTodo({ id: "standalone", title: "혼자 있는 할 일" }),
+      makeTodo({ id: "project", title: "프로젝트" }),
+      makeTodo({ id: "child", parentId: "project" }),
+    ];
+    expect(listProjectOptions(todos)).toEqual([{ id: "project", title: "프로젝트", isDone: false }]);
+  });
+
+  it("자식이 아카이브됐어도 부모는 프로젝트로 남는다", () => {
+    const todos = [
+      makeTodo({ id: "project", title: "옛 프로젝트", status: "done", archived: true }),
+      makeTodo({ id: "child", parentId: "project", status: "done", archived: true }),
+    ];
+    expect(listProjectOptions(todos)).toEqual([{ id: "project", title: "옛 프로젝트", isDone: true }]);
   });
 });
