@@ -42,4 +42,9 @@ const Label = styled.span`
   color: ${colors.text.secondary};
 `;
 
-export { Card, IconWrapper, Content, Value, Label };
+const Caption = styled.span`
+  font-size: 11px;
+  color: ${colors.text.tertiary};
+`;
+
+export { Card, IconWrapper, Content, Value, Label, Caption };

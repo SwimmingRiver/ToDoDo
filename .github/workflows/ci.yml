@@ -218,6 +218,14 @@ jobs:
       - name: Unit Test
         run: npm run test
 
+      # 로컬(Asia/Seoul)과 기본 CI(UTC)에는 DST가 없어 diffDaysBetweenKeys 같은
+      # 날짜 키 계산의 DST 회귀가 숨는다. client job과 동일하게 음수 오프셋 +
+      # DST 타임존으로 한 번 더 돌린다.
+      - name: Unit Test (negative UTC offset)
+        env:
+          TZ: America/New_York
+        run: npm run test
+
       - name: Build
         run: npm run build
 
