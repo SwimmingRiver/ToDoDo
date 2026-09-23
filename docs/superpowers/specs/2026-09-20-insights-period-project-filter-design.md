@@ -73,7 +73,7 @@ type PeriodRange = { startKey: string; endKey: string } | null;
 ## 프로젝트 스코프
 
 - `scopeTodosByProject(todos, projectId)`: `projectId`가 null이면 전체, 아니면 **루트 자신 + `parentId === projectId`인 자식** 만 남긴다.
-- 프로젝트 옵션 목록: `parentId === null`인 루트 전부. **아카이브된 루트도 포함**(통계가 전체 이력 기준이라 옛 프로젝트 기록도 볼 수 있어야 함). 정렬은 진행 중(`status !== "done"`) 먼저 → 완료 순, 각 그룹 안에서 `updatedAt` 내림차순. 라벨은 제목.
+- 프로젝트 옵션 목록: `parentId === null`이면서 **하위 할 일이 하나라도 있는** 루트. 자식 없는 단독 할 일은 "프로젝트별로 기록을 본다"는 목적에 맞지 않고 옵션만 길어지므로 제외한다(구현 중 사용자 요청으로 추가된 규칙). **아카이브된 루트도 포함**(통계가 전체 이력 기준이라 옛 프로젝트 기록도 볼 수 있어야 함 — 자식이 아카이브됐어도 부모는 남는다). 정렬은 진행 중(`status !== "done"`) 먼저 → 완료 순, 각 그룹 안에서 `updatedAt` 내림차순. 라벨은 제목.
 - 선택된 `projectId`가 옵션 목록에 없어지면(삭제 등) `null`로 리셋한다.
 
 ## 지표
@@ -125,7 +125,7 @@ type PeriodRange = { startKey: string; endKey: string } | null;
 
 - `all`에서 완료 0건 → 버킷 0개 → EmptyState.
 - 선택 프로젝트 삭제 → 옵션에서 사라지고 `projectId`가 `null`로 리셋.
-- 자식 없는 루트를 프로젝트로 선택 → 루트 자신 1건 기준(상태 막대는 1건짜리).
+- 자식 없는 루트는 옵션에 없으므로 선택 자체가 불가능하다. `computeStatusBreakdown`의 "자식 없으면 루트 자신 1건" 폴백은 순수 함수의 방어 코드로만 남는다(화면에서는 도달 불가).
 - 너비 측정 전 첫 렌더 → svg 안 그림.
 - 타임존: 모든 경계(기간·주·월 버킷)를 로컬 날짜 키로 계산. 절대 `split("T")[0]` 금지.
 
