@@ -46,7 +46,7 @@ const Container = styled.div`
 
 const Column = styled.div`
   flex: 1;
-  background-color: #f4f5f7;
+  background-color: ${colors.background.secondary};
   border-radius: 10px;
   padding: 12px;
   display: flex;
@@ -57,7 +57,12 @@ const Column = styled.div`
 const ColumnHeader = styled.div`
   height: 16px;
   width: 60px;
-  background: linear-gradient(90deg, #e0e0e0 25%, #d0d0d0 50%, #e0e0e0 75%);
+  background: linear-gradient(
+    90deg,
+    ${colors.border.tertiary} 25%,
+    ${colors.border.secondary} 50%,
+    ${colors.border.tertiary} 75%
+  );
   background-size: 400px 100%;
   border-radius: 4px;
   margin-bottom: 4px;
@@ -65,7 +70,7 @@ const ColumnHeader = styled.div`
 `;
 
 const Card = styled.div<{ $delay: number }>`
-  background: #fff;
+  background: ${colors.surface.raised};
   border-radius: 8px;
   padding: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -98,7 +103,12 @@ const CardContent = styled.div`
 const CardTitle = styled.div<{ $width: string }>`
   height: 14px;
   width: ${({ $width }) => $width};
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${colors.background.secondary} 25%,
+    ${colors.border.tertiary} 50%,
+    ${colors.background.secondary} 75%
+  );
   background-size: 400px 100%;
   border-radius: 4px;
   animation: ${shimmer} 1.5s ease-in-out infinite;

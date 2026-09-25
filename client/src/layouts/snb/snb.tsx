@@ -74,8 +74,8 @@ const SNBContainer = styled.div<{ $isopen: boolean }>`
   flex-direction: column;
   height: 100%;
   width: ${({ $isopen }) => ($isopen ? "200px" : "40px")};
-  background-color: #f1f3f4;
-  border-right: 1px solid #e0e0e0;
+  background-color: ${colors.background.secondary};
+  border-right: 1px solid ${colors.border.tertiary};
   transition: all 0.3s ease;
   transform: translateX(${({ $isopen }) => ($isopen ? "0" : "-10%")});
 
@@ -109,7 +109,7 @@ const FeedbackTrigger = styled.button<{ $isopen: boolean }>`
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #e0ede8;
+    background-color: ${colors.brand.tint};
     color: ${colors.brand.strong};
   }
 `;
@@ -139,14 +139,14 @@ const SidebarNavLink = styled(NavLink)<{ $isopen: boolean }>`
   cursor: pointer;
   font-size: 20px;
   font-weight: 500;
-  color: #666;
+  color: ${colors.text.secondary};
   background-color: transparent;
   border-radius: 8px;
   text-decoration: none;
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #E0EDE8;
+    background-color: ${colors.brand.tint};
   }
 
   &.active {
@@ -163,11 +163,11 @@ const SidebarNavLink = styled(NavLink)<{ $isopen: boolean }>`
         : ""}
 
     &:hover {
-      background-color: ${({ $isopen }) => ($isopen ? "#D5EDE4" : "transparent")};
+      background-color: ${({ $isopen }) => ($isopen ? colors.brand.tint : "transparent")};
     }
 
     &:hover ${IconWrapper} {
-      background-color: #D5EDE4;
+      background-color: ${colors.brand.tint};
     }
   }
 `;
@@ -180,12 +180,12 @@ const SidebarButton = styled.button`
   right: -20px;
   width: 40px;
   height: 40px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid ${colors.border.tertiary};
   display: flex;
   align-items: center;
   justify-content: center;
   &:hover {
-    background-color: #e0e0e0;
+    background-color: ${colors.border.tertiary};
   }
 `;
 

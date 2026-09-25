@@ -1,5 +1,6 @@
 import { styled, keyframes } from "styled-components";
 import { media } from "../../../styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const fadeIn = keyframes`
   from {
@@ -27,7 +28,7 @@ const Overlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   display: flex;
   justify-content: center;
   align-items: center;
@@ -36,7 +37,7 @@ const Overlay = styled.div`
 `;
 
 const Container = styled.div`
-  background-color: white;
+  background-color: ${colors.surface.overlay};
   border-radius: 12px;
   padding: 24px;
   min-width: 320px;
@@ -55,13 +56,13 @@ const Title = styled.h3`
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: ${colors.text.primary};
 `;
 
 const Message = styled.p`
   margin: 0 0 24px 0;
   font-size: 14px;
-  color: #666;
+  color: ${colors.text.secondary};
   line-height: 1.5;
   white-space: pre-line;
 `;
@@ -83,21 +84,21 @@ const Button = styled.button<{ $variant?: "danger" | "cancel" }>`
   ${({ $variant }) =>
     $variant === "danger"
       ? `
-    background-color: #d32f2f;
-    color: white;
+    background-color: ${colors.danger.main};
+    color: ${colors.background.primary};
     border: none;
 
     &:hover {
-      background-color: #b71c1c;
+      background-color: color-mix(in srgb, ${colors.danger.main} 80%, black);
     }
   `
       : `
-    background-color: white;
-    color: #666;
-    border: 1px solid #ddd;
+    background-color: ${colors.surface.overlay};
+    color: ${colors.text.secondary};
+    border: 1px solid ${colors.border.secondary};
 
     &:hover {
-      background-color: #f5f5f5;
+      background-color: ${colors.background.secondary};
     }
   `}
 

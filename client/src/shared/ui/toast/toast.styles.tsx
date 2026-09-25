@@ -1,5 +1,7 @@
 import { styled, keyframes } from "styled-components";
 import { media } from "@/styles/breakpoints";
+import { colors } from "@/styles/colors";
+import { urgencyColors } from "@/styles/urgencyColors";
 
 const slideIn = keyframes`
   from {
@@ -58,7 +60,7 @@ const ToastItem = styled.div<{ $type: "success" | "error" | "warning" | "info"; 
   max-width: 400px;
   padding: 16px;
   border-radius: 12px;
-  background: #fff;
+  background: ${colors.surface.overlay};
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: ${({ $isExiting }) => ($isExiting ? slideOut : slideIn)} 0.3s ease forwards;
   position: relative;
@@ -82,25 +84,25 @@ const IconWrapper = styled.div<{ $type: "success" | "error" | "warning" | "info"
   background-color: ${({ $type }) => {
     switch ($type) {
       case "success":
-        return "#e8f5e9";
+        return colors.brand.tint;
       case "error":
-        return "#ffebee";
+        return colors.danger.background;
       case "warning":
-        return "#fff3e0";
+        return urgencyColors.soon.background;
       case "info":
-        return "#e3f2fd";
+        return colors.background.secondary;
     }
   }};
   color: ${({ $type }) => {
     switch ($type) {
       case "success":
-        return "#4caf50";
+        return colors.brand.fill;
       case "error":
-        return "#f44336";
+        return colors.danger.main;
       case "warning":
-        return "#ff9800";
+        return urgencyColors.soon.main;
       case "info":
-        return "#2196f3";
+        return colors.text.secondary;
     }
   }};
 `;
@@ -114,14 +116,14 @@ const Title = styled.p`
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: ${colors.text.primary};
   line-height: 1.4;
 `;
 
 const Message = styled.p`
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #666;
+  color: ${colors.text.secondary};
   line-height: 1.4;
 `;
 
@@ -130,7 +132,7 @@ const CloseButton = styled.button`
   border: none;
   padding: 4px;
   cursor: pointer;
-  color: #999;
+  color: ${colors.text.tertiary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -138,8 +140,8 @@ const CloseButton = styled.button`
   transition: all 0.2s;
 
   &:hover {
-    background-color: #f5f5f5;
-    color: #666;
+    background-color: ${colors.background.secondary};
+    color: ${colors.text.secondary};
   }
 `;
 
@@ -151,13 +153,13 @@ const ProgressBar = styled.div<{ $type: "success" | "error" | "warning" | "info"
   background-color: ${({ $type }) => {
     switch ($type) {
       case "success":
-        return "#4caf50";
+        return colors.brand.fill;
       case "error":
-        return "#f44336";
+        return colors.danger.main;
       case "warning":
-        return "#ff9800";
+        return urgencyColors.soon.main;
       case "info":
-        return "#2196f3";
+        return colors.text.secondary;
     }
   }};
   animation: ${progressShrink} ${({ $duration }) => $duration}ms linear forwards;

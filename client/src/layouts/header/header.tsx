@@ -85,7 +85,7 @@ const HeaderContainer = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid ${colors.border.tertiary};
   padding: 10px;
 
   ${media.mobile} {
@@ -98,7 +98,7 @@ const HamburgerMenuButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: #1a1a1a;
+  color: ${colors.text.primary};
   padding: 4px;
 
   ${media.tablet} {

@@ -1,4 +1,5 @@
 import { styled, keyframes } from "styled-components";
+import { colors } from "@/styles/colors";
 
 const shimmer = keyframes`
   0% {
@@ -23,7 +24,12 @@ const cellFade = keyframes`
 
 // shimmer를 쓰는 회색 블록들의 공통 바탕. kanbanSkeleton과 같은 톤을 유지한다.
 const Bar = styled.div`
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${colors.background.secondary} 25%,
+    ${colors.border.tertiary} 50%,
+    ${colors.background.secondary} 75%
+  );
   background-size: 400px 100%;
   border-radius: 4px;
   animation: ${shimmer} 1.5s ease-in-out infinite;
@@ -83,7 +89,7 @@ const Grid = styled.div`
 `;
 
 const Cell = styled.div<{ $delay: number }>`
-  background: #f7f8f9;
+  background: ${colors.background.secondary};
   border-radius: 6px;
   padding: 6px;
   display: flex;

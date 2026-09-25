@@ -43,9 +43,9 @@ const SkeletonItem = styled.div<{ $delay: number }>`
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #fff;
+  background: ${colors.surface.raised};
   border-radius: 8px;
-  border: 1px solid #e8eaed;
+  border: 1px solid ${colors.border.tertiary};
 `;
 
 const CheckboxWrapper = styled.div<{ $delay: number }>`
@@ -58,9 +58,9 @@ const CheckboxWrapper = styled.div<{ $delay: number }>`
 const CheckboxBase = styled.div`
   width: 20px;
   height: 20px;
-  border: 2px solid #dadce0;
+  border: 2px solid ${colors.border.secondary};
   border-radius: 4px;
-  background: #fff;
+  background: ${colors.surface.raised};
 `;
 
 const CheckMark = styled.svg<{ $delay: number }>`
@@ -95,7 +95,12 @@ const TextGroup = styled.div`
 const SkeletonText = styled.div<{ $width: string; $delay: number }>`
   height: 14px;
   width: ${({ $width }) => $width};
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${colors.background.secondary} 25%,
+    ${colors.border.tertiary} 50%,
+    ${colors.background.secondary} 75%
+  );
   background-size: 400px 100%;
   border-radius: 4px;
   animation: ${shimmer} 1.5s ease-in-out infinite;
