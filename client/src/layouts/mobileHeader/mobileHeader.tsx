@@ -1,11 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
+import ThemeMenu from "@/layouts/themeMenu/themeMenu";
 import logo from "@/assets/logo.png";
 import {
   HeaderContainer,
   LogoGroup,
   LogoMark,
   LogoText,
+  RightGroup,
   AvatarButton,
   AvatarImage,
 } from "./mobileHeader.styles";
@@ -24,9 +26,12 @@ const MobileHeader = ({ onAvatarClick }: MobileHeaderProps) => {
         <LogoMark src={logo} alt="" aria-hidden="true" />
         <LogoText>ToDoDo</LogoText>
       </LogoGroup>
-      <AvatarButton onClick={onAvatarClick} aria-label="사용자 메뉴 열기">
-        <AvatarImage src={user?.photoURL || ""} alt="" />
-      </AvatarButton>
+      <RightGroup>
+        <ThemeMenu />
+        <AvatarButton onClick={onAvatarClick} aria-label="사용자 메뉴 열기">
+          <AvatarImage src={user?.photoURL || ""} alt="" />
+        </AvatarButton>
+      </RightGroup>
     </HeaderContainer>
   );
 };
