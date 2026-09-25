@@ -16,6 +16,7 @@ import * as Sentry from "@sentry/react";
 import { calcParentStatus } from "@tododo/core";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
+import { localDateKeyToISO } from "@/shared/utils/date";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
 import {
   buildRecurringInstanceId,
@@ -393,6 +394,73 @@ const getNextRootOrder = async (userId: string): Promise<number> => {
     -1,
   );
   return maxOrder + 1;
+};
+
+export interface PlanTodoInput {
+  title: string;
+  /** "yyyy-MM-dd" 로컬 날짜 키 또는 null */
+  dueDate: string | null;
+  priority: Todo["priority"];
+}
+
+export interface PlanSubmission {
+  parent: PlanTodoInput;
+  children: PlanTodoInput[];
+}
+
+/**
+ * AI 플랜 미리보기에서 사용자가 편집을 마친 초안을 저장한다. 상위 1개와 하위 N개를
+ * writeBatch 한 번으로 만든다. createTodo 후 createChildTodo를 N번 부르면 중간 실패 시
+ * "하위가 반쯤만 있는 플랜"이 남기 때문이다. 상위 문서 id는 doc(todosRef)로 미리 만들어
+ * 하위의 parentId에 넣는다. 전부 "todo"로 시작하므로 상위 상태 재계산은 필요 없다.
+ * startAt이 모두 null이라 assertValidTodoDates(startAt ≤ dueAt)는 항상 만족한다.
+ */
+export const createPlanTodos = async (
+  submission: PlanSubmission,
+): Promise<{ parentId: string; count: number }> => {
+  if (submission.children.length === 0) {
+    throw new Error("AI 플랜에는 하위 할 일이 1개 이상 필요합니다");
+  }
+  const userId = getUserId();
+  const now = new Date().toISOString();
+  const base = {
+    userId,
+    status: "todo" as const,
+    startAt: null,
+    doneAt: null,
+    recurrence: null,
+    recurrenceId: null,
+    archived: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const parentRef = doc(todosRef);
+  const parentOrder = await getNextRootOrder(userId);
+  const batch = writeBatch(db);
+
+  batch.set(parentRef, {
+    ...base,
+    title: submission.parent.title,
+    priority: submission.parent.priority,
+    dueAt: localDateKeyToISO(submission.parent.dueDate),
+    parentId: null,
+    order: parentOrder,
+  });
+
+  submission.children.forEach((child, index) => {
+    batch.set(doc(todosRef), {
+      ...base,
+      title: child.title,
+      priority: child.priority,
+      dueAt: localDateKeyToISO(child.dueDate),
+      parentId: parentRef.id,
+      order: index,
+    });
+  });
+
+  await batch.commit();
+  return { parentId: parentRef.id, count: submission.children.length + 1 };
 };
 
 /**

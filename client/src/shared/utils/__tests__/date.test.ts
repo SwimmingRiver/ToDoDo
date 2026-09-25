@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { toDatetimeLocalValue } from "../date";
+import { toDatetimeLocalValue, localDateKeyToISO, toDateKeyFromISO } from "../date";
 
 describe("toDatetimeLocalValue", () => {
   // CI(ubuntu-latest)는 TZ 미설정 시 UTC로 실행되는데, UTC 환경에서는 로컬 시각과 UTC 시각이
@@ -39,5 +39,18 @@ describe("toDatetimeLocalValue", () => {
     const iso = local.toISOString();
 
     expect(toDatetimeLocalValue(iso)).toBe("2026-01-05T09:07");
+  });
+});
+
+describe("localDateKeyToISO", () => {
+  it("로컬 자정의 UTC ISO로 바꾼다", () => {
+    expect(localDateKeyToISO("2026-10-03")).toBe(new Date(2026, 9, 3).toISOString());
+  });
+  it("다시 로컬 날짜 키로 읽으면 같은 날짜다(타임존 무관)", () => {
+    const iso = localDateKeyToISO("2026-10-03");
+    expect(iso && toDateKeyFromISO(iso)).toBe("2026-10-03");
+  });
+  it("null은 null", () => {
+    expect(localDateKeyToISO(null)).toBeNull();
   });
 });
