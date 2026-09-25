@@ -60,7 +60,7 @@ packages/core/src/theme/
 | `text.secondary` | `#5F6368` | `#A8ADB3` | 보조 |
 | `text.tertiary` | `#9AA0A6` | `#7C8187` | 플레이스홀더·비활성 |
 | `border.secondary` | `#D1D5DB` | `#3A3A3A` | |
-| `border.tertiary` | `#E5E7EB` | `#2C2C2C` | |
+| `border.tertiary` | `#E5E7EB` | `#333333` | |
 | `border.danger` | `#E24B4A` | `#FF7A78` | |
 | `danger.main` | `#E24B4A` | `#FF7A78` | |
 | `danger.subtle` | `#F5C2C1` | `#5C2B2B` | |

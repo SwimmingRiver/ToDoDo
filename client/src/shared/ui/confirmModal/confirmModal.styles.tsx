@@ -89,7 +89,7 @@ const Button = styled.button<{ $variant?: "danger" | "cancel" }>`
     border: none;
 
     &:hover {
-      background-color: color-mix(in srgb, ${colors.danger.main} 80%, black);
+      background-color: ${colors.danger.text};
     }
   `
       : `

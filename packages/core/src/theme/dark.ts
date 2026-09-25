@@ -19,7 +19,7 @@ export const darkTokens: ThemeTokens = {
   background: { primary: "#121212", secondary: "#181818" },
   surface: { raised: "#1E1E1E", overlay: "#262626" },
   text: { primary: "#E8EAED", secondary: "#A8ADB3", tertiary: "#7C8187" },
-  border: { secondary: "#3A3A3A", tertiary: "#2C2C2C", danger: "#FF7A78" },
+  border: { secondary: "#3A3A3A", tertiary: "#333333", danger: "#FF7A78" },
   status: {
     todo: { main: "#C4C9D0", light: "#2A2D31", border: "#5B6168" },
     doing: { main: "#4FD1A5", light: "#123A2E", border: "#2A8F6D" },
