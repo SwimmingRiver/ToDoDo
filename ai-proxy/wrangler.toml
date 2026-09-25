@@ -1,0 +1,16 @@
+name = "tododo-ai-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# id는 배포 전에 사용자가 `npx wrangler kv namespace create AI_USAGE`로 발급해
+# 채운다(README "배포 준비" 참고). 테스트·typecheck는 이 값을 읽지 않는다.
+kv_namespaces = [
+  { binding = "AI_USAGE", id = "REPLACE_WITH_AI_USAGE_KV_ID" }
+]
+
+[vars]
+FIREBASE_PROJECT_ID = "tododo-83576"
+CLIENT_APP_URL = "https://tododo-83576.web.app"
+# 모델·한도는 코드 수정 없이 여기서만 바꾼다.
+AI_MODEL = "claude-haiku-4-5"
+DAILY_LIMIT = "20"
