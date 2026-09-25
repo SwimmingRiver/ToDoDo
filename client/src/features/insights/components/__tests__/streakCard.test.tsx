@@ -16,4 +16,9 @@ describe("StreakCard", () => {
     expect(screen.getByText("0일")).toBeInTheDocument();
     expect(screen.getByText("오늘부터 시작해보세요")).toBeInTheDocument();
   });
+
+  it("전체 기간 기준임을 캡션으로 알린다", () => {
+    render(<StreakCard streak={3} />);
+    expect(screen.getByText("전체 기간 기준")).toBeInTheDocument();
+  });
 });

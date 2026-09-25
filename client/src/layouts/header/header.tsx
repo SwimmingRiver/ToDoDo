@@ -6,6 +6,7 @@ import { MenuIcon } from "lucide-react";
 import { colors } from "@/styles/colors";
 import { radius } from "@/styles/radius";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
+import ThemeMenu from "@/layouts/themeMenu/themeMenu";
 import logo from "@/assets/logo.png";
 
 interface HeaderProps {
@@ -22,15 +23,18 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
         <LogoMark src={logo} alt="" />
         <HeaderTitle>ToDoDo</HeaderTitle>
       </LogoGroup>
-      <UserInfo>
-        <ProfileMenu>
-          <UserInfoText>{user?.displayName}</UserInfoText>
-          <UserInfoImage src={user?.photoURL || ""} alt="user" />
-        </ProfileMenu>
-      </UserInfo>
-      <HamburgerMenuButton onClick={onMenuOpen} aria-label="메뉴 열기">
-        <MenuIcon size={20} />
-      </HamburgerMenuButton>
+      <RightGroup>
+        <ThemeMenu />
+        <UserInfo>
+          <ProfileMenu>
+            <UserInfoText>{user?.displayName}</UserInfoText>
+            <UserInfoImage src={user?.photoURL || ""} alt="user" />
+          </ProfileMenu>
+        </UserInfo>
+        <HamburgerMenuButton onClick={onMenuOpen} aria-label="메뉴 열기">
+          <MenuIcon size={20} />
+        </HamburgerMenuButton>
+      </RightGroup>
     </HeaderContainer>
   );
 };
@@ -59,6 +63,12 @@ const HeaderTitle = styled.h1`
   font-weight: 700;
 `;
 
+const RightGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
 const UserInfo = styled.div`
   display: flex;
   align-items: center;
@@ -85,7 +95,7 @@ const HeaderContainer = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid ${colors.border.tertiary};
   padding: 10px;
 
   ${media.mobile} {
@@ -98,7 +108,7 @@ const HamburgerMenuButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: #1a1a1a;
+  color: ${colors.text.primary};
   padding: 4px;
 
   ${media.tablet} {

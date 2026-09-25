@@ -1,16 +1,7 @@
-import { colors } from "./colors";
+// @tododo/core 루트(index.js)는 firestore를 쓰는 todoApi까지 재수출해 초기 번들에
+// firebase를 끌어들인다. urgencyColors는 거의 모든 컴포넌트가 import하므로 firebase-free한
+// theme 서브패스로 직접 가져온다.
+import { lightTokens, toCssVarRefs } from "@tododo/core/dist/theme/index.js";
 
-/**
- * "마감 임박" 2단계 강조 색 토큰(Today 화면 전용, design/spec.md 참고).
- * `danger`는 기존 `colors.danger` 토큰을 그대로 재사용하고, `soon`은 신규 색상이다.
- * `todoListItem`/`dueTodo`의 기존 3단계 하드코딩 정리는 이번 스펙 범위 밖이라
- * 아직 이 토큰을 참조하지 않는다(후속 리팩터링 권장 사항).
- */
-export const urgencyColors = {
-  soon: { main: "#F97316", background: "#FFEDD5", text: "#C2410C" },
-  danger: {
-    main: colors.danger.main,
-    background: colors.danger.background,
-    text: colors.danger.text,
-  },
-} as const;
+/** "마감 임박" 2단계 강조 색(Today 화면). danger는 colors.danger와 같은 변수를 가리킨다. */
+export const urgencyColors = toCssVarRefs(lightTokens).urgency;

@@ -1,10 +1,13 @@
 import { styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
 import { statusColors, type Status } from "../../../../styles/statusColors";
+import { colors } from "@/styles/colors";
+import { urgencyColors } from "@/styles/urgencyColors";
 
 const TodoListItemContainer = styled.div<{ isChild?: boolean; $status?: Status }>`
-  border: 1px solid #e0e0e0;
-  border-left: 4px solid ${({ $status }) => $status ? statusColors[$status].main : "#e0e0e0"};
+  border: 1px solid ${colors.border.tertiary};
+  border-left: 4px solid
+    ${({ $status }) => ($status ? statusColors[$status].main : colors.border.tertiary)};
   padding: 10px;
   padding-left: ${(props) => (props.isChild ? "28px" : "10px")};
   border-radius: 12px;
@@ -13,7 +16,7 @@ const TodoListItemContainer = styled.div<{ isChild?: boolean; $status?: Status }
   justify-content: space-between;
   align-items: center;
   &:hover {
-    background-color: #f0f0f0;
+    background-color: ${colors.background.secondary};
   }
 
   ${media.mobile} {
@@ -30,15 +33,15 @@ const ExpandButton = styled.button<{ isExpanded: boolean }>`
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
-  color: #666;
+  color: ${colors.text.secondary};
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 2px;
 
   &:hover {
-    background-color: #e9ecef;
-    color: #333;
+    background-color: ${colors.border.tertiary};
+    color: ${colors.text.primary};
   }
 `;
 
@@ -47,10 +50,10 @@ const AddChildButton = styled.button`
   padding: 8px 12px;
   margin-left: 32px;
   margin-top: 4px;
-  background-color: #f8f9fa;
-  border: 1px dashed #dee2e6;
+  background-color: ${colors.background.secondary};
+  border: 1px dashed ${colors.border.tertiary};
   border-radius: 8px;
-  color: #495057;
+  color: ${colors.text.primary};
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -60,9 +63,9 @@ const AddChildButton = styled.button`
   gap: 6px;
 
   &:hover {
-    background-color: #e9ecef;
-    border-color: #adb5bd;
-    color: #212529;
+    background-color: ${colors.border.tertiary};
+    border-color: ${colors.border.secondary};
+    color: ${colors.text.primary};
   }
 
   ${media.mobile} {
@@ -86,7 +89,7 @@ const TodoIconButton = styled.button<{ $variant?: "danger" }>`
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  color: #666;
+  color: ${colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -94,8 +97,8 @@ const TodoIconButton = styled.button<{ $variant?: "danger" }>`
 
   &:hover {
     background-color: ${({ $variant }) =>
-      $variant === "danger" ? "#ffebee" : "#f0f0f0"};
-    color: ${({ $variant }) => ($variant === "danger" ? "#d32f2f" : "#333")};
+      $variant === "danger" ? colors.danger.background : colors.background.secondary};
+    color: ${({ $variant }) => ($variant === "danger" ? colors.danger.main : colors.text.primary)};
   }
 
   ${media.mobile} {
@@ -116,8 +119,12 @@ const DueBadge = styled.span<{ $daysLeft: number }>`
   border-radius: 99px;
   flex-shrink: 0;
   background-color: ${({ $daysLeft }) =>
-    $daysLeft < 0 ? "#ef4444" : $daysLeft === 0 ? "#f97316" : "#f59e0b"};
-  color: white;
+    $daysLeft < 0
+      ? colors.danger.main
+      : $daysLeft === 0
+        ? urgencyColors.soon.main
+        : urgencyColors.soon.text};
+  color: ${colors.background.primary};
 `;
 
 export {

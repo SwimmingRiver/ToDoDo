@@ -10,7 +10,7 @@ const slideOut = keyframes`from { transform: translateX(0); } to { transform: tr
 export const Overlay = styled.div<{ $isClosing: boolean }>`
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   z-index: 9998;
   animation: ${({ $isClosing }) => ($isClosing ? fadeOut : fadeIn)} 0.2s ease forwards;
 `;
@@ -21,7 +21,7 @@ export const DrawerContainer = styled.div<{ $isClosing: boolean }>`
   left: 0;
   width: 280px;
   height: 100vh;
-  background-color: #fff;
+  background-color: ${colors.surface.overlay};
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -33,7 +33,7 @@ export const UserSection = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid ${colors.border.tertiary};
 `;
 
 export const UserImage = styled.img`
@@ -49,7 +49,7 @@ export const UserInfo = styled.div`
 export const UserName = styled.p`
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: ${colors.text.primary};
   margin: 0;
 `;
 
@@ -66,14 +66,17 @@ export const NavItem = styled.div<{ $active?: boolean }>`
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? colors.brand.strong : "#1a1a1a")};
+  color: ${({ $active }) => ($active ? colors.brand.strong : colors.text.primary)};
   background-color: ${({ $active }) =>
     $active ? colors.brand.tint : "transparent"};
   border-radius: 8px;
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: ${({ $active }) => ($active ? "#D5EDE4" : "#f1f3f4")};
+    background-color: ${({ $active }) =>
+      $active
+        ? `color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint})`
+        : colors.background.secondary};
   }
 `;
 
@@ -89,7 +92,7 @@ export const FeedbackNavRow = styled.button`
   width: 100%;
   padding: 16px 22px;
   border: none;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid ${colors.border.tertiary};
   cursor: pointer;
   font: inherit;
   font-size: 15px;
@@ -100,7 +103,7 @@ export const FeedbackNavRow = styled.button`
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #f1f3f4;
+    background-color: ${colors.background.secondary};
   }
 `;
 
@@ -112,14 +115,14 @@ export const NavNavLink = styled(NavLink)`
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  color: #666;
+  color: ${colors.text.secondary};
   background-color: transparent;
   border-radius: 8px;
   text-decoration: none;
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #f1f3f4;
+    background-color: ${colors.background.secondary};
   }
 
   &.active {
@@ -130,7 +133,7 @@ export const NavNavLink = styled(NavLink)`
     padding-left: 7px;
 
     &:hover {
-      background-color: #D5EDE4;
+      background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
     }
   }
 `;

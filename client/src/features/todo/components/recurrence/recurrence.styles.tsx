@@ -151,6 +151,6 @@ export const DayChipCircle = styled.span<{ $selected: boolean }>`
   font-size: 12px;
   font-weight: 500;
   background-color: ${({ $selected }) => ($selected ? colors.brand.strong : "transparent")};
-  color: ${({ $selected }) => ($selected ? "#FFFFFF" : colors.text.tertiary)};
+  color: ${({ $selected }) => ($selected ? colors.brand.onStrong : colors.text.tertiary)};
   transition: background-color 0.15s ease, color 0.15s ease;
 `;

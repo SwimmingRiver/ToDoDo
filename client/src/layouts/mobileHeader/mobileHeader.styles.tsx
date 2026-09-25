@@ -31,6 +31,12 @@ const LogoText = styled.span`
   color: ${colors.text.primary};
 `;
 
+const RightGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
 const AvatarButton = styled.button`
   width: 44px;
   height: 44px;
@@ -51,4 +57,4 @@ const AvatarImage = styled.img`
   object-fit: cover;
 `;
 
-export { HeaderContainer, LogoGroup, LogoMark, LogoText, AvatarButton, AvatarImage };
+export { HeaderContainer, LogoGroup, LogoMark, LogoText, RightGroup, AvatarButton, AvatarImage };

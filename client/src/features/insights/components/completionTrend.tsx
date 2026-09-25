@@ -1,37 +1,33 @@
-import type { TrendPoint } from "../utils/computeCompletionTrend";
-import { Card, Title, ChartRow, Column, BarTrack, Bar, DateLabel } from "./completionTrend.styles";
+import { BarChart3 } from "lucide-react";
+import type { TrendBucket } from "@tododo/core";
+import { EmptyState, useElementWidth } from "@/shared";
+import { BarChart } from "./charts";
+import { Card, Title, ChartArea } from "./completionTrend.styles";
 
 interface CompletionTrendProps {
-  trend: TrendPoint[];
+  buckets: TrendBucket[];
+  /** "이번 달 완료 추이"처럼 필터를 반영한 제목. */
+  title: string;
 }
 
-/** "yyyy-MM-dd" -> "M/d". 라벨이 촘촘해 보이지 않게 짧게 줄인다. */
-const toShortLabel = (dateKey: string): string => {
-  const [, month, day] = dateKey.split("-");
-  return `${Number(month)}/${Number(day)}`;
-};
+const formatBarTitle = (label: string, value: number) => `${label}: ${value}건 완료`;
 
-const CompletionTrend = ({ trend }: CompletionTrendProps) => {
-  const max = Math.max(...trend.map((point) => point.count), 1);
-  // 라벨이 다 붙으면 좁은 화면에서 서로 겹치므로 3일 간격 + 마지막 날만 보여준다.
-  const isLabelVisible = (index: number) => index % 3 === 0 || index === trend.length - 1;
+const CompletionTrend = ({ buckets, title }: CompletionTrendProps) => {
+  const { ref, width } = useElementWidth<HTMLDivElement>();
+  const points = buckets.map((bucket) => ({ label: bucket.label, value: bucket.count }));
+  const max = Math.max(0, ...points.map((p) => p.value));
+  const isEmpty = buckets.length === 0 || max === 0;
 
   return (
     <Card>
-      <Title>최근 {trend.length}일 완료 추이</Title>
-      <ChartRow>
-        {trend.map((point, index) => (
-          <Column key={point.date}>
-            <BarTrack>
-              <Bar
-                style={{ height: `${(point.count / max) * 100}%` }}
-                title={`${point.date}: ${point.count}건 완료`}
-              />
-            </BarTrack>
-            <DateLabel>{isLabelVisible(index) ? toShortLabel(point.date) : ""}</DateLabel>
-          </Column>
-        ))}
-      </ChartRow>
+      <Title>{title}</Title>
+      {isEmpty ? (
+        <EmptyState icon={BarChart3} title="이 기간에 기록이 없습니다" description="할 일을 완료하면 여기에 추이가 쌓입니다" />
+      ) : (
+        <ChartArea ref={ref}>
+          <BarChart points={points} width={width} ariaLabel={`${title}, 최대 ${max}건`} formatTitle={formatBarTitle} />
+        </ChartArea>
+      )}
     </Card>
   );
 };

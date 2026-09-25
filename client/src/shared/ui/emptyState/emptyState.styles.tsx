@@ -16,12 +16,12 @@ const IconWrapper = styled.div`
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background-color: #f1f3f4;
+  background-color: ${colors.background.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
-  color: #9aa0a6;
+  color: ${colors.text.tertiary};
 
   ${media.mobile} {
     width: 64px;
@@ -33,7 +33,7 @@ const Title = styled.h3`
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: ${colors.text.primary};
 
   ${media.mobile} {
     font-size: 16px;
@@ -43,7 +43,7 @@ const Title = styled.h3`
 const Description = styled.p`
   margin: 0 0 24px 0;
   font-size: 14px;
-  color: #666;
+  color: ${colors.text.secondary};
   line-height: 1.5;
   max-width: 280px;
 
@@ -58,7 +58,7 @@ const ActionButton = styled.button`
   gap: 8px;
   padding: 12px 24px;
   background-color: ${colors.brand.strong};
-  color: white;
+  color: ${colors.brand.onStrong};
   font-size: 14px;
   font-weight: 600;
   border: none;

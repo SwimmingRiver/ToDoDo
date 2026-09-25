@@ -218,8 +218,22 @@ jobs:
       - name: Unit Test
         run: npm run test
 
+      # 로컬(Asia/Seoul)과 기본 CI(UTC)에는 DST가 없어 diffDaysBetweenKeys 같은
+      # 날짜 키 계산의 DST 회귀가 숨는다. client job과 동일하게 음수 오프셋 +
+      # DST 타임존으로 한 번 더 돌린다.
+      - name: Unit Test (negative UTC offset)
+        env:
+          TZ: America/New_York
+        run: npm run test
+
       - name: Build
         run: npm run build
+
+      # client의 Vite 플러그인은 core src를 읽지만 런타임은 커밋된 dist를 읽는다 —
+      # dist가 낡으면 var() 이름이 소리 없이 어긋난다. build 산출물이 커밋된
+      # dist와 다르면 여기서 막는다.
+      - name: Check dist is up to date
+        run: git diff --exit-code -- dist
 
   calendar-proxy:
     name: Calendar Proxy

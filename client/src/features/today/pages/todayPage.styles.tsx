@@ -39,7 +39,7 @@ const Fab = styled.button`
   justify-content: center;
   gap: 8px;
   background-color: ${colors.brand.strong};
-  color: white;
+  color: ${colors.brand.onStrong};
   font-size: 14px;
   font-weight: 500;
   border: none;

@@ -35,7 +35,7 @@ const AddButton = styled.button`
   min-height: 44px;
   padding: 0 16px;
   background-color: ${colors.brand.strong};
-  color: #ffffff;
+  color: ${colors.brand.onStrong};
   font-size: 14px;
   font-weight: 600;
   border: none;

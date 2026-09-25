@@ -2,6 +2,7 @@ import { css, keyframes, styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
 import { colors } from "@/styles/colors";
 import { statusColors, type Status } from "@/styles/statusColors";
+import { urgencyColors } from "@/styles/urgencyColors";
 import { ChildTodoCardList } from "../projectCard.styles";
 
 const slideIn = keyframes`
@@ -28,7 +29,7 @@ const Overlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   z-index: 100;
   animation: ${fadeIn} 0.3s ease-out;
 `;
@@ -39,7 +40,7 @@ const Panel = styled.div`
   right: 0;
   width: 50%;
   height: 100vh;
-  background-color: white;
+  background-color: ${colors.surface.overlay};
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
   z-index: 101;
   animation: ${slideIn} 0.3s ease-out;
@@ -87,7 +88,7 @@ const CloseButton = styled.button`
   transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: #e0ede8;
+    background-color: ${colors.brand.tint};
     color: ${colors.brand.strong};
   }
 
@@ -155,7 +156,7 @@ const Input = styled.input`
 
   &:focus {
     border-color: ${colors.brand.strong};
-    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
   }
 `;
 
@@ -225,12 +226,14 @@ const DescriptionOverlay = styled.div`
   color: ${colors.text.primary};
 `;
 
-/** 오버레이에서 링크로 인식된 구간. 색만으로 구분하지 않도록 밑줄을 함께 준다. */
+/**
+ * 오버레이에서 링크로 인식된 구간. 색만으로 구분하지 않도록 밑줄을 함께 준다.
+ *
+ * brand.fill은 흰 배경 대비로 WCAG AA(4.5:1)에 미달한다. brand.strong은
+ * 통과하지만, brand.strong과 본문색의 대비는 낮아 색만으로는 구분이 보장되지
+ * 않는다(WCAG 1.4.1). 밑줄은 장식이 아니라 필수 요건이다.
+ */
 const OverlayLink = styled.span`
-  /* brand.fill(#1D9E75)는 흰 배경 대비 3.39:1로 WCAG AA(4.5:1)에 미달한다.
-     brand.strong(#0F6E56)는 6.20:1로 통과.
-     다만 #0F6E56과 본문색(#1A1A1A)의 대비는 2.81:1이라 색만으로는 구분이 보장되지
-     않는다(WCAG 1.4.1). 밑줄은 장식이 아니라 필수 요건이다. */
   color: ${colors.brand.strong};
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -272,7 +275,7 @@ const DescriptionField = styled.div<{ $highlight: boolean }>`
 
   &:focus-within {
     border-color: ${colors.brand.strong};
-    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
   }
 
   ${({ $highlight }) =>
@@ -305,7 +308,7 @@ const Select = styled.select`
 
   &:focus {
     border-color: ${colors.brand.strong};
-    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
   }
 `;
 
@@ -378,23 +381,23 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     $variant === "primary"
       ? `
     background-color: ${colors.brand.strong};
-    color: white;
+    color: ${colors.brand.onStrong};
     border: none;
-    box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
+    box-shadow: 0 1px 2px color-mix(in srgb, ${colors.brand.strong} 15%, transparent);
 
     &:hover {
       background-color: ${colors.brand.strongHover};
-      box-shadow: 0 2px 6px rgba(15, 110, 86, 0.25);
+      box-shadow: 0 2px 6px color-mix(in srgb, ${colors.brand.strong} 25%, transparent);
     }
 
     &:active {
       background-color: ${colors.brand.strongHover};
-      box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
+      box-shadow: 0 1px 2px color-mix(in srgb, ${colors.brand.strong} 15%, transparent);
     }
   `
       : $variant === "danger"
         ? `
-    background-color: white;
+    background-color: ${colors.surface.overlay};
     color: ${colors.danger.text};
     border: 1px solid ${colors.border.danger};
     display: inline-flex;
@@ -410,7 +413,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     }
   `
         : `
-    background-color: white;
+    background-color: ${colors.surface.overlay};
     color: ${colors.text.secondary};
     border: 1px solid ${colors.border.secondary};
 
@@ -443,9 +446,9 @@ const priorityStyles = {
     text: colors.danger.text,
   },
   medium: {
-    border: "#F59E0B",
-    background: "#FEF3E2",
-    text: "#B45309",
+    border: urgencyColors.soon.text,
+    background: urgencyColors.soon.background,
+    text: urgencyColors.soon.text,
   },
   low: {
     border: colors.border.tertiary,
@@ -513,7 +516,7 @@ const SubtaskIconButton = styled.button`
   transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: #e0ede8;
+    background-color: ${colors.brand.tint};
     color: ${colors.brand.strong};
   }
 

@@ -1,34 +1,27 @@
-import type { PriorityDistribution as PriorityDistributionData } from "../utils/computeDistribution";
-import { Card, Title, Row, RowLabel, BarTrack, BarFill, RowCount } from "./priorityDistribution.styles";
+import type { PriorityDistribution as PriorityDistributionData } from "@tododo/core";
+import { useElementWidth } from "@/shared";
+import { HorizontalBars } from "./charts";
+import { Card, Title, ChartArea } from "./priorityDistribution.styles";
 
 interface PriorityDistributionProps {
   distribution: PriorityDistributionData;
+  title: string;
 }
 
-const ROWS: { key: keyof PriorityDistributionData; label: string }[] = [
-  { key: "high", label: "높음" },
-  { key: "medium", label: "보통" },
-  { key: "low", label: "낮음" },
-];
-
-const PriorityDistribution = ({ distribution }: PriorityDistributionProps) => {
-  const max = Math.max(distribution.high, distribution.medium, distribution.low, 1);
+const PriorityDistribution = ({ distribution, title }: PriorityDistributionProps) => {
+  const { ref, width } = useElementWidth<HTMLDivElement>();
+  const rows = [
+    { label: "높음", value: distribution.high },
+    { label: "보통", value: distribution.medium },
+    { label: "낮음", value: distribution.low },
+  ];
 
   return (
     <Card>
-      <Title>완료한 할 일의 우선순위 분포</Title>
-      {ROWS.map(({ key, label }) => {
-        const count = distribution[key];
-        return (
-          <Row key={key}>
-            <RowLabel>{label}</RowLabel>
-            <BarTrack>
-              <BarFill style={{ width: `${(count / max) * 100}%` }} />
-            </BarTrack>
-            <RowCount>{count}</RowCount>
-          </Row>
-        );
-      })}
+      <Title>{title}</Title>
+      <ChartArea ref={ref}>
+        <HorizontalBars rows={rows} width={width} ariaLabel={title} />
+      </ChartArea>
     </Card>
   );
 };

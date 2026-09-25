@@ -3,6 +3,21 @@ import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
 
 const CalendarContainer = styled.div`
+  --fc-page-bg-color: ${colors.surface.raised};
+  --fc-neutral-bg-color: ${colors.background.secondary};
+  --fc-border-color: ${colors.border.tertiary};
+  --fc-today-bg-color: ${colors.brand.tint};
+  --fc-list-event-hover-bg-color: ${colors.background.secondary};
+  --fc-neutral-text-color: ${colors.text.secondary};
+  --fc-event-text-color: ${colors.brand.onStrong};
+  --fc-button-text-color: ${colors.brand.onStrong};
+  --fc-button-bg-color: ${colors.brand.strong};
+  --fc-button-border-color: ${colors.brand.strong};
+  --fc-button-hover-bg-color: ${colors.brand.strongHover};
+  --fc-button-hover-border-color: ${colors.brand.strongHover};
+  --fc-button-active-bg-color: ${colors.brand.strongHover};
+  --fc-button-active-border-color: ${colors.brand.strongHover};
+
   width: 100%;
   height: 100%;
   display: flex;
@@ -39,7 +54,7 @@ const CalendarContainer = styled.div`
   .fc-daygrid-more-link {
     font-size: 11px;
     font-weight: 600;
-    color: #5f6368;
+    color: ${colors.text.secondary};
   }
 
   /* 날짜 셀 클릭 가능하도록 */
@@ -47,7 +62,7 @@ const CalendarContainer = styled.div`
     cursor: pointer;
 
     &:hover {
-      background-color: #f5f5f5;
+      background-color: ${colors.background.secondary};
     }
   }
 
@@ -106,7 +121,7 @@ const DayDetailList = styled.ul`
 const DayDetailItem = styled.li<{ $color: string; $overdue?: boolean }>`
   padding: 12px 16px;
   border-left: 4px solid ${({ $color }) => $color};
-  background-color: ${({ $overdue }) => ($overdue ? colors.danger.background : "#f9f9f9")};
+  background-color: ${({ $overdue }) => ($overdue ? colors.danger.background : colors.surface.raised)};
   margin-bottom: 8px;
   border-radius: 0 8px 8px 0;
 `;
@@ -122,13 +137,13 @@ const DayDetailTitle = styled.p`
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: ${colors.text.primary};
 `;
 
 const DayDetailDate = styled.p`
   margin: 4px 0 0;
   font-size: 12px;
-  color: #666;
+  color: ${colors.text.secondary};
 `;
 
 const DayDetailRecurrenceCaption = styled.p`
@@ -149,7 +164,7 @@ const EventContentWrapper = styled.span`
 
 const EmptyMessage = styled.p`
   text-align: center;
-  color: #999;
+  color: ${colors.text.tertiary};
   padding: 24px;
   font-size: 14px;
 `;
@@ -169,7 +184,7 @@ const ViewButton = styled.button<{ $active: boolean }>`
   border: 1px solid
     ${({ $active }) => ($active ? colors.brand.strong : colors.border.secondary)};
   background-color: ${({ $active }) => ($active ? colors.brand.strong : "transparent")};
-  color: ${({ $active }) => ($active ? "#ffffff" : colors.text.secondary)};
+  color: ${({ $active }) => ($active ? colors.brand.onStrong : colors.text.secondary)};
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
   min-height: 44px;
@@ -212,11 +227,11 @@ const AddButton = styled.button`
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #f0fbf7;
+    background-color: ${colors.brand.tint};
   }
 
   &:active {
-    background-color: #d1f5e8;
+    background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
   }
 `;
 

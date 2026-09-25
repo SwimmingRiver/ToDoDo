@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "virtual:theme.css";
 import "./index.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import { RouterProvider } from "react-router-dom";
 // 모듈 그래프에 올리는데, 그 안의 utils/descriptionLinks → linkifyjs는 부피
 // 대부분이 TLD 데이터 테이블이라 트리셰이킹이 한 번만 어긋나도 통째로 딸려온다.
 import { ToastProvider } from "@/shared/ui/toast/toastContext";
+import { ThemePreferenceProvider } from "@/shared/theme/themePreference";
 import ErrorBoundary from "@/shared/ui/errorBoundary/errorBoundary";
 import { AuthProvider } from "@/features/auth/context/authProvider";
 import { initSentry } from "@/shared/lib/sentry";
@@ -29,14 +31,16 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ReactQueryDevtools initialIsOpen={false} />
-        <ToastProvider>
-          <AuthProvider>
-            <RouterProvider router={router} />
-          </AuthProvider>
-        </ToastProvider>
-      </QueryClientProvider>
+      <ThemePreferenceProvider>
+        <QueryClientProvider client={queryClient}>
+          <ReactQueryDevtools initialIsOpen={false} />
+          <ToastProvider>
+            <AuthProvider>
+              <RouterProvider router={router} />
+            </AuthProvider>
+          </ToastProvider>
+        </QueryClientProvider>
+      </ThemePreferenceProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

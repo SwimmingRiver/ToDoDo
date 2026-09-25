@@ -30,7 +30,7 @@ export const ReloadButton = styled.button`
   border: none;
   border-radius: 8px;
   background-color: ${colors.brand.strong};
-  color: #fff;
+  color: ${colors.brand.onStrong};
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
