@@ -1,27 +1,28 @@
 import { styled } from "styled-components";
 import { media } from "@/styles/breakpoints";
+import { colors } from "@/styles/colors";
 
 const StatusButton = styled.button<{ $color: string }>`
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background-color: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background-color: ${colors.background.secondary};
+  border: 1px solid ${colors.border.tertiary};
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #495057;
+  color: ${colors.text.primary};
   font-size: 13px;
   flex-shrink: 0;
 
   &:hover {
-    background-color: #f0f0f0;
-    border-color: #d0d0d0;
+    background-color: ${colors.background.secondary};
+    border-color: ${colors.border.secondary};
   }
 
   &:active {
-    background-color: #e8e8e8;
+    background-color: ${colors.border.tertiary};
   }
 
   ${media.mobile} {

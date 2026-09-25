@@ -12,14 +12,14 @@ const FormContainer = styled.form`
 const InputLabel = styled.label`
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: ${colors.text.primary};
 `;
 
 const Input = styled.input`
   width: 100%;
   padding: 10px 12px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid ${colors.border.secondary};
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
@@ -35,7 +35,7 @@ const TextArea = styled.textarea`
   font-size: 14px;
   font-family: inherit;
   line-height: 1.5;
-  border: 1px solid #ddd;
+  border: 1px solid ${colors.border.secondary};
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
@@ -100,7 +100,7 @@ const Select = styled.select`
   width: 100%;
   padding: 10px 12px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid ${colors.border.secondary};
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;

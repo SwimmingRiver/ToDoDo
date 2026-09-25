@@ -20,7 +20,7 @@ const AddButton = styled.button`
   height: 48px;
   flex-shrink: 0;
   background-color: ${colors.brand.strong};
-  color: white;
+  color: ${colors.brand.onStrong};
   font-size: 14px;
   font-weight: 500;
   border: none;
@@ -52,7 +52,7 @@ const ProjectListToolbar = styled.div`
 
 const ProjectCountText = styled.span`
   font-size: 12px;
-  color: var(--color-text-tertiary, #9aa0a6);
+  color: ${colors.text.tertiary};
   font-weight: 500;
 `;
 

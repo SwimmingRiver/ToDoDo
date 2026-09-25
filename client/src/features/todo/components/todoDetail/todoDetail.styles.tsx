@@ -2,6 +2,7 @@ import { css, keyframes, styled } from "styled-components";
 import { media } from "../../../../styles/breakpoints";
 import { colors } from "@/styles/colors";
 import { statusColors, type Status } from "@/styles/statusColors";
+import { urgencyColors } from "@/styles/urgencyColors";
 import { ChildTodoCardList } from "../projectCard.styles";
 
 const slideIn = keyframes`
@@ -28,7 +29,7 @@ const Overlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   z-index: 100;
   animation: ${fadeIn} 0.3s ease-out;
 `;
@@ -39,7 +40,7 @@ const Panel = styled.div`
   right: 0;
   width: 50%;
   height: 100vh;
-  background-color: white;
+  background-color: ${colors.surface.overlay};
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
   z-index: 101;
   animation: ${slideIn} 0.3s ease-out;
@@ -87,7 +88,7 @@ const CloseButton = styled.button`
   transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: #e0ede8;
+    background-color: ${colors.brand.tint};
     color: ${colors.brand.strong};
   }
 
@@ -155,7 +156,7 @@ const Input = styled.input`
 
   &:focus {
     border-color: ${colors.brand.strong};
-    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
   }
 `;
 
@@ -272,7 +273,7 @@ const DescriptionField = styled.div<{ $highlight: boolean }>`
 
   &:focus-within {
     border-color: ${colors.brand.strong};
-    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
   }
 
   ${({ $highlight }) =>
@@ -305,7 +306,7 @@ const Select = styled.select`
 
   &:focus {
     border-color: ${colors.brand.strong};
-    box-shadow: 0 0 0 3px rgba(15, 110, 86, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
   }
 `;
 
@@ -378,23 +379,23 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     $variant === "primary"
       ? `
     background-color: ${colors.brand.strong};
-    color: white;
+    color: ${colors.brand.onStrong};
     border: none;
-    box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
+    box-shadow: 0 1px 2px color-mix(in srgb, ${colors.brand.strong} 15%, transparent);
 
     &:hover {
       background-color: ${colors.brand.strongHover};
-      box-shadow: 0 2px 6px rgba(15, 110, 86, 0.25);
+      box-shadow: 0 2px 6px color-mix(in srgb, ${colors.brand.strong} 25%, transparent);
     }
 
     &:active {
       background-color: ${colors.brand.strongHover};
-      box-shadow: 0 1px 2px rgba(15, 110, 86, 0.15);
+      box-shadow: 0 1px 2px color-mix(in srgb, ${colors.brand.strong} 15%, transparent);
     }
   `
       : $variant === "danger"
         ? `
-    background-color: white;
+    background-color: ${colors.surface.raised};
     color: ${colors.danger.text};
     border: 1px solid ${colors.border.danger};
     display: inline-flex;
@@ -410,7 +411,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     }
   `
         : `
-    background-color: white;
+    background-color: ${colors.surface.raised};
     color: ${colors.text.secondary};
     border: 1px solid ${colors.border.secondary};
 
@@ -443,9 +444,9 @@ const priorityStyles = {
     text: colors.danger.text,
   },
   medium: {
-    border: "#F59E0B",
-    background: "#FEF3E2",
-    text: "#B45309",
+    border: urgencyColors.soon.text,
+    background: urgencyColors.soon.background,
+    text: urgencyColors.soon.text,
   },
   low: {
     border: colors.border.tertiary,
@@ -513,7 +514,7 @@ const SubtaskIconButton = styled.button`
   transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: #e0ede8;
+    background-color: ${colors.brand.tint};
     color: ${colors.brand.strong};
   }
 

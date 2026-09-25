@@ -36,7 +36,7 @@ const trigger = `
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #d9ece4;
+    background-color: ${colors.brand.tint};
     text-decoration: underline;
   }
 
