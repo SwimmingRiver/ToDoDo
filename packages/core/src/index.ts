@@ -1,3 +1,4 @@
 export type { Todo, TodoFields, RecurrenceRule } from "./types/todo";
 export { getTodos, createTodo, updateTodo, deleteTodo, calcParentStatus } from "./api/todoApi";
 export * from "./insights";
+export * from "./theme";
