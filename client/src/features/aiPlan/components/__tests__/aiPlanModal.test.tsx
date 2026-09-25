@@ -52,8 +52,14 @@ const renderModal = (onClose = vi.fn()) => {
   return { onClose };
 };
 
+// 실제 useMutation은 onSuccess/onError 뒤에 항상 onSettled를 호출한다. mock도 이를
+// 맞춰야 컴포넌트의 in-flight ref 가드(onSettled에서 플래그를 내림)가 다음 호출을
+// 막지 않는다.
 const goToPreview = () => {
-  generateMutate.mockImplementationOnce((_input, { onSuccess }) => onSuccess(result));
+  generateMutate.mockImplementationOnce((_input, { onSuccess, onSettled }) => {
+    onSuccess(result);
+    onSettled?.();
+  });
   fireEvent.change(screen.getByLabelText("목표"), { target: { value: "다음 달 이사 준비" } });
   fireEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
 };
@@ -105,6 +111,43 @@ describe("AiPlanModal", () => {
     expect(generateMutate).not.toHaveBeenCalled();
   });
 
+  it("isPending이 아직 false여도 동기 더블클릭하면 ref 가드가 두 번째 호출을 막는다", () => {
+    renderModal();
+    fireEvent.change(screen.getByLabelText("목표"), { target: { value: "이사" } });
+    const submit = screen.getByRole("button", { name: "계획 만들기" });
+    // generateMutate는 콜백을 호출하지 않으므로 isPending은 계속 false지만, ref 가드가 막는다.
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(generateMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("저장도 isPending이 false인 동기 더블클릭에서 ref 가드로 한 번만 호출된다", () => {
+    renderModal();
+    goToPreview();
+    const submit = screen.getByRole("button", { name: "2개 추가" });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(createMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("생성 중에는 취소·X·배경 클릭이 모두 무시된다(닫기 안 됨)", () => {
+    state.generatePending = true;
+    const { onClose } = renderModal();
+
+    const cancel = screen.getByRole("button", { name: "취소" });
+    expect(cancel).toBeDisabled();
+    fireEvent.click(cancel);
+
+    const closeButton = screen.getByRole("button", { name: "모달 닫기" });
+    expect(closeButton).toBeDisabled();
+    fireEvent.click(closeButton);
+
+    const dialog = screen.getByRole("dialog", { name: "AI로 계획" });
+    fireEvent.click(dialog.parentElement as HTMLElement);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("성공하면 미리보기에 상위·하위와 오늘 사용량을 보여준다", () => {
     renderModal();
     goToPreview();
@@ -118,7 +161,10 @@ describe("AiPlanModal", () => {
     const { onClose } = renderModal();
     goToPreview();
     fireEvent.click(screen.getByRole("checkbox", { name: "짐 정리 포함" }));
-    createMutate.mockImplementationOnce((_s, { onSuccess }) => onSuccess({ parentId: "p", count: 2 }));
+    createMutate.mockImplementationOnce((_s, { onSuccess, onSettled }) => {
+      onSuccess({ parentId: "p", count: 2 });
+      onSettled?.();
+    });
     fireEvent.click(screen.getByRole("button", { name: "1개 추가" }));
     expect(createMutate).toHaveBeenCalledWith(
       {
@@ -127,7 +173,9 @@ describe("AiPlanModal", () => {
       },
       expect.any(Object),
     );
-    expect(toastSuccess).toHaveBeenCalledWith("계획 추가 완료", "할 일 2개를 추가했어요");
+    // 토스트 개수는 버튼과 같은 값(체크된 하위 개수)을 써야 한다 — 서버가 돌려준
+    // count(상위 포함 2)가 아니라 실제로 체크해서 추가한 1개.
+    expect(toastSuccess).toHaveBeenCalledWith("계획 추가 완료", "할 일 1개를 추가했어요");
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -166,12 +214,18 @@ describe("AiPlanModal", () => {
 
   it("한도 초과는 에러 토스트, 권한 없음(403)은 잠금 안내로 전환", () => {
     renderModal();
-    generateMutate.mockImplementationOnce((_i, { onError }) => onError(new AiPlanError("DAILY_LIMIT", 429)));
+    generateMutate.mockImplementationOnce((_i, { onError, onSettled }) => {
+      onError(new AiPlanError("DAILY_LIMIT", 429));
+      onSettled?.();
+    });
     fireEvent.change(screen.getByLabelText("목표"), { target: { value: "이사" } });
     fireEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
     expect(toastError).toHaveBeenCalledWith("오늘 사용 횟수를 다 썼어요", "내일 다시 시도해 주세요");
 
-    generateMutate.mockImplementationOnce((_i, { onError }) => onError(new AiPlanError("PREMIUM_REQUIRED", 403)));
+    generateMutate.mockImplementationOnce((_i, { onError, onSettled }) => {
+      onError(new AiPlanError("PREMIUM_REQUIRED", 403));
+      onSettled?.();
+    });
     fireEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
     expect(screen.getByText("AI 할 일 플랜은 프리미엄 기능입니다")).toBeInTheDocument();
   });
@@ -179,7 +233,10 @@ describe("AiPlanModal", () => {
   it("저장 실패면 에러 토스트를 띄우고 초안을 유지한다", () => {
     const { onClose } = renderModal();
     goToPreview();
-    createMutate.mockImplementationOnce((_s, { onError }) => onError(new Error("x")));
+    createMutate.mockImplementationOnce((_s, { onError, onSettled }) => {
+      onError(new Error("x"));
+      onSettled?.();
+    });
     fireEvent.click(screen.getByRole("button", { name: "2개 추가" }));
     expect(toastError).toHaveBeenCalledWith("추가하지 못했어요", "잠시 후 다시 시도해 주세요");
     expect(onClose).not.toHaveBeenCalled();

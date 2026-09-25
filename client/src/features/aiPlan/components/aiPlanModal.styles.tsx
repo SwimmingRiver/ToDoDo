@@ -1,5 +1,6 @@
 import { styled } from "styled-components";
 import { colors } from "@/styles/colors";
+import { media } from "@/styles/breakpoints";
 
 export const Heading = styled.h2`
   margin: 0;
@@ -48,12 +49,59 @@ export const Row = styled.div`
   grid-template-columns: 20px minmax(0, 1fr) 132px 84px 28px;
   gap: 6px;
   align-items: center;
+
+  /* 좁은 화면에서는 체크박스+제목(+삭제)을 1줄, 날짜+우선순위를 2줄로 접는다.
+     자식 순서(체크박스 → 제목 → 날짜 → 우선순위 → 삭제)는 고정이라 nth-child로
+     grid-area를 배정한다. */
+  ${media.mobile} {
+    grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr) 28px;
+    grid-template-areas:
+      "check title title delete"
+      ".     date  priority .";
+    row-gap: 8px;
+
+    & > *:nth-child(1) {
+      grid-area: check;
+    }
+    & > *:nth-child(2) {
+      grid-area: title;
+    }
+    & > *:nth-child(3) {
+      grid-area: date;
+    }
+    & > *:nth-child(4) {
+      grid-area: priority;
+    }
+    & > *:nth-child(5) {
+      grid-area: delete;
+    }
+  }
 `;
 
 export const ParentRow = styled(Row)`
   grid-template-columns: 40px minmax(0, 1fr) 132px 84px;
   padding-bottom: 8px;
   border-bottom: 1px solid ${colors.border.tertiary};
+
+  ${media.mobile} {
+    grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "label title title"
+      ".     date  priority";
+
+    & > *:nth-child(1) {
+      grid-area: label;
+    }
+    & > *:nth-child(2) {
+      grid-area: title;
+    }
+    & > *:nth-child(3) {
+      grid-area: date;
+    }
+    & > *:nth-child(4) {
+      grid-area: priority;
+    }
+  }
 `;
 
 export const RowLabel = styled.span`

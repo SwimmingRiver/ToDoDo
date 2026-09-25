@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PremiumLockedNotice, useIsPremium, useUpgradeInterest } from "@/features/entitlement";
 import { useCreatePlanTodos } from "@/features/todo/hooks";
@@ -12,7 +12,7 @@ import {
 } from "@/shared/ui/modal/modal.styles";
 import { toDateKey } from "@/shared/utils/date";
 import { AiPlanError, type GeneratePlanInput, type PlanUsage } from "../api";
-import { useGeneratePlan, usePlanDraft, toSubmission } from "../hooks";
+import { useGeneratePlan, usePlanDraft, toSubmission, checkedCount } from "../hooks";
 import { aiPlanErrorMessage } from "../utils/aiPlanErrorMessage";
 import PlanGoalStep from "./planGoalStep";
 import PlanPreviewStep from "./planPreviewStep";
@@ -42,9 +42,14 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
   // 클레임 전파 지연 등으로 서버가 403을 주면 UI 판정과 무관하게 잠금 안내로 전환한다.
   const [serverLocked, setServerLocked] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  // isPending은 mutate 직후 즉시 반영되지 않아(다음 렌더까지 지연) 동기 더블클릭이
+  // 두 번째 mutate 호출을 막지 못할 수 있다. ref 플래그로 그 틈을 막는다.
+  const generateInFlight = useRef(false);
+  const saveInFlight = useRef(false);
 
   const runGenerate = (input: GeneratePlanInput) => {
-    if (generate.isPending) return;
+    if (generate.isPending || generateInFlight.current) return;
+    generateInFlight.current = true;
     setLastInput(input);
     generate.mutate(input, {
       onSuccess: (result) => {
@@ -60,6 +65,9 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
         const { title, message } = aiPlanErrorMessage(error);
         toast.error(title, message);
       },
+      onSettled: () => {
+        generateInFlight.current = false;
+      },
     });
   };
 
@@ -70,6 +78,9 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
   };
 
   const requestClose = () => {
+    // 생성 요청 중에는 닫기를 막는다. AI 호출 하나가 유료 사용 횟수를 소모하는데,
+    // 닫아버리면 결과를 못 받고 그 시도만 날아간다.
+    if (generate.isPending) return;
     if (step === "preview" && draft.dirty) {
       setPendingConfirm("close");
       return;
@@ -87,14 +98,19 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
   };
 
   const handleSubmit = () => {
-    if (createPlan.isPending) return;
+    if (createPlan.isPending || saveInFlight.current) return;
+    saveInFlight.current = true;
+    const addedCount = checkedCount(draft);
     createPlan.mutate(toSubmission(draft), {
-      onSuccess: ({ count }) => {
-        toast.success("계획 추가 완료", `할 일 ${count}개를 추가했어요`);
+      onSuccess: () => {
+        toast.success("계획 추가 완료", `할 일 ${addedCount}개를 추가했어요`);
         onClose();
       },
       onError: () => {
         toast.error("추가하지 못했어요", "잠시 후 다시 시도해 주세요");
+      },
+      onSettled: () => {
+        saveInFlight.current = false;
       },
     });
   };
@@ -153,7 +169,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
         <ModalBackground onClick={requestClose}>
           <ModalContainer role="dialog" aria-modal="true" aria-label="AI로 계획" onClick={(e) => e.stopPropagation()}>
             <ModalHeader>
-              <ModalCloseButton onClick={requestClose} aria-label="모달 닫기">
+              <ModalCloseButton onClick={requestClose} disabled={generate.isPending} aria-label="모달 닫기">
                 X
               </ModalCloseButton>
             </ModalHeader>

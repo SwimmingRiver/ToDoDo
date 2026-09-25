@@ -47,7 +47,7 @@ const PlanGoalStep = ({
     <Footer>
       <span />
       <FooterGroup>
-        <SecondaryButton type="button" onClick={onCancel}>
+        <SecondaryButton type="button" onClick={onCancel} disabled={isPending}>
           취소
         </SecondaryButton>
         <PrimaryButton type="button" onClick={onSubmit} disabled={isPending || goal.trim().length === 0}>

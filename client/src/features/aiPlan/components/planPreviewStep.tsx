@@ -94,7 +94,7 @@ const PlanPreviewStep = ({
           {isRegenerating ? "계획을 짜는 중…" : "다시 만들기"}
         </SecondaryButton>
         <FooterGroup>
-          <SecondaryButton type="button" onClick={onCancel}>
+          <SecondaryButton type="button" onClick={onCancel} disabled={isRegenerating}>
             취소
           </SecondaryButton>
           <PrimaryButton type="button" onClick={onSubmit} disabled={!canSubmit(draft) || isSaving || isRegenerating}>
