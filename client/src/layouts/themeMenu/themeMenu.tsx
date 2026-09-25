@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 import type { ThemePreference } from "@tododo/core/dist/theme/index.js";
 import { useThemePreference } from "@/shared/theme/useThemePreference";
@@ -40,6 +40,16 @@ const ThemeMenu = () => {
     close(true);
   };
 
+  // 포커스가 컴포넌트 밖으로 나가면(Tab 등) 메뉴를 닫는다. 트리거 클릭으로 다시
+  // 여닫히는 흐름과 달리, 선택 없이 그냥 벗어나는 것이므로 포커스를 되돌리지 않는다.
+  // relatedTarget이 여전히 wrapper 안(트리거↔항목 간 이동, 항목 클릭)이면 무시한다.
+  const onWrapperBlur = (e: FocusEvent<HTMLDivElement>) => {
+    if (!isOpen) return;
+    const next = e.relatedTarget as Node | null;
+    if (next && wrapperRef.current?.contains(next)) return;
+    close(false);
+  };
+
   const onMenuKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     const index = itemRefs.current.findIndex((el) => el === document.activeElement);
     if (e.key === "Escape") {
@@ -56,7 +66,7 @@ const ThemeMenu = () => {
   };
 
   return (
-    <Wrapper ref={wrapperRef}>
+    <Wrapper ref={wrapperRef} onBlur={onWrapperBlur}>
       <Trigger
         ref={triggerRef}
         type="button"

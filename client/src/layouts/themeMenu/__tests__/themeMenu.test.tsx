@@ -75,4 +75,14 @@ describe("ThemeMenu", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(trigger()).toHaveAccessibleName("화면 테마: 시스템");
   });
+
+  it("Tab으로 포커스가 벗어나면 메뉴가 닫히고 선택은 바뀌지 않으며, 포커스는 트리거로 돌아오지 않는다", async () => {
+    setup();
+    await userEvent.click(trigger());
+    await userEvent.keyboard("{Tab}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger()).toHaveAccessibleName("화면 테마: 시스템");
+    expect(trigger()).not.toHaveFocus();
+    expect(screen.queryAllByRole("menuitemradio")).toHaveLength(0);
+  });
 });
