@@ -364,7 +364,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npm run deploy
+        run: |
+          if grep -q REPLACE_WITH_AI_USAGE_KV_ID wrangler.toml; then echo "::error::ai-proxy/wrangler.toml의 AI_USAGE KV id가 아직 placeholder입니다 (README 배포 준비 1단계)"; exit 1; fi
+          npm run deploy
 
   server:
     name: Server
