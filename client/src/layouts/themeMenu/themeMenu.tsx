@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 import type { ThemePreference } from "@tododo/core/dist/theme/index.js";
 import { useThemePreference } from "@/shared/theme/useThemePreference";
@@ -40,21 +40,20 @@ const ThemeMenu = () => {
     close(true);
   };
 
-  // 포커스가 컴포넌트 밖으로 나가면(Tab 등) 메뉴를 닫는다. 트리거 클릭으로 다시
-  // 여닫히는 흐름과 달리, 선택 없이 그냥 벗어나는 것이므로 포커스를 되돌리지 않는다.
-  // relatedTarget이 여전히 wrapper 안(트리거↔항목 간 이동, 항목 클릭)이면 무시한다.
-  const onWrapperBlur = (e: FocusEvent<HTMLDivElement>) => {
-    if (!isOpen) return;
-    const next = e.relatedTarget as Node | null;
-    if (next && wrapperRef.current?.contains(next)) return;
-    close(false);
-  };
-
   const onMenuKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     const index = itemRefs.current.findIndex((el) => el === document.activeElement);
     if (e.key === "Escape") {
       e.preventDefault();
       close(true);
+    } else if (e.key === "Tab") {
+      // preventDefault를 걸지 않아 포커스가 자연스럽게 다음 탭 대상으로 넘어가게
+      // 둔다(표준 메뉴 버튼 패턴). 선택 없이 그냥 벗어나는 것이므로 트리거로
+      // 포커스를 되돌리지 않는다. 마우스로 밖을 클릭하는 경우는 document의
+      // pointerdown 리스너가 이미 처리한다 — blur 기반 처리는 Safari에서 버튼이
+      // 마우스 클릭으로 포커스되지 않아 relatedTarget이 null인 blur가 먼저 발생하고,
+      // 뒤이은 트리거 클릭의 setIsOpen(v => !v)와 경합해 메뉴가 다시 열리는
+      // 레이스를 일으키므로 쓰지 않는다.
+      close(false);
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const delta = e.key === "ArrowDown" ? 1 : -1;
@@ -66,7 +65,7 @@ const ThemeMenu = () => {
   };
 
   return (
-    <Wrapper ref={wrapperRef} onBlur={onWrapperBlur}>
+    <Wrapper ref={wrapperRef}>
       <Trigger
         ref={triggerRef}
         type="button"

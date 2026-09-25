@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ThemePreferenceProvider } from "@/shared/theme/themePreference";
 import ThemeMenu from "../themeMenu";
@@ -84,5 +84,16 @@ describe("ThemeMenu", () => {
     expect(trigger()).toHaveAccessibleName("화면 테마: 시스템");
     expect(trigger()).not.toHaveFocus();
     expect(screen.queryAllByRole("menuitemradio")).toHaveLength(0);
+  });
+
+  it("아이템에 포커스가 있는 상태에서 relatedTarget 없는 blur 후 트리거를 클릭하면 닫힌 채로 유지된다 (Safari 포커스 레이스)", () => {
+    setup();
+    fireEvent.click(trigger());
+    const systemItem = screen.getByRole("menuitemradio", { name: "시스템" });
+    // Safari는 버튼을 마우스 클릭으로 포커스하지 않는다: 트리거를 클릭해도 포커스를
+    // 받을 곳이 없어 relatedTarget이 null인 blur만 발생한다.
+    fireEvent.blur(systemItem, { relatedTarget: null });
+    fireEvent.click(trigger());
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 });
