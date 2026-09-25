@@ -82,6 +82,20 @@ describe("handlePlan", () => {
     expect(store.get(KEY)).toBe("2");
   });
 
+  it("생성 중 다른 요청이 먼저 카운트를 올려도 재조회한 최신값+1을 쓴다(경쟁 상태)", async () => {
+    const store = new Map([[KEY, "1"]]);
+    vi.mocked(generatePlan).mockImplementationOnce(async () => {
+      // 게이트 체크(used=1) 이후, AI 호출이 끝나기 전에 다른 병렬 요청이 먼저
+      // 성공해 카운트를 5로 올려놓은 상황을 흉내낸다.
+      store.set(KEY, "5");
+      return rawPlan;
+    });
+    const res = await handlePlan(request(), makeEnv(store));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ plan: rawPlan, usage: { used: 6, limit: 3 } });
+    expect(store.get(KEY)).toBe("6");
+  });
+
   it("한도에 도달하면 429 DAILY_LIMIT, AI 미호출, 카운트 불변", async () => {
     const store = new Map([[KEY, "3"]]);
     const res = await handlePlan(request(), makeEnv(store));
