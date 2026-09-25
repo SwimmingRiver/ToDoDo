@@ -1,4 +1,4 @@
-# 다크모드 (웹 + 모바일) — 설계
+# 다크모드 (웹) — 설계
 
 ## Context
 
@@ -10,8 +10,7 @@
 현재 상태(2026-09-25 조사):
 
 - 웹: `ThemeProvider`/테마 객체 없음. `client/src/styles/{colors,statusColors,urgencyColors}.ts`의 정적 상수를 67개 파일이 import. 그 밖에 51개 파일에 hex/rgba 리터럴 553곳(토큰이 있는 브랜드색조차 `#1D9E75` 63회, `#0F6E56` 38회 하드코딩). FullCalendar 오버라이드는 `index.css`/`App.css`.
-- 모바일: `mobile/src/theme/colors.ts`·`statusColors.ts`가 웹 값을 **손으로 복제**. 30개 파일 import, `StyleSheet.create` 28곳, 리터럴 58곳. `app.json`의 `userInterfaceStyle: "light"` 고정.
-- **복제 드리프트 발견**: 모바일 `statusColors`는 아직 PR #113 이전 값(doing=파랑 `#1d4ed8`, done=틸 `#065f46`)이다. 웹은 doing=초록 `#117453`, done=보라 `#6d28d9`로 바뀌었다. 이 설계의 단일 원본 구조가 이 문제를 구조적으로 없앤다.
+- 모바일: `mobile/src/theme/colors.ts`·`statusColors.ts`가 웹 값을 **손으로 복제**하고 있고, 이미 드리프트가 생겼다(§3). 모바일은 이 스펙 범위 밖.
 - `client`·`mobile` 모두 이미 `@tododo/core`(`packages/core`)에 의존한다.
 - AA 대비 테스트(`brandContrast`, `statusColorsContrast`)는 흰 배경 기준만 검증한다.
 
@@ -19,16 +18,14 @@
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| 적용 범위 | 웹 + 모바일(RN) 둘 다 | 사용자 요구 |
+| 적용 범위 | **웹(client) + core 팔레트**. 모바일(RN)은 후속 스펙 | 앱은 네이티브 iOS 빌드라 설정 전제가 달라 따로 설계 필요(§3). 로드맵상 모바일 웹격차 축소 때 함께 하는 편이 이중 작업이 적다 |
 | 전환 방식 | 시스템 / 라이트 / 다크 3택, 기본값 시스템 | 표준 패턴. 시스템만 따르면 "OS 라이트·앱만 다크"가 불가 |
-| 선택값 저장 | 기기별(웹 localStorage, 앱 AsyncStorage). 기기 간 동기화 안 함 | 테마는 기기 환경(사무실 PC·밤의 폰)에 따라 다르게 쓰는 경우가 많다. rules/데이터 모델 추가 불필요 |
+| 선택값 저장 | 기기별(localStorage). 기기 간 동기화 안 함 | 테마는 기기 환경(사무실 PC·밤의 폰)에 따라 다르게 쓰는 경우가 많다. rules/데이터 모델 추가 불필요 |
 | 다크 바탕 톤 | 뉴트럴 그레이 + 층 간 명도차(elevation) | 직접 경쟁 앱(Todoist·TickTick·Things)과 iOS 시스템 다크가 뉴트럴. 무채색 위에서 상태색(초록/보라) 구분이 가장 또렷 |
 | 다크 브랜드 버튼 | 밝은 초록 바탕 + 거의 검정 글자(반전) | 어두운 바탕에서 진한 초록은 묻힌다 |
-| 팔레트 원본 | `packages/core/src/theme/` 단일 원본 | 수동 복제 드리프트 제거, 두 테마 AA를 한 곳에서 검증 |
+| 팔레트 원본 | `packages/core/src/theme/` 단일 원본 | 두 테마 AA를 한 곳에서 검증, 후속 앱 작업이 그대로 import(수동 복제 드리프트 방지) |
 | 웹 전달 | CSS 변수(`var(--…)`) | 기존 토큰 사용처 515곳 무수정, 전환 시 리렌더 없음, 전역 CSS(FullCalendar)까지 한 방식 |
-| 앱 전달 | `ThemeProvider` + `useTheme` + `makeStyles` | RN에는 CSS 변수가 없음 |
 | 웹 토글 위치 | Header·MobileHeader 우측(아바타 왼쪽) 아이콘 + 3택 드롭다운 | 사이드바 접힘/모바일 웹과 무관하게 항상 같은 자리. SNB 하단은 눈에 안 띄고, SNB 상단은 상태별 3가지 형태가 필요 |
-| 앱 토글 위치 | 3개 탭 루트 화면 헤더 우측 아이콘 → `Alert.alert` 3택 | 웹과 같은 자리, 기존 모바일 관례(TodoListScreen) 재사용 |
 | 라이트 미세 변화 | 허용 | 토큰 없는 하드코딩 회색을 가장 가까운 기존 토큰으로 흡수 |
 | 프리미엄 여부 | 무료 | 다크모드는 기본 기능 인식, 유료화 시 반감 |
 
@@ -121,48 +118,15 @@ ThemePreferenceProvider (React)
 - 접근성: 버튼 `aria-label="화면 테마: {현재}"`, `aria-haspopup="menu"`, 항목은 `role="menuitemradio"` + `aria-checked`, Esc·바깥 클릭으로 닫힘, 키보드 ↑↓ 이동.
 - SNB·ProfileMenu는 변경하지 않는다.
 
-## 3. 모바일(RN) 전달 구조
+## 3. 모바일(RN) — 후속 작업 (이 스펙 범위 밖)
 
-### ThemeProvider
+2026-09-25 결정: **웹 먼저**. 앱 다크모드는 로드맵의 "모바일 웹격차 축소" 단계에서 별도 스펙으로 다룬다. 이 스펙의 core 팔레트(PR 1)는 앱이 그대로 import할 수 있게 만들어 두는 것까지만 한다.
 
-```
-AsyncStorage["tododo:theme"] = "system" | "light" | "dark"
-        │
-ThemeProvider (App 루트, NavigationContainer 바깥)
-  → useColorScheme()(OS) + preference → resolveScheme → "light" | "dark"
-  → Appearance.setColorScheme(preference === "system" ? null : preference)
-  → context: { tokens, scheme, preference, setPreference }
-```
+별도 스펙에서 먼저 확인할 사실(09-25 조사):
 
-- `Appearance.setColorScheme`: 우리 화면만 바꾸면 OS가 그리는 `Alert.alert`·키보드·피커가 라이트로 남는다. 앱 단위 설정을 OS에 알려 이것들까지 맞춘다.
-- 저장값 로드 전(수 ms)에는 `ThemeProvider`가 `null`을 렌더한다. `expo-splash-screen`은 미설치이고 네이티브 재빌드가 필요해 도입하지 않는다 — `userInterfaceStyle: automatic`이면 그 순간 보이는 네이티브 창 배경이 OS 설정을 따르므로, 틀린 테마로 한 프레임 그려지는 것보다 낫다. 로드 실패 시 system.
-- `app.json` `userInterfaceStyle: "automatic"` — iOS/안드로이드가 OS 다크 신호를 앱에 전달하려면 필수.
-- `mobile/src/theme/colors.ts`·`statusColors.ts`는 삭제하고 core를 import한다(드리프트 해소).
-
-### 스타일 패턴
-
-```ts
-// 현재
-const styles = StyleSheet.create({ title: { color: colors.text.primary } });
-
-// 변경
-const useStyles = makeStyles((t) => ({ title: { color: t.text.primary } }));
-// 컴포넌트 안: const styles = useStyles();
-```
-
-`makeStyles`는 토큰 객체(light/dark 두 개뿐)를 키로 `WeakMap` 캐시한다 — 같은 테마에서는 `StyleSheet.create`를 다시 호출하지 않는다.
-
-### 서드파티
-
-- React Navigation: `NavigationContainer theme`에 우리 토큰으로 만든 `Theme`(background/card/text/border/primary) 전달 → 헤더·탭바·화면 배경.
-- `react-native-calendars`: `theme` prop이 마운트 시에만 반영되므로 `key={scheme}`로 재마운트.
-- `expo-status-bar`: `style={scheme === "dark" ? "light" : "dark"}`.
-
-### 선택 UI
-
-Today / TodoList / Calendar 루트 화면의 `headerRight`에 테마 아이콘 → `Alert.alert("화면 테마", …, [라이트, 시스템, 다크, 취소])`. 현재 선택은 버튼 라벨에 "✓"로 표시.
-
-앱 설정 화면·로그아웃은 현재 없으며, 스토어 심사(Task 8)의 계정 삭제 요구와 함께 다룬다 — 이 스펙 범위 밖.
+- **빌드 방식**: 앱은 Expo 툴체인(prebuild/EAS)이 아니라 네이티브 `mobile/ios` 프로젝트를 iOS 빌더로 직접 빌드한다. 따라서 테마 관련 설정의 실제 원본은 `app.json`이 아니라 `mobile/ios/mobile/Info.plist`의 `UIUserInterfaceStyle`(현재 `Light`)이다. 이 값을 `Automatic`으로 바꾸거나 키를 제거해야 OS 다크 신호가 앱에 들어온다.
+- **상태색 드리프트**: `mobile/src/theme/statusColors.ts`가 PR #113 이전 값(doing=파랑 `#1d4ed8`, done=틸 `#065f46`)으로 남아 있다. 다크모드와 무관하게 지금 웹과 불일치하는 버그다.
+- 브레인스토밍에서 잠정 합의한 방향(재검토 대상): `ThemeProvider` + `useTheme` + `makeStyles(t => …)` 패턴, `Appearance.setColorScheme`으로 OS 요소(Alert·키보드) 동기화, React Navigation `theme`·`react-native-calendars` `key={scheme}` 재마운트, 3탭 루트 헤더 우측 아이콘 → `Alert.alert` 3택. `expo-splash-screen`은 미설치.
 
 ## 4. 하드코딩 정리 · 출시 순서 · 테스트
 
@@ -174,7 +138,7 @@ Today / TodoList / Calendar 루트 화면의 `headerRight`에 테마 아이콘 �
 4. 오버레이용 `rgba(0,0,0,x)` → `scrim`. 그림자 안의 rgba는 유지.
 5. 규칙으로 판단이 안 서는 값은 PR 설명에 목록으로 남기고 가장 가까운 토큰을 쓴다(신규 토큰은 만들지 않는다).
 
-**재발 방지**: 웹·앱 ESLint에 `no-restricted-syntax`로 문자열/템플릿 리터럴 안의 `#hex`·`rgb(`·`rgba(` 패턴을 에러 처리. 예외 경로: `client/src/styles/**`, `packages/core/src/theme/**`, 테스트 파일, 그림자(`box-shadow`/`shadowColor`)는 인라인 disable 주석으로 사유 명시.
+**재발 방지**: 웹 ESLint에 `no-restricted-syntax`로 문자열/템플릿 리터럴 안의 `#hex`·`rgb(`·`rgba(` 패턴을 에러 처리. 예외 경로: `client/src/styles/**`, `packages/core/src/theme/**`, 테스트 파일, 그림자(`box-shadow`/`shadowColor`)는 인라인 disable 주석으로 사유 명시.
 
 ### 출시 순서
 
@@ -183,21 +147,19 @@ Today / TodoList / Calendar 루트 화면의 `headerRight`에 테마 아이콘 �
 | 1 | core `theme/` + 두 테마 AA 테스트 + `resolveScheme` | 없음 |
 | 2 | 웹 CSS 변수 인프라 + 리터럴 정리 + ESLint 규칙. **data-theme은 light 고정** | 회색 미세 조정 |
 | 3 | 웹 `ThemePreferenceProvider` + 인라인 스크립트 + `ThemeMenu` | **웹 다크모드 출시** |
-| 4 | 앱 core 팔레트 전환 + `ThemeProvider`/`makeStyles` + 리터럴 정리 + ESLint. **light 고정** | 상태색 드리프트 해소(모바일 doing/done이 웹과 같아짐) |
-| 5 | 앱 헤더 토글 + `Appearance` 연동 + `userInterfaceStyle: automatic` | **앱 다크모드 출시** |
 
-light 고정 단계를 두는 이유: 정리가 덜 된 상태에서 system 추종을 켜면 OS 다크 사용자에게 흰 조각이 섞인 화면이 즉시 노출된다. 인프라 PR과 스위치 PR을 분리해 PR 2·4를 화면 변화 없이 머지한다.
+light 고정 단계를 두는 이유: 정리가 덜 된 상태에서 system 추종을 켜면 OS 다크 사용자에게 흰 조각이 섞인 화면이 즉시 노출된다. 인프라 PR과 스위치 PR을 분리해 PR 2를 화면 변화 없이 머지한다.
 
 ### 테스트
 
 - **core**: 대비 테스트 light×dark, `resolveScheme` 전 조합(3 preference × 2 os), `toCssVarRefs`가 모든 토큰 경로를 `var(--…)`로 내보내는지.
 - **웹**: `ThemePreferenceProvider`(localStorage 없음/throw → system, setPreference 저장·data-theme 반영, system일 때 matchMedia change 반영), 인라인 스크립트 판정 표 = `resolveScheme` 표, `ThemeMenu`(열기/선택/Esc/aria-checked).
-- **앱**: `makeStyles` 캐시(같은 토큰 → 같은 객체), `ThemeProvider`(AsyncStorage 실패 → system, `Appearance.setColorScheme` 호출값).
-- **육안 검증**: 웹은 Playwright로 오늘/목록/캘린더/칸반/인사이트 + 할 일 모달·바텀시트·ThemeMenu 드롭다운을 light/dark 스크린샷해 흰 조각 잔존 확인. 앱은 iOS 시뮬레이터에서 3탭 + 상세/폼 + Alert를 다크로 확인.
+- **육안 검증**: 웹은 Playwright로 오늘/목록/캘린더/칸반/인사이트 + 할 일 모달·바텀시트·ThemeMenu 드롭다운을 light/dark 스크린샷해 흰 조각 잔존 확인.
 
 ## 범위 밖
 
 - 기기 간 테마 동기화
+- 모바일(RN) 다크모드 — §3 후속 스펙
 - 앱 설정 화면(스토어 심사 Task 8에서)
 - 사용자 지정 테마 색·고대비 테마
 - 프리미엄 게이팅
