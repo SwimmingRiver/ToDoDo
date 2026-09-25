@@ -84,12 +84,12 @@ const Button = styled.button<{ $variant?: "danger" | "cancel" }>`
   ${({ $variant }) =>
     $variant === "danger"
       ? `
-    background-color: ${colors.danger.main};
+    background-color: ${colors.danger.text};
     color: ${colors.background.primary};
     border: none;
 
     &:hover {
-      background-color: ${colors.danger.text};
+      background-color: color-mix(in srgb, ${colors.text.primary} 12%, ${colors.danger.text});
     }
   `
       : `
