@@ -112,4 +112,22 @@ describe("ThemePreferenceProvider", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => render(<Probe />)).toThrow();
   });
+
+  it("다른 탭에서 저장값이 바뀌면 storage 이벤트로 반영한다", () => {
+    renderProbe();
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "tododo:theme", newValue: "dark" }));
+    });
+    expect(themeAttr()).toBe("dark");
+    expect(screen.getByTestId("pref")).toHaveTextContent("dark");
+  });
+
+  it("다른 key의 storage 이벤트는 무시한다", () => {
+    renderProbe();
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "other-key", newValue: "dark" }));
+    });
+    expect(themeAttr()).toBe("light");
+    expect(screen.getByTestId("pref")).toHaveTextContent("system");
+  });
 });

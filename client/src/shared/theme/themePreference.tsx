@@ -44,6 +44,16 @@ export const ThemePreferenceProvider = ({ children }: { children: ReactNode }) =
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // 다른 탭에서 테마를 바꾸면 이 탭도 즉시 따라간다.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== THEME_STORAGE_KEY) return;
+      setPreferenceState(parsePreference(e.newValue));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const scheme = resolveScheme(preference, osDark);
 
   useEffect(() => {
