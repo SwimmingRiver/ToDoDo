@@ -54,4 +54,10 @@ describe("index.html 테마 초기화 스크립트", () => {
     expect(document.head.querySelector('meta[name="theme-color"]')?.getAttribute("content"))
       .toBe(themes.dark.background.primary);
   });
+
+  it("저장값이 light이면 meta도 light 바탕색으로 맞춘다", () => {
+    run("light", true);
+    expect(document.head.querySelector('meta[name="theme-color"]')?.getAttribute("content"))
+      .toBe(themes.light.background.primary);
+  });
 });
