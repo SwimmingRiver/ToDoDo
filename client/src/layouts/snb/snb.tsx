@@ -163,11 +163,14 @@ const SidebarNavLink = styled(NavLink)<{ $isopen: boolean }>`
         : ""}
 
     &:hover {
-      background-color: ${({ $isopen }) => ($isopen ? colors.brand.tint : "transparent")};
+      background-color: ${({ $isopen }) =>
+        $isopen
+          ? `color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint})`
+          : "transparent"};
     }
 
     &:hover ${IconWrapper} {
-      background-color: ${colors.brand.tint};
+      background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
     }
   }
 `;

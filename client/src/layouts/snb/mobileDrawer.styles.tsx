@@ -73,7 +73,10 @@ export const NavItem = styled.div<{ $active?: boolean }>`
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: ${({ $active }) => ($active ? colors.brand.tint : colors.background.secondary)};
+    background-color: ${({ $active }) =>
+      $active
+        ? `color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint})`
+        : colors.background.secondary};
   }
 `;
 
@@ -130,7 +133,7 @@ export const NavNavLink = styled(NavLink)`
     padding-left: 7px;
 
     &:hover {
-      background-color: ${colors.brand.tint};
+      background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
     }
   }
 `;
