@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tododo/worker-auth": "file:../packages/worker-auth"
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@tododo/worker-auth": "file:../packages/worker-auth",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
