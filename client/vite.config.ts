@@ -4,6 +4,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
+import { themeCssPlugin } from './src/styles/themeCssPlugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -17,6 +18,7 @@ const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    themeCssPlugin(),
     react(),
     // 소스맵을 Sentry에 업로드하는 플러그인. authToken이 없으면(로컬 개발, CI의
     // client 테스트 빌드) 플러그인이 자체적으로 "No auth token provided" 경고만
