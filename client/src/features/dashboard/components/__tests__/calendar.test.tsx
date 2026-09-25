@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { MemoryRouter, createMemoryRouter, RouterProvider } from 'react-router-dom'
 import Calendar from '../calendar'
+import { CalendarContainer } from '../calendar.styles'
 
 vi.mock('@/shared/lib/firebase', () => ({
   auth: { currentUser: null },
@@ -77,6 +78,20 @@ const renderCalendar = () =>
       <Calendar />
     </MemoryRouter>,
   )
+
+// 다크 모드에서 이벤트 칩(.fc-daygrid-event) 배경이 밝아지는데도 FullCalendar
+// 기본 --fc-event-text-color(#fff)가 그대로면 흰 배경에 흰 글자가 겹쳐
+// 텍스트가 안 보인다. 이벤트 아이콘(구글/반복)에 이미 쓰는
+// colors.brand.onStrong(라이트=흰색, 다크=거의 검정)으로 맞춰야
+// 테마와 무관하게 항상 읽힌다.
+describe('Calendar 이벤트 칩 텍스트 색상', () => {
+  it('--fc-event-text-color가 brand.onStrong 토큰을 참조한다', () => {
+    const { container } = render(<CalendarContainer />)
+    const el = container.firstChild as HTMLElement
+    const value = getComputedStyle(el).getPropertyValue('--fc-event-text-color').trim()
+    expect(value).toBe('var(--brand-on-strong)')
+  })
+})
 
 describe('Calendar 하루 다건 "+N개" 표시', () => {
   beforeAll(() => {

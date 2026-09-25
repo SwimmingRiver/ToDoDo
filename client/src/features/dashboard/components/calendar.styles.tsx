@@ -9,6 +9,7 @@ const CalendarContainer = styled.div`
   --fc-today-bg-color: ${colors.brand.tint};
   --fc-list-event-hover-bg-color: ${colors.background.secondary};
   --fc-neutral-text-color: ${colors.text.secondary};
+  --fc-event-text-color: ${colors.brand.onStrong};
   --fc-button-text-color: ${colors.brand.onStrong};
   --fc-button-bg-color: ${colors.brand.strong};
   --fc-button-border-color: ${colors.brand.strong};
