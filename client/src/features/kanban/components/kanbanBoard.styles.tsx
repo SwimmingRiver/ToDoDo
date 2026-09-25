@@ -15,7 +15,7 @@ const KanbanColumn = styled.div`
   flex: 1;
   min-width: 0;
   height: 100%;
-  background-color: #f4f5f7;
+  background-color: ${colors.background.secondary};
   border-radius: 10px;
   padding: 12px;
   display: flex;
@@ -26,7 +26,7 @@ const KanbanColumn = styled.div`
 const ColumnTitle = styled.h2`
   font-size: 14px;
   font-weight: 600;
-  color: #5e6c84;
+  color: ${colors.text.secondary};
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -37,12 +37,12 @@ const KanbanItemList = styled.div<{ $isOver?: boolean }>`
   min-height: 100px;
   border-radius: 8px;
   transition: background-color 0.2s ease;
-  background-color: ${({ $isOver }) => ($isOver ? "#e3e6ea" : "transparent")};
+  background-color: ${({ $isOver }) => ($isOver ? colors.border.tertiary : "transparent")};
   overflow-y: auto;
 `;
 
 const KanbanItemStyled = styled.div<{ $isDragging?: boolean }>`
-  background: #fff;
+  background: ${colors.surface.raised};
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
@@ -58,7 +58,7 @@ const KanbanItemStyled = styled.div<{ $isDragging?: boolean }>`
 
 const ParentLabel = styled.span`
   font-size: 11px;
-  color: #5e6c84;
+  color: ${colors.text.secondary};
   display: block;
   margin-bottom: 4px;
 `;
@@ -66,7 +66,7 @@ const ParentLabel = styled.span`
 const ItemTitle = styled.h3`
   font-size: 14px;
   font-weight: 500;
-  color: #172b4d;
+  color: ${colors.text.primary};
   margin: 0;
 `;
 
@@ -89,7 +89,7 @@ const ItemContentRow = styled.div`
 `;
 
 const DragOverlayItem = styled.div`
-  background: #fff;
+  background: ${colors.surface.raised};
   border-radius: 8px;
   padding: 12px;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
@@ -99,8 +99,8 @@ const DragOverlayItem = styled.div`
 const MobileTabContainer = styled.div`
   display: flex;
   gap: 0;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: #fff;
+  border-bottom: 1px solid ${colors.border.tertiary};
+  background-color: ${colors.background.primary};
 `;
 
 const MobileTabButton = styled.button<{ $active: boolean }>`
@@ -111,7 +111,7 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  color: ${({ $active }) => ($active ? colors.brand.strong : "#5f6368")};
+  color: ${({ $active }) => ($active ? colors.brand.strong : colors.text.secondary)};
   border-bottom: 2px solid
     ${({ $active }) => ($active ? colors.brand.strong : "transparent")};
   transition: all 0.2s ease;
@@ -121,8 +121,8 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
   gap: 6px;
 
   &:hover {
-    color: ${({ $active }) => ($active ? colors.brand.strong : "#1a1a1a")};
-    background-color: #f8f9fa;
+    color: ${({ $active }) => ($active ? colors.brand.strong : colors.text.primary)};
+    background-color: ${colors.background.secondary};
   }
 `;
 
@@ -142,7 +142,7 @@ const EmptyColumn = styled.div`
   justify-content: center;
   padding: 24px 16px;
   text-align: center;
-  color: #9aa0a6;
+  color: ${colors.text.tertiary};
 `;
 
 const EmptyIcon = styled.div`

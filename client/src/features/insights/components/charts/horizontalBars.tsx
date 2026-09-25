@@ -32,14 +32,14 @@ const HorizontalBars = ({ rows, width, ariaLabel }: HorizontalBarsProps) => {
         const valueText = `${row.value} (${Math.round(row.ratio * 100)}%)`;
         return (
           <g key={i}>
-            <text x={0} y={y + ROW_HEIGHT / 2} dominantBaseline="middle" fontSize={13} fontWeight={500} fill={colors.text.secondary}>
+            <text x={0} y={y + ROW_HEIGHT / 2} dominantBaseline="middle" fontSize={13} fontWeight={500} style={{ fill: colors.text.secondary }}>
               {row.label}
             </text>
-            <rect x={trackX} y={y + trackY} width={trackWidth} height={TRACK_HEIGHT} rx={4} fill={colors.background.secondary} />
-            <rect x={trackX} y={y + trackY} width={row.fillWidth} height={TRACK_HEIGHT} rx={4} fill={colors.brand.strong}>
+            <rect x={trackX} y={y + trackY} width={trackWidth} height={TRACK_HEIGHT} rx={4} style={{ fill: colors.background.secondary }} />
+            <rect x={trackX} y={y + trackY} width={row.fillWidth} height={TRACK_HEIGHT} rx={4} style={{ fill: colors.brand.strong }}>
               <title>{`${row.label} ${valueText}`}</title>
             </rect>
-            <text x={width} y={y + ROW_HEIGHT / 2} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={500} fill={colors.text.primary}>
+            <text x={width} y={y + ROW_HEIGHT / 2} textAnchor="end" dominantBaseline="middle" fontSize={13} fontWeight={500} style={{ fill: colors.text.primary }}>
               {valueText}
             </text>
           </g>

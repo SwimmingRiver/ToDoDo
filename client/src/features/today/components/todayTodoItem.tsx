@@ -1,6 +1,7 @@
 import { Check, Link2, Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { colors } from "@/styles/colors";
 import type { Todo } from "@/features/todo/types";
 import { RecurrenceBadge, extractLinks } from "@/shared";
 import { getDaysLeft, getDueBadgeLabel, getUrgency } from "@/shared/utils/due";
@@ -77,7 +78,7 @@ const TodayTodoItem = ({
           onToggleDone(todo);
         }}
       >
-        {isDone && <Check size={12} color="#FFFFFF" />}
+        {isDone && <Check size={12} color={colors.brand.onStrong} />}
       </Checkbox>
       <Content onClick={handleItemClick}>
         <TitleRow>
