@@ -47,29 +47,30 @@ export const Title = styled.h1`
   color: ${colors.text.primary};
 `;
 
-/* Google 로그인 버튼: 색상은 Google 브랜딩 가이드라인 고정값이라 토큰화하지 않는다. */
+/* Google 로그인 버튼: 로고 SVG 색만 Google 브랜딩 가이드라인 고정값이라 토큰화하지 않는다
+   (GoogleIcon, loginPage.tsx 참고). 버튼 자체 색은 다른 요소와 동일하게 토큰화한다. */
 export const GoogleButton = styled.button`
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  background-color: #fff;
-  border: 1px solid #dadce0;
+  background-color: ${colors.surface.raised};
+  border: 1px solid ${colors.border.secondary};
   border-radius: ${radius.md};
   font-size: 15px;
   font-weight: 500;
-  color: #3c4043;
+  color: ${colors.text.primary};
   cursor: pointer;
   transition: box-shadow 0.2s ease, background-color 0.2s ease;
   white-space: nowrap;
 
   &:hover:not(:disabled) {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    background-color: #f8f9fa;
+    background-color: ${colors.background.secondary};
   }
 
   &:active:not(:disabled) {
-    background-color: #f1f3f4;
+    background-color: ${colors.background.secondary};
   }
 
   &:disabled {

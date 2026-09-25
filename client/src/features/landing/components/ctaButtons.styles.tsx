@@ -17,7 +17,7 @@ const PrimaryButton = styled.button`
   padding: 14px 28px;
   font-size: 15px;
   font-weight: 600;
-  color: #ffffff;
+  color: ${colors.brand.onStrong};
   background-color: ${colors.brand.strong};
   border: none;
   border-radius: ${radius.md};
