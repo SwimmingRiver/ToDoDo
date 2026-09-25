@@ -229,6 +229,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # client의 Vite 플러그인은 core src를 읽지만 런타임은 커밋된 dist를 읽는다 —
+      # dist가 낡으면 var() 이름이 소리 없이 어긋난다. build 산출물이 커밋된
+      # dist와 다르면 여기서 막는다.
+      - name: Check dist is up to date
+        run: git diff --exit-code -- dist
+
   calendar-proxy:
     name: Calendar Proxy
     runs-on: ubuntu-latest
