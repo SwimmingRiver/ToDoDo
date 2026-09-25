@@ -26,4 +26,21 @@ export default tseslint.config([
       }],
     },
   },
+  {
+    // 하드코딩 색은 다크모드에서 바뀌지 않는다. 그림자용 rgba(0,0,0,a)만 허용.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/styles/**', 'src/**/__tests__/**', 'src/**/*.test.{ts,tsx}', 'src/test/**'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        {
+          selector: 'Literal[value=/#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?\\b|rgba?\\((?!\\s*0\\s*,\\s*0\\s*,\\s*0\\s*,)/]',
+          message: '하드코딩 색 금지 — @/styles의 토큰을 쓰세요',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?\\b|rgba?\\((?!\\s*0\\s*,\\s*0\\s*,\\s*0\\s*,)/]',
+          message: '하드코딩 색 금지 — @/styles의 토큰을 쓰세요',
+        },
+      ],
+    },
+  },
 ])

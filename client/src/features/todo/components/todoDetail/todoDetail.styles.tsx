@@ -226,12 +226,14 @@ const DescriptionOverlay = styled.div`
   color: ${colors.text.primary};
 `;
 
-/** 오버레이에서 링크로 인식된 구간. 색만으로 구분하지 않도록 밑줄을 함께 준다. */
+/**
+ * 오버레이에서 링크로 인식된 구간. 색만으로 구분하지 않도록 밑줄을 함께 준다.
+ *
+ * brand.fill은 흰 배경 대비로 WCAG AA(4.5:1)에 미달한다. brand.strong은
+ * 통과하지만, brand.strong과 본문색의 대비는 낮아 색만으로는 구분이 보장되지
+ * 않는다(WCAG 1.4.1). 밑줄은 장식이 아니라 필수 요건이다.
+ */
 const OverlayLink = styled.span`
-  /* brand.fill(#1D9E75)는 흰 배경 대비 3.39:1로 WCAG AA(4.5:1)에 미달한다.
-     brand.strong(#0F6E56)는 6.20:1로 통과.
-     다만 #0F6E56과 본문색(#1A1A1A)의 대비는 2.81:1이라 색만으로는 구분이 보장되지
-     않는다(WCAG 1.4.1). 밑줄은 장식이 아니라 필수 요건이다. */
   color: ${colors.brand.strong};
   text-decoration: underline;
   text-underline-offset: 2px;

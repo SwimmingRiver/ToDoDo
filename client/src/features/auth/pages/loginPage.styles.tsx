@@ -70,7 +70,7 @@ export const GoogleButton = styled.button`
   }
 
   &:active:not(:disabled) {
-    background-color: ${colors.background.secondary};
+    background-color: color-mix(in srgb, ${colors.text.primary} 6%, ${colors.background.secondary});
   }
 
   &:disabled {
