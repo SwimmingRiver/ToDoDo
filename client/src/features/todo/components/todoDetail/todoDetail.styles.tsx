@@ -395,7 +395,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
   `
       : $variant === "danger"
         ? `
-    background-color: ${colors.surface.raised};
+    background-color: ${colors.surface.overlay};
     color: ${colors.danger.text};
     border: 1px solid ${colors.border.danger};
     display: inline-flex;
@@ -411,7 +411,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     }
   `
         : `
-    background-color: ${colors.surface.raised};
+    background-color: ${colors.surface.overlay};
     color: ${colors.text.secondary};
     border: 1px solid ${colors.border.secondary};
 

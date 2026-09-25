@@ -17,7 +17,7 @@ const StatusButton = styled.button<{ $color: string }>`
   flex-shrink: 0;
 
   &:hover {
-    background-color: ${colors.background.secondary};
+    background-color: color-mix(in srgb, ${colors.text.primary} 6%, ${colors.background.secondary});
     border-color: ${colors.border.secondary};
   }
 

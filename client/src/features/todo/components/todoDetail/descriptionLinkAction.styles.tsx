@@ -36,7 +36,7 @@ const trigger = `
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: ${colors.brand.tint};
+    background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
     text-decoration: underline;
   }
 
