@@ -48,7 +48,7 @@ packages/core/src/theme/
 | 토큰 | light | dark | 용도 |
 |---|---|---|---|
 | `brand.strong` | `#0F6E56` | `#3CCB9A` | 글자·아이콘, 솔리드 버튼 배경, 포커스 |
-| `brand.strongHover` | `#0A4E3C` | `#5DD8AE` | strong 요소 hover/pressed |
+| `brand.strongHover` | `#0A4E3C` | `#6EE0B8` | strong 요소 hover/pressed |
 | `brand.fill` | `#1D9E75` | `#2FB386` | 글자 없는 장식 |
 | `brand.tint` | `#E8F5EF` | `#16352B` | 활성 내비·배지 연한 배경 |
 | `brand.onStrong` 🆕 | `#FFFFFF` | `#06231A` | strong 배경 위 글자 |
