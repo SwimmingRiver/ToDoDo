@@ -1,5 +1,6 @@
 import { useForm } from "react-hook-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { colors } from "@/styles/colors";
 
 import {
   useCreateTodo,
@@ -353,7 +354,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
           autoFocus
         />
         {errors.title && (
-          <span style={{ color: "red", fontSize: "12px" }}>
+          <span style={{ color: colors.danger.text, fontSize: "12px" }}>
             {errors.title.message}
           </span>
         )}
@@ -368,7 +369,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
               placeholder="상세 설명을 입력하세요"
             />
             {errors.description && (
-              <span style={{ color: "red", fontSize: "12px" }}>
+              <span style={{ color: colors.danger.text, fontSize: "12px" }}>
                 {errors.description.message}
               </span>
             )}

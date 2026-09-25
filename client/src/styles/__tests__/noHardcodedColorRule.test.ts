@@ -25,4 +25,20 @@ describe("하드코딩 색 규칙", () => {
     expect(await lint(`export const a = "#1a1a1a";`, "src/styles/probe.ts")).toBe(0);
     expect(await lint(`export const a = "#1a1a1a";`, "src/features/x/__tests__/probe.test.ts")).toBe(0);
   });
+
+  it("템플릿 리터럴 안 named color를 막는다", async () => {
+    expect(await lint("export const a = `color: white;`;")).toBe(1);
+  });
+  it("인라인 style 객체의 named color를 막는다", async () => {
+    expect(await lint('const a = <span style={{ color: "red" }} />;')).toBe(1);
+  });
+  it("hsl()/hsla()를 막는다", async () => {
+    expect(await lint("export const a = `background: hsl(0 0% 100%);`;")).toBe(1);
+  });
+  it("CSS 값 위치가 아닌 문자열 속 named color는 허용한다", async () => {
+    expect(await lint(`const label = "white";`)).toBe(0);
+  });
+  it("named color와 무관한 CSS 속성(white-space)은 허용한다", async () => {
+    expect(await lint("export const a = `white-space: nowrap;`;")).toBe(0);
+  });
 });
