@@ -50,7 +50,7 @@ const TodayChip = styled.button`
   align-items: center;
   justify-content: center;
   background: ${colors.brand.strong};
-  color: #ffffff;
+  color: ${colors.brand.onStrong};
   border: none;
   border-radius: ${radius.md};
   font-size: 12px;
@@ -91,7 +91,7 @@ const DayCell = styled.div<{ $isSelected: boolean; $isToday: boolean }>`
 
 const DayLabel = styled.span<{ $isSelected: boolean }>`
   font-size: 11px;
-  color: ${({ $isSelected }) => ($isSelected ? "#FFFFFF" : colors.text.tertiary)};
+  color: ${({ $isSelected }) => ($isSelected ? colors.brand.onStrong : colors.text.tertiary)};
 `;
 
 const DateLabel = styled.span<{ $isSelected: boolean; $isToday: boolean }>`
@@ -99,7 +99,7 @@ const DateLabel = styled.span<{ $isSelected: boolean; $isToday: boolean }>`
   font-weight: 500;
   color: ${({ $isSelected, $isToday }) =>
     $isSelected
-      ? "#FFFFFF"
+      ? colors.brand.onStrong
       : $isToday
         ? colors.brand.strong
         : colors.text.primary};
@@ -114,7 +114,7 @@ const Dot = styled.span<{
   border-radius: ${radius.full};
   background-color: ${({ $marker, $onColoredBackground }) => {
     if ($marker === "none") return "transparent";
-    if ($onColoredBackground) return "#FFFFFF";
+    if ($onColoredBackground) return colors.brand.onStrong;
     return $marker === "danger" ? colors.danger.main : colors.brand.strong;
   }};
 `;

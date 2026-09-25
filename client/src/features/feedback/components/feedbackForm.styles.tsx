@@ -11,7 +11,7 @@ const scaleIn = keyframes`
 export const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   display: flex;
   justify-content: center;
   align-items: center;
@@ -101,7 +101,7 @@ export const Button = styled.button<{ $variant?: "primary" }>`
     $variant === "primary"
       ? `
     background-color: ${colors.brand.strong};
-    color: white;
+    color: ${colors.brand.onStrong};
     border: none;
 
     &:hover {
@@ -109,7 +109,7 @@ export const Button = styled.button<{ $variant?: "primary" }>`
     }
   `
       : `
-    background-color: white;
+    background-color: ${colors.surface.overlay};
     color: ${colors.text.secondary};
     border: 1px solid ${colors.border.secondary};
 

@@ -14,6 +14,11 @@ const Container = styled.div`
  * 링크 액션 트리거. 44px 터치 타겟을 확보하되 라벨 행 높이를 밀어 올리지 않도록
  * 음수 마진으로 흡수한다(todayTodoItem의 Checkbox/DeleteButton과 같은 기법).
  */
+/**
+ * 13px는 WCAG large text(18.66px bold / 24px)가 아니므로 대비 4.5:1이 적용된다.
+ * brand.fill은 흰 배경에서 미달이라 쓸 수 없다. brand.strong은 흰 배경, tint
+ * 배경 위 모두에서 통과한다.
+ */
 const trigger = `
   display: inline-flex;
   align-items: center;
@@ -28,15 +33,12 @@ const trigger = `
   font-size: 13px;
   font-family: inherit;
   text-decoration: none;
-  /* 13px는 WCAG large text(18.66px bold / 24px)가 아니므로 대비 4.5:1이 적용된다.
-     brand.fill(#1D9E75)는 흰 배경에서 3.39:1로 미달이라 쓸 수 없다.
-     brand.strong(#0F6E56)는 흰 배경 6.20:1, tint 배경(#E8F5EF) 위에서도 5.54:1로 통과. */
   color: ${colors.brand.strong};
   background-color: ${colors.brand.tint};
   transition: background-color 0.15s ease;
 
   &:hover {
-    background-color: #d9ece4;
+    background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
     text-decoration: underline;
   }
 

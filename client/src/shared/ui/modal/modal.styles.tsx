@@ -8,7 +8,7 @@ const ModalBackground = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   display: flex;
   justify-content: center;
   align-items: center;
@@ -25,7 +25,7 @@ const ModalContainer = styled.div`
   height: auto;
   max-height: 80vh;
   padding: 16px;
-  background-color: white;
+  background-color: ${colors.surface.overlay};
   z-index: 1000;
   border-radius: 12px;
   display: flex;
@@ -42,7 +42,7 @@ const ModalContainer = styled.div`
 
 const ModalHeader = styled.div`
   flex: 0 0 50px;
-  background-color: white;
+  background-color: ${colors.surface.overlay};
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -52,7 +52,7 @@ const ModalHeader = styled.div`
 const ModalBody = styled.div`
   width: 100%;
   flex: 1 1 auto;
-  background-color: white;
+  background-color: ${colors.surface.overlay};
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -63,12 +63,12 @@ const ModalBody = styled.div`
 const ModalFooter = styled.div`
   width: 100%;
   flex: 0 0 50px;
-  background-color: #f0f0f0;
+  background-color: ${colors.background.secondary};
 `;
 const ModalCloseButton = styled.button`
   width: 20px;
   height: 20px;
-  background-color: #f0f0f0;
+  background-color: ${colors.background.secondary};
   border: none;
   cursor: pointer;
 `;
@@ -76,7 +76,7 @@ const ModalSubmitButton = styled.button`
   width: 100%;
   height: 100%;
   background-color: ${colors.brand.strong};
-  color: white;
+  color: ${colors.brand.onStrong};
   font-size: 16px;
   font-weight: bold;
   border: none;

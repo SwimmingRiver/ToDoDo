@@ -30,7 +30,7 @@ const StackedBar = ({ segments, colorOf, width, ariaLabel }: StackedBarProps) =>
       </defs>
       <g clipPath={`url(#${clipId})`}>
         {layout.segments.map((segment) => (
-          <rect key={segment.key} x={segment.x} y={0} width={segment.w} height={HEIGHT} fill={colorOf(segment.key)}>
+          <rect key={segment.key} x={segment.x} y={0} width={segment.w} height={HEIGHT} style={{ fill: colorOf(segment.key) }}>
             <title>{`${segment.label} ${segment.value}건 (${Math.round(segment.ratio * 100)}%)`}</title>
           </rect>
         ))}

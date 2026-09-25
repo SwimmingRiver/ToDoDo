@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { Clock } from "lucide-react";
 import { DueBadge } from "./todoListItem/todoListItem.styles";
 import { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel } from "@/shared/utils";
+import { colors } from "@/styles/colors";
+import { urgencyColors } from "@/styles/urgencyColors";
 
 export default function DueTodo({ todos }: { todos: Todo[] }) {
   const navigate = useNavigate();
@@ -63,7 +65,7 @@ const Header = styled.h3`
   margin: 0 0 4px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: ${colors.text.primary};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -79,10 +81,14 @@ const List = styled.ul`
 `;
 
 const Item = styled.li<{ $daysLeft: number }>`
-  border: 1px solid #e0e0e0;
+  border: 1px solid ${colors.border.tertiary};
   border-left: 4px solid
     ${({ $daysLeft }) =>
-      $daysLeft < 0 ? "#ef4444" : $daysLeft === 0 ? "#f97316" : "#f59e0b"};
+      $daysLeft < 0
+        ? colors.danger.main
+        : $daysLeft === 0
+          ? urgencyColors.soon.main
+          : urgencyColors.soon.text};
   padding: 10px;
   border-radius: 12px;
   cursor: pointer;
@@ -91,14 +97,14 @@ const Item = styled.li<{ $daysLeft: number }>`
   align-items: center;
   gap: 8px;
   &:hover {
-    background-color: #f0f0f0;
+    background-color: ${colors.background.secondary};
   }
 `;
 
 const Title = styled.span`
   flex: 1;
   font-size: 13px;
-  color: #111827;
+  color: ${colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -106,7 +112,7 @@ const Title = styled.span`
 
 const Empty = styled.p`
   font-size: 13px;
-  color: #9ca3af;
+  color: ${colors.text.tertiary};
   margin: 0;
   text-align: center;
   padding-top: 12px;

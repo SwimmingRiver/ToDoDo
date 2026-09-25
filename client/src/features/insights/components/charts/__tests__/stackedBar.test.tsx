@@ -7,7 +7,7 @@ const segments = [
   { key: "doing", label: "진행 중", value: 0 },
   { key: "done", label: "완료", value: 3 },
 ];
-const colorOf = (key: string) => (key === "done" ? "#6d28d9" : "#4b5563");
+const colorOf = (key: string) => (key === "done" ? "var(--status-done-main)" : "var(--status-todo-main)");
 
 describe("StackedBar", () => {
   it("0이 아닌 세그먼트만 title을 가진 rect로 그리고 건수·비율을 넣는다", () => {

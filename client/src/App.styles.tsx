@@ -1,5 +1,6 @@
 import { styled } from "styled-components";
 import { media } from "./styles/breakpoints";
+import { colors } from "./styles/colors";
 
 const Container = styled.div`
   height: 100vh;
@@ -11,7 +12,7 @@ const ModeTapContainer = styled.div`
   display: flex;
   gap: 4px;
   padding: 4px;
-  background-color: #f1f3f4;
+  background-color: ${colors.background.secondary};
   border-radius: 8px;
   margin: 8px 16px;
   position: relative;
@@ -30,8 +31,8 @@ const TabButton = styled.button<{ $active: boolean }>`
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  background-color: ${({ $active }) => ($active ? "#fff" : "transparent")};
-  color: ${({ $active }) => ($active ? "#1a1a1a" : "#5f6368")};
+  background-color: ${({ $active }) => ($active ? colors.surface.raised : "transparent")};
+  color: ${({ $active }) => ($active ? colors.text.primary : colors.text.secondary)};
   box-shadow: ${({ $active }) =>
     $active ? "0 1px 3px rgba(0, 0, 0, 0.1)" : "none"};
   display: flex;
@@ -39,7 +40,7 @@ const TabButton = styled.button<{ $active: boolean }>`
   gap: 6px;
 
   &:hover {
-    background-color: ${({ $active }) => ($active ? "#fff" : "#e8eaed")};
+    background-color: ${({ $active }) => ($active ? colors.surface.raised : colors.background.secondary)};
   }
 
   ${media.mobile} {

@@ -177,10 +177,10 @@ const Calendar = () => {
   const renderEventContent = useCallback((arg: EventContentArg) => (
     <EventContentWrapper>
       {arg.event.extendedProps.source === "google" ? (
-        <CalendarDays size={10} color="#ffffff" aria-hidden="true" />
+        <CalendarDays size={10} color={colors.brand.onStrong} aria-hidden="true" />
       ) : (
         arg.event.extendedProps.isRecurring && (
-          <Repeat size={10} color="#ffffff" aria-hidden="true" />
+          <Repeat size={10} color={colors.brand.onStrong} aria-hidden="true" />
         )
       )}
       <span>{arg.event.title}</span>
@@ -433,7 +433,7 @@ const LoadingWrapper = styled.div`
 const Spinner = styled.div`
   width: 36px;
   height: 36px;
-  border: 3px solid #e0e0e0;
+  border: 3px solid ${colors.border.tertiary};
   border-top-color: ${colors.brand.fill};
   border-radius: 50%;
   animation: ${spin} 0.8s linear infinite;

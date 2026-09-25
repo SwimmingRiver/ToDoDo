@@ -9,8 +9,7 @@ export const CardContainer = styled.div<{ $isOverdue?: boolean }>`
   overflow: hidden;
   flex-shrink: 0;
   border: 0.5px solid
-    ${({ $isOverdue }) =>
-      $isOverdue ? colors.danger.subtle : "var(--color-border-tertiary, #E5E7EB)"};
+    ${({ $isOverdue }) => ($isOverdue ? colors.danger.subtle : colors.border.tertiary)};
 `;
 
 export const CardHeader = styled.div`
@@ -135,7 +134,7 @@ export const ExpandedArea = styled.div`
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  border-top: 0.5px solid var(--color-border-tertiary, #e5e7eb);
+  border-top: 0.5px solid ${colors.border.tertiary};
   background: ${colors.background.secondary};
   max-height: 260px;
   overflow-y: auto;

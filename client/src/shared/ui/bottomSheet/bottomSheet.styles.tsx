@@ -27,7 +27,7 @@ const Overlay = styled.div<{ $isClosing: boolean }>`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: ${colors.scrim};
   /*
    * 모바일 드로어(mobileDrawer.styles.tsx)의 DrawerContainer가 9999를 쓴다.
    * BottomSheet는 document.body에 portal되는 "최상위" 오버레이라, 드로어가 열린
@@ -48,7 +48,7 @@ const Overlay = styled.div<{ $isClosing: boolean }>`
 
 const Container = styled.div<{ $isClosing: boolean }>`
   width: 100%;
-  background-color: #fff;
+  background-color: ${colors.surface.overlay};
   border-radius: 16px 16px 0 0;
   max-height: 80vh;
   overflow: hidden;
@@ -68,7 +68,7 @@ const Container = styled.div<{ $isClosing: boolean }>`
 const Handle = styled.div`
   width: 36px;
   height: 4px;
-  background-color: #e0e0e0;
+  background-color: ${colors.border.tertiary};
   border-radius: 2px;
   margin: 12px auto;
   flex-shrink: 0;
@@ -80,7 +80,7 @@ const Handle = styled.div`
 
 const Header = styled.div`
   padding: 0 20px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid ${colors.border.tertiary};
   flex-shrink: 0;
 
   @media (min-width: 481px) {
@@ -92,7 +92,7 @@ const Title = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: ${colors.text.primary};
   text-align: center;
 `;
 
@@ -111,7 +111,7 @@ const OptionList = styled.ul`
 const OptionItem = styled.li<{ $selected?: boolean }>`
   padding: 16px 20px;
   font-size: 16px;
-  color: ${({ $selected }) => ($selected ? colors.brand.strong : "#1a1a1a")};
+  color: ${({ $selected }) => ($selected ? colors.brand.strong : colors.text.primary)};
   background-color: ${({ $selected }) =>
     $selected ? colors.brand.tint : "transparent"};
   cursor: pointer;
@@ -121,7 +121,7 @@ const OptionItem = styled.li<{ $selected?: boolean }>`
   transition: background-color 0.15s ease;
 
   &:active {
-    background-color: #f5f5f5;
+    background-color: ${colors.background.secondary};
   }
 `;
 
@@ -136,16 +136,16 @@ const CancelButton = styled.button`
   padding: 16px;
   margin-top: 8px;
   border: none;
-  border-top: 1px solid #f0f0f0;
-  background-color: #fff;
+  border-top: 1px solid ${colors.border.tertiary};
+  background-color: ${colors.surface.overlay};
   font-size: 16px;
   font-weight: 500;
-  color: #666;
+  color: ${colors.text.secondary};
   cursor: pointer;
   flex-shrink: 0;
 
   &:active {
-    background-color: #f5f5f5;
+    background-color: ${colors.background.secondary};
   }
 `;
 

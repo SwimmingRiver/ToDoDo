@@ -26,21 +26,21 @@ const BarChart = ({ points, width, height = DEFAULT_HEIGHT, ariaLabel, formatTit
     <svg width={width} height={height} role="img" aria-label={ariaLabel}>
       {layout.yTicks.map((tick) => (
         <g key={tick.value}>
-          <line x1={layout.plotLeft} x2={layout.plotRight} y1={tick.y} y2={tick.y} stroke={colors.border.tertiary} strokeWidth={1} />
-          <text x={layout.plotLeft - 6} y={tick.y} textAnchor="end" dominantBaseline="middle" fontSize={10} fill={colors.text.tertiary}>
+          <line x1={layout.plotLeft} x2={layout.plotRight} y1={tick.y} y2={tick.y} style={{ stroke: colors.border.tertiary }} strokeWidth={1} />
+          <text x={layout.plotLeft - 6} y={tick.y} textAnchor="end" dominantBaseline="middle" fontSize={10} style={{ fill: colors.text.tertiary }}>
             {tick.value}
           </text>
         </g>
       ))}
       {layout.bars.map((bar, index) => (
-        <rect key={index} x={bar.x} y={bar.y} width={bar.w} height={bar.h} rx={3} fill={colors.brand.strong}>
+        <rect key={index} x={bar.x} y={bar.y} width={bar.w} height={bar.h} rx={3} style={{ fill: colors.brand.strong }}>
           <title>{formatTitle(bar.label, bar.value)}</title>
         </rect>
       ))}
       {layout.xLabels
         .filter((label) => label.visible)
         .map((label, index) => (
-          <text key={index} x={label.x} y={layout.baselineY + 14} textAnchor="middle" fontSize={10} fill={colors.text.tertiary}>
+          <text key={index} x={label.x} y={layout.baselineY + 14} textAnchor="middle" fontSize={10} style={{ fill: colors.text.tertiary }}>
             {label.text}
           </text>
         ))}

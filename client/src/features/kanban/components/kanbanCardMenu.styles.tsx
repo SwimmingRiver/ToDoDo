@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { colors } from "@/styles/colors";
 
 // 카드 우측 상단 "..." 액션시트 트리거. 인터랙티브 요소 터치 타겟 최소 44px 확보를
 // 위해 버튼 자체 크기를 44x44로 잡되, 아이콘은 시각적으로 작게 유지한다.
@@ -15,17 +16,17 @@ const MenuButton = styled.button`
   border: none;
   background: transparent;
   border-radius: 8px;
-  color: #5e6c84;
+  color: ${colors.text.secondary};
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: #eceff3;
-    color: #172b4d;
+    background-color: ${colors.border.tertiary};
+    color: ${colors.text.primary};
   }
 
   &:active {
-    background-color: #e3e6ea;
+    background-color: color-mix(in srgb, ${colors.text.primary} 6%, ${colors.border.tertiary});
   }
 `;
 
