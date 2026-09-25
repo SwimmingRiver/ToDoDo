@@ -51,6 +51,8 @@ export default defineConfig({
         VITE_FIREBASE_MESSAGING_SENDER_ID: '0',
         VITE_FIREBASE_APP_ID: 'demo-app-id',
         VITE_FIREBASE_MEASUREMENT_ID: '',
+        // AI 플랜 E2E는 page.route로 이 주소를 가로챈다. 실제 Worker를 부르지 않는다.
+        VITE_AI_PROXY_URL: 'http://ai-proxy.e2e.test',
       },
     },
   ],

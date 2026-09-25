@@ -9,7 +9,7 @@ import {
   getRecurringMissedCount,
   collapseRecurringInstances,
 } from "../utils/projectUtils";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import useModal from "@/shared/hooks/useModal";
@@ -19,22 +19,28 @@ import { useDeleteTodo, useDeleteRecurringSeries } from "../hooks";
 import {
   TodoListContainer,
   AddButton,
+  AddButtonRow,
+  AiPlanButton,
   ListWrapper,
   ProjectListToolbar,
   ProjectCountText,
   NewProjectLink,
 } from "./todoList.styles";
-import { Plus, ClipboardList, SearchX } from "lucide-react";
+import { Plus, ClipboardList, SearchX, Sparkles } from "lucide-react";
 import { EmptyState } from "@/shared";
 import { TodoSearch } from "./todoSearch";
 import { useSearchTodo } from "../hooks";
 import { ConfirmModal, useToast } from "@/shared";
+
+// 모달은 버튼을 눌러야 필요하므로 초기 번들에 넣지 않는다.
+const AiPlanModal = lazy(() => import("@/features/aiPlan/components/aiPlanModal"));
 
 const TodoList = ({ todos }: { todos: Todo[] }) => {
   const navigate = useNavigate();
   const { isOpen, setIsOpen } = useModal();
   const { isOpen: isEditOpen, setIsOpen: setIsEditOpen } = useModal();
   const { isOpen: isAddChildOpen, setIsOpen: setIsAddChildOpen } = useModal();
+  const [isAiPlanOpen, setIsAiPlanOpen] = useState(false);
   const [isAddSubmitting, setIsAddSubmitting] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [isAddChildSubmitting, setIsAddChildSubmitting] = useState(false);
@@ -311,10 +317,21 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         )}
       </ListWrapper>
 
-      <AddButton onClick={() => setIsOpen(true)}>
-        <Plus size={16} />
-        새 할일
-      </AddButton>
+      <AddButtonRow>
+        <AddButton onClick={() => setIsOpen(true)}>
+          <Plus size={16} />
+          새 할일
+        </AddButton>
+        <AiPlanButton onClick={() => setIsAiPlanOpen(true)}>
+          <Sparkles size={16} aria-hidden="true" />
+          AI로 계획
+        </AiPlanButton>
+      </AddButtonRow>
+      {isAiPlanOpen && (
+        <Suspense fallback={null}>
+          <AiPlanModal onClose={() => setIsAiPlanOpen(false)} />
+        </Suspense>
+      )}
     </TodoListContainer>
   );
 };
