@@ -1,10 +1,18 @@
 import { describe, it, expect, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '@/shared/ui/toast/toastContext'
 import { setupUser } from '@/test/setupUser'
 import TodoList from '../todoList'
 import type { Todo } from '../../types/todo.type'
+
+vi.mock('@/features/aiPlan/components/aiPlanModal', () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div role="dialog" aria-label="AI로 계획">
+      <button onClick={onClose}>stub 닫기</button>
+    </div>
+  ),
+}))
 
 vi.mock('@/shared/lib/firebase', () => ({
   auth: { currentUser: null },
@@ -122,5 +130,14 @@ describe('TodoList', () => {
 
     expect(afterB.isExpanded).toBe(false)
     expect(afterB.data).toBe(beforeB.data)
+  })
+
+  it('AI로 계획 버튼을 누르면 AI 플랜 모달이 열리고 닫힌다', async () => {
+    renderTodoList([makeTodo()])
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI로 계획' }))
+    expect(await screen.findByRole('dialog', { name: 'AI로 계획' })).toBeInTheDocument()
+    fireEvent.click(screen.getByText('stub 닫기'))
+    expect(screen.queryByRole('dialog', { name: 'AI로 계획' })).not.toBeInTheDocument()
   })
 })

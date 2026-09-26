@@ -1,19 +1,9 @@
-import { auth } from "@/shared/lib/firebase";
+import { authorizedFetch as authorizedFetchTo } from "@/shared/lib/authorizedFetch";
 
 const CALENDAR_PROXY_URL = import.meta.env.VITE_CALENDAR_PROXY_URL as string;
 
-const authorizedFetch = async (path: string, init: RequestInit = {}): Promise<Response> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Not authenticated");
-  const idToken = await user.getIdToken();
-  return fetch(`${CALENDAR_PROXY_URL}${path}`, {
-    ...init,
-    headers: {
-      ...init.headers,
-      Authorization: `Bearer ${idToken}`,
-    },
-  });
-};
+const authorizedFetch = (path: string, init: RequestInit = {}): Promise<Response> =>
+  authorizedFetchTo(CALENDAR_PROXY_URL, path, init);
 
 export const getOAuthStartUrl = async (): Promise<string> => {
   const res = await authorizedFetch("/oauth/start");
