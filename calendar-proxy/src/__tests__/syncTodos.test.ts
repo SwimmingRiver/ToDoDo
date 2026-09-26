@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleSyncTodos } from "../handlers/syncTodos";
 import type { Env } from "../env";
 
-vi.mock("../auth", () => ({
+vi.mock("@tododo/worker-auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tododo/worker-auth")>()),
   verifyFirebaseIdToken: vi.fn(),
 }));
 vi.mock("../tokenStore", () => ({
@@ -45,7 +46,7 @@ describe("handleSyncTodos", () => {
   });
 
   it("연동되지 않은 사용자면 409를 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord } = await import("../tokenStore");
     vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
     vi.mocked(getTokenRecord).mockResolvedValue(null);
@@ -55,7 +56,7 @@ describe("handleSyncTodos", () => {
   });
 
   it("정상 흐름이면 결과 배열을 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
     const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
@@ -78,7 +79,7 @@ describe("handleSyncTodos", () => {
   });
 
   it("리프레시 토큰이 철회됐으면(invalid_grant) 토큰을 지우고 401을 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
 
@@ -95,7 +96,7 @@ describe("handleSyncTodos", () => {
   });
 
   it("premium이 아니면 403 PREMIUM_REQUIRED를 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
 
     const response = await handleSyncTodos(makeRequest({ todos: [] }), makeEnv());

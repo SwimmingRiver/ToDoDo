@@ -4,7 +4,7 @@ import { handleOAuthCallback } from "./handlers/oauthCallback";
 import { handleSyncTodos } from "./handlers/syncTodos";
 import { handleGetEvents } from "./handlers/events";
 import { handleDisconnect } from "./handlers/disconnect";
-import { isAllowedOrigin } from "./corsOrigin";
+import { isAllowedOrigin } from "@tododo/worker-auth";
 
 const withCors = (response: Response, requestOrigin: string | null, env: Env): Response => {
   const headers = new Headers(response.headers);

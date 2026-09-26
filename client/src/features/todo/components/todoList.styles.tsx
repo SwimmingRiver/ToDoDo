@@ -42,6 +42,36 @@ const AddButton = styled.button`
   }
 `;
 
+const AddButtonRow = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+
+  & > ${AddButton} {
+    flex: 1;
+  }
+`;
+
+const AiPlanButton = styled.button`
+  height: 48px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: ${colors.brand.tint};
+  color: ${colors.brand.strong};
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--border-radius-lg, 10px);
+  cursor: pointer;
+
+  &:hover {
+    background-color: color-mix(in srgb, ${colors.brand.strong} 12%, ${colors.brand.tint});
+  }
+`;
+
 const ProjectListToolbar = styled.div`
   padding: 0 0 10px;
   display: flex;
@@ -86,6 +116,8 @@ const ListWrapper = styled.div`
 export {
   TodoListContainer,
   AddButton,
+  AddButtonRow,
+  AiPlanButton,
   ListWrapper,
   ProjectListToolbar,
   ProjectCountText,

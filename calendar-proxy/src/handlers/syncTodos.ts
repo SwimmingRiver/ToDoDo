@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { verifyFirebaseIdToken } from "../auth";
+import { verifyFirebaseIdToken } from "@tododo/worker-auth";
 import { getTokenRecord, deleteTokenRecord } from "../tokenStore";
 import { refreshAccessToken } from "../googleOAuth";
 import { syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";

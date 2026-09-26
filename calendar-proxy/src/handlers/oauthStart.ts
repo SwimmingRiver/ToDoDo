@@ -1,7 +1,6 @@
 import type { Env } from "../env";
-import { verifyFirebaseIdToken } from "../auth";
+import { verifyFirebaseIdToken, isAllowedOrigin } from "@tododo/worker-auth";
 import { createOAuthState } from "../tokenStore";
-import { isAllowedOrigin } from "../corsOrigin";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 

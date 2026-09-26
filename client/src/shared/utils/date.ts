@@ -40,6 +40,14 @@ export const toDatetimeLocalValue = (iso: string): string => {
   return `${toDateKey(d)}T${hours}:${minutes}`;
 };
 
+/**
+ * "yyyy-MM-dd" 날짜 키를 dueAt 저장용 UTC ISO로 바꾼다. 로컬 자정을 기준으로 해서
+ * todayPage·calendar가 TodoForm에 넘기는 `${date}T00:00` 관례와 같은 값이 된다.
+ * `new Date("yyyy-MM-dd")`(UTC 자정 해석)를 쓰면 음수 오프셋에서 하루 당겨진다.
+ */
+export const localDateKeyToISO = (dateKey: string | null): string | null =>
+  dateKey ? parseLocalDateOnly(dateKey).toISOString() : null;
+
 export const isSameLocalDay = (a: Date, b: Date): boolean =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&

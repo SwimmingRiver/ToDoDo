@@ -3,7 +3,7 @@ const JWKS_URL =
 
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1시간
 
-interface VerifiedToken {
+export interface VerifiedToken {
   uid: string;
   premium: boolean;
 }

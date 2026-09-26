@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleGetEvents } from "../handlers/events";
 import type { Env } from "../env";
 
-vi.mock("../auth", () => ({
+vi.mock("@tododo/worker-auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tododo/worker-auth")>()),
   verifyFirebaseIdToken: vi.fn(),
 }));
 vi.mock("../tokenStore", () => ({
@@ -36,7 +37,7 @@ describe("handleGetEvents", () => {
   });
 
   it("연동되지 않은 사용자면 빈 이벤트 배열을 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord } = await import("../tokenStore");
     vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
     vi.mocked(getTokenRecord).mockResolvedValue(null);
@@ -47,7 +48,7 @@ describe("handleGetEvents", () => {
   });
 
   it("구글 이벤트를 title/start/end 형태로 매핑해 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
 
@@ -79,7 +80,7 @@ describe("handleGetEvents", () => {
   });
 
   it("premium이 아니면 403 PREMIUM_REQUIRED를 반환한다", async () => {
-    const { verifyFirebaseIdToken } = await import("../auth");
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
 
     const response = await handleGetEvents(makeRequest(), makeEnv());

@@ -20,6 +20,8 @@ jobs:
       server: ${{ steps.filter.outputs.server }}
       core: ${{ steps.filter.outputs.core }}
       calendarProxy: ${{ steps.filter.outputs.calendarProxy }}
+      workerAuth: ${{ steps.filter.outputs.workerAuth }}
+      aiProxy: ${{ steps.filter.outputs.aiProxy }}
 
     steps:
       - name: Checkout
@@ -41,6 +43,12 @@ jobs:
               - 'packages/core/**'
             calendarProxy:
               - 'calendar-proxy/**'
+              - 'packages/worker-auth/**'
+            workerAuth:
+              - 'packages/worker-auth/**'
+            aiProxy:
+              - 'ai-proxy/**'
+              - 'packages/worker-auth/**'
 
   client:
     name: Client
@@ -235,6 +243,33 @@ jobs:
       - name: Check dist is up to date
         run: git diff --exit-code -- dist
 
+  worker-auth:
+    name: Worker Auth
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.workerAuth == 'true'
+    defaults:
+      run:
+        working-directory: packages/worker-auth
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Unit Test
+        run: npm run test
+
   calendar-proxy:
     name: Calendar Proxy
     runs-on: ubuntu-latest
@@ -283,6 +318,55 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npm run deploy
+
+  ai-proxy:
+    name: AI Proxy
+    runs-on: ubuntu-latest
+    needs: changes
+    # calendar-proxy와 같은 이유로 main push에는 항상 실행한다(배포는 멱등).
+    if: >-
+      needs.changes.outputs.aiProxy == 'true' ||
+      (github.ref == 'refs/heads/main' && github.event_name == 'push')
+    defaults:
+      run:
+        working-directory: ai-proxy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-ai-proxy-npm
+        with:
+          path: ai-proxy/node_modules
+          key: ${{ runner.os }}-ai-proxy-node-modules-${{ hashFiles('ai-proxy/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ai-proxy-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-ai-proxy-npm.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Unit Test
+        run: npm run test
+
+      - name: Deploy to Cloudflare Workers
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if grep -q REPLACE_WITH_AI_USAGE_KV_ID wrangler.toml; then echo "::error::ai-proxy/wrangler.toml의 AI_USAGE KV id가 아직 placeholder입니다 (README 배포 준비 1단계)"; exit 1; fi
+          npm run deploy
 
   server:
     name: Server
@@ -364,6 +448,7 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
           VITE_CALENDAR_PROXY_URL: ${{ secrets.VITE_CALENDAR_PROXY_URL }}
+          VITE_AI_PROXY_URL: ${{ secrets.VITE_AI_PROXY_URL }}
           # VITE_ 접두사가 붙어 클라이언트 번들(import.meta.env)에 포함된다. Vite는
           # VITE_* 변수를 빌드 타임에 정적으로 인라인하므로, 이 스텝에서 주입되지
           # 않으면 배포된 번들에는 dsn이 빈 값으로 굳어져 Sentry가 초기화되지 않는다.
