@@ -1,4 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// ../../api가 authorizedFetch → @/shared/lib/firebase의 getAuth()까지 불러온다.
+// CI에는 .env가 없어 auth/invalid-api-key로 던지므로 목으로 대체한다.
+vi.mock("@/shared/lib/firebase", () => ({ auth: { currentUser: null }, googleProvider: {} }));
+
 import { aiPlanErrorMessage } from "../aiPlanErrorMessage";
 import { AiPlanError } from "../../api";
 

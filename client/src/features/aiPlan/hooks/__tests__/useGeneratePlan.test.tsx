@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 
 const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
 vi.mock("@sentry/react", () => ({ captureException }));
+// importOriginal로 실제 api 모듈을 불러오면 authorizedFetch → @/shared/lib/firebase의
+// getAuth()까지 실행된다. CI에는 .env가 없어 auth/invalid-api-key로 던지므로 목으로 대체한다.
+vi.mock("@/shared/lib/firebase", () => ({ auth: { currentUser: null }, googleProvider: {} }));
 vi.mock("../../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../api")>()),
   requestPlan: vi.fn(),
