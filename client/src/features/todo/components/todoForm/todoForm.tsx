@@ -1,6 +1,16 @@
 import { useForm } from "react-hook-form";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { colors } from "@/styles/colors";
+import {
+  REMINDER_SETTING_OPTIONS,
+  parseReminderSetting,
+  toReminderChoice,
+  useReminderDefault,
+} from "@/features/reminders";
+import {
+  DEFAULT_REMINDER_SETTING,
+  reminderSettingLabel,
+} from "@tododo/core/dist/reminders/index.js";
 
 import {
   useCreateTodo,
@@ -42,6 +52,8 @@ interface TodoFormData {
   priority?: "low" | "medium" | "high";
   startAt?: string;
   dueAt?: string;
+  /** select 값: "default" | "off" | "0" | "10" | ... — 저장 전 parseReminderSetting으로 바꾼다. */
+  reminder?: string;
 }
 
 interface TodoFormProps {
@@ -68,10 +80,11 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
           priority: todo.priority,
           startAt: todo.startAt ? toDatetimeLocalValue(todo.startAt) : undefined,
           dueAt: todo.dueAt ? toDatetimeLocalValue(todo.dueAt) : undefined,
+          reminder: toReminderChoice(todo.reminderOffsetMinutes),
         }
       : initialDueAt
-        ? { dueAt: initialDueAt }
-        : undefined,
+        ? { dueAt: initialDueAt, reminder: "default" }
+        : { reminder: "default" },
   });
   const createTodo = useCreateTodo();
   const updateTodo = useUpdateTodo();
@@ -96,6 +109,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
   const startAtWatch = watch("startAt");
   const dueAtWatch = watch("dueAt");
   const descriptionWatch = watch("description");
+  const { data: reminderDefault = DEFAULT_REMINDER_SETTING } = useReminderDefault();
 
   const { setRef: setDescriptionRef, resize: resizeDescription } =
     useAutoGrowTextArea(descriptionWatch);
@@ -169,6 +183,11 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
   const onSubmit = (data: TodoFormData) => {
     if (isSubmitting) return;
 
+    // reminder는 select용 문자열이라 문서에 그대로 저장하면 안 된다. 아래 경로들은
+    // data 대신 fields를 전개하고 reminderOffsetMinutes를 따로 넣는다.
+    const { reminder, ...fields } = data;
+    const reminderOffsetMinutes = parseReminderSetting(reminder);
+
     const dateValidationError = getTodoDateValidationError(
       data.startAt ?? null,
       data.dueAt ?? null,
@@ -199,10 +218,11 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
         : null;
       const updatedFields = {
         ...todo,
-        ...data,
+        ...fields,
         startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
         dueAt: dueAtIso,
         recurrence: newRecurrence,
+        reminderOffsetMinutes,
       } as Todo;
 
       const wasRecurring = todo.recurrence != null;
@@ -268,9 +288,10 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
         {
           parentId,
           todo: {
-            ...data,
+            ...fields,
             startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
             dueAt: dueAtIso,
+            reminderOffsetMinutes,
           },
         },
         {
@@ -288,10 +309,11 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       const newRecurrence = toRecurrenceRule(recurrenceValue, dueAtIso) as RecurrenceRule;
       createRecurringTodo.mutate(
         {
-          ...data,
+          ...fields,
           startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
           dueAt: dueAtIso,
           recurrence: newRecurrence,
+          reminderOffsetMinutes,
         } as Todo,
         {
           onSuccess: () => {
@@ -307,9 +329,10 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       // 일반 todo 생성 — 빈 datetime-local 값("")을 null로, 값은 ISO로 정규화
       createTodo.mutate(
         {
-          ...data,
+          ...fields,
           startAt: data.startAt ? new Date(data.startAt).toISOString() : null,
           dueAt: dueAtIso,
+          reminderOffsetMinutes,
         } as Todo, {
         onSuccess: () => {
           toast.success("추가 완료", `"${data.title}" 할 일이 추가되었습니다`);
@@ -386,6 +409,21 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
 
             <InputLabel>만료일시</InputLabel>
             <Input type="datetime-local" {...register("dueAt")} />
+
+            <InputLabel htmlFor="todo-reminder">마감 알림</InputLabel>
+            <Select
+              id="todo-reminder"
+              aria-label="마감 알림"
+              {...register("reminder")}
+              disabled={!dueAtWatch}
+            >
+              <option value="default">기본값 ({reminderSettingLabel(reminderDefault)})</option>
+              {REMINDER_SETTING_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
 
             {showRecurrenceSection && (
               <RecurrenceFields

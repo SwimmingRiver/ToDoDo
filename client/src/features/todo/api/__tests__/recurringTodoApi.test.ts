@@ -283,6 +283,26 @@ describe("createRecurringTodo", () => {
 
     expect(created.length).toBeGreaterThan(0);
   });
+
+  it("reminderOffsetMinutes를 모든 인스턴스에 승계한다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../todoApi");
+    await createRecurringTodo(
+      makeTodo({ recurrence: dailyRule, startAt: "2026-07-10T09:00:00", reminderOffsetMinutes: 60 }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledTimes(4);
+    for (const [, data] of batch.set.mock.calls) {
+      expect(data).toMatchObject({ reminderOffsetMinutes: 60 });
+    }
+  });
 });
 
 describe("editRecurringSeries", () => {
