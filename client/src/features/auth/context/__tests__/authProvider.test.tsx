@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import type { User } from 'firebase/auth'
+import { signOut } from 'firebase/auth'
 import * as Sentry from '@sentry/react'
 import { AuthProvider } from '../authProvider'
 import { useAuth } from '../useAuth'
 
 let authStateCallback: ((user: User | null) => void) | null = null
+
+const { disableMock } = vi.hoisted(() => ({ disableMock: vi.fn() }))
+vi.mock('@/features/reminders/push/pushClient', () => ({ disablePushOnThisDevice: disableMock }))
 
 vi.mock('@/shared/lib/firebase', () => ({
   auth: {},
@@ -82,5 +86,41 @@ describe('AuthProvider', () => {
     })
 
     expect(Sentry.setUser).toHaveBeenCalledWith(null)
+  })
+})
+
+const logoutViaProvider = async () => {
+  let logout: () => Promise<void> = async () => {}
+  const Grab = () => {
+    logout = useAuth().logout
+    return null
+  }
+  render(
+    <AuthProvider>
+      <Grab />
+    </AuthProvider>,
+  )
+  await act(() => logout())
+}
+
+// Review Focus 5
+describe('logout', () => {
+  beforeEach(() => {
+    disableMock.mockReset()
+    vi.mocked(signOut).mockReset()
+  })
+
+  it('푸시 토큰을 먼저 해제한 뒤 로그아웃한다', async () => {
+    const order: string[] = []
+    disableMock.mockImplementation(async () => void order.push('disable'))
+    vi.mocked(signOut).mockImplementation(async () => void order.push('signOut'))
+    await logoutViaProvider()
+    expect(order).toEqual(['disable', 'signOut'])
+  })
+
+  it('해제가 실패해도 로그아웃은 진행한다', async () => {
+    disableMock.mockRejectedValue(new Error('offline'))
+    await logoutViaProvider()
+    expect(signOut).toHaveBeenCalled()
   })
 })
