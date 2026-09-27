@@ -186,7 +186,6 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
     // reminder는 select용 문자열이라 문서에 그대로 저장하면 안 된다. 아래 경로들은
     // data 대신 fields를 전개하고 reminderOffsetMinutes를 따로 넣는다.
     const { reminder, ...fields } = data;
-    const reminderOffsetMinutes = parseReminderSetting(reminder);
 
     const dateValidationError = getTodoDateValidationError(
       data.startAt ?? null,
@@ -211,6 +210,10 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
 
     // datetime-local input의 값을 ISO string으로 변환 (반복 종료일 유도에도 재사용)
     const dueAtIso = data.dueAt ? new Date(data.dueAt).toISOString() : null;
+    // disabled select는 DOM 속성일 뿐 register 밖이라 RHF가 값을 계속 제출한다.
+    // 마감일을 지운 채로 저장하면 이전에 재지정해둔 값이 그대로 남으므로,
+    // 마감이 없으면 select 값과 무관하게 항상 기본값(null)으로 되돌린다.
+    const reminderOffsetMinutes = dueAtIso ? parseReminderSetting(reminder) : null;
 
     if (todo) {
       const newRecurrence = showRecurrenceSection

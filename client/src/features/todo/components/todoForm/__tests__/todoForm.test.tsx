@@ -351,6 +351,21 @@ describe("마감 알림 선택", () => {
     expect(payload).not.toHaveProperty("reminder");
   });
 
+  it("마감일을 지우면 reminderOffsetMinutes도 기본값(null)으로 저장한다(재지정 잔존 방지)", async () => {
+    asSuccess(mockTodo.useUpdateTodo.mutate);
+    renderForm({
+      todo: makeTodo({ dueAt: "2026-10-01T09:00:00.000Z", reminderOffsetMinutes: 60 }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="dueAt"]')!, { target: { value: "" } });
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useUpdateTodo.mutate).toHaveBeenCalled());
+    const payload = mockTodo.useUpdateTodo.mutate.mock.calls[0][0];
+    expect(payload.dueAt).toBeNull();
+    expect(payload.reminderOffsetMinutes).toBeNull();
+  });
+
   it("하위 할 일·반복 생성 경로도 값을 넘긴다", async () => {
     asSuccess(mockTodo.useCreateChildTodo.mutate);
     const user = setupUser();
