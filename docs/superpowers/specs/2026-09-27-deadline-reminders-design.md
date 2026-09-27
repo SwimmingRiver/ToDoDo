@@ -233,7 +233,7 @@ DO는 알람을 하나만 걸 수 있으므로 재계산과 발송이 한 알람
 
 사용자 사전 작업:
 
-1. Google 서비스 계정 생성(역할: Cloud Datastore User, Firebase Cloud Messaging API Admin). Firebase Cloud Messaging API(v1) 활성화 확인. 결제 등록 불필요.
+1. Google 서비스 계정 생성(역할: Cloud Datastore Viewer `roles/datastore.viewer` — Worker는 Firestore 읽기 전용, Firebase Cloud Messaging API Admin). Firebase Cloud Messaging API(v1) 활성화 확인. 결제 등록 불필요.
 2. Firebase 콘솔에서 웹 푸시 VAPID 키 발급. `VITE_FIREBASE_VAPID_KEY`, `VITE_REMINDER_PROXY_URL`을 `client/.env`와 GitHub Secrets에 추가하고 **deploy job env에도** 넣는다(Sentry DSN 누락과 같은 함정).
 3. `firestore.rules`(`userSettings`)와 `firestore.indexes.json`(`userId + dueAt`) 배포.
 4. Worker 코드를 **먼저** 배포한 뒤, 사용자 터미널에서 `wrangler secret put GOOGLE_SERVICE_ACCOUNT`. 시크릿을 먼저 넣으면 코드 없는 빈 Worker가 생긴다.

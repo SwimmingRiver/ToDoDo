@@ -12,7 +12,7 @@
 
 ## 배포 준비 (최초 1회, 순서 중요)
 
-1. **서비스 계정**: Google Cloud 콘솔(프로젝트 `tododo-83576`) > IAM > 서비스 계정 만들기. 역할 `Cloud Datastore User`, `Firebase Cloud Messaging API Admin`. 키(JSON) 발급. API 및 서비스에서 `Firebase Cloud Messaging API`가 사용 설정인지 확인. 결제 등록은 필요 없다.
+1. **서비스 계정**: Google Cloud 콘솔(프로젝트 `tododo-83576`) > IAM > 서비스 계정 만들기. 역할 `Cloud Datastore Viewer`(`roles/datastore.viewer`, Worker는 Firestore를 읽기만 한다), `Firebase Cloud Messaging API Admin`. 키(JSON) 발급. API 및 서비스에서 `Firebase Cloud Messaging API`가 사용 설정인지 확인. 결제 등록은 필요 없다.
 2. **VAPID 키**: Firebase 콘솔 > 프로젝트 설정 > 클라우드 메시징 > 웹 푸시 인증서 > 키 쌍 생성. 공개키를 `VITE_FIREBASE_VAPID_KEY`로 `client/.env`와 GitHub Secrets에 넣는다.
 3. **Worker 코드 먼저 배포**: `npm run deploy`(또는 main 병합 후 CI). 출력된 URL을 `VITE_REMINDER_PROXY_URL`로 `client/.env`와 GitHub Secrets에 넣는다.
 4. **시크릿**: 사용자 터미널에서 직접 실행한다(이 저장소의 에이전트 셸은 비대화형이라 입력을 받지 못한다).
