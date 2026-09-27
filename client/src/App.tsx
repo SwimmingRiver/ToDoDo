@@ -18,6 +18,9 @@ import { useMediaQuery } from "@/shared/hooks";
 // 실제로 쓰는 훅만 직접 가져온다.
 import { useRunStartupMaintenance } from "@/features/todo/hooks";
 import { useSyncTodosToCalendar } from "@/features/calendarIntegration/hooks";
+import { useReminderRefresh } from "@/features/reminders/hooks/useReminderRefresh";
+import { usePushTokenSync } from "@/features/reminders/hooks/usePushTokenSync";
+import { useForegroundReminders } from "@/features/reminders/hooks/useForegroundReminders";
 
 const App = () => {
   const [isopen, setIsOpen] = useState(true);
@@ -26,6 +29,9 @@ const App = () => {
   const isMobile = useMediaQuery("tablet");
   const runStartupMaintenance = useRunStartupMaintenance();
   useSyncTodosToCalendar();
+  useReminderRefresh();
+  usePushTokenSync();
+  useForegroundReminders();
   const hasRunMaintenanceRef = useRef(false);
 
   // 인증된 레이아웃(App) 마운트 시 1회. 세션 중 재마운트되어도 다시 실행되지 않도록
