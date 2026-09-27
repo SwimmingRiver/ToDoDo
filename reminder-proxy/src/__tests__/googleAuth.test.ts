@@ -28,7 +28,7 @@ beforeAll(async () => {
   publicKey = pair.publicKey;
   sa = {
     client_email: "reminder@tododo-test.iam.gserviceaccount.com",
-    private_key: toPem(await crypto.subtle.exportKey("pkcs8", pair.privateKey)),
+    private_key: toPem((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer),
   };
 });
 
