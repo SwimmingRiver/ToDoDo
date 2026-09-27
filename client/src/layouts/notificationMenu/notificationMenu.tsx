@@ -108,7 +108,13 @@ const NotificationMenu = () => {
                 value={String(reminderDefault)}
                 onChange={(e) => {
                   const setting = parseReminderSetting(e.target.value);
-                  if (setting !== null) setDefault.mutate(setting);
+                  if (setting === null) return;
+                  setDefault.mutate(setting, {
+                    onError: (error) => {
+                      Sentry.captureException(error);
+                      toast.error("저장하지 못했어요", "잠시 후 다시 시도해 주세요");
+                    },
+                  });
                 }}
               >
                 {REMINDER_SETTING_OPTIONS.map(({ value, label }) => (

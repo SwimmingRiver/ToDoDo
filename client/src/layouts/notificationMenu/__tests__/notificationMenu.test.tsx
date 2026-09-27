@@ -73,7 +73,20 @@ describe("NotificationMenu", () => {
     renderMenu();
     await user.click(screen.getByRole("button", { name: "알림 설정" }));
     await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
-    expect(s.setDefault).toHaveBeenCalledWith(1440);
+    expect(s.setDefault).toHaveBeenCalledTimes(1);
+    expect(s.setDefault.mock.calls[0][0]).toBe(1440);
+  });
+
+  it("기본 알림 저장이 실패하면 에러 토스트를 보여준다", async () => {
+    s.setDefault.mockImplementation((_setting: unknown, options?: { onError?: (e: unknown) => void }) => {
+      options?.onError?.(new Error("write failed"));
+    });
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: "알림 설정" }));
+    await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
+    expect(await screen.findByText("저장하지 못했어요")).toBeInTheDocument();
+    expect(screen.getByText("잠시 후 다시 시도해 주세요")).toBeInTheDocument();
   });
 
   it("미지원이면 기본 알림 선택을 숨긴다", async () => {

@@ -29,7 +29,7 @@ cp /path/to/service-account.json .  # 커밋 금지
 printf 'GOOGLE_SERVICE_ACCOUNT=%s\n' "$(jq -c . service-account.json)" > .dev.vars
 npx wrangler dev   # http://localhost:8787
 ```
-`client/.env.local`에 `VITE_REMINDER_PROXY_URL=http://localhost:8787`. 알림 클릭 링크는 `CLIENT_APP_URL`(배포 주소)로 열린다.
+`client/.env.local`에 `VITE_REMINDER_PROXY_URL=http://localhost:8787`. 알림 클릭 링크는 `CLIENT_APP_URL`(배포 주소)을 가리키는데, Firebase SW SDK는 링크의 호스트가 서비스 워커 출처와 다르면 클릭을 무시한다. 그래서 localhost나 `firebaseapp.com`처럼 배포 주소가 아닌 곳에서 받은 백그라운드 알림은 클릭해도 아무 일도 일어나지 않는다(탭이 열려 있을 때의 포그라운드 토스트는 정상). 클릭 이동까지 확인하려면 `CLIENT_APP_URL`을 테스트하는 출처로 맞춘다.
 
 ## 알고 감수한 한계
 스펙 §9 참고(웹 외 경로의 늦은 반영, 브라우저 실행 필요, 제목이 FCM 경유, iOS 브라우저 미지원, Firestore 무료 읽기 한도, 자정 마감).

@@ -21,6 +21,7 @@ import { useSyncTodosToCalendar } from "@/features/calendarIntegration/hooks";
 import { useReminderRefresh } from "@/features/reminders/hooks/useReminderRefresh";
 import { usePushTokenSync } from "@/features/reminders/hooks/usePushTokenSync";
 import { useForegroundReminders } from "@/features/reminders/hooks/useForegroundReminders";
+import { useNotificationClickNavigation } from "@/features/reminders/hooks/useNotificationClickNavigation";
 import { ReminderPromptProvider } from "@/features/reminders/components/reminderPrompt/reminderPrompt";
 
 const App = () => {
@@ -33,6 +34,7 @@ const App = () => {
   useReminderRefresh();
   usePushTokenSync();
   useForegroundReminders();
+  useNotificationClickNavigation();
   const hasRunMaintenanceRef = useRef(false);
 
   // 인증된 레이아웃(App) 마운트 시 1회. 세션 중 재마운트되어도 다시 실행되지 않도록

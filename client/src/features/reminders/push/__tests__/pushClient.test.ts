@@ -27,6 +27,7 @@ import {
   subscribeForegroundMessages,
   syncPushToken,
 } from "../pushClient";
+import { onPushPermissionChanged } from "../pushSupport";
 
 const registration = { scope: "/firebase-cloud-messaging-push-scope" };
 const installPush = (permission: NotificationPermission, requestResult: NotificationPermission = permission) => {
@@ -86,6 +87,15 @@ describe("enablePushOnThisDevice", () => {
     expect(m.register).toHaveBeenCalledWith("fcm-token");
   });
 
+  it("권한 요청 결과가 나오면 권한 변경 신호를 보낸다", async () => {
+    installPush("default", "granted");
+    const listener = vi.fn();
+    const off = onPushPermissionChanged(listener);
+    await enablePushOnThisDevice();
+    off();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it("거절되면 토큰을 받지 않는다", async () => {
     installPush("default", "denied");
     expect(await enablePushOnThisDevice()).toBe("denied");
@@ -117,6 +127,13 @@ describe("disablePushOnThisDevice", () => {
     installPush("granted");
     await disablePushOnThisDevice();
     expect(m.unregister).toHaveBeenCalledWith("fcm-token");
+    expect(m.deleteToken).toHaveBeenCalled();
+  });
+
+  it("Worker 해제가 실패해도 FCM 토큰은 삭제하고 에러는 다시 던진다", async () => {
+    installPush("granted");
+    m.unregister.mockRejectedValueOnce(new Error("worker down"));
+    await expect(disablePushOnThisDevice()).rejects.toThrow("worker down");
     expect(m.deleteToken).toHaveBeenCalled();
   });
 

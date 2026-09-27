@@ -1,6 +1,6 @@
 import type { Messaging } from "firebase/messaging";
 import { registerPushToken, unregisterPushToken } from "../api/reminderProxyApi";
-import { getPushPermission, type PushPermission } from "./pushSupport";
+import { getPushPermission, notifyPushPermissionChanged, type PushPermission } from "./pushSupport";
 
 export { getPushPermission, isPushSupported } from "./pushSupport";
 export type { PushPermission } from "./pushSupport";
@@ -45,6 +45,7 @@ export const syncPushToken = async (): Promise<void> => {
 export const enablePushOnThisDevice = async (): Promise<PushPermission> => {
   if (getPushPermission() === "unsupported") return "unsupported";
   const permission = await Notification.requestPermission();
+  notifyPushPermissionChanged();
   if (permission === "granted") await syncPushToken();
   return permission;
 };
@@ -53,8 +54,13 @@ export const enablePushOnThisDevice = async (): Promise<PushPermission> => {
 export const disablePushOnThisDevice = async (): Promise<void> => {
   if (getPushPermission() !== "granted") return;
   const { token, messaging, sdk } = await getCurrentToken();
-  await unregisterPushToken(token);
-  await sdk.deleteToken(messaging);
+  try {
+    await unregisterPushToken(token);
+  } finally {
+    // Worker 호출이 실패해도 FCM 토큰은 무효화한다. 그러면 옛 DO가 다음 발송에서
+    // UNREGISTERED를 받아 스스로 토큰을 버린다. 원래 에러는 그대로 전파된다.
+    await sdk.deleteToken(messaging);
+  }
 };
 
 /** 탭이 포커스된 상태에서는 FCM이 알림을 자동 표시하지 않으므로 앱이 직접 보여준다. */
