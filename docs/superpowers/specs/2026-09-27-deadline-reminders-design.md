@@ -71,15 +71,15 @@ client/public/firebase-messaging-sw.js (신규)
 ### Todo 필드 추가
 
 ```ts
-/** 알림 오프셋(마감 몇 분 전). 필드가 없으면 사용자 기본값을 따른다.
+/** 알림 오프셋(마감 몇 분 전). 필드가 없거나 null이면 사용자 기본값을 따른다.
  *  "off"면 이 할 일만 알림을 끈다. */
-reminderOffsetMinutes?: number | "off";
+reminderOffsetMinutes?: number | "off" | null;
 ```
 
 - 허용 숫자: `0, 10, 30, 60, 1440`(`REMINDER_OFFSETS` 상수, `packages/core`).
 - 기존 문서, AI 플랜이 만든 할 일은 필드가 없으므로 기본값을 따른다.
-- 폼에서 "기본값"을 고르면 필드를 **삭제**한다(`deleteField()`). 수정 경로에서 `null`을 쓰지 않는다.
-- 반복 인스턴스 생성(`client/src/features/todo/utils/recurrence.ts`)은 이 필드를 복사한다. 빠뜨리면 두 번째 인스턴스부터 알림이 사라진다.
+- 폼에서 "기본값"을 고르면 `null`을 쓴다. (09-27 계획 단계 수정: 처음엔 `deleteField()`로 필드를 지우려 했으나, `editTodo`가 할 일 객체 전체를 `update`하는 구조라 `null`을 "기본값"으로 함께 인정하는 편이 단순하고 안전하다. 없음과 `null`은 같은 의미다.)
+- 반복 인스턴스는 모든 생성 경로(`createRecurringTodoImpl`, `editRecurringSeriesImpl`, 앱 진입 시 시리즈 확장 `buildExtensionCreates`)가 원본 할 일 객체를 전개(`...todoData`/`...rest`/`...template`)하므로 필드가 자동 승계된다. 이 승계를 테스트로 고정한다.
 - `firestore.rules`의 todos 규칙은 필드 화이트리스트가 없으므로 변경하지 않는다.
 
 ### userSettings 컬렉션(신규)
@@ -161,7 +161,8 @@ DO는 알람을 하나만 걸 수 있으므로 재계산과 발송이 한 알람
 
 - `public/firebase-messaging-sw.js`: 백그라운드 푸시 표시. 클릭 시 이미 열린 앱 탭이 있으면 포커스 후 이동, 없으면 새 창으로 `/todo/:id`.
 - 권한이 `granted`면 `getToken({ vapidKey, serviceWorkerRegistration })` → `POST /push-tokens`.
-- 앱 진입마다 토큰을 재확인하고, 바뀌었으면 다시 등록한다(마지막 등록 토큰은 localStorage).
+- 앱 진입마다 권한이 `granted`면 `getToken` 결과를 다시 등록한다(upsert라 멱등, DO 요청 1건). FCM이 토큰을 바꿨거나 DO가 무효 토큰을 지운 경우를 함께 복구한다.
+- 탭이 열려 있고 포커스된 상태에서는 FCM이 알림을 자동 표시하지 않는다. `onMessage`로 받아 앱 토스트(`toast.info`)로 보여준다.
 - 로그아웃 시 `DELETE /push-tokens` → `deleteToken()`. 같은 브라우저에서 다른 계정의 알림이 오지 않게 한다.
 - `firebase/messaging`은 **동적 import**만 한다. 첫 화면 번들에 넣지 않는다.
 
@@ -170,7 +171,7 @@ DO는 알람을 하나만 걸 수 있으므로 재계산과 발송이 한 알람
 - todos 캐시에서 알림 관련 값만 뽑아 지문을 만든다: `id · dueAt · status · archived · reminderOffsetMinutes`.
 - 지문이 바뀌면 2초 디바운스 후 `POST /reminders/refresh`. 제목만 바뀐 경우처럼 무관한 변경은 신호를 보내지 않는다.
 - 첫 로드에서도 1회 보낸다(오프라인 변경 맞춤). 기본값 설정이 바뀌어도 보낸다.
-- 이 기기에 알림 권한·등록 토큰이 없으면 보내지 않는다.
+- **이 기기의 알림 권한과 무관하게 보낸다.** (09-27 계획 단계 수정: 기기 A에서 알림을 켜고 기기 B에서 마감을 바꾸면, B가 신호를 안 보낼 경우 A의 알림이 어긋난다. 토큰이 없는 사용자의 신호는 DO가 Firestore 조회 없이 끝내므로 비용은 DO 요청 1건뿐이다.)
 - 실패는 조용히 넘기고 Sentry에만 기록한다. 다음 변경 때 다시 보낸다.
 - 게스트 모드에서는 동작하지 않는다.
 
@@ -259,5 +260,6 @@ CI:
 2. **데스크톱은 브라우저가 실행 중이어야 한다.** 탭은 닫혀도 되지만 브라우저가 꺼져 있으면 다음 실행 때 받거나 FCM TTL이 지나 사라진다.
 3. **할 일 제목이 FCM(Google)을 거친다.**
 4. **iOS 브라우저는 지원하지 않는다.**
-5. **`dueAt` 문자열 범위 조회는 모든 작성 경로가 `toISOString()` 형식(UTC, 밀리초, `Z`)으로 저장한다는 전제**에 기댄다. 구현 첫 단계에서 웹·모바일·AI 플랜의 작성 경로를 확인하고, 다르면 정규화한다.
+5. **`dueAt` 문자열 범위 조회는 모든 작성 경로가 `toISOString()` 형식(UTC, 밀리초, `Z`)으로 저장한다는 전제**에 기댄다. 09-27 확인: 웹 폼, AI 플랜(`localDateKeyToISO`), 캘린더 드래그(`getDropDates`), 모바일 폼(`DateTimeField`) 모두 `toISOString()`이다.
 6. **Firestore 무료 읽기 한도**가 사용자 증가 시 먼저 닿는 병목이다(§8).
+7. **날짜만 있는 마감은 자정으로 저장된다.** AI 플랜(`localDateKeyToISO`)과 캘린더 드래그(`getDropDates`)는 마감을 그날 로컬 자정으로 저장한다. 이런 할 일에 "30분 전"이 적용되면 전날 23:30에 "30분 후 마감이에요" 알림이 간다. 데이터상으로는 맞지만 사용자 기대와 다를 수 있다. 실사용에서 문제가 되면 후속으로 다룬다.
