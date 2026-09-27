@@ -149,6 +149,33 @@ describe("runAlarm", () => {
     expect(store.dueEntries(now)).toHaveLength(1);
   });
 
+  // Fix round 1, Important #1: 비일시(TransientFcmError가 아닌) 에러도 부분 발송 후엔
+  // 삼켜야 한다. 안 그러면 이미 받은 기기에 재시도 때 중복으로 간다.
+  it("한 기기라도 성공하면 다른 기기의 비일시 에러로도 재시도하지 않는다(중복 방지)", async () => {
+    store.upsertToken("tok-b", "web", NOW);
+    sendPush.mockImplementation(async (m) => {
+      if (m.token === "tok-b") throw new Error("403");
+      return "sent";
+    });
+    await runAlarm(deps());
+    now = NOW + 30 * MIN;
+    await expect(runAlarm(deps())).resolves.not.toThrow();
+    expect(store.isSent("t1", NOW + 30 * MIN)).toBe(true);
+
+    const callCountAfterSend = sendPush.mock.calls.length;
+    await runAlarm(deps()); // 같은 now에 다시 걸어도 이미 지워진 예약이라 더 보내지 않는다.
+    expect(sendPush.mock.calls.length).toBe(callCountAfterSend);
+  });
+
+  it("모든 기기가 비일시 에러면 sent 기록 없이 throw(재시도)", async () => {
+    sendPush.mockRejectedValue(new Error("403"));
+    await runAlarm(deps());
+    now = NOW + 30 * MIN;
+    await expect(runAlarm(deps())).rejects.toThrow("403");
+    expect(store.isSent("t1", NOW + 30 * MIN)).toBe(false);
+    expect(store.dueEntries(now)).toHaveLength(1);
+  });
+
   it("이미 보낸 예약은 다시 보내지 않는다", async () => {
     await runAlarm(deps());
     store.markSent("t1", NOW + 30 * MIN, Date.parse(iso(60 * MIN)));
@@ -161,5 +188,27 @@ describe("runAlarm", () => {
     store.markSent("old", 1, NOW - 25 * 60 * MIN);
     await runAlarm(deps());
     expect(store.isSent("old", 1)).toBe(false);
+  });
+
+  // Fix round 1, Important #2: 재계산을 due 처리보다 먼저 하면 computeSchedule이
+  // fireAt <= now인 항목을 걸러내 이미 예약된(아직 안 보낸) 알림이 조용히 사라진다.
+  // due 처리를 먼저 해야 이 알림이 살아남는다.
+  it("재계산이 밀려 있어도(refreshPending) 이미 예약된 알림을 먼저 보낸다", async () => {
+    await runAlarm(deps()); // 예약 생성: fireAt = NOW + 30분
+    store.setMeta("refreshPending", "1"); // 다른 기기의 refresh가 도착했다고 가정
+    now = NOW + 30 * MIN + 1000; // fireAt을 막 지난 시점
+    await runAlarm(deps());
+    expect(sendPush).toHaveBeenCalledTimes(1);
+    expect(store.isSent("t1", NOW + 30 * MIN)).toBe(true);
+  });
+
+  it("마감이 바뀐 할 일은 같은 실행 안에서 새 시각으로 재예약된다", async () => {
+    await runAlarm(deps()); // 예약 생성: fireAt = NOW + 30분
+    const newDueAt = iso(3 * 60 * MIN);
+    db.set("t1", todo({ dueAt: newDueAt }));
+    now = NOW + 30 * MIN;
+    await runAlarm(deps());
+    const rescheduled = store.dueEntries(Number.MAX_SAFE_INTEGER).find((e) => e.todoId === "t1");
+    expect(rescheduled?.fireAt).toBe(Date.parse(newDueAt) - 30 * MIN);
   });
 });

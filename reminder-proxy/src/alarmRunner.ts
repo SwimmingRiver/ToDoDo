@@ -1,6 +1,6 @@
 import { reminderBody } from "@tododo/core/dist/reminders/index.js";
 import type { FirestoreClient } from "./firestore";
-import { TransientFcmError, type PushMessage, type SendResult } from "./fcm";
+import type { PushMessage, SendResult } from "./fcm";
 import { computeSchedule, shouldSend, QUERY_SPAN_MS, WINDOW_MS, type ScheduleEntry } from "./schedule";
 import type { ReminderStore } from "./store";
 
@@ -32,13 +32,14 @@ export const refreshSchedule = async (deps: AlarmDeps, now: number): Promise<voi
 };
 
 /**
- * 모든 토큰으로 보낸다. 무효 토큰은 지운다. 한 기기라도 받았으면 성공으로 보고
- * 나머지의 일시 실패는 로그만 남긴다 — 재시도하면 받은 기기에 중복으로 가기 때문이다.
- * 아무 기기도 받지 못했고 일시 실패가 있었으면 throw해서 알람 재시도에 맡긴다.
+ * 모든 토큰으로 보낸다. 무효 토큰은 지운다. 한 기기라도 받았으면 성공으로 본다 —
+ * 에러 종류(일시적이든 아니든)와 무관하게, 이미 받은 기기가 있는 채로 다시 던지면
+ * 재시도 때 그 기기에 중복으로 간다. 그래서 개별 토큰 에러는 항상 로그만 남기고
+ * 삼키며, 한 기기도 받지 못했을 때만 첫 에러를 던져 알람 재시도에 맡긴다.
  */
 const deliver = async (deps: AlarmDeps, entry: ScheduleEntry, title: string): Promise<void> => {
   let delivered = 0;
-  let transient: unknown = null;
+  let firstError: unknown = null;
   for (const token of deps.store.listTokens()) {
     try {
       const result = await deps.sendPush({
@@ -51,15 +52,23 @@ const deliver = async (deps: AlarmDeps, entry: ScheduleEntry, title: string): Pr
       if (result === "invalidToken") deps.store.deleteToken(token);
       else delivered += 1;
     } catch (error) {
-      if (!(error instanceof TransientFcmError)) throw error;
-      console.error(`FCM 일시 실패 (todo ${entry.todoId}):`, error);
-      transient = error;
+      console.error(`FCM 발송 실패 (todo ${entry.todoId}):`, error);
+      if (firstError === null) firstError = error;
     }
   }
-  if (delivered === 0 && transient) throw transient;
+  if (delivered === 0 && firstError) throw firstError;
 };
 
-/** 알람 1회 처리. 반환값은 다음 알람 시각(걸 필요 없으면 null). */
+/**
+ * 알람 1회 처리. 반환값은 다음 알람 시각(걸 필요 없으면 null).
+ *
+ * 순서가 중요하다: 기존 예약표의 due 항목부터 먼저 처리하고, 그 다음에 재계산한다.
+ * 반대로 하면(재계산 먼저) computeSchedule이 fireAt <= now인 항목을 걸러내므로,
+ * 알람이 늦게 울렸거나 실패한 재계산의 재시도가 겹치는 순간에 아직 보내지 않은
+ * 알림이 재계산 한 번으로 조용히 사라진다(5분 유예가 전혀 적용되지 못함).
+ * due 처리 중 shouldSend가 dueAtChanged로 판단하면 그 자리에서 refreshPending을
+ * 세워, 같은 실행 안에서 바로 재계산해 새 시각으로 재예약되게 한다.
+ */
 export const runAlarm = async (deps: AlarmDeps): Promise<number | null> => {
   const { store } = deps;
   const now = deps.now();
@@ -71,11 +80,6 @@ export const runAlarm = async (deps: AlarmDeps): Promise<number | null> => {
     return null;
   }
 
-  const windowEnd = Number(store.getMeta("windowEnd") ?? 0);
-  if (store.getMeta("refreshPending") === "1" || now >= windowEnd) {
-    await refreshSchedule(deps, now);
-  }
-
   for (const entry of store.dueEntries(now)) {
     if (!store.isSent(entry.todoId, entry.fireAt)) {
       const current = await deps.firestore.getTodo(deps.uid, entry.todoId);
@@ -83,9 +87,17 @@ export const runAlarm = async (deps: AlarmDeps): Promise<number | null> => {
       if (decision.send && current) {
         await deliver(deps, entry, current.title);
         store.markSent(entry.todoId, entry.fireAt, Date.parse(entry.dueAt));
+      } else if (!decision.send && decision.reason === "dueAtChanged") {
+        // 다른 기기에서 마감을 옮겼다 — 이 실행에서 바로 재계산해 새 시각으로 재예약한다.
+        store.setMeta("refreshPending", "1");
       }
     }
     store.deleteEntry(entry.todoId);
+  }
+
+  const windowEnd = Number(store.getMeta("windowEnd") ?? 0);
+  if (store.getMeta("refreshPending") === "1" || now >= windowEnd) {
+    await refreshSchedule(deps, now);
   }
 
   store.pruneSent(now - DAY);
