@@ -6,6 +6,7 @@ import {
   parseReminderSetting,
   toReminderChoice,
   useReminderDefault,
+  useReminderPrompt,
 } from "@/features/reminders";
 import {
   DEFAULT_REMINDER_SETTING,
@@ -110,6 +111,11 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
   const dueAtWatch = watch("dueAt");
   const descriptionWatch = watch("description");
   const { data: reminderDefault = DEFAULT_REMINDER_SETTING } = useReminderDefault();
+  const { offerReminders } = useReminderPrompt();
+  // 저장 성공 후 마감이 있으면 알림 안내를 제안한다(조건 판단은 Provider가 한다).
+  const offerIfDue = (dueAtIso: string | null) => {
+    if (dueAtIso) offerReminders();
+  };
 
   const { setRef: setDescriptionRef, resize: resizeDescription } =
     useAutoGrowTextArea(descriptionWatch);
@@ -170,6 +176,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       onSuccess: () => {
         toast.success("수정 완료", `"${pendingSeriesUpdate.title}" 반복 일정이 수정되었습니다`);
         closeSeriesConfirm();
+        offerIfDue(pendingSeriesUpdate.dueAt);
         onClose?.();
       },
       onError: () => {
@@ -255,6 +262,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
                   "반복 설정 완료",
                   `"${data.title}" 할 일이 반복 일정으로 전환되었습니다`,
                 );
+                offerIfDue(dueAtIso);
                 onClose?.();
               },
               onError: () => {
@@ -277,6 +285,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       updateTodo.mutate(updatedFields, {
         onSuccess: () => {
           toast.success("수정 완료", `"${data.title}" 할 일이 수정되었습니다`);
+          offerIfDue(dueAtIso);
           onClose?.();
         },
         onError: () => {
@@ -300,6 +309,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
         {
           onSuccess: () => {
             toast.success("추가 완료", `"${data.title}" 하위 할 일이 추가되었습니다`);
+            offerIfDue(dueAtIso);
             onClose?.();
           },
           onError: () => {
@@ -321,6 +331,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
         {
           onSuccess: () => {
             toast.success("추가 완료", `"${data.title}" 반복 할 일이 추가되었습니다`);
+            offerIfDue(dueAtIso);
             onClose?.();
           },
           onError: () => {
@@ -339,6 +350,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
         } as Todo, {
         onSuccess: () => {
           toast.success("추가 완료", `"${data.title}" 할 일이 추가되었습니다`);
+          offerIfDue(dueAtIso);
           onClose?.();
         },
         onError: () => {

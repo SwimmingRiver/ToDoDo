@@ -5,3 +5,5 @@ export type { PushPermission } from "./push/pushSupport";
 export { useReminderRefresh } from "./hooks/useReminderRefresh";
 export { usePushTokenSync } from "./hooks/usePushTokenSync";
 export { useForegroundReminders } from "./hooks/useForegroundReminders";
+export { ReminderPromptProvider } from "./components/reminderPrompt/reminderPrompt";
+export { useReminderPrompt } from "./components/reminderPrompt/reminderPromptContext";

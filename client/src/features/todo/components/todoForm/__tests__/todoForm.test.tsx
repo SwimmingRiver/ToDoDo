@@ -14,9 +14,11 @@ vi.mock("@/shared/lib/firestore", () => ({
   db: {},
 }));
 
+const { offerRemindersMock } = vi.hoisted(() => ({ offerRemindersMock: vi.fn() }));
 vi.mock("@/features/reminders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/reminders")>()),
   useReminderDefault: () => ({ data: 30 }),
+  useReminderPrompt: () => ({ offerReminders: offerRemindersMock }),
 }));
 
 type MutateOptions<T> = { onSuccess?: (v?: T) => void; onError?: () => void };
@@ -84,6 +86,7 @@ const asError = <T,>(mutateFn: ReturnType<typeof vi.fn>) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  offerRemindersMock.mockClear();
   mockTodo.useGetTodos.data = [];
   mockTodo.useEditRecurringSeries.isPending = false;
 
@@ -378,5 +381,28 @@ describe("마감 알림 선택", () => {
 
     await vi.waitFor(() => expect(mockTodo.useCreateChildTodo.mutate).toHaveBeenCalled());
     expect(mockTodo.useCreateChildTodo.mutate.mock.calls[0][0].todo.reminderOffsetMinutes).toBe("off");
+  });
+});
+
+describe("알림 안내창 트리거", () => {
+  it("마감이 있는 할 일을 저장하면 offerReminders를 부른다", async () => {
+    asSuccess(mockTodo.useCreateTodo.mutate);
+    const user = setupUser();
+    renderForm();
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "보고서");
+    await user.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="dueAt"]')!, { target: { value: "2026-10-01T18:00" } });
+    fireEvent.submit(document.getElementById("todo-form")!);
+    await vi.waitFor(() => expect(offerRemindersMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("마감이 없으면 부르지 않는다", async () => {
+    asSuccess(mockTodo.useCreateTodo.mutate);
+    const user = setupUser();
+    renderForm();
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "보고서");
+    fireEvent.submit(document.getElementById("todo-form")!);
+    await vi.waitFor(() => expect(mockTodo.useCreateTodo.mutate).toHaveBeenCalled());
+    expect(offerRemindersMock).not.toHaveBeenCalled();
   });
 });

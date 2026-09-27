@@ -21,6 +21,7 @@ import { useSyncTodosToCalendar } from "@/features/calendarIntegration/hooks";
 import { useReminderRefresh } from "@/features/reminders/hooks/useReminderRefresh";
 import { usePushTokenSync } from "@/features/reminders/hooks/usePushTokenSync";
 import { useForegroundReminders } from "@/features/reminders/hooks/useForegroundReminders";
+import { ReminderPromptProvider } from "@/features/reminders/components/reminderPrompt/reminderPrompt";
 
 const App = () => {
   const [isopen, setIsOpen] = useState(true);
@@ -45,36 +46,38 @@ const App = () => {
   }, []);
 
   return (
-    <Container>
-      {isMobile ? (
-        <MobileHeader onAvatarClick={() => setIsMobileMenuOpen(true)} />
-      ) : (
-        <Header onMenuOpen={() => setIsMobileMenuOpen(true)} />
-      )}
-      <ContentContainer>
-        <SNB
-          isopen={isopen}
-          setIsOpen={setIsOpen}
+    <ReminderPromptProvider>
+      <Container>
+        {isMobile ? (
+          <MobileHeader onAvatarClick={() => setIsMobileMenuOpen(true)} />
+        ) : (
+          <Header onMenuOpen={() => setIsMobileMenuOpen(true)} />
+        )}
+        <ContentContainer>
+          <SNB
+            isopen={isopen}
+            setIsOpen={setIsOpen}
+            onFeedbackClick={() => setIsFeedbackOpen(true)}
+          />
+          <Main $bottomInset={isMobile ? BOTTOM_TAB_BAR_HEIGHT : 0}>
+            <Outlet />
+          </Main>
+        </ContentContainer>
+        {isMobile ? <BottomTabBar /> : <Footer />}
+        <MobileDrawer
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
           onFeedbackClick={() => setIsFeedbackOpen(true)}
         />
-        <Main $bottomInset={isMobile ? BOTTOM_TAB_BAR_HEIGHT : 0}>
-          <Outlet />
-        </Main>
-      </ContentContainer>
-      {isMobile ? <BottomTabBar /> : <Footer />}
-      <MobileDrawer
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-        onFeedbackClick={() => setIsFeedbackOpen(true)}
-      />
-      {/* MobileDrawer/SNB의 트리거는 각자 자리에 두되, 폼 상태는 여기(App)에서
-          소유한다 — 드로어는 닫히면 서브트리 전체가 언마운트되므로 폼이 그
-          자식이면 방금 열리려던 상태까지 같이 사라진다. */}
-      <FeedbackForm
-        isOpen={isFeedbackOpen}
-        onClose={() => setIsFeedbackOpen(false)}
-      />
-    </Container>
+        {/* MobileDrawer/SNB의 트리거는 각자 자리에 두되, 폼 상태는 여기(App)에서
+            소유한다 — 드로어는 닫히면 서브트리 전체가 언마운트되므로 폼이 그
+            자식이면 방금 열리려던 상태까지 같이 사라진다. */}
+        <FeedbackForm
+          isOpen={isFeedbackOpen}
+          onClose={() => setIsFeedbackOpen(false)}
+        />
+      </Container>
+    </ReminderPromptProvider>
   );
 };
 
