@@ -91,6 +91,7 @@ describe("handleRequest", () => {
     );
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Methods")).toContain("DELETE");
+    expect(res.headers.get("Access-Control-Max-Age")).toBe("86400");
     expect(verifyFirebaseIdToken).not.toHaveBeenCalled();
   });
 

@@ -1,7 +1,7 @@
 import { reminderBody } from "@tododo/core/dist/reminders/index.js";
 import type { FirestoreClient } from "./firestore";
 import type { PushMessage, SendResult } from "./fcm";
-import { computeSchedule, shouldSend, QUERY_SPAN_MS, WINDOW_MS, type ScheduleEntry } from "./schedule";
+import { computeSchedule, shouldSend, QUERY_SPAN_MS, WINDOW_MS, type ReminderTodo, type ScheduleEntry } from "./schedule";
 import type { ReminderStore } from "./store";
 
 const DAY = 24 * 60 * 60_000;
@@ -15,20 +15,36 @@ export interface AlarmDeps {
   appUrl: string;
 }
 
-/** Firestore에서 창 안의 할 일과 기본값을 읽어 예약표를 통째로 교체한다.
- *  조회가 성공한 뒤에만 pending을 내린다 — 실패하면 알람 재시도가 다시 계산한다. */
+/** 재계산 중에 새 refresh 신호가 도착했을 때 다시 계산할 때까지의 지연. */
+export const REFRESH_RETRY_MS = 5_000;
+
+/**
+ * Firestore에서 창 안의 할 일과 기본값을 읽어 예약표를 통째로 교체한다.
+ *
+ * pending은 조회 "전에" 내린다. DO 입력 게이트는 await 동안 다른 RPC를 들여보내므로,
+ * 조회 중에 도착한 requestRefresh가 pending=1을 세우면 그 값이 끝까지 남아 runAlarm이
+ * 곧 다시 계산한다(조회 뒤에 내리면 그 신호를 덮어써 잃는다).
+ * 조회가 실패하면 pending을 다시 세우고 던져 알람 재시도가 다시 계산하게 한다.
+ */
 export const refreshSchedule = async (deps: AlarmDeps, now: number): Promise<void> => {
-  const [todos, userDefault] = await Promise.all([
-    deps.firestore.queryUpcomingTodos(
-      deps.uid,
-      new Date(now).toISOString(),
-      new Date(now + QUERY_SPAN_MS).toISOString(),
-    ),
-    deps.firestore.getReminderDefault(deps.uid),
-  ]);
+  deps.store.setMeta("refreshPending", "0");
+  let todos: ReminderTodo[];
+  let userDefault: unknown;
+  try {
+    [todos, userDefault] = await Promise.all([
+      deps.firestore.queryUpcomingTodos(
+        deps.uid,
+        new Date(now).toISOString(),
+        new Date(now + QUERY_SPAN_MS).toISOString(),
+      ),
+      deps.firestore.getReminderDefault(deps.uid),
+    ]);
+  } catch (error) {
+    deps.store.setMeta("refreshPending", "1");
+    throw error;
+  }
   deps.store.replaceSchedule(computeSchedule(todos, userDefault, now));
   deps.store.setMeta("windowEnd", String(now + WINDOW_MS));
-  deps.store.setMeta("refreshPending", "0");
 };
 
 /**
@@ -104,5 +120,8 @@ export const runAlarm = async (deps: AlarmDeps): Promise<number | null> => {
 
   const nextFire = store.nextFireAt();
   const nextWindowEnd = Number(store.getMeta("windowEnd"));
-  return nextFire === null ? nextWindowEnd : Math.min(nextFire, nextWindowEnd);
+  const next = nextFire === null ? nextWindowEnd : Math.min(nextFire, nextWindowEnd);
+  // 재계산 도중 들어온 refresh 신호가 남아 있으면 곧 다시 계산한다. 그러지 않으면
+  // requestRefresh가 건 짧은 알람을 호출자의 setAlarm(next)가 덮어써 신호를 잃는다.
+  return store.getMeta("refreshPending") === "1" ? Math.min(next, now + REFRESH_RETRY_MS) : next;
 };

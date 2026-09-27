@@ -12,6 +12,8 @@ const withCors = (response: Response, origin: string | null, env: Env): Response
   if (isAllowedOrigin(origin, env)) headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
   headers.set("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
+  // 요청마다 preflight가 붙지 않게 하루 캐시한다(브라우저별 상한은 더 짧을 수 있다).
+  headers.set("Access-Control-Max-Age", "86400");
   return new Response(response.body, { status: response.status, headers });
 };
 

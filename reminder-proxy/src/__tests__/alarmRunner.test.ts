@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { runAlarm, type AlarmDeps } from "../alarmRunner";
+import { runAlarm, REFRESH_RETRY_MS, type AlarmDeps } from "../alarmRunner";
 import { TransientFcmError, type PushMessage, type SendResult } from "../fcm";
 import { WINDOW_MS, type ReminderTodo } from "../schedule";
 import { MemoryReminderStore } from "./memoryStore";
@@ -82,6 +82,19 @@ describe("runAlarm", () => {
     vi.mocked(firestore.queryUpcomingTodos).mockRejectedValueOnce(new Error("503"));
     await expect(runAlarm(deps())).rejects.toThrow("503");
     expect(store.getMeta("refreshPending")).toBe("1");
+  });
+
+  it("재계산 조회 중에 도착한 refresh 신호는 유실되지 않고 곧 다시 계산한다", async () => {
+    vi.mocked(firestore.queryUpcomingTodos).mockImplementationOnce(async () => {
+      // 조회를 기다리는 동안 DO 입력 게이트가 열려 requestRefresh가 끼어든 상황
+      store.setMeta("refreshPending", "1");
+      return [...db.values()];
+    });
+    const next = await runAlarm(deps());
+    expect(store.getMeta("refreshPending")).toBe("1");
+    expect(REFRESH_RETRY_MS).toBe(5_000);
+    expect(next).not.toBeNull();
+    expect(next!).toBeLessThanOrEqual(NOW + REFRESH_RETRY_MS);
   });
 
   it("시각이 된 예약을 재조회 후 모든 토큰으로 보내고 sent에 기록한다", async () => {
