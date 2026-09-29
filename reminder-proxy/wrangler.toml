@@ -1,0 +1,17 @@
+name = "tododo-reminder-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# 사용자(uid)마다 DO 1개(idFromName(uid)). 무료 플랜은 SQLite 백엔드만 쓸 수 있다.
+[[durable_objects.bindings]]
+name = "REMINDER_SCHEDULER"
+class_name = "ReminderScheduler"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ReminderScheduler"]
+
+[vars]
+FIREBASE_PROJECT_ID = "tododo-83576"
+CLIENT_APP_URL = "https://tododo-83576.web.app"
+# GOOGLE_SERVICE_ACCOUNT는 시크릿이다(README "배포 준비" 참고).
