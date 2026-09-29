@@ -282,4 +282,20 @@ describe("buildExtensionCreates", () => {
 
     expect(creates.map((c) => c.doc.order)).toEqual([10, 11]);
   });
+
+  it("시리즈 확장 인스턴스가 마지막 인스턴스의 reminderOffsetMinutes를 승계한다", () => {
+    const creates = buildExtensionCreates(
+      [
+        {
+          recurrenceId: "r1",
+          template: { title: "운동", reminderOffsetMinutes: 1440 } as unknown as Omit<Todo, "id">,
+          dueDates: ["2026-10-08T09:00:00.000Z"],
+        },
+      ],
+      0,
+      "user-1",
+      "2026-10-01T00:00:00.000Z",
+    );
+    expect(creates[0].doc.reminderOffsetMinutes).toBe(1440);
+  });
 });

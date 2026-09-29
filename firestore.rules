@@ -55,6 +55,15 @@ service cloud.firestore {
                           && request.auth.token.premium == true;
     }
 
+    match /userSettings/{userId} {
+      // 마감 알림 기본값. reminder-proxy는 서비스 계정(규칙 우회)으로 읽는다.
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+                            && request.resource.data.keys().hasOnly(["reminderDefaultOffsetMinutes"])
+                            && (request.resource.data.reminderDefaultOffsetMinutes == "off"
+                                || request.resource.data.reminderDefaultOffsetMinutes in [0, 10, 30, 60, 1440]);
+    }
+
     match /entitlements/{userId} {
       // 구독 상태는 클라이언트가 절대 스스로 쓰지 못하게 막는다. 지금은 운영자가
       // scripts/grantEntitlement.ts로 이 문서와 커스텀 클레임을 함께 설정하고,

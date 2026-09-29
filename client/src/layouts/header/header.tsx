@@ -7,6 +7,7 @@ import { colors } from "@/styles/colors";
 import { radius } from "@/styles/radius";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 import ThemeMenu from "@/layouts/themeMenu/themeMenu";
+import NotificationMenu from "@/layouts/notificationMenu/notificationMenu";
 import logo from "@/assets/logo.png";
 
 interface HeaderProps {
@@ -24,6 +25,7 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
         <HeaderTitle>ToDoDo</HeaderTitle>
       </LogoGroup>
       <RightGroup>
+        <NotificationMenu />
         <ThemeMenu />
         <UserInfo>
           <ProfileMenu>

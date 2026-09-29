@@ -1,3 +1,5 @@
+import type { ReminderSetting } from "@tododo/core/dist/reminders/index.js";
+
 /**
  * 반복 규칙.
  * - 모든 인스턴스(Todo 문서)가 동일한 recurrenceId를 공유하고, 이 규칙 값도
@@ -47,6 +49,9 @@ interface Todo {
   /** 구글 캘린더에 매핑된 이벤트 ID. 연동 안 됐거나 아직 동기화 전이면 없음(optional).
    *  useSyncTodosToCalendar가 /sync-todos 응답을 받아 기록한다. */
   googleEventId?: string | null;
+  /** 마감 알림 오프셋. 없거나 null이면 사용자 기본값(userSettings)을 따른다.
+   *  "off"면 이 할 일만 알림을 끈다. reminder-proxy가 이 값을 읽어 예약한다. */
+  reminderOffsetMinutes?: ReminderSetting | null;
 }
 
 /** 칸반 같은 컬럼 내 드래그 재정렬 시 bulk write할 order 변경분. */

@@ -14,6 +14,13 @@ vi.mock("@/shared/lib/firestore", () => ({
   db: {},
 }));
 
+const { offerRemindersMock } = vi.hoisted(() => ({ offerRemindersMock: vi.fn() }));
+vi.mock("@/features/reminders", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/reminders")>()),
+  useReminderDefault: () => ({ data: 30 }),
+  useReminderPrompt: () => ({ offerReminders: offerRemindersMock }),
+}));
+
 type MutateOptions<T> = { onSuccess?: (v?: T) => void; onError?: () => void };
 
 /**
@@ -79,6 +86,7 @@ const asError = <T,>(mutateFn: ReturnType<typeof vi.fn>) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  offerRemindersMock.mockClear();
   mockTodo.useGetTodos.data = [];
   mockTodo.useEditRecurringSeries.isPending = false;
 
@@ -304,5 +312,97 @@ describe("TodoForm 날짜 유효성 검사", () => {
       await screen.findByText("시작일시는 마감일시보다 늦을 수 없습니다"),
     ).toBeInTheDocument();
     expect(mockTodo.useUpdateTodo.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("마감 알림 선택", () => {
+  it("마감이 없으면 비활성, 기본 라벨에 현재 기본값을 보여준다", async () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
+    const select = screen.getByLabelText("마감 알림") as HTMLSelectElement;
+    expect(select).toBeDisabled();
+    expect(screen.getByRole("option", { name: "기본값 (30분 전)" })).toBeInTheDocument();
+  });
+
+  it("새 할 일에 1시간 전을 고르면 reminderOffsetMinutes: 60으로 생성하고 reminder 키는 저장하지 않는다", async () => {
+    asSuccess(mockTodo.useCreateTodo.mutate);
+    const user = setupUser();
+    renderForm();
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "보고서");
+    await user.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="dueAt"]')!, { target: { value: "2026-10-01T18:00" } });
+    await user.selectOptions(screen.getByLabelText("마감 알림"), "60");
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useCreateTodo.mutate).toHaveBeenCalled());
+    const payload = mockTodo.useCreateTodo.mutate.mock.calls[0][0];
+    expect(payload.reminderOffsetMinutes).toBe(60);
+    expect(payload).not.toHaveProperty("reminder");
+  });
+
+  it("기본값을 고르면 null로 저장한다(기존 재지정 해제)", async () => {
+    asSuccess(mockTodo.useUpdateTodo.mutate);
+    renderForm({ todo: makeTodo({ dueAt: "2026-10-01T09:00:00.000Z", reminderOffsetMinutes: 10 }) });
+    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
+    expect((screen.getByLabelText("마감 알림") as HTMLSelectElement).value).toBe("10");
+    fireEvent.change(screen.getByLabelText("마감 알림"), { target: { value: "default" } });
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useUpdateTodo.mutate).toHaveBeenCalled());
+    const payload = mockTodo.useUpdateTodo.mutate.mock.calls[0][0];
+    expect(payload.reminderOffsetMinutes).toBeNull();
+    expect(payload).not.toHaveProperty("reminder");
+  });
+
+  it("마감일을 지우면 reminderOffsetMinutes도 기본값(null)으로 저장한다(재지정 잔존 방지)", async () => {
+    asSuccess(mockTodo.useUpdateTodo.mutate);
+    renderForm({
+      todo: makeTodo({ dueAt: "2026-10-01T09:00:00.000Z", reminderOffsetMinutes: 60 }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="dueAt"]')!, { target: { value: "" } });
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useUpdateTodo.mutate).toHaveBeenCalled());
+    const payload = mockTodo.useUpdateTodo.mutate.mock.calls[0][0];
+    expect(payload.dueAt).toBeNull();
+    expect(payload.reminderOffsetMinutes).toBeNull();
+  });
+
+  it("하위 할 일·반복 생성 경로도 값을 넘긴다", async () => {
+    asSuccess(mockTodo.useCreateChildTodo.mutate);
+    const user = setupUser();
+    renderForm({ parentId: "p1" });
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "하위");
+    await user.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="dueAt"]')!, { target: { value: "2026-10-01T18:00" } });
+    await user.selectOptions(screen.getByLabelText("마감 알림"), "off");
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useCreateChildTodo.mutate).toHaveBeenCalled());
+    expect(mockTodo.useCreateChildTodo.mutate.mock.calls[0][0].todo.reminderOffsetMinutes).toBe("off");
+  });
+});
+
+describe("알림 안내창 트리거", () => {
+  it("마감이 있는 할 일을 저장하면 offerReminders를 부른다", async () => {
+    asSuccess(mockTodo.useCreateTodo.mutate);
+    const user = setupUser();
+    renderForm();
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "보고서");
+    await user.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="dueAt"]')!, { target: { value: "2026-10-01T18:00" } });
+    fireEvent.submit(document.getElementById("todo-form")!);
+    await vi.waitFor(() => expect(offerRemindersMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("마감이 없으면 부르지 않는다", async () => {
+    asSuccess(mockTodo.useCreateTodo.mutate);
+    const user = setupUser();
+    renderForm();
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "보고서");
+    fireEvent.submit(document.getElementById("todo-form")!);
+    await vi.waitFor(() => expect(mockTodo.useCreateTodo.mutate).toHaveBeenCalled());
+    expect(offerRemindersMock).not.toHaveBeenCalled();
   });
 });

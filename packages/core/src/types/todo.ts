@@ -1,3 +1,5 @@
+import type { ReminderSetting } from "../reminders";
+
 /**
  * 반복 규칙. client/src/features/todo/types/todo.type.ts의 RecurrenceRule과 동일한
  * shape을 그대로 옮긴 것 — 값 이름/의미도 동일하다.
@@ -38,6 +40,9 @@ interface Todo {
    *  목록/칸반의 대표 노출(collapseRecurringInstances) 후보에서 제외된다.
    *  기존 문서엔 필드가 없을 수 있어 optional — 없으면 아닌 것으로 취급한다. */
   overdueArchived?: boolean;
+  /** 마감 알림 오프셋. 없거나 null이면 사용자 기본값(userSettings)을 따른다.
+   *  "off"면 이 할 일만 알림을 끈다. */
+  reminderOffsetMinutes?: ReminderSetting | null;
 }
 
 /** 생성 시 클라이언트가 채우는 부분집합. status/doneAt/timestamps는 서버 쪽(todoApi)이 채운다. */
