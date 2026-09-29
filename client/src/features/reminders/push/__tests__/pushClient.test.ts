@@ -29,7 +29,7 @@ import {
 } from "../pushClient";
 import { onPushPermissionChanged } from "../pushSupport";
 
-const registration = { scope: "/firebase-cloud-messaging-push-scope" };
+const registration = { scope: "/firebase-cloud-messaging-push-scope", active: { state: "activated" } };
 const installPush = (permission: NotificationPermission, requestResult: NotificationPermission = permission) => {
   const NotificationStub = Object.assign(vi.fn(), {
     permission,
@@ -164,5 +164,29 @@ describe("subscribeForegroundMessages", () => {
     const off = await subscribeForegroundMessages(vi.fn());
     expect(m.onMessage).not.toHaveBeenCalled();
     expect(() => off()).not.toThrow();
+  });
+});
+
+// 운영 Sentry TODODO-CLIENT-2: 새로 등록된 워커가 활성화되기 전에 getToken(→ pushManager.subscribe)을
+// 부르면 "no active Service Worker"로 실패해, 첫 "알림 켜기"에서 토큰이 등록되지 않았다.
+describe("서비스 워커 활성화 대기", () => {
+  it("등록 직후 설치 중이면 활성화된 뒤에야 토큰을 요청한다", async () => {
+    installPush("default", "granted");
+    const installing = Object.assign(new EventTarget(), { state: "installing" });
+    const fresh = { scope: "/firebase-cloud-messaging-push-scope", active: null, installing };
+    vi.mocked(navigator.serviceWorker.register).mockResolvedValueOnce(
+      fresh as unknown as ServiceWorkerRegistration,
+    );
+
+    const pending = enablePushOnThisDevice();
+    await vi.waitFor(() => expect(navigator.serviceWorker.register).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(m.getToken).not.toHaveBeenCalled();
+
+    installing.state = "activated";
+    installing.dispatchEvent(new Event("statechange"));
+    expect(await pending).toBe("granted");
+    expect(m.getToken).toHaveBeenCalledTimes(1);
+    expect(m.register).toHaveBeenCalledWith("fcm-token");
   });
 });
