@@ -121,3 +121,19 @@ describe("FirestoreClient", () => {
     await expect(client(fetchFn).getTodo("u1", "t1")).rejects.toBeInstanceOf(FirestoreError);
   });
 });
+
+describe("FirestoreClient 기본 fetch", () => {
+  // googleAuth 테스트와 같은 이유: 기본 fetch가 인스턴스를 this로 받으면 Workers에서 터진다.
+  it("fetchFn을 넘기지 않으면 전역 fetch를 올바른 this로 호출한다", async () => {
+    const strictFetch = vi.fn(function (this: unknown) {
+      if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(json({}, 404));
+    });
+    vi.stubGlobal("fetch", strictFetch);
+    try {
+      expect(await new FirestoreClient("p1", async () => "tok").getTodo("u1", "t1")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

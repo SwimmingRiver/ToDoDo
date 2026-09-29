@@ -59,7 +59,9 @@ export class GoogleTokenProvider {
 
   constructor(
     private readonly sa: ServiceAccount,
-    private readonly fetchFn: typeof fetch = fetch,
+    // 전역 fetch를 그대로 기본값으로 담으면 this.fetchFn(...) 호출 시 this가 인스턴스가 되어
+    // Workers가 "Illegal invocation"을 던진다. 감싸서 전역 fetch로 호출되게 한다.
+    private readonly fetchFn: typeof fetch = (input, init) => fetch(input, init),
     private readonly now: () => number = Date.now,
   ) {}
 

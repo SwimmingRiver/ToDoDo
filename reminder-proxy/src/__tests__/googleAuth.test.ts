@@ -96,4 +96,19 @@ describe("GoogleTokenProvider", () => {
     await expect(provider.getToken()).rejects.toThrow("400");
     expect(await provider.getToken()).toBe("c");
   });
+
+  // Workers·브라우저의 fetch는 this가 전역이 아니면 "Illegal invocation"을 던진다.
+  // 기본 fetch를 필드에 담아 this.fetchFn(...)으로 부르면 this가 인스턴스가 되어 터졌다.
+  it("fetchFn을 넘기지 않으면 전역 fetch를 올바른 this로 호출한다", async () => {
+    const strictFetch = vi.fn(function (this: unknown) {
+      if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(okResponse("g"));
+    });
+    vi.stubGlobal("fetch", strictFetch);
+    try {
+      expect(await new GoogleTokenProvider(sa).getToken()).toBe("g");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
