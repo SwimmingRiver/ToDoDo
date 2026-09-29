@@ -5,6 +5,9 @@ export interface PushMessage {
   /** 알림 클릭 시 열 절대 URL. 웹 푸시는 같은 origin의 HTTPS여야 한다. */
   link: string;
   todoId: string;
+  /** FCM이 전달을 시도할 최대 시간(초). 기기가 오프라인이면 FCM은 기본 4주까지 보관했다가
+   *  뒤늦게 몰아서 보내므로, 마감이 지난 알림이 쏟아지지 않게 발송 측에서 기한을 준다. */
+  ttlSeconds: number;
 }
 
 export type SendResult = "sent" | "invalidToken";
@@ -37,7 +40,7 @@ export const sendPush = async (
         token: message.token,
         notification: { title: message.title, body: message.body },
         data: { todoId: message.todoId },
-        webpush: { fcm_options: { link: message.link } },
+        webpush: { headers: { TTL: String(message.ttlSeconds) }, fcm_options: { link: message.link } },
       },
     }),
   });

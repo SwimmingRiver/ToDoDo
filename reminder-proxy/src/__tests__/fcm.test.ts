@@ -7,6 +7,7 @@ const message: PushMessage = {
   body: "30분 후 마감이에요",
   link: "https://app.example.com/todo/t1",
   todoId: "t1",
+  ttlSeconds: 2100,
 };
 const fcmError = (status: number, errorCode: string, msg = "x") =>
   new Response(
@@ -33,7 +34,8 @@ describe("sendPush", () => {
         token: "tok-1",
         notification: { title: "보고서", body: "30분 후 마감이에요" },
         data: { todoId: "t1" },
-        webpush: { fcm_options: { link: "https://app.example.com/todo/t1" } },
+        // 전달 못 한 알림은 마감 + 5분이 지나면 FCM이 버린다(뒤늦게 몰려오는 옛 알림 방지).
+        webpush: { headers: { TTL: "2100" }, fcm_options: { link: "https://app.example.com/todo/t1" } },
       },
     });
   });

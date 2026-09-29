@@ -110,6 +110,8 @@ describe("runAlarm", () => {
       body: "30분 후 마감이에요",
       link: "https://app.example.com/todo/t1",
       todoId: "t1",
+      // 마감(NOW+60분) + 5분 유예 - 발송 시각(NOW+30분) = 35분
+      ttlSeconds: 35 * 60,
     });
     expect(store.isSent("t1", NOW + 30 * MIN)).toBe(true);
     expect(store.nextFireAt()).toBeNull();
@@ -223,5 +225,12 @@ describe("runAlarm", () => {
     await runAlarm(deps());
     const rescheduled = store.dueEntries(Number.MAX_SAFE_INTEGER).find((e) => e.todoId === "t1");
     expect(rescheduled?.fireAt).toBe(Date.parse(newDueAt) - 30 * MIN);
+  });
+
+  it("유예 시간 안에 늦게 울려도 TTL은 0 이상이다", async () => {
+    await runAlarm(deps());
+    now = NOW + 64 * MIN; // 마감 4분 지남, 5분 유예 안
+    await runAlarm(deps());
+    expect(sendPush.mock.calls[0][0].ttlSeconds).toBe(60);
   });
 });

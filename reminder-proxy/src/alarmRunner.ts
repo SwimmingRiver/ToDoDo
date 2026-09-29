@@ -1,7 +1,7 @@
 import { reminderBody } from "@tododo/core/dist/reminders/index.js";
 import type { FirestoreClient } from "./firestore";
 import type { PushMessage, SendResult } from "./fcm";
-import { computeSchedule, shouldSend, QUERY_SPAN_MS, WINDOW_MS, type ReminderTodo, type ScheduleEntry } from "./schedule";
+import { computeSchedule, shouldSend, LATE_GRACE_MS, QUERY_SPAN_MS, WINDOW_MS, type ReminderTodo, type ScheduleEntry } from "./schedule";
 import type { ReminderStore } from "./store";
 
 const DAY = 24 * 60 * 60_000;
@@ -54,6 +54,9 @@ export const refreshSchedule = async (deps: AlarmDeps, now: number): Promise<voi
  * 삼키며, 한 기기도 받지 못했을 때만 첫 에러를 던져 알람 재시도에 맡긴다.
  */
 const deliver = async (deps: AlarmDeps, entry: ScheduleEntry, title: string): Promise<void> => {
+  // 서버가 보내기 전에 적용하는 "마감 + 유예 이후는 버린다"(shouldSend) 규칙을 FCM 보관 구간에도
+  // 똑같이 적용한다. shouldSend를 통과했으므로 음수가 되지 않지만 방어적으로 0에서 자른다.
+  const ttlSeconds = Math.max(0, Math.floor((Date.parse(entry.dueAt) + LATE_GRACE_MS - deps.now()) / 1000));
   let delivered = 0;
   let firstError: unknown = null;
   for (const token of deps.store.listTokens()) {
@@ -64,6 +67,7 @@ const deliver = async (deps: AlarmDeps, entry: ScheduleEntry, title: string): Pr
         body: reminderBody(entry.offsetMinutes),
         link: `${deps.appUrl}/todo/${encodeURIComponent(entry.todoId)}`,
         todoId: entry.todoId,
+        ttlSeconds,
       });
       if (result === "invalidToken") deps.store.deleteToken(token);
       else delivered += 1;
