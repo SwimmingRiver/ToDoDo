@@ -5,9 +5,7 @@ import { sendPush } from "./fcm";
 import { FirestoreClient } from "./firestore";
 import { GoogleTokenProvider, parseServiceAccount } from "./googleAuth";
 import { SqliteReminderStore } from "./store";
-
-/** refresh 신호를 이만큼 모았다가 한 번에 재계산한다. */
-const REFRESH_DEBOUNCE_MS = 5_000;
+import { nextRefreshAlarm } from "./refreshAlarm";
 
 /**
  * 사용자(uid)당 1개. 로직은 alarmRunner(테스트됨)에 있고 여기는 DO API와 이어주는 얇은 어댑터다.
@@ -38,9 +36,8 @@ export class ReminderScheduler extends DurableObject<Env> {
     // 알림을 켠 기기가 없으면 알람조차 걸지 않는다(DO 쓰기·Firestore 읽기 0).
     if (this.store.listTokens().length === 0) return;
     this.store.setMeta("refreshPending", "1");
-    const target = Date.now() + REFRESH_DEBOUNCE_MS;
-    const current = await this.ctx.storage.getAlarm();
-    if (current === null || current > target) await this.ctx.storage.setAlarm(target);
+    const next = nextRefreshAlarm(await this.ctx.storage.getAlarm(), Date.now());
+    if (next !== null) await this.ctx.storage.setAlarm(next);
   }
 
   async alarm(): Promise<void> {
