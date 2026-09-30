@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
-import { runAlarm } from "./alarmRunner";
+import { ALARM_RETRY_MS, runAlarm } from "./alarmRunner";
 import { sendPush } from "./fcm";
 import { FirestoreClient } from "./firestore";
 import { GoogleTokenProvider, parseServiceAccount } from "./googleAuth";
@@ -43,17 +43,25 @@ export class ReminderScheduler extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const uid = this.store.getMeta("uid");
     if (!uid) return;
-    const tokenProvider = this.getTokenProvider();
-    const firestore = new FirestoreClient(this.env.FIREBASE_PROJECT_ID, () => tokenProvider.getToken());
-    const next = await runAlarm({
-      store: this.store,
-      now: Date.now,
-      uid,
-      firestore,
-      sendPush: async (message) =>
-        sendPush(this.env.FIREBASE_PROJECT_ID, await tokenProvider.getToken(), message),
-      appUrl: this.env.CLIENT_APP_URL,
-    });
+    let next: number | null;
+    try {
+      const tokenProvider = this.getTokenProvider();
+      const firestore = new FirestoreClient(this.env.FIREBASE_PROJECT_ID, () => tokenProvider.getToken());
+      next = await runAlarm({
+        store: this.store,
+        now: Date.now,
+        uid,
+        firestore,
+        sendPush: async (message) =>
+          sendPush(this.env.FIREBASE_PROJECT_ID, await tokenProvider.getToken(), message),
+        appUrl: this.env.CLIENT_APP_URL,
+      });
+    } catch (error) {
+      // runAlarm은 발송·조회 실패를 스스로 처리한다. 여기까지 온 예외(설정·저장소 오류 등)를
+      // 던지면 런타임 재시도가 소진된 뒤 알람이 영영 안 걸리므로, 직접 다시 건다.
+      console.error("알람 처리 중 예기치 않은 오류, 재시도 예정:", error);
+      next = Date.now() + ALARM_RETRY_MS;
+    }
     if (next !== null) await this.ctx.storage.setAlarm(next);
   }
 
