@@ -1,6 +1,7 @@
 import type { Messaging } from "firebase/messaging";
 import { registerPushToken, unregisterPushToken } from "../api/reminderProxyApi";
 import { getPushPermission, notifyPushPermissionChanged, type PushPermission } from "./pushSupport";
+import { waitForActiveWorker } from "./waitForActiveWorker";
 
 export { getPushPermission, isPushSupported } from "./pushSupport";
 export type { PushPermission } from "./pushSupport";
@@ -28,6 +29,8 @@ const loadMessaging = async (): Promise<{ messaging: Messaging; sdk: typeof impo
 const getCurrentToken = async (): Promise<{ token: string; messaging: Messaging; sdk: typeof import("firebase/messaging") }> => {
   const { messaging, sdk } = await loadMessaging();
   const registration = await navigator.serviceWorker.register(serviceWorkerUrl(), { scope: SW_SCOPE });
+  // 첫 등록 직후엔 워커가 installing이라 바로 구독하면 실패한다(waitForActiveWorker 주석 참고).
+  await waitForActiveWorker(registration);
   const token = await sdk.getToken(messaging, {
     vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
     serviceWorkerRegistration: registration,
