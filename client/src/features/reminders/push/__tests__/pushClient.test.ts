@@ -50,8 +50,12 @@ const installPush = (permission: NotificationPermission, requestResult: Notifica
 beforeEach(() => {
   vi.stubEnv("VITE_FIREBASE_VAPID_KEY", "vapid");
   Object.values(m).forEach((fn) => fn.mockClear());
+  // 테스트가 남긴 ...Once 큐·구현 교체가 다음 테스트로 새지 않게 기본값으로 되돌린다.
+  m.getToken.mockReset().mockResolvedValue("fcm-token");
+  m.deleteToken.mockReset().mockResolvedValue(true);
   m.register.mockResolvedValue(undefined);
   m.unregister.mockResolvedValue(undefined);
+  localStorage.clear();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -141,6 +145,56 @@ describe("disablePushOnThisDevice", () => {
     installPush("denied");
     await disablePushOnThisDevice();
     expect(m.getToken).not.toHaveBeenCalled();
+  });
+});
+
+// 로그아웃 정리가 오프라인 등으로 실패하면 FCM 토큰이 살아 있는 채 이전 계정 DO에 남는다.
+// 그 상태로 다음 계정이 같은 토큰을 등록하면 이전 계정의 알림(할 일 제목)이 이 브라우저에 뜬다.
+describe("로그아웃 정리 실패 복구", () => {
+  it("로그아웃 때 토큰 삭제까지 실패하면 다음 동기화는 옛 토큰을 지운 뒤 새 토큰을 등록한다", async () => {
+    installPush("granted");
+    m.unregister.mockRejectedValueOnce(new Error("offline"));
+    m.deleteToken.mockRejectedValueOnce(new Error("offline"));
+    await expect(disablePushOnThisDevice()).rejects.toThrow("offline");
+
+    m.deleteToken.mockImplementationOnce(async () => {
+      m.getToken.mockResolvedValue("fcm-token-new");
+      return true;
+    });
+    await syncPushToken();
+    expect(m.register).toHaveBeenCalledTimes(1);
+    expect(m.register).toHaveBeenCalledWith("fcm-token-new");
+  });
+
+  it("토큰 조회부터 실패해도 다음 동기화에서 옛 토큰을 지운다", async () => {
+    installPush("granted");
+    m.getToken.mockRejectedValueOnce(new Error("offline"));
+    await expect(disablePushOnThisDevice()).rejects.toThrow("offline");
+
+    await syncPushToken();
+    expect(m.deleteToken).toHaveBeenCalledTimes(1);
+    expect(m.deleteToken.mock.invocationCallOrder[0]).toBeLessThan(m.register.mock.invocationCallOrder[0]);
+  });
+
+  it("옛 토큰 삭제가 또 실패하면 등록하지 않고, 다음 동기화에서 다시 시도한다", async () => {
+    installPush("granted");
+    m.getToken.mockRejectedValueOnce(new Error("offline"));
+    await expect(disablePushOnThisDevice()).rejects.toThrow();
+
+    m.deleteToken.mockRejectedValueOnce(new Error("offline"));
+    await expect(syncPushToken()).rejects.toThrow("offline");
+    expect(m.register).not.toHaveBeenCalled();
+
+    await syncPushToken();
+    expect(m.deleteToken).toHaveBeenCalledTimes(2);
+    expect(m.register).toHaveBeenCalledTimes(1);
+  });
+
+  it("로그아웃 정리가 성공했으면 다음 동기화에서 토큰을 지우지 않는다", async () => {
+    installPush("granted");
+    await disablePushOnThisDevice();
+    await syncPushToken();
+    expect(m.deleteToken).toHaveBeenCalledTimes(1);
   });
 });
 

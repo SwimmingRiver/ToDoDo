@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { runAlarm, REFRESH_RETRY_MS, type AlarmDeps } from "../alarmRunner";
+import { runAlarm, ALARM_RETRY_MS, REFRESH_RETRY_MS, type AlarmDeps } from "../alarmRunner";
 import { TransientFcmError, type PushMessage, type SendResult } from "../fcm";
 import { WINDOW_MS, type ReminderTodo } from "../schedule";
 import { MemoryReminderStore } from "./memoryStore";
@@ -78,9 +78,10 @@ describe("runAlarm", () => {
     expect(firestore.queryUpcomingTodos).toHaveBeenCalledTimes(1);
   });
 
-  it("재계산 조회가 실패하면 pending을 유지한 채 throw(알람 재시도)", async () => {
+  // 던지면 런타임 재시도(약 2분)가 소진된 뒤 알람이 영영 안 걸려 이후 알림이 전부 멈춘다.
+  it("재계산 조회가 실패하면 pending을 유지하고 던지는 대신 재시도 알람 시각을 돌려준다", async () => {
     vi.mocked(firestore.queryUpcomingTodos).mockRejectedValueOnce(new Error("503"));
-    await expect(runAlarm(deps())).rejects.toThrow("503");
+    expect(await runAlarm(deps())).toBe(NOW + ALARM_RETRY_MS);
     expect(store.getMeta("refreshPending")).toBe("1");
   });
 
@@ -155,11 +156,11 @@ describe("runAlarm", () => {
     expect(store.dueEntries(now)).toEqual([]);
   });
 
-  it("모든 기기가 일시 실패면 sent에 기록하지 않고 throw(재시도)", async () => {
+  it("모든 기기가 일시 실패면 sent에 기록하지 않고 예약을 남긴 채 재시도 시각을 돌려준다", async () => {
     sendPush.mockRejectedValue(new TransientFcmError(503));
     await runAlarm(deps());
     now = NOW + 30 * MIN;
-    await expect(runAlarm(deps())).rejects.toBeInstanceOf(TransientFcmError);
+    expect(await runAlarm(deps())).toBe(now + ALARM_RETRY_MS);
     expect(store.isSent("t1", NOW + 30 * MIN)).toBe(false);
     expect(store.dueEntries(now)).toHaveLength(1);
   });
@@ -182,11 +183,11 @@ describe("runAlarm", () => {
     expect(sendPush.mock.calls.length).toBe(callCountAfterSend);
   });
 
-  it("모든 기기가 비일시 에러면 sent 기록 없이 throw(재시도)", async () => {
+  it("모든 기기가 비일시 에러면 sent 기록 없이 예약을 남긴 채 재시도 시각을 돌려준다", async () => {
     sendPush.mockRejectedValue(new Error("403"));
     await runAlarm(deps());
     now = NOW + 30 * MIN;
-    await expect(runAlarm(deps())).rejects.toThrow("403");
+    expect(await runAlarm(deps())).toBe(now + ALARM_RETRY_MS);
     expect(store.isSent("t1", NOW + 30 * MIN)).toBe(false);
     expect(store.dueEntries(now)).toHaveLength(1);
   });
@@ -232,5 +233,57 @@ describe("runAlarm", () => {
     now = NOW + 64 * MIN; // 마감 4분 지남, 5분 유예 안
     await runAlarm(deps());
     expect(sendPush.mock.calls[0][0].ttlSeconds).toBe(60);
+  });
+
+  it("한 예약의 발송이 실패해도 같은 시각의 다른 예약은 보낸다", async () => {
+    db.set("t2", todo({ id: "t2", title: "회의" }));
+    await runAlarm(deps());
+    sendPush.mockImplementation(async (m) => {
+      if (m.todoId === "t1") throw new TransientFcmError(503);
+      return "sent";
+    });
+    now = NOW + 30 * MIN;
+    expect(await runAlarm(deps())).toBe(now + ALARM_RETRY_MS);
+    expect(store.isSent("t2", NOW + 30 * MIN)).toBe(true);
+    expect(store.isSent("t1", NOW + 30 * MIN)).toBe(false);
+  });
+
+  it("발송 직전 재조회가 실패해도 던지지 않고 예약을 남긴 채 재시도한다", async () => {
+    await runAlarm(deps());
+    vi.mocked(firestore.getTodo).mockRejectedValueOnce(new Error("503"));
+    now = NOW + 30 * MIN;
+    expect(await runAlarm(deps())).toBe(now + ALARM_RETRY_MS);
+    expect(store.dueEntries(now)).toHaveLength(1);
+
+    now += ALARM_RETRY_MS;
+    await runAlarm(deps());
+    expect(store.isSent("t1", NOW + 30 * MIN)).toBe(true);
+  });
+
+  it("계속 실패하던 예약은 마감+유예가 지나면 조회 없이 버리고 재시도를 멈춘다", async () => {
+    await runAlarm(deps());
+    vi.mocked(firestore.getTodo).mockRejectedValue(new Error("503"));
+    now = NOW + 30 * MIN;
+    await runAlarm(deps());
+
+    now = NOW + 66 * MIN; // 마감(60분) + 유예(5분) 초과
+    vi.mocked(firestore.getTodo).mockClear();
+    const next = await runAlarm(deps());
+    expect(firestore.getTodo).not.toHaveBeenCalled();
+    expect(store.dueEntries(now)).toEqual([]);
+    expect(next).toBe(NOW + WINDOW_MS);
+  });
+
+  it("발송이 실패한 실행에서 재계산이 돌아도 실패한 예약은 사라지지 않는다", async () => {
+    await runAlarm(deps());
+    sendPush.mockRejectedValueOnce(new TransientFcmError(503));
+    store.setMeta("refreshPending", "1"); // 같은 실행에서 재계산이 돌게 한다
+    now = NOW + 30 * MIN;
+    expect(await runAlarm(deps())).toBe(now + ALARM_RETRY_MS);
+    expect(store.dueEntries(now).map((e) => e.todoId)).toEqual(["t1"]);
+
+    now += ALARM_RETRY_MS;
+    await runAlarm(deps());
+    expect(store.isSent("t1", NOW + 30 * MIN)).toBe(true);
   });
 });

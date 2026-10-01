@@ -38,9 +38,40 @@ const getCurrentToken = async (): Promise<{ token: string; messaging: Messaging;
   return { token, messaging, sdk };
 };
 
+/**
+ * 로그아웃 정리(FCM 토큰 삭제)가 끝나지 않았다는 표시. 오프라인 로그아웃 등으로 삭제가 실패하면
+ * 토큰이 살아 있는 채 이전 계정의 DO에 남는다(옛 계정 ID 토큰이 없어 Worker에서 대신 지울 수도 없다).
+ * 다음 계정이 그 토큰을 그대로 등록하면 이전 계정의 알림이 이 브라우저에 오므로, 등록 전에 먼저 지운다.
+ */
+const RELEASE_PENDING_KEY = "tododo:pushReleasePending";
+
+const hasPendingRelease = (): boolean => {
+  try {
+    return localStorage.getItem(RELEASE_PENDING_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const setPendingRelease = (pending: boolean): void => {
+  try {
+    if (pending) localStorage.setItem(RELEASE_PENDING_KEY, "1");
+    else localStorage.removeItem(RELEASE_PENDING_KEY);
+  } catch {
+    // 저장소를 못 쓰는 환경(시크릿 모드 등)은 복구 표시 없이 진행한다.
+  }
+};
+
 /** 권한이 있으면 현재 토큰을 Worker에 등록한다. upsert라 여러 번 불러도 된다. */
 export const syncPushToken = async (): Promise<void> => {
   if (getPushPermission() !== "granted") return;
+  if (hasPendingRelease()) {
+    // deleteToken은 워커 등록이 붙은 messaging이 필요해 getCurrentToken을 거친다. 이 옛 토큰은 등록하지 않는다.
+    // 삭제가 실패하면 던져서 옛 토큰이 새 계정에 등록되지 않게 하고, 다음 동기화에서 다시 시도한다.
+    const { messaging, sdk } = await getCurrentToken();
+    await sdk.deleteToken(messaging);
+    setPendingRelease(false);
+  }
   const { token } = await getCurrentToken();
   await registerPushToken(token);
 };
@@ -56,6 +87,8 @@ export const enablePushOnThisDevice = async (): Promise<PushPermission> => {
 /** 로그아웃 시: 이 브라우저가 다음 사용자에게 이전 계정의 알림을 받지 않게 한다. */
 export const disablePushOnThisDevice = async (): Promise<void> => {
   if (getPushPermission() !== "granted") return;
+  // 어느 단계에서 실패하든 표시가 남아, 다음 syncPushToken이 옛 토큰부터 지운다.
+  setPendingRelease(true);
   const { token, messaging, sdk } = await getCurrentToken();
   try {
     await unregisterPushToken(token);
@@ -63,6 +96,7 @@ export const disablePushOnThisDevice = async (): Promise<void> => {
     // Worker 호출이 실패해도 FCM 토큰은 무효화한다. 그러면 옛 DO가 다음 발송에서
     // UNREGISTERED를 받아 스스로 토큰을 버린다. 원래 에러는 그대로 전파된다.
     await sdk.deleteToken(messaging);
+    setPendingRelease(false);
   }
 };
 

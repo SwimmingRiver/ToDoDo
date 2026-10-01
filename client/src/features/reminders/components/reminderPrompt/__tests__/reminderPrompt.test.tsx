@@ -65,8 +65,9 @@ describe("ReminderPrompt", () => {
     renderPrompt();
     act(() => offer());
     await user.click(screen.getByRole("button", { name: "켜기" }));
-    expect(s.enable).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/알려드릴까요/)).not.toBeInTheDocument();
+    // 핸들러가 pushClient를 동적 import한 뒤 호출하므로 클릭 직후엔 아직 불리지 않았을 수 있다.
+    await vi.waitFor(() => expect(s.enable).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(screen.queryByText(/알려드릴까요/)).not.toBeInTheDocument());
   });
 
   it("[나중에]는 7일간 다시 묻지 않는다", async () => {
