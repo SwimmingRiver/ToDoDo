@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { setupUser } from "@/test/setupUser";
+// 배럴(@/features/reminders)을 읽으면 Firebase 초기화가 일어나 CI(API 키 비어 있음)에서 실패한다.
+vi.mock("@/shared/lib/firebase", () => ({ auth: { currentUser: { uid: "user-1" } }, googleProvider: {} }));
+vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
+vi.mock("@/features/todo/hooks", () => ({ useGetTodos: () => ({ data: undefined }) }));
+
 import NotificationHistoryList from "../notificationHistoryList";
 
 const NOW = 1_000_000_000_000;

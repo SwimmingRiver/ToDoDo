@@ -10,6 +10,7 @@ export const Panel = styled.div`
   right: 0;
   z-index: 1000;
   width: 260px;
+  max-width: calc(100vw - 32px);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -63,4 +64,32 @@ export const DefaultSelect = styled.select`
   background-color: ${colors.background.primary};
   color: ${colors.text.primary};
   font-size: 14px;
+`;
+
+export const TriggerSlot = styled.span`
+  position: relative;
+  display: inline-flex;
+`;
+
+// danger.main 위 흰 글자는 라이트 3.93:1, 다크 2.53:1로 AA 미달이라 brand.strong/onStrong 조합을 쓴다.
+export const Badge = styled.span`
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background-color: ${colors.brand.strong};
+  color: ${colors.brand.onStrong};
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+`;
+
+export const Divider = styled.hr`
+  margin: 2px 0;
+  border: none;
+  border-top: 1px solid ${colors.border.secondary};
 `;

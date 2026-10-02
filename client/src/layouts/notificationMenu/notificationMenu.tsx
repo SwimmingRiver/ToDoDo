@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bell, BellOff } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { DEFAULT_REMINDER_SETTING } from "@tododo/core/dist/reminders/index.js";
@@ -7,6 +8,8 @@ import {
   getPushPermission,
   parseReminderSetting,
   useReminderDefault,
+  useReminderHistory,
+  useMarkHistorySeen,
   useSetReminderDefault,
   type PushPermission,
 } from "@/features/reminders";
@@ -19,7 +22,11 @@ import {
   EnableButton,
   FieldLabel,
   DefaultSelect,
+  TriggerSlot,
+  Badge,
+  Divider,
 } from "./notificationMenu.styles";
+import NotificationHistoryList from "./notificationHistoryList";
 
 const STATUS_TEXT: Record<PushPermission, string> = {
   granted: "이 기기에서 마감 알림을 받고 있어요.",
@@ -37,6 +44,14 @@ const NotificationMenu = () => {
   const toast = useToast();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
+  const history = useReminderHistory();
+  const markSeen = useMarkHistorySeen();
+  // ●는 "열 때" 기준으로 고정한다. 읽음 처리로 lastSeenAt이 바로 올라가도 열려 있는 동안
+  // 무엇이 새 알림이었는지 보이게 하려는 것이다(배지는 즉시 0).
+  const [openedLastSeenAt, setOpenedLastSeenAt] = useState(0);
+  const newestSentAt = history.data?.items[0]?.sentAt ?? 0;
+  const lastSeenAt = history.data?.lastSeenAt ?? 0;
 
   const close = (restoreFocus: boolean) => {
     setIsOpen(false);
@@ -53,6 +68,13 @@ const NotificationMenu = () => {
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [isOpen]);
+
+  // 화면에 보여준 가장 최신 항목까지 읽음 처리한다. 열린 채 새 알림이 와도 따라 올라간다.
+  useEffect(() => {
+    if (isOpen && newestSentAt > lastSeenAt) markSeen.mutate(newestSentAt);
+    // markSeen 객체 정체성은 렌더마다 바뀌므로 의존성에서 뺀다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, newestSentAt, lastSeenAt]);
 
   // 패널이 열려도 포커스는 트리거에 남아 있으므로(패널 안으로 옮기지 않는다),
   // Escape 핸들러는 패널이 아니라 Wrapper에 달아야 버블링으로 잡힌다.
@@ -77,6 +99,25 @@ const NotificationMenu = () => {
     }
   };
 
+  const toggle = () => {
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+    setOpenedLastSeenAt(lastSeenAt);
+    // 포그라운드 재조회는 지연되고 백그라운드 탭은 포커스 전엔 갱신이 없으니, 열 때 한 번 더 확인한다.
+    void history.refetch();
+    setIsOpen(true);
+  };
+
+  const openTodo = (todoId: string) => {
+    setIsOpen(false);
+    navigate(`/todo/${encodeURIComponent(todoId)}`);
+  };
+
+  const unread = history.unreadCount;
+  const triggerLabel = unread > 0 ? `알림, 읽지 않은 알림 ${unread}개` : "알림";
+
   const isActive = permission === "granted" && reminderDefault !== "off";
   const Icon = isActive ? Bell : BellOff;
 
@@ -85,15 +126,27 @@ const NotificationMenu = () => {
       <Trigger
         ref={triggerRef}
         type="button"
-        aria-label="알림 설정"
+        aria-label={triggerLabel}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={toggle}
       >
-        <Icon size={18} aria-hidden="true" />
+        <TriggerSlot>
+          <Icon size={18} aria-hidden="true" />
+          {unread > 0 && <Badge aria-hidden="true">{unread > 9 ? "9+" : unread}</Badge>}
+        </TriggerSlot>
       </Trigger>
       {isOpen && (
-        <Panel role="dialog" aria-label="알림 설정">
+        <Panel role="dialog" aria-label="알림">
+          <NotificationHistoryList
+            items={history.data?.items}
+            isPending={history.isPending}
+            isError={history.isError}
+            unreadAfter={openedLastSeenAt}
+            now={Date.now()}
+            onSelect={openTodo}
+          />
+          <Divider />
           <StatusText>{STATUS_TEXT[permission]}</StatusText>
           {permission === "default" && (
             <EnableButton type="button" onClick={() => void enable()} disabled={isEnabling}>
