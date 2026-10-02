@@ -6,6 +6,7 @@ import { FirestoreClient } from "./firestore";
 import { GoogleTokenProvider, parseServiceAccount } from "./googleAuth";
 import { SqliteReminderStore } from "./store";
 import { nextRefreshAlarm } from "./refreshAlarm";
+import { markSeen, readHistory, type HistoryResponse } from "./history";
 
 /**
  * 사용자(uid)당 1개. 로직은 alarmRunner(테스트됨)에 있고 여기는 DO API와 이어주는 얇은 어댑터다.
@@ -38,6 +39,16 @@ export class ReminderScheduler extends DurableObject<Env> {
     this.store.setMeta("refreshPending", "1");
     const next = nextRefreshAlarm(await this.ctx.storage.getAlarm(), Date.now());
     if (next !== null) await this.ctx.storage.setAlarm(next);
+  }
+
+  async getHistory(uid: string): Promise<HistoryResponse> {
+    // 조회(GET)는 탭 포커스마다 호출되므로 저장소에 쓰지 않는다. uid 기록은 markHistorySeen이 맡는다.
+    return readHistory(this.store, Date.now());
+  }
+
+  async markHistorySeen(uid: string, seenUntil: number): Promise<void> {
+    this.store.setMeta("uid", uid);
+    markSeen(this.store, seenUntil, Date.now());
   }
 
   async alarm(): Promise<void> {

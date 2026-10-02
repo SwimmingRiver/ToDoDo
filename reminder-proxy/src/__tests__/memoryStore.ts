@@ -1,4 +1,4 @@
-import type { MetaKey, ReminderStore } from "../store";
+import type { HistoryItem, MetaKey, ReminderStore } from "../store";
 import type { ScheduleEntry } from "../schedule";
 
 export class MemoryReminderStore implements ReminderStore {
@@ -6,6 +6,7 @@ export class MemoryReminderStore implements ReminderStore {
   schedule = new Map<string, ScheduleEntry>();
   sent = new Map<string, number>(); // `${todoId}:${fireAt}` → dueAtMs
   meta = new Map<MetaKey, string>();
+  history = new Map<string, HistoryItem>(); // `${todoId}:${fireAt}`
 
   listTokens() {
     return [...this.tokens.keys()];
@@ -37,6 +38,22 @@ export class MemoryReminderStore implements ReminderStore {
   }
   pruneSent(beforeDueAtMs: number) {
     for (const [k, due] of this.sent) if (due < beforeDueAtMs) this.sent.delete(k);
+  }
+  addHistory(item: HistoryItem, fireAt: number) {
+    const key = `${item.todoId}:${fireAt}`;
+    if (!this.history.has(key)) this.history.set(key, item);
+  }
+  listHistory(sinceSentAt: number, limit: number) {
+    return [...this.history.values()]
+      .filter((h) => h.sentAt >= sinceSentAt)
+      .sort((a, b) => b.sentAt - a.sentAt)
+      .slice(0, limit);
+  }
+  pruneHistory(beforeSentAt: number, keep: number) {
+    const kept = this.listHistory(beforeSentAt, keep);
+    this.history = new Map(
+      [...this.history].filter(([, h]) => kept.includes(h)),
+    );
   }
   getMeta(key: MetaKey) {
     return this.meta.get(key) ?? null;

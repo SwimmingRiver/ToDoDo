@@ -1,5 +1,6 @@
 export { useReminderDefault, useSetReminderDefault } from "./hooks/useReminderSettings";
 export { REMINDER_SETTING_OPTIONS, parseReminderSetting, toReminderChoice } from "./utils/reminderChoice";
+export { formatTimeAgo } from "./utils/timeAgo";
 export { getPushPermission, isPushSupported } from "./push/pushSupport";
 export type { PushPermission } from "./push/pushSupport";
 export { useReminderRefresh } from "./hooks/useReminderRefresh";
@@ -7,3 +8,5 @@ export { usePushTokenSync } from "./hooks/usePushTokenSync";
 export { useForegroundReminders } from "./hooks/useForegroundReminders";
 export { ReminderPromptProvider } from "./components/reminderPrompt/reminderPrompt";
 export { useReminderPrompt } from "./components/reminderPrompt/reminderPromptContext";
+export { useReminderHistory, useMarkHistorySeen } from "./hooks/useReminderHistory";
+export type { ReminderHistoryItem } from "./api/reminderProxyApi";

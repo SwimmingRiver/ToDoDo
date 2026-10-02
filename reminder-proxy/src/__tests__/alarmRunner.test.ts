@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runAlarm, ALARM_RETRY_MS, REFRESH_RETRY_MS, type AlarmDeps } from "../alarmRunner";
 import { TransientFcmError, type PushMessage, type SendResult } from "../fcm";
 import { WINDOW_MS, type ReminderTodo } from "../schedule";
+import { HISTORY_RETENTION_MS } from "../history";
 import { MemoryReminderStore } from "./memoryStore";
 
 const NOW = Date.parse("2026-10-01T00:00:00.000Z");
@@ -285,5 +286,55 @@ describe("runAlarm", () => {
     now += ALARM_RETRY_MS;
     await runAlarm(deps());
     expect(store.isSent("t1", NOW + 30 * MIN)).toBe(true);
+  });
+
+  describe("발송 기록", () => {
+    it("발송에 성공하면 발송 시점 제목으로 기록한다", async () => {
+      await runAlarm(deps());
+      now = NOW + 30 * MIN;
+      await runAlarm(deps());
+      db.set("t1", todo({ title: "바뀐 제목" })); // 발송 뒤 바뀌어도 기록은 그대로
+      expect(store.listHistory(0, 50)).toEqual([
+        { todoId: "t1", title: "보고서", offsetMinutes: 30, dueAt: iso(60 * MIN), sentAt: NOW + 30 * MIN },
+      ]);
+    });
+
+    it("모든 기기 발송이 실패하면 기록하지 않는다", async () => {
+      await runAlarm(deps());
+      sendPush.mockRejectedValue(new TransientFcmError(503));
+      now = NOW + 30 * MIN;
+      await runAlarm(deps());
+      expect(store.listHistory(0, 50)).toEqual([]);
+    });
+
+    it("보내지 않기로 한 예약(완료됨)은 기록하지 않는다", async () => {
+      await runAlarm(deps());
+      db.set("t1", todo({ status: "done" }));
+      now = NOW + 30 * MIN;
+      await runAlarm(deps());
+      expect(store.listHistory(0, 50)).toEqual([]);
+    });
+
+    // Review Focus 5
+    it("재시도 끝에 성공해도 기록은 1건이다", async () => {
+      await runAlarm(deps());
+      sendPush.mockRejectedValueOnce(new TransientFcmError(503));
+      now = NOW + 30 * MIN;
+      await runAlarm(deps());
+      now += ALARM_RETRY_MS;
+      await runAlarm(deps());
+      await runAlarm(deps());
+      expect(store.listHistory(0, 50)).toHaveLength(1);
+      expect(store.listHistory(0, 50)[0].sentAt).toBe(NOW + 30 * MIN + ALARM_RETRY_MS);
+    });
+
+    it("알람이 돌 때 7일 지난 기록을 정리한다", async () => {
+      store.addHistory(
+        { todoId: "old", title: "옛 알림", offsetMinutes: 30, dueAt: iso(0), sentAt: NOW - HISTORY_RETENTION_MS - 1 },
+        1,
+      );
+      await runAlarm(deps());
+      expect(store.history.size).toBe(0);
+    });
   });
 });
