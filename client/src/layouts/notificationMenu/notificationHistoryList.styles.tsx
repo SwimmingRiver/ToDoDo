@@ -10,7 +10,7 @@ export const Heading = styled.h2`
 `;
 
 // 행 규칙은 오늘 화면 할 일 목록(todayTodoItem.styles의 Row)과 맞춘다:
-// 위아래 12px·좌우 0, 앞 표시와 내용 사이 12px, 최소 높이 44px, tertiary 구분선(마지막 행 없음).
+// 위아래 12px·좌우 0, 앞 표시와 내용 사이 12px, 최소 높이 44px. 구분선은 두지 않는다.
 // 호버 배경만 글자 밖으로 8px 넓게 칠하려고 List에 좌우 8px 여백을 두고 버튼을 그만큼 바깥으로 뺀다
 // (List가 overflow-y: auto라 음수 여백이 List 밖으로 나가면 가로 스크롤이 생긴다).
 export const List = styled.ul`
@@ -21,14 +21,6 @@ export const List = styled.ul`
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-`;
-
-export const Row = styled.li`
-  border-bottom: 1px solid ${colors.border.tertiary};
-
-  &:last-child {
-    border-bottom: none;
-  }
 `;
 
 export const ItemButton = styled.button`

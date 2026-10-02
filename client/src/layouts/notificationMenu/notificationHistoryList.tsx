@@ -3,7 +3,6 @@ import { formatTimeAgo, type ReminderHistoryItem } from "@/features/reminders";
 import {
   Heading,
   List,
-  Row,
   ItemButton,
   UnreadDot,
   Title,
@@ -35,7 +34,7 @@ const Body = ({ items, isPending, isError, unreadAfter, now, onSelect }: Props) 
       {items.map((item) => {
         const unread = item.sentAt > unreadAfter;
         return (
-          <Row key={`${item.todoId}:${item.sentAt}`}>
+          <li key={`${item.todoId}:${item.sentAt}`}>
             <ItemButton type="button" onClick={() => onSelect(item.todoId)}>
               <UnreadDot $visible={unread} aria-hidden="true" />
               <TextBlock>
@@ -46,7 +45,7 @@ const Body = ({ items, isPending, isError, unreadAfter, now, onSelect }: Props) 
                 </Meta>
               </TextBlock>
             </ItemButton>
-          </Row>
+          </li>
         );
       })}
     </List>
