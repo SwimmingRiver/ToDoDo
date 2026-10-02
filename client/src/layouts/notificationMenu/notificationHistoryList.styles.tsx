@@ -23,7 +23,7 @@ export const List = styled.ul`
 export const ItemButton = styled.button`
   width: 100%;
   display: grid;
-  grid-template-columns: 8px 1fr;
+  grid-template-columns: 8px minmax(0, 1fr);
   column-gap: 8px;
   align-items: start;
   padding: 8px 6px;
@@ -40,6 +40,10 @@ export const ItemButton = styled.button`
     outline: 2px solid ${colors.brand.strong};
     outline-offset: -2px;
   }
+`;
+
+export const TextBlock = styled.span`
+  min-width: 0;
 `;
 
 export const UnreadDot = styled.span<{ $visible: boolean }>`

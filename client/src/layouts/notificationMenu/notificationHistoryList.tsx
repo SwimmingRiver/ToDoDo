@@ -9,6 +9,7 @@ import {
   Meta,
   Message,
   VisuallyHidden,
+  TextBlock,
 } from "./notificationHistoryList.styles";
 
 interface Props {
@@ -33,13 +34,13 @@ const Body = ({ items, isPending, isError, unreadAfter, now, onSelect }: Props) 
           <li key={`${item.todoId}:${item.sentAt}`}>
             <ItemButton type="button" onClick={() => onSelect(item.todoId)}>
               <UnreadDot $visible={unread} aria-hidden="true" />
-              <span>
+              <TextBlock>
                 {unread && <VisuallyHidden>읽지 않음, </VisuallyHidden>}
                 <Title>{item.title}</Title>
                 <Meta>
                   {reminderBody(item.offsetMinutes)} · {formatTimeAgo(item.sentAt, now)}
                 </Meta>
-              </span>
+              </TextBlock>
             </ItemButton>
           </li>
         );
