@@ -11,7 +11,7 @@ const withCors = (response: Response, origin: string | null, env: Env): Response
   const headers = new Headers(response.headers);
   if (isAllowedOrigin(origin, env)) headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  headers.set("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   // 요청마다 preflight가 붙지 않게 하루 캐시한다(브라우저별 상한은 더 짧을 수 있다).
   headers.set("Access-Control-Max-Age", "86400");
   return new Response(response.body, { status: response.status, headers });
@@ -33,14 +33,30 @@ const readToken = async (request: Request): Promise<{ token: string; platform: u
   return { token: body.token, platform: body.platform };
 };
 
+const readSeenUntil = async (request: Request): Promise<number | null> => {
+  const body = (await request.json().catch(() => null)) as { seenUntil?: unknown } | null;
+  const value = body?.seenUntil;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+};
+
 const route = async (request: Request, env: Env, path: string): Promise<Response> => {
   const isTokens = path === "/push-tokens" && (request.method === "POST" || request.method === "DELETE");
   const isRefresh = path === "/reminders/refresh" && request.method === "POST";
-  if (!isTokens && !isRefresh) return new Response("Not Found", { status: 404 });
+  const isHistory = path === "/reminders/history" && request.method === "GET";
+  const isSeen = path === "/reminders/history/seen" && request.method === "POST";
+  if (!isTokens && !isRefresh && !isHistory && !isSeen) return new Response("Not Found", { status: 404 });
 
   const uid = await authenticate(request, env);
   if (!uid) return json({ error: "UNAUTHORIZED" }, 401);
   const scheduler = env.REMINDER_SCHEDULER.get(env.REMINDER_SCHEDULER.idFromName(uid));
+
+  if (isHistory) return json(await scheduler.getHistory(uid), 200);
+  if (isSeen) {
+    const seenUntil = await readSeenUntil(request);
+    if (seenUntil === null) return json({ error: "INVALID_INPUT" }, 400);
+    await scheduler.markHistorySeen(uid, seenUntil);
+    return new Response(null, { status: 204 });
+  }
 
   if (isRefresh) {
     await scheduler.requestRefresh(uid);
