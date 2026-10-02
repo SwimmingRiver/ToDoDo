@@ -1,6 +1,7 @@
 import { styled } from "styled-components";
 import { colors } from "@/styles/colors";
 import { radius } from "@/styles/radius";
+import { media } from "@/styles/breakpoints";
 
 export { Wrapper, Trigger } from "@/layouts/themeMenu/themeMenu.styles";
 
@@ -9,9 +10,9 @@ export const Panel = styled.div`
   top: calc(100% + 6px);
   right: 0;
   z-index: 1000;
-  width: 260px;
+  width: 340px;
   max-width: calc(100vw - 32px);
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -19,6 +20,18 @@ export const Panel = styled.div`
   border: 1px solid ${colors.border.secondary};
   border-radius: ${radius.md};
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  /* 모바일 헤더에선 벨 오른쪽에 테마·아바타 버튼이 있어(360px 화면에서 벨 오른쪽 끝 ≈ 256px)
+     벨 기준으로 왼쪽으로 펼치면 화면 밖으로 넘친다. 좁은 화면에선 화면 좌우에 맞춰 고정한다.
+     top = 모바일 헤더 높이(56px) + 6px. */
+  ${media.mobile} {
+    position: fixed;
+    top: 62px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+  }
 `;
 
 export const StatusText = styled.p`

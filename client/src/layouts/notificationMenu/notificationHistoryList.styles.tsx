@@ -13,7 +13,7 @@ export const List = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 320px;
+  max-height: 400px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -26,7 +26,7 @@ export const ItemButton = styled.button`
   grid-template-columns: 8px minmax(0, 1fr);
   column-gap: 8px;
   align-items: start;
-  padding: 8px 6px;
+  padding: 10px 8px;
   border: none;
   border-radius: ${radius.sm};
   background: none;
@@ -65,6 +65,7 @@ export const Title = styled.span`
 
 export const Meta = styled.span`
   display: block;
+  margin-top: 2px;
   font-size: 12px;
   color: ${colors.text.tertiary};
 `;
