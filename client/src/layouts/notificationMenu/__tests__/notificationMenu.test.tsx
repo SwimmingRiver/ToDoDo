@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ToastProvider } from "@/shared/ui/toast/toastContext";
 import { setupUser } from "@/test/setupUser";
@@ -12,6 +12,7 @@ const s = vi.hoisted(() => ({
   history: { items: [] as unknown[], lastSeenAt: 0 } as { items: { todoId: string; title: string; offsetMinutes: 30; dueAt: string; sentAt: number }[]; lastSeenAt: number } | undefined,
   refetch: vi.fn(),
   markSeen: vi.fn(),
+  historyError: false,
 }));
 vi.mock("@/features/reminders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/reminders")>()),
@@ -21,7 +22,7 @@ vi.mock("@/features/reminders", async (importOriginal) => ({
   useReminderHistory: () => ({
     data: s.history,
     isPending: false,
-    isError: false,
+    isError: s.historyError,
     refetch: s.refetch,
     unreadCount: s.history ? s.history.items.filter((i) => i.sentAt > s.history!.lastSeenAt).length : 0,
   }),
@@ -60,6 +61,7 @@ beforeEach(() => {
   s.history = { items: [], lastSeenAt: 0 };
   s.refetch.mockReset();
   s.markSeen.mockReset();
+  s.historyError = false;
   s.enable.mockReset().mockImplementation(async () => {
     s.permission = "granted";
     return "granted";
@@ -156,7 +158,8 @@ describe("NotificationMenu 알림 기록", () => {
     renderMenu();
     await user.click(screen.getByRole("button", { name: /^알림/ }));
     expect(s.refetch).toHaveBeenCalled();
-    expect(s.markSeen).toHaveBeenCalledWith(300);
+    expect(s.refetch).toHaveBeenCalled();
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
   });
 
   it("이미 다 읽었으면 읽음 요청을 보내지 않는다", async () => {
@@ -186,7 +189,7 @@ describe("NotificationMenu 알림 기록", () => {
     s.history = { items: [h("b", 400), h("a", 200)], lastSeenAt: 200 };
     view.rerender(menuTree());
     expect(screen.getByRole("button", { name: /할 일 b/ })).toHaveAccessibleName(/읽지 않음/);
-    expect(s.markSeen).toHaveBeenLastCalledWith(400);
+    await waitFor(() => expect(s.markSeen).toHaveBeenLastCalledWith(400));
   });
 
   it("항목을 누르면 할 일 상세로 이동하고 패널을 닫는다", async () => {
@@ -197,5 +200,54 @@ describe("NotificationMenu 알림 기록", () => {
     await user.click(screen.getByRole("button", { name: /할 일 t 1/ }));
     expect(screen.getByTestId("location")).toHaveTextContent("/todo/t%201");
     expect(screen.queryByRole("dialog", { name: "알림" })).not.toBeInTheDocument();
+  });
+
+  it("재조회가 끝나기 전엔 읽음 처리하지 않고, 끝난 뒤 갱신된 최신 값까지 처리한다", async () => {
+    s.history = { items: [h("a", 200)], lastSeenAt: 100 };
+    let resolve!: () => void;
+    s.refetch.mockReturnValue(new Promise<void>((r) => (resolve = r)));
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(s.markSeen).not.toHaveBeenCalled();
+    s.history = { items: [h("n", 500), h("a", 200)], lastSeenAt: 100 };
+    await act(async () => {
+      resolve();
+    });
+    view.rerender(menuTree());
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(500));
+  });
+
+  it("재조회가 실패해도 캐시의 최신 sentAt까지 읽음 처리한다", async () => {
+    s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+    s.refetch.mockRejectedValue(new Error("network"));
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
+  });
+
+  it("읽음 처리가 실패해 롤백돼도 무한 재시도하지 않는다", async () => {
+    s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
+    for (let i = 0; i < 3; i++) {
+      s.history = { items: [h("b", 300)], lastSeenAt: 200 + i };
+      view.rerender(menuTree());
+      s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+      view.rerender(menuTree());
+    }
+    expect(s.markSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it("기록 조회가 실패해도 설정 영역은 동작한다", async () => {
+    s.historyError = true;
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
+    expect(s.setDefault).toHaveBeenCalledTimes(1);
   });
 });

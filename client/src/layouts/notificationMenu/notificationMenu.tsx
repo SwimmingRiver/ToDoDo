@@ -50,10 +50,20 @@ const NotificationMenu = () => {
   // ●는 "열 때" 기준으로 고정한다. 읽음 처리로 lastSeenAt이 바로 올라가도 열려 있는 동안
   // 무엇이 새 알림이었는지 보이게 하려는 것이다(배지는 즉시 0).
   const [openedLastSeenAt, setOpenedLastSeenAt] = useState(0);
+  // 열 때의 재조회가 끝났는지. useMarkHistorySeen.onMutate가 cancelQueries를 하므로
+  // 재조회가 끝나기 전에 읽음 처리하면 방금 시작한 재조회가 취소된다.
+  const [openSynced, setOpenSynced] = useState(false);
+  // 열 때마다 증가하는 번호. 닫힘·언마운트·재오픈 뒤 늦게 끝난 재조회가 상태를 건드리지 않게 한다.
+  const openSeqRef = useRef(0);
+  // 이번에 연 동안 이미 시도한 가장 큰 seenUntil. 실패 롤백으로 effect가 재실행돼도 무한 재시도하지 않는다.
+  const attemptedSeenRef = useRef(0);
   const newestSentAt = history.data?.items[0]?.sentAt ?? 0;
   const lastSeenAt = history.data?.lastSeenAt ?? 0;
 
+  useEffect(() => () => void (openSeqRef.current += 1), []);
+
   const close = (restoreFocus: boolean) => {
+    openSeqRef.current += 1;
     setIsOpen(false);
     if (restoreFocus) triggerRef.current?.focus();
   };
@@ -71,10 +81,13 @@ const NotificationMenu = () => {
 
   // 화면에 보여준 가장 최신 항목까지 읽음 처리한다. 열린 채 새 알림이 와도 따라 올라간다.
   useEffect(() => {
-    if (isOpen && newestSentAt > lastSeenAt) markSeen.mutate(newestSentAt);
+    if (!isOpen || !openSynced) return;
+    if (newestSentAt <= lastSeenAt || newestSentAt <= attemptedSeenRef.current) return;
+    attemptedSeenRef.current = newestSentAt;
+    markSeen.mutate(newestSentAt);
     // markSeen 객체 정체성은 렌더마다 바뀌므로 의존성에서 뺀다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, newestSentAt, lastSeenAt]);
+  }, [isOpen, openSynced, newestSentAt, lastSeenAt]);
 
   // 패널이 열려도 포커스는 트리거에 남아 있으므로(패널 안으로 옮기지 않는다),
   // Escape 핸들러는 패널이 아니라 Wrapper에 달아야 버블링으로 잡힌다.
@@ -101,16 +114,25 @@ const NotificationMenu = () => {
 
   const toggle = () => {
     if (isOpen) {
+      openSeqRef.current += 1;
       setIsOpen(false);
       return;
     }
     setOpenedLastSeenAt(lastSeenAt);
     // 포그라운드 재조회는 지연되고 백그라운드 탭은 포커스 전엔 갱신이 없으니, 열 때 한 번 더 확인한다.
-    void history.refetch();
+    attemptedSeenRef.current = 0;
+    setOpenSynced(false);
+    const seq = ++openSeqRef.current;
+    const synced = () => {
+      if (openSeqRef.current === seq) setOpenSynced(true);
+    };
+    // 성공·실패 모두 "끝남"으로 취급한다(실패해도 캐시된 값은 읽음 처리해야 한다).
+    void Promise.resolve(history.refetch()).then(synced, synced);
     setIsOpen(true);
   };
 
   const openTodo = (todoId: string) => {
+    openSeqRef.current += 1;
     setIsOpen(false);
     navigate(`/todo/${encodeURIComponent(todoId)}`);
   };
