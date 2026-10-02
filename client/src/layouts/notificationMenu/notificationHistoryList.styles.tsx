@@ -17,7 +17,11 @@ export const List = styled.ul`
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+
+  /* 항목 사이 연한 구분선. 목록·설정을 나누는 Divider(border.secondary)보다 한 단계 연하게 둔다. */
+  & > li + li {
+    border-top: 1px solid ${colors.border.tertiary};
+  }
 `;
 
 export const ItemButton = styled.button`
