@@ -2,6 +2,7 @@ import { reminderBody } from "@tododo/core/dist/reminders/index.js";
 import type { FirestoreClient } from "./firestore";
 import type { PushMessage, SendResult } from "./fcm";
 import { computeSchedule, shouldSend, LATE_GRACE_MS, QUERY_SPAN_MS, WINDOW_MS, type ReminderTodo, type ScheduleEntry } from "./schedule";
+import { HISTORY_LIMIT, HISTORY_RETENTION_MS } from "./history";
 import type { ReminderStore } from "./store";
 
 const DAY = 24 * 60 * 60_000;
@@ -132,6 +133,17 @@ export const runAlarm = async (deps: AlarmDeps): Promise<number | null> => {
         if (decision.send && current) {
           await deliver(deps, entry, current.title);
           store.markSent(entry.todoId, entry.fireAt, Date.parse(entry.dueAt));
+          // 벨 메뉴 기록. deliver가 성공(한 기기 이상 수락)했을 때만 여기 온다.
+          store.addHistory(
+            {
+              todoId: entry.todoId,
+              title: current.title,
+              offsetMinutes: entry.offsetMinutes,
+              dueAt: entry.dueAt,
+              sentAt: deps.now(),
+            },
+            entry.fireAt,
+          );
         } else if (!decision.send && decision.reason === "dueAtChanged") {
           // 다른 기기에서 마감을 옮겼다 — 이 실행에서 바로 재계산해 새 시각으로 재예약한다.
           store.setMeta("refreshPending", "1");
@@ -156,6 +168,7 @@ export const runAlarm = async (deps: AlarmDeps): Promise<number | null> => {
   }
 
   store.pruneSent(now - DAY);
+  store.pruneHistory(now - HISTORY_RETENTION_MS, HISTORY_LIMIT);
 
   // 실패해 남은 예약은 fireAt이 이미 지났으므로 nextFireAt에 그대로 넣으면 즉시 다시 울려
   // 헛돈다. 그 경우엔 재시도 시각으로 대신한다(그 사이 다른 예약은 최대 1분 늦어질 수 있다).
