@@ -7,3 +7,5 @@ export { usePushTokenSync } from "./hooks/usePushTokenSync";
 export { useForegroundReminders } from "./hooks/useForegroundReminders";
 export { ReminderPromptProvider } from "./components/reminderPrompt/reminderPrompt";
 export { useReminderPrompt } from "./components/reminderPrompt/reminderPromptContext";
+export { useReminderHistory, useMarkHistorySeen } from "./hooks/useReminderHistory";
+export type { ReminderHistoryItem } from "./api/reminderProxyApi";
