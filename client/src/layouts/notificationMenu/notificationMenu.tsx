@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, BellOff, ChevronDown } from "lucide-react";
+import { Bell, BellOff, ChevronDown, ChevronLeft, Settings } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { DEFAULT_REMINDER_SETTING } from "@tododo/core/dist/reminders/index.js";
 import {
@@ -26,7 +26,9 @@ import {
   SelectArrow,
   TriggerSlot,
   Badge,
-  Divider,
+  PanelHeader,
+  PanelTitle,
+  HeaderButton,
 } from "./notificationMenu.styles";
 import NotificationHistoryList from "./notificationHistoryList";
 
@@ -41,6 +43,12 @@ const NotificationMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [permission, setPermission] = useState<PushPermission>(getPushPermission);
   const [isEnabling, setIsEnabling] = useState(false);
+  // 패널은 기록 목록이 기본이고, 거의 바꾸지 않는 기본 알림 설정은 톱니바퀴 뒤의 설정 화면에 둔다.
+  const [view, setView] = useState<"list" | "settings">("list");
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
+  // 화면을 바꾸면 누른 버튼이 사라져 포커스가 body로 빠지고(Escape도 안 먹는다), 반대 화면의 버튼으로 옮긴다.
+  const pendingFocusRef = useRef(false);
   const { data: reminderDefault = DEFAULT_REMINDER_SETTING } = useReminderDefault();
   const setDefault = useSetReminderDefault();
   const toast = useToast();
@@ -80,6 +88,17 @@ const NotificationMenu = () => {
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !pendingFocusRef.current) return;
+    pendingFocusRef.current = false;
+    (view === "settings" ? backButtonRef : settingsButtonRef).current?.focus();
+  }, [isOpen, view]);
+
+  const switchView = (next: "list" | "settings") => {
+    pendingFocusRef.current = true;
+    setView(next);
+  };
 
   // 화면에 보여준 가장 최신 항목까지 읽음 처리한다. 열린 채 새 알림이 와도 따라 올라간다.
   useEffect(() => {
@@ -141,6 +160,7 @@ const NotificationMenu = () => {
       (result) => synced(result?.data?.lastSeenAt),
       () => synced(),
     );
+    setView("list");
     setIsOpen(true);
   };
 
@@ -173,23 +193,46 @@ const NotificationMenu = () => {
       </Trigger>
       {isOpen && (
         <Panel role="dialog" aria-label="알림">
-          <NotificationHistoryList
-            items={history.data?.items}
-            isPending={history.isPending}
-            isError={history.isError}
-            unreadAfter={openedLastSeenAt}
-            now={Date.now()}
-            onSelect={openTodo}
-          />
-          <Divider />
-          <StatusText>{STATUS_TEXT[permission]}</StatusText>
-          {permission === "default" && (
-            <EnableButton type="button" onClick={() => void enable()} disabled={isEnabling}>
-              알림 켜기
-            </EnableButton>
-          )}
-          {permission !== "unsupported" && (
+          {view === "list" ? (
             <>
+              <PanelHeader>
+                <PanelTitle>알림</PanelTitle>
+                {permission !== "unsupported" && (
+                  <HeaderButton
+                    ref={settingsButtonRef}
+                    type="button"
+                    aria-label="알림 설정"
+                    onClick={() => switchView("settings")}
+                  >
+                    <Settings size={16} aria-hidden="true" />
+                  </HeaderButton>
+                )}
+              </PanelHeader>
+              {/* 정상(granted)일 땐 목록이 곧 상태라 문구를 두지 않고, 조치가 필요할 때만 안내한다. */}
+              {permission !== "granted" && <StatusText>{STATUS_TEXT[permission]}</StatusText>}
+              {permission === "default" && (
+                <EnableButton type="button" onClick={() => void enable()} disabled={isEnabling}>
+                  알림 켜기
+                </EnableButton>
+              )}
+              <NotificationHistoryList
+                items={history.data?.items}
+                isPending={history.isPending}
+                isError={history.isError}
+                unreadAfter={openedLastSeenAt}
+                now={Date.now()}
+                onSelect={openTodo}
+              />
+            </>
+          ) : (
+            <>
+              <PanelHeader>
+                <HeaderButton ref={backButtonRef} type="button" aria-label="뒤로" onClick={() => switchView("list")}>
+                  <ChevronLeft size={16} aria-hidden="true" />
+                </HeaderButton>
+                <PanelTitle>알림 설정</PanelTitle>
+              </PanelHeader>
+              <StatusText>{STATUS_TEXT[permission]}</StatusText>
               <FieldLabel htmlFor="reminder-default">기본 알림</FieldLabel>
               <SelectField>
                 <DefaultSelect

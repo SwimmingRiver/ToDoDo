@@ -68,13 +68,34 @@ beforeEach(() => {
   });
 });
 
+const h = (todoId: string, sentAt: number) => ({
+  todoId,
+  title: `할 일 ${todoId}`,
+  offsetMinutes: 30 as const,
+  dueAt: "2026-10-01T01:00:00.000Z",
+  sentAt,
+});
+
+const openSettings = async (user: ReturnType<typeof setupUser>) => {
+  await user.click(screen.getByRole("button", { name: "알림" }));
+  await user.click(screen.getByRole("button", { name: "알림 설정" }));
+};
+
 describe("NotificationMenu", () => {
+  it("정상(granted)일 땐 목록 화면에 상태 문구를 띄우지 않는다", async () => {
+    s.permission = "granted";
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(screen.getByRole("dialog", { name: "알림" })).not.toHaveTextContent("이 기기에서 마감 알림을 받고 있어요.");
+    expect(screen.queryByLabelText("기본 알림")).not.toBeInTheDocument();
+  });
+
   it.each([
-    ["granted", "이 기기에서 마감 알림을 받고 있어요."],
     ["default", "알림을 켜면 탭을 닫아도 마감 전에 알려드려요."],
     ["denied", "브라우저에서 알림이 차단돼 있어요. 주소창 왼쪽의 사이트 설정에서 알림을 허용해 주세요."],
     ["unsupported", "이 브라우저에서는 알림을 받을 수 없어요."],
-  ])("%s 상태 문구", async (permission, text) => {
+  ])("조치가 필요한 %s 상태는 목록 위에 안내한다", async (permission, text) => {
     s.permission = permission;
     const user = setupUser();
     renderMenu();
@@ -82,19 +103,48 @@ describe("NotificationMenu", () => {
     expect(screen.getByRole("dialog", { name: "알림" })).toHaveTextContent(text);
   });
 
-  it("default면 [알림 켜기]로 권한을 요청하고 상태가 바뀐다", async () => {
+  it("default면 [알림 켜기]로 권한을 요청하고, 켜지면 안내가 사라진다", async () => {
     const user = setupUser();
     renderMenu();
     await user.click(screen.getByRole("button", { name: "알림" }));
     await user.click(screen.getByRole("button", { name: "알림 켜기" }));
     expect(s.enable).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("이 기기에서 마감 알림을 받고 있어요.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("알림을 켜면 탭을 닫아도 마감 전에 알려드려요.")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button", { name: "알림 켜기" })).not.toBeInTheDocument();
+  });
+
+  it("톱니바퀴로 설정 화면을 열고, 뒤로 가면 목록으로 돌아온다(포커스도 따라간다)", async () => {
+    s.permission = "granted";
+    s.history = { items: [h("a", 100)], lastSeenAt: 100 };
+    const user = setupUser();
+    renderMenu();
+    await openSettings(user);
+    expect(screen.getByRole("dialog", { name: "알림" })).toHaveTextContent("이 기기에서 마감 알림을 받고 있어요.");
+    expect(screen.getByLabelText("기본 알림")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /할 일 a/ })).not.toBeInTheDocument();
+    const back = screen.getByRole("button", { name: "뒤로" });
+    expect(back).toHaveFocus();
+    await user.click(back);
+    expect(screen.getByRole("button", { name: /할 일 a/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "알림 설정" })).toHaveFocus();
+  });
+
+  it("다시 열면 목록 화면부터 보여준다", async () => {
+    const user = setupUser();
+    renderMenu();
+    await openSettings(user);
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(screen.queryByLabelText("기본 알림")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "알림 설정" })).toBeInTheDocument();
   });
 
   it("기본 알림을 바꾸면 저장한다", async () => {
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림" }));
+    await openSettings(user);
     await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
     expect(s.setDefault).toHaveBeenCalledTimes(1);
     expect(s.setDefault.mock.calls[0][0]).toBe(1440);
@@ -106,18 +156,18 @@ describe("NotificationMenu", () => {
     });
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림" }));
+    await openSettings(user);
     await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
     expect(await screen.findByText("저장하지 못했어요")).toBeInTheDocument();
     expect(screen.getByText("잠시 후 다시 시도해 주세요")).toBeInTheDocument();
   });
 
-  it("미지원이면 기본 알림 선택을 숨긴다", async () => {
+  it("미지원이면 설정 버튼을 두지 않는다", async () => {
     s.permission = "unsupported";
     const user = setupUser();
     renderMenu();
     await user.click(screen.getByRole("button", { name: "알림" }));
-    expect(screen.queryByLabelText("기본 알림")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "알림 설정" })).not.toBeInTheDocument();
   });
 
   it("Escape로 닫고 트리거로 포커스를 돌려준다", async () => {
@@ -129,15 +179,17 @@ describe("NotificationMenu", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it("설정 화면에서도 Escape로 닫힌다", async () => {
+    const user = setupUser();
+    renderMenu();
+    await openSettings(user);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "알림" })).toHaveFocus();
+  });
 });
 
-const h = (todoId: string, sentAt: number) => ({
-  todoId,
-  title: `할 일 ${todoId}`,
-  offsetMinutes: 30 as const,
-  dueAt: "2026-10-01T01:00:00.000Z",
-  sentAt,
-});
 
 describe("NotificationMenu 알림 기록", () => {
   it("안 읽은 개수를 배지와 트리거 이름으로 알린다", () => {
@@ -275,6 +327,7 @@ describe("NotificationMenu 알림 기록", () => {
     const user = setupUser();
     renderMenu();
     await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await user.click(screen.getByRole("button", { name: "알림 설정" }));
     await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
     expect(s.setDefault).toHaveBeenCalledTimes(1);
   });

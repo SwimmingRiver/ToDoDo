@@ -1,7 +1,6 @@
 import { reminderBody } from "@tododo/core/dist/reminders/index.js";
 import { formatTimeAgo, type ReminderHistoryItem } from "@/features/reminders";
 import {
-  Heading,
   List,
   ItemButton,
   UnreadDot,
@@ -52,11 +51,6 @@ const Body = ({ items, isPending, isError, unreadAfter, now, onSelect }: Props) 
   );
 };
 
-const NotificationHistoryList = (props: Props) => (
-  <>
-    <Heading>알림</Heading>
-    <Body {...props} />
-  </>
-);
+const NotificationHistoryList = (props: Props) => <Body {...props} />;
 
 export default NotificationHistoryList;

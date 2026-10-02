@@ -126,8 +126,48 @@ export const Badge = styled.span`
   text-align: center;
 `;
 
-export const Divider = styled.hr`
-  margin: 2px 0;
+export const PanelHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+`;
+
+export const PanelTitle = styled.h2`
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: ${colors.text.primary};
+`;
+
+export const HeaderButton = styled.button`
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: none;
-  border-top: 1px solid ${colors.border.secondary};
+  border-radius: ${radius.sm};
+  background: none;
+  color: ${colors.text.secondary};
+  cursor: pointer;
+
+  /* 버튼(28px) 안 아이콘(16px)이 본문 가장자리보다 6px 안쪽에 보이므로, 헤더 양끝 버튼은 바깥으로 당겨 맞춘다. */
+  &:first-child {
+    margin-left: -6px;
+  }
+  &:last-child {
+    margin-right: -6px;
+  }
+
+  &:hover {
+    background-color: ${colors.background.secondary};
+    color: ${colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.strong};
+    outline-offset: 2px;
+  }
 `;
