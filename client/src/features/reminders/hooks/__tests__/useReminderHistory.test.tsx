@@ -65,6 +65,14 @@ describe("useReminderHistory", () => {
     expect(result.current.history.unreadCount).toBe(1);
   });
 
+  // 화면엔 실패를 알리지 않으므로(빈 상태 문구) Sentry가 유일한 실패 신호다.
+  it("기록 조회가 실패하면 Sentry로 보낸다", async () => {
+    const error = new Error("reminder-proxy /reminders/history 실패: 500");
+    fetchMock.mockRejectedValue(error);
+    setup();
+    await waitFor(() => expect(captureMock).toHaveBeenCalledWith(error));
+  });
+
   it("읽음 처리가 끝나면(성공) 기록을 무효화해 서버 값과 맞춘다", async () => {
     const { result, client } = setup();
     await waitFor(() => expect(result.current.history.unreadCount).toBe(1));

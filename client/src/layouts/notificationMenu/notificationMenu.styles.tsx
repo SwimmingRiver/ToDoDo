@@ -57,13 +57,38 @@ export const FieldLabel = styled.label`
   color: ${colors.text.primary};
 `;
 
+// 크롬의 기본 셀렉트 화살표는 padding을 무시하고 오른쪽 테두리에 붙는다(실측).
+// 기본 화살표를 숨기고 테마 색을 따르는 아이콘을 직접 얹어 여백을 맞춘다.
+export const SelectField = styled.div`
+  position: relative;
+  display: flex;
+`;
+
 export const DefaultSelect = styled.select`
-  padding: 6px 8px;
+  width: 100%;
+  appearance: none;
+  padding: 6px 32px 6px 12px;
   border: 1px solid ${colors.border.secondary};
   border-radius: ${radius.sm};
   background-color: ${colors.background.primary};
   color: ${colors.text.primary};
   font-size: 14px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.strong};
+    outline-offset: 2px;
+  }
+`;
+
+export const SelectArrow = styled.span`
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: flex;
+  transform: translateY(-50%);
+  color: ${colors.text.secondary};
+  pointer-events: none;
 `;
 
 export const TriggerSlot = styled.span`

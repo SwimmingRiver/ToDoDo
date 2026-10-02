@@ -10,7 +10,13 @@ export const useReminderHistory = () => {
   const uid = auth.currentUser?.uid;
   const query = useQuery({
     queryKey: historyKey(uid),
-    queryFn: fetchReminderHistory,
+    // 벨 메뉴는 실패를 빈 상태로 보여줘 사용자에게 드러나지 않으므로 여기서 Sentry로 보낸다
+    // (전역 QueryClient엔 쿼리 실패 보고가 없다). 재시도 1회까지 시도마다 한 번씩 보고된다.
+    queryFn: () =>
+      fetchReminderHistory().catch((error: unknown) => {
+        Sentry.captureException(error);
+        throw error;
+      }),
     enabled: !!uid,
     // 전역 staleTime(1분)을 따르면 탭 포커스 재조회가 건너뛰어진다. 백그라운드에서 OS 알림을
     // 받고 돌아왔을 때 배지가 바로 떠야 하므로 이 쿼리는 항상 stale로 둔다.

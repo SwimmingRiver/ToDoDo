@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, BellOff } from "lucide-react";
+import { Bell, BellOff, ChevronDown } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { DEFAULT_REMINDER_SETTING } from "@tododo/core/dist/reminders/index.js";
 import {
@@ -22,6 +22,8 @@ import {
   EnableButton,
   FieldLabel,
   DefaultSelect,
+  SelectField,
+  SelectArrow,
   TriggerSlot,
   Badge,
   Divider,
@@ -189,26 +191,31 @@ const NotificationMenu = () => {
           {permission !== "unsupported" && (
             <>
               <FieldLabel htmlFor="reminder-default">기본 알림</FieldLabel>
-              <DefaultSelect
-                id="reminder-default"
-                value={String(reminderDefault)}
-                onChange={(e) => {
-                  const setting = parseReminderSetting(e.target.value);
-                  if (setting === null) return;
-                  setDefault.mutate(setting, {
-                    onError: (error) => {
-                      Sentry.captureException(error);
-                      toast.error("저장하지 못했어요", "잠시 후 다시 시도해 주세요");
-                    },
-                  });
-                }}
-              >
-                {REMINDER_SETTING_OPTIONS.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </DefaultSelect>
+              <SelectField>
+                <DefaultSelect
+                  id="reminder-default"
+                  value={String(reminderDefault)}
+                  onChange={(e) => {
+                    const setting = parseReminderSetting(e.target.value);
+                    if (setting === null) return;
+                    setDefault.mutate(setting, {
+                      onError: (error) => {
+                        Sentry.captureException(error);
+                        toast.error("저장하지 못했어요", "잠시 후 다시 시도해 주세요");
+                      },
+                    });
+                  }}
+                >
+                  {REMINDER_SETTING_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </DefaultSelect>
+                <SelectArrow aria-hidden="true">
+                  <ChevronDown size={16} />
+                </SelectArrow>
+              </SelectField>
             </>
           )}
         </Panel>

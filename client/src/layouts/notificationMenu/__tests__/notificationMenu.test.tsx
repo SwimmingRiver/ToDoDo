@@ -225,7 +225,7 @@ describe("NotificationMenu 알림 기록", () => {
     renderMenu();
     await user.click(screen.getByRole("button", { name: /^알림/ }));
     expect(screen.getByRole("button", { name: /할 일 b/ })).toBeInTheDocument();
-    expect(screen.queryByText("알림 기록을 불러오지 못했어요")).not.toBeInTheDocument();
+    expect(screen.queryByText("최근 7일간 받은 알림이 없어요")).not.toBeInTheDocument();
     await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
   });
 
@@ -236,7 +236,7 @@ describe("NotificationMenu 알림 기록", () => {
     const user = setupUser();
     renderMenu();
     await user.click(screen.getByRole("button", { name: /^알림/ }));
-    expect(await screen.findByText("알림 기록을 불러오지 못했어요")).toBeInTheDocument();
+    expect(await screen.findByText("최근 7일간 받은 알림이 없어요")).toBeInTheDocument();
     expect(s.markSeen).not.toHaveBeenCalled();
   });
 

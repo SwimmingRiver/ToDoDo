@@ -59,9 +59,10 @@ describe("NotificationHistoryList", () => {
     expect(screen.getByText("최근 7일간 받은 알림이 없어요")).toBeInTheDocument();
   });
 
-  it("실패하면 실패 문구", () => {
+  it("실패했고 캐시된 기록도 없으면 빈 상태 문구를 보여준다(에러 문구 대신)", () => {
     renderList({ items: undefined, isError: true });
-    expect(screen.getByText("알림 기록을 불러오지 못했어요")).toBeInTheDocument();
+    expect(screen.getByText("최근 7일간 받은 알림이 없어요")).toBeInTheDocument();
+    expect(screen.queryByText("불러오는 중…")).not.toBeInTheDocument();
   });
 
   it("불러오는 중엔 빈 상태 문구를 보여주지 않는다", () => {
@@ -73,6 +74,6 @@ describe("NotificationHistoryList", () => {
   it("실패해도 캐시된 기록이 있으면 목록을 보여준다", () => {
     renderList({ isError: true });
     expect(screen.getByText("기획서 제출")).toBeInTheDocument();
-    expect(screen.queryByText("알림 기록을 불러오지 못했어요")).not.toBeInTheDocument();
+    expect(screen.queryByText("최근 7일간 받은 알림이 없어요")).not.toBeInTheDocument();
   });
 });
