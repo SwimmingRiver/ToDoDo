@@ -118,16 +118,27 @@ const NotificationMenu = () => {
       setIsOpen(false);
       return;
     }
+    // 캐시 기준으로 먼저 잡고, 재조회가 끝나면 더 오래된(작은) 값으로 보정한다.
     setOpenedLastSeenAt(lastSeenAt);
     // 포그라운드 재조회는 지연되고 백그라운드 탭은 포커스 전엔 갱신이 없으니, 열 때 한 번 더 확인한다.
     attemptedSeenRef.current = 0;
     setOpenSynced(false);
     const seq = ++openSeqRef.current;
-    const synced = () => {
-      if (openSeqRef.current === seq) setOpenSynced(true);
+    const hadCache = history.data !== undefined;
+    const synced = (refetchedLastSeenAt?: number) => {
+      if (openSeqRef.current !== seq) return;
+      // 열 때 캐시가 오래됐을 수 있으니, 재조회로 받은 lastSeenAt이 더 작으면 그 기준으로 ●를 표시한다.
+      // 캐시가 없었으면 받은 값을 그대로 쓴다.
+      if (refetchedLastSeenAt !== undefined) {
+        setOpenedLastSeenAt((cur) => (hadCache ? Math.min(cur, refetchedLastSeenAt) : refetchedLastSeenAt));
+      }
+      setOpenSynced(true);
     };
-    // 성공·실패 모두 "끝남"으로 취급한다(실패해도 캐시된 값은 읽음 처리해야 한다).
-    void Promise.resolve(history.refetch()).then(synced, synced);
+    // 성공·실패 모두 "끝남"으로 취급한다(실패해도 캐시된 기록은 화면에 보이므로 읽음 처리한다).
+    void Promise.resolve(history.refetch()).then(
+      (result) => synced(result?.data?.lastSeenAt),
+      () => synced(),
+    );
     setIsOpen(true);
   };
 

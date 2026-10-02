@@ -23,7 +23,9 @@ interface Props {
 }
 
 const Body = ({ items, isPending, isError, unreadAfter, now, onSelect }: Props) => {
-  if (isError) return <Message>알림 기록을 불러오지 못했어요</Message>;
+  // 재조회가 실패해도 캐시된 기록이 있으면 보여준다. 화면에 보인 항목만 읽음 처리되므로
+  // (notificationMenu) 숨기면서 읽음 처리하는 일이 없어야 한다.
+  if (isError && !items?.length) return <Message>알림 기록을 불러오지 못했어요</Message>;
   if (isPending || !items) return <Message>불러오는 중…</Message>;
   if (items.length === 0) return <Message>최근 7일간 받은 알림이 없어요</Message>;
   return (

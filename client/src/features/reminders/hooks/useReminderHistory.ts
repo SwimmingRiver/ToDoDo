@@ -15,6 +15,8 @@ export const useReminderHistory = () => {
     // 전역 staleTime(1분)을 따르면 탭 포커스 재조회가 건너뛰어진다. 백그라운드에서 OS 알림을
     // 받고 돌아왔을 때 배지가 바로 떠야 하므로 이 쿼리는 항상 stale로 둔다.
     staleTime: 0,
+    // 기본 재시도(3회, 약 7초 백오프)면 벨을 연 뒤 재조회가 끝나기까지 너무 오래 걸린다.
+    retry: 1,
   });
   const { data } = query;
   const unreadCount = data ? data.items.filter((i) => i.sentAt > data.lastSeenAt).length : 0;
@@ -38,5 +40,7 @@ export const useMarkHistorySeen = () => {
       if (context?.prev) queryClient.setQueryData(key, context.prev);
       Sentry.captureException(error);
     },
+    // 낙관적 값을 서버 값과 맞춘다. 메뉴의 attemptedSeenRef 덕에 재시도 루프는 생기지 않는다.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
 };

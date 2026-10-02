@@ -69,4 +69,10 @@ describe("NotificationHistoryList", () => {
     expect(screen.queryByText("최근 7일간 받은 알림이 없어요")).not.toBeInTheDocument();
     expect(screen.getByText("불러오는 중…")).toBeInTheDocument();
   });
+
+  it("실패해도 캐시된 기록이 있으면 목록을 보여준다", () => {
+    renderList({ isError: true });
+    expect(screen.getByText("기획서 제출")).toBeInTheDocument();
+    expect(screen.queryByText("알림 기록을 불러오지 못했어요")).not.toBeInTheDocument();
+  });
 });

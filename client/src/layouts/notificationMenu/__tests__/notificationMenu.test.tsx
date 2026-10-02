@@ -158,7 +158,6 @@ describe("NotificationMenu 알림 기록", () => {
     renderMenu();
     await user.click(screen.getByRole("button", { name: /^알림/ }));
     expect(s.refetch).toHaveBeenCalled();
-    expect(s.refetch).toHaveBeenCalled();
     await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
   });
 
@@ -218,13 +217,42 @@ describe("NotificationMenu 알림 기록", () => {
     await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(500));
   });
 
-  it("재조회가 실패해도 캐시의 최신 sentAt까지 읽음 처리한다", async () => {
+  it("재조회가 실패해도 캐시된 기록을 보여주고, 보여준 최신 sentAt까지 읽음 처리한다", async () => {
     s.history = { items: [h("b", 300)], lastSeenAt: 100 };
-    s.refetch.mockRejectedValue(new Error("network"));
+    s.historyError = true;
+    s.refetch.mockResolvedValue({ data: undefined });
     const user = setupUser();
     renderMenu();
     await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(screen.getByRole("button", { name: /할 일 b/ })).toBeInTheDocument();
+    expect(screen.queryByText("알림 기록을 불러오지 못했어요")).not.toBeInTheDocument();
     await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
+  });
+
+  it("실패했고 캐시도 없으면 읽음 처리하지 않는다", async () => {
+    s.history = undefined;
+    s.historyError = true;
+    s.refetch.mockResolvedValue({ data: undefined });
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(await screen.findByText("알림 기록을 불러오지 못했어요")).toBeInTheDocument();
+    expect(s.markSeen).not.toHaveBeenCalled();
+  });
+
+  it("열 때 캐시가 없었으면 재조회로 받은 lastSeenAt 기준으로 ●를 표시한다", async () => {
+    s.history = undefined;
+    const fetched = { items: [h("n", 300), h("o", 100)], lastSeenAt: 200 };
+    s.refetch.mockImplementation(async () => {
+      s.history = fetched;
+      return { data: fetched };
+    });
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    view.rerender(menuTree());
+    await waitFor(() => expect(screen.getByRole("button", { name: /할 일 n/ })).toHaveAccessibleName(/읽지 않음/));
+    expect(screen.getByRole("button", { name: /할 일 o/ })).not.toHaveAccessibleName(/읽지 않음/);
   });
 
   it("읽음 처리가 실패해 롤백돼도 무한 재시도하지 않는다", async () => {

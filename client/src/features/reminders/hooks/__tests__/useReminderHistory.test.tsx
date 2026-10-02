@@ -30,7 +30,7 @@ const setup = () => {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => ({ history: useReminderHistory(), seen: useMarkHistorySeen() }), { wrapper });
+  return { client, ...renderHook(() => ({ history: useReminderHistory(), seen: useMarkHistorySeen() }), { wrapper }) };
 };
 
 beforeEach(() => {
@@ -63,5 +63,13 @@ describe("useReminderHistory", () => {
     act(() => result.current.seen.mutate(300));
     await waitFor(() => expect(captureMock).toHaveBeenCalled());
     expect(result.current.history.unreadCount).toBe(1);
+  });
+
+  it("읽음 처리가 끝나면(성공) 기록을 무효화해 서버 값과 맞춘다", async () => {
+    const { result, client } = setup();
+    await waitFor(() => expect(result.current.history.unreadCount).toBe(1));
+    const spy = vi.spyOn(client, "invalidateQueries");
+    act(() => result.current.seen.mutate(300));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["reminderHistory", "user-1"] }));
   });
 });

@@ -42,7 +42,7 @@ export class ReminderScheduler extends DurableObject<Env> {
   }
 
   async getHistory(uid: string): Promise<HistoryResponse> {
-    this.store.setMeta("uid", uid);
+    // 조회(GET)는 탭 포커스마다 호출되므로 저장소에 쓰지 않는다. uid 기록은 markHistorySeen이 맡는다.
     return readHistory(this.store, Date.now());
   }
 
