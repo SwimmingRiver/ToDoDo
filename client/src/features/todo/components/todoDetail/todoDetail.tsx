@@ -41,6 +41,7 @@ import {
   PanelContent,
   PanelFooter,
   PanelFooterActions,
+  DeleteButtonLabel,
   CloseButton,
   FormContainer,
   InfoRow,
@@ -607,7 +608,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
             aria-label="할 일 삭제"
           >
             <Trash2 size={16} />
-            삭제
+            <DeleteButtonLabel>삭제</DeleteButtonLabel>
           </Button>
           <PanelFooterActions>
             <Button type="button" onClick={handleClose}>

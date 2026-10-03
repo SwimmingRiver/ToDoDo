@@ -352,14 +352,26 @@ const PanelFooter = styled.div`
   }
 `;
 
+// 모바일에서는 삭제(아이콘만)·취소·저장을 한 줄로 두고 저장이 남은 폭을 채운다.
+// 세로 스택으로 바꾸면 왼쪽 삭제 버튼만 따로 놀아 통일성이 깨진다.
 const PanelFooterActions = styled.div`
   display: flex;
   gap: 12px;
   margin-left: auto;
 
   ${media.mobile} {
-    flex-direction: column-reverse;
-    width: 100%;
+    flex: 1;
+    gap: 8px;
+
+    & > button[type="submit"] {
+      flex: 1;
+    }
+  }
+`;
+
+const DeleteButtonLabel = styled.span`
+  ${media.mobile} {
+    display: none;
   }
 `;
 
@@ -402,6 +414,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     border: 1px solid ${colors.border.danger};
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
 
     &:hover {
@@ -423,9 +436,10 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" | "danger" }>`
     }
   `}
 
+  /* 모바일 한 줄 배치: 삭제는 아이콘만 남으므로 정사각형에 가깝게 좁힌다. */
   ${media.mobile} {
-    width: 100%;
-    padding: 12px;
+    padding: ${({ $variant }) => ($variant === "danger" ? "10px 12px" : "10px 16px")};
+    min-width: 44px;
   }
 `;
 
@@ -595,6 +609,7 @@ export {
   InfoValue,
   PanelFooter,
   PanelFooterActions,
+  DeleteButtonLabel,
   Button,
   StatusBadge,
   PriorityBadge,
