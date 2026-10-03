@@ -65,12 +65,33 @@ const ModalFooter = styled.div`
   flex: 0 0 50px;
   background-color: ${colors.background.secondary};
 `;
+// todoDetail의 패널 닫기 버튼과 같은 모양 — 앱 전체 닫기 버튼을 하나로 맞춘다.
 const ModalCloseButton = styled.button`
-  width: 20px;
-  height: 20px;
-  background-color: ${colors.background.secondary};
+  background: none;
   border: none;
   cursor: pointer;
+  color: ${colors.text.secondary};
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background-color: ${colors.brand.tint};
+    color: ${colors.brand.strong};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.strong};
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
 `;
 const ModalSubmitButton = styled.button`
   width: 100%;
