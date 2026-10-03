@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { PremiumLockedNotice, useIsPremium, useUpgradeInterest } from "@/features/entitlement";
 import { useCreatePlanTodos } from "@/features/todo/hooks";
 import { ConfirmModal, useToast } from "@/shared";
@@ -170,7 +171,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
           <ModalContainer role="dialog" aria-modal="true" aria-label="AI로 계획" onClick={(e) => e.stopPropagation()}>
             <ModalHeader>
               <ModalCloseButton onClick={requestClose} disabled={generate.isPending} aria-label="모달 닫기">
-                X
+                <X size={20} />
               </ModalCloseButton>
             </ModalHeader>
             <ModalBody>{renderBody()}</ModalBody>

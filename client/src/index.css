@@ -20,3 +20,16 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* iOS Safari는 font-size 16px 미만인 입력 요소에 포커스하면 화면을 자동 확대하고,
+   폼을 닫아도 확대가 풀리지 않는다. 터치 기기에서만 16px로 올려 이를 막는다.
+   (viewport maximum-scale=1은 Android에서 핀치 줌까지 막아 접근성을 해치므로 쓰지 않는다.)
+   폭 기준이 아니라 포인터 기준인 이유: 가로 모드 폰은 480px를 넘기 때문.
+   styled-components 클래스 선택자보다 우선해야 해서 !important가 필요하다. */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
