@@ -1,7 +1,16 @@
 import type { ReminderOffsetMinutes } from "@tododo/core/dist/reminders/index.js";
 import type { ScheduleEntry } from "./schedule";
 
-export type MetaKey = "uid" | "refreshPending" | "windowEnd";
+export type MetaKey = "uid" | "refreshPending" | "windowEnd" | "lastSeenAt";
+
+/** 벨 메뉴에 보여줄 발송 기록. 제목은 발송 시점 스냅샷이다(할 일이 지워지거나 바뀌어도 받은 그대로). */
+export interface HistoryItem {
+  todoId: string;
+  title: string;
+  offsetMinutes: ReminderOffsetMinutes;
+  dueAt: string;
+  sentAt: number;
+}
 
 /** DO SQLite가 동기 API라 저장소도 동기다. 테스트는 memoryStore로 같은 계약을 쓴다. */
 export interface ReminderStore {
@@ -15,6 +24,12 @@ export interface ReminderStore {
   isSent(todoId: string, fireAt: number): boolean;
   markSent(todoId: string, fireAt: number, dueAtMs: number): void;
   pruneSent(beforeDueAtMs: number): void;
+  /** (todoId, fireAt)이 같으면 무시한다 — 같은 예약이 두 번 기록되지 않게. */
+  addHistory(item: HistoryItem, fireAt: number): void;
+  /** sentAt >= sinceSentAt인 기록을 최신순으로 최대 limit개. */
+  listHistory(sinceSentAt: number, limit: number): HistoryItem[];
+  /** sentAt < beforeSentAt을 지우고, 남은 것 중 최신 keep개만 남긴다. */
+  pruneHistory(beforeSentAt: number, keep: number): void;
   getMeta(key: MetaKey): string | null;
   setMeta(key: MetaKey, value: string): void;
 }
@@ -33,6 +48,10 @@ export class SqliteReminderStore implements ReminderStore {
       "CREATE TABLE IF NOT EXISTS sent (todoId TEXT NOT NULL, fireAt INTEGER NOT NULL, dueAtMs INTEGER NOT NULL, PRIMARY KEY (todoId, fireAt))",
     );
     sql.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    // sent(중복 방지, 마감 하루 뒤 삭제)와 수명·필드가 달라 분리한다. 키를 같게 두어 중복 기록을 막는다.
+    sql.exec(
+      "CREATE TABLE IF NOT EXISTS history (todoId TEXT NOT NULL, fireAt INTEGER NOT NULL, title TEXT NOT NULL, offsetMinutes INTEGER NOT NULL, dueAt TEXT NOT NULL, sentAt INTEGER NOT NULL, PRIMARY KEY (todoId, fireAt))",
+    );
   }
 
   listTokens(): string[] {
@@ -96,6 +115,37 @@ export class SqliteReminderStore implements ReminderStore {
 
   pruneSent(beforeDueAtMs: number): void {
     this.sql.exec("DELETE FROM sent WHERE dueAtMs < ?", beforeDueAtMs);
+  }
+
+  addHistory(item: HistoryItem, fireAt: number): void {
+    this.sql.exec(
+      "INSERT OR IGNORE INTO history (todoId, fireAt, title, offsetMinutes, dueAt, sentAt) VALUES (?, ?, ?, ?, ?, ?)",
+      item.todoId,
+      fireAt,
+      item.title,
+      item.offsetMinutes,
+      item.dueAt,
+      item.sentAt,
+    );
+  }
+
+  listHistory(sinceSentAt: number, limit: number): HistoryItem[] {
+    return this.sql
+      .exec<{ todoId: string; title: string; offsetMinutes: number; dueAt: string; sentAt: number }>(
+        "SELECT todoId, title, offsetMinutes, dueAt, sentAt FROM history WHERE sentAt >= ? ORDER BY sentAt DESC LIMIT ?",
+        sinceSentAt,
+        limit,
+      )
+      .toArray()
+      .map((r) => ({ ...r, offsetMinutes: r.offsetMinutes as ReminderOffsetMinutes }));
+  }
+
+  pruneHistory(beforeSentAt: number, keep: number): void {
+    this.sql.exec("DELETE FROM history WHERE sentAt < ?", beforeSentAt);
+    this.sql.exec(
+      "DELETE FROM history WHERE rowid NOT IN (SELECT rowid FROM history ORDER BY sentAt DESC LIMIT ?)",
+      keep,
+    );
   }
 
   getMeta(key: MetaKey): string | null {

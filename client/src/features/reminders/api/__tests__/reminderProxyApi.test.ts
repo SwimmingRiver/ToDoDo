@@ -45,4 +45,35 @@ describe("reminderProxyApi", () => {
     await api.registerPushToken("tok");
     expect(authorizedFetchMock).not.toHaveBeenCalled();
   });
+
+  it("기록 조회는 GET /reminders/history, 본문 JSON을 돌려준다", async () => {
+    const api = await load("https://r.example.com");
+    const body = { items: [], lastSeenAt: 5 };
+    authorizedFetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200 }));
+    expect(await api.fetchReminderHistory()).toEqual(body);
+    expect(authorizedFetchMock).toHaveBeenCalledWith("https://r.example.com", "/reminders/history", { method: "GET" });
+  });
+
+  it("기록 조회가 실패 응답이면 throw", async () => {
+    const api = await load("https://r.example.com");
+    authorizedFetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
+    await expect(api.fetchReminderHistory()).rejects.toThrow("500");
+  });
+
+  it("읽음 처리는 POST /reminders/history/seen {seenUntil}", async () => {
+    const api = await load("https://r.example.com");
+    await api.markReminderHistorySeen(123);
+    expect(authorizedFetchMock).toHaveBeenCalledWith("https://r.example.com", "/reminders/history/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seenUntil: 123 }),
+    });
+  });
+
+  it("URL이 없으면 기록은 네트워크 없이 빈 결과", async () => {
+    const api = await load("");
+    expect(await api.fetchReminderHistory()).toEqual({ items: [], lastSeenAt: 0 });
+    await api.markReminderHistorySeen(1);
+    expect(authorizedFetchMock).not.toHaveBeenCalled();
+  });
 });

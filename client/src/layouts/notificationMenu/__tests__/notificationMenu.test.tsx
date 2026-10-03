@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ToastProvider } from "@/shared/ui/toast/toastContext";
 import { setupUser } from "@/test/setupUser";
 
@@ -8,12 +9,24 @@ const s = vi.hoisted(() => ({
   reminderDefault: 30 as unknown,
   setDefault: vi.fn(),
   enable: vi.fn(),
+  history: { items: [] as unknown[], lastSeenAt: 0 } as { items: { todoId: string; title: string; offsetMinutes: 30; dueAt: string; sentAt: number }[]; lastSeenAt: number } | undefined,
+  refetch: vi.fn(),
+  markSeen: vi.fn(),
+  historyError: false,
 }));
 vi.mock("@/features/reminders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/reminders")>()),
   getPushPermission: () => s.permission,
   useReminderDefault: () => ({ data: s.reminderDefault }),
   useSetReminderDefault: () => ({ mutate: s.setDefault }),
+  useReminderHistory: () => ({
+    data: s.history,
+    isPending: false,
+    isError: s.historyError,
+    refetch: s.refetch,
+    unreadCount: s.history ? s.history.items.filter((i) => i.sentAt > s.history!.lastSeenAt).length : 0,
+  }),
+  useMarkHistorySeen: () => ({ mutate: s.markSeen }),
 }));
 vi.mock("@/features/reminders/push/pushClient", () => ({ enablePushOnThisDevice: s.enable }));
 // importOriginal이 실제 배럴을 읽으므로 Firebase 초기화를 막는다(CI는 API 키가 비어 있어 실패한다).
@@ -28,50 +41,110 @@ vi.mock("@/features/todo/hooks", () => ({ useGetTodos: () => ({ data: undefined 
 
 import NotificationMenu from "../notificationMenu";
 
-const renderMenu = () =>
-  render(
+const LocationProbe = () => <div data-testid="location">{useLocation().pathname}</div>;
+const menuTree = () => (
+  <MemoryRouter initialEntries={["/today"]}>
     <ToastProvider>
       <NotificationMenu />
-    </ToastProvider>,
-  );
+      <Routes>
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
+    </ToastProvider>
+  </MemoryRouter>
+);
+const renderMenu = () => render(menuTree());
 
 beforeEach(() => {
   s.permission = "default";
   s.reminderDefault = 30;
   s.setDefault.mockReset();
+  s.history = { items: [], lastSeenAt: 0 };
+  s.refetch.mockReset();
+  s.markSeen.mockReset();
+  s.historyError = false;
   s.enable.mockReset().mockImplementation(async () => {
     s.permission = "granted";
     return "granted";
   });
 });
 
+const h = (todoId: string, sentAt: number) => ({
+  todoId,
+  title: `할 일 ${todoId}`,
+  offsetMinutes: 30 as const,
+  dueAt: "2026-10-01T01:00:00.000Z",
+  sentAt,
+});
+
+const openSettings = async (user: ReturnType<typeof setupUser>) => {
+  await user.click(screen.getByRole("button", { name: "알림" }));
+  await user.click(screen.getByRole("button", { name: "알림 설정" }));
+};
+
 describe("NotificationMenu", () => {
+  it("정상(granted)일 땐 목록 화면에 상태 문구를 띄우지 않는다", async () => {
+    s.permission = "granted";
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(screen.getByRole("dialog", { name: "알림" })).not.toHaveTextContent("이 기기에서 마감 알림을 받고 있어요.");
+    expect(screen.queryByLabelText("기본 알림")).not.toBeInTheDocument();
+  });
+
   it.each([
-    ["granted", "이 기기에서 마감 알림을 받고 있어요."],
     ["default", "알림을 켜면 탭을 닫아도 마감 전에 알려드려요."],
     ["denied", "브라우저에서 알림이 차단돼 있어요. 주소창 왼쪽의 사이트 설정에서 알림을 허용해 주세요."],
     ["unsupported", "이 브라우저에서는 알림을 받을 수 없어요."],
-  ])("%s 상태 문구", async (permission, text) => {
+  ])("조치가 필요한 %s 상태는 목록 위에 안내한다", async (permission, text) => {
     s.permission = permission;
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림 설정" }));
-    expect(screen.getByRole("dialog", { name: "알림 설정" })).toHaveTextContent(text);
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(screen.getByRole("dialog", { name: "알림" })).toHaveTextContent(text);
   });
 
-  it("default면 [알림 켜기]로 권한을 요청하고 상태가 바뀐다", async () => {
+  it("default면 [알림 켜기]로 권한을 요청하고, 켜지면 안내가 사라진다", async () => {
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림 설정" }));
+    await user.click(screen.getByRole("button", { name: "알림" }));
     await user.click(screen.getByRole("button", { name: "알림 켜기" }));
     expect(s.enable).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("이 기기에서 마감 알림을 받고 있어요.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("알림을 켜면 탭을 닫아도 마감 전에 알려드려요.")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button", { name: "알림 켜기" })).not.toBeInTheDocument();
+  });
+
+  it("톱니바퀴로 설정 화면을 열고, 뒤로 가면 목록으로 돌아온다(포커스도 따라간다)", async () => {
+    s.permission = "granted";
+    s.history = { items: [h("a", 100)], lastSeenAt: 100 };
+    const user = setupUser();
+    renderMenu();
+    await openSettings(user);
+    expect(screen.getByRole("dialog", { name: "알림" })).toHaveTextContent("이 기기에서 마감 알림을 받고 있어요.");
+    expect(screen.getByLabelText("기본 알림")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /할 일 a/ })).not.toBeInTheDocument();
+    const back = screen.getByRole("button", { name: "뒤로" });
+    expect(back).toHaveFocus();
+    await user.click(back);
+    expect(screen.getByRole("button", { name: /할 일 a/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "알림 설정" })).toHaveFocus();
+  });
+
+  it("다시 열면 목록 화면부터 보여준다", async () => {
+    const user = setupUser();
+    renderMenu();
+    await openSettings(user);
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(screen.queryByLabelText("기본 알림")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "알림 설정" })).toBeInTheDocument();
   });
 
   it("기본 알림을 바꾸면 저장한다", async () => {
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림 설정" }));
+    await openSettings(user);
     await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
     expect(s.setDefault).toHaveBeenCalledTimes(1);
     expect(s.setDefault.mock.calls[0][0]).toBe(1440);
@@ -83,27 +156,179 @@ describe("NotificationMenu", () => {
     });
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림 설정" }));
+    await openSettings(user);
     await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
     expect(await screen.findByText("저장하지 못했어요")).toBeInTheDocument();
     expect(screen.getByText("잠시 후 다시 시도해 주세요")).toBeInTheDocument();
   });
 
-  it("미지원이면 기본 알림 선택을 숨긴다", async () => {
+  it("미지원이면 설정 버튼을 두지 않는다", async () => {
     s.permission = "unsupported";
     const user = setupUser();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "알림 설정" }));
-    expect(screen.queryByLabelText("기본 알림")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(screen.queryByRole("button", { name: "알림 설정" })).not.toBeInTheDocument();
   });
 
   it("Escape로 닫고 트리거로 포커스를 돌려준다", async () => {
     const user = setupUser();
     renderMenu();
-    const trigger = screen.getByRole("button", { name: "알림 설정" });
+    const trigger = screen.getByRole("button", { name: "알림" });
     await user.click(trigger);
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("설정 화면에서도 Escape로 닫힌다", async () => {
+    const user = setupUser();
+    renderMenu();
+    await openSettings(user);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "알림" })).toHaveFocus();
+  });
+});
+
+
+describe("NotificationMenu 알림 기록", () => {
+  it("안 읽은 개수를 배지와 트리거 이름으로 알린다", () => {
+    s.history = { items: [h("b", 300), h("a", 200), h("z", 50)], lastSeenAt: 100 };
+    renderMenu();
+    expect(screen.getByRole("button", { name: "알림, 읽지 않은 알림 2개" })).toHaveTextContent("2");
+  });
+
+  it("9개를 넘으면 9+", () => {
+    s.history = { items: Array.from({ length: 12 }, (_, i) => h(`t${i}`, 1000 - i)), lastSeenAt: 0 };
+    renderMenu();
+    expect(screen.getByRole("button", { name: "알림, 읽지 않은 알림 12개" })).toHaveTextContent("9+");
+  });
+
+  it("열면 다시 불러오고, 보여준 최신 sentAt까지 읽음 처리한다", async () => {
+    s.history = { items: [h("b", 300), h("a", 200)], lastSeenAt: 100 };
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(s.refetch).toHaveBeenCalled();
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
+  });
+
+  it("이미 다 읽었으면 읽음 요청을 보내지 않는다", async () => {
+    s.history = { items: [h("a", 100)], lastSeenAt: 100 };
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: "알림" }));
+    expect(s.markSeen).not.toHaveBeenCalled();
+  });
+
+  it("열려 있는 동안엔 읽음 처리 후에도 ●를 유지한다", async () => {
+    s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    s.history = { items: [h("b", 300)], lastSeenAt: 300 }; // 낙관적 업데이트 반영
+    view.rerender(menuTree());
+    expect(screen.getByRole("button", { name: /할 일 b/ })).toHaveAccessibleName(/읽지 않음/);
+  });
+
+  // Review Focus 2
+  it("열린 채 새 알림이 오면 그것도 ●로 보이고 읽음 위치가 따라 올라간다", async () => {
+    s.history = { items: [h("a", 200)], lastSeenAt: 100 };
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    s.history = { items: [h("b", 400), h("a", 200)], lastSeenAt: 200 };
+    view.rerender(menuTree());
+    expect(screen.getByRole("button", { name: /할 일 b/ })).toHaveAccessibleName(/읽지 않음/);
+    await waitFor(() => expect(s.markSeen).toHaveBeenLastCalledWith(400));
+  });
+
+  it("항목을 누르면 할 일 상세로 이동하고 패널을 닫는다", async () => {
+    s.history = { items: [h("t 1", 300)], lastSeenAt: 0 };
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await user.click(screen.getByRole("button", { name: /할 일 t 1/ }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/todo/t%201");
+    expect(screen.queryByRole("dialog", { name: "알림" })).not.toBeInTheDocument();
+  });
+
+  it("재조회가 끝나기 전엔 읽음 처리하지 않고, 끝난 뒤 갱신된 최신 값까지 처리한다", async () => {
+    s.history = { items: [h("a", 200)], lastSeenAt: 100 };
+    let resolve!: () => void;
+    s.refetch.mockReturnValue(new Promise<void>((r) => (resolve = r)));
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(s.markSeen).not.toHaveBeenCalled();
+    s.history = { items: [h("n", 500), h("a", 200)], lastSeenAt: 100 };
+    await act(async () => {
+      resolve();
+    });
+    view.rerender(menuTree());
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(500));
+  });
+
+  it("재조회가 실패해도 캐시된 기록을 보여주고, 보여준 최신 sentAt까지 읽음 처리한다", async () => {
+    s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+    s.historyError = true;
+    s.refetch.mockResolvedValue({ data: undefined });
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(screen.getByRole("button", { name: /할 일 b/ })).toBeInTheDocument();
+    expect(screen.queryByText("최근 7일간 받은 알림이 없어요")).not.toBeInTheDocument();
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
+  });
+
+  it("실패했고 캐시도 없으면 읽음 처리하지 않는다", async () => {
+    s.history = undefined;
+    s.historyError = true;
+    s.refetch.mockResolvedValue({ data: undefined });
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    expect(await screen.findByText("최근 7일간 받은 알림이 없어요")).toBeInTheDocument();
+    expect(s.markSeen).not.toHaveBeenCalled();
+  });
+
+  it("열 때 캐시가 없었으면 재조회로 받은 lastSeenAt 기준으로 ●를 표시한다", async () => {
+    s.history = undefined;
+    const fetched = { items: [h("n", 300), h("o", 100)], lastSeenAt: 200 };
+    s.refetch.mockImplementation(async () => {
+      s.history = fetched;
+      return { data: fetched };
+    });
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    view.rerender(menuTree());
+    await waitFor(() => expect(screen.getByRole("button", { name: /할 일 n/ })).toHaveAccessibleName(/읽지 않음/));
+    expect(screen.getByRole("button", { name: /할 일 o/ })).not.toHaveAccessibleName(/읽지 않음/);
+  });
+
+  it("읽음 처리가 실패해 롤백돼도 무한 재시도하지 않는다", async () => {
+    s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+    const user = setupUser();
+    const view = renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await waitFor(() => expect(s.markSeen).toHaveBeenCalledWith(300));
+    for (let i = 0; i < 3; i++) {
+      s.history = { items: [h("b", 300)], lastSeenAt: 200 + i };
+      view.rerender(menuTree());
+      s.history = { items: [h("b", 300)], lastSeenAt: 100 };
+      view.rerender(menuTree());
+    }
+    expect(s.markSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it("기록 조회가 실패해도 설정 영역은 동작한다", async () => {
+    s.historyError = true;
+    const user = setupUser();
+    renderMenu();
+    await user.click(screen.getByRole("button", { name: /^알림/ }));
+    await user.click(screen.getByRole("button", { name: "알림 설정" }));
+    await user.selectOptions(screen.getByLabelText("기본 알림"), "1440");
+    expect(s.setDefault).toHaveBeenCalledTimes(1);
   });
 });
