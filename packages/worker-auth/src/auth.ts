@@ -5,7 +5,10 @@ const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1시간
 
 export interface VerifiedToken {
   uid: string;
+  /** premiumUntil > 검증 시각. 소비처(ai-proxy, calendar-proxy)는 이 값만 본다. */
   premium: boolean;
+  /** 커스텀 클레임 premiumUntil(epoch 초). 없거나 숫자가 아니면 null. */
+  premiumUntil: number | null;
 }
 
 interface JwksCache {
@@ -69,7 +72,7 @@ export const verifyFirebaseIdToken = async (
     iss?: string;
     exp?: number;
     sub?: string;
-    premium?: boolean;
+    premiumUntil?: unknown;
   };
 
   if (payload.aud !== firebaseProjectId) throw new Error("Invalid audience");
@@ -106,5 +109,15 @@ export const verifyFirebaseIdToken = async (
   );
   if (!isValid) throw new Error("Invalid signature");
 
-  return { uid: payload.sub, premium: payload.premium === true };
+  // 만료 시각만 비교하므로 체험 종료·해지 후 기간 만료 시 별도 회수 작업이 필요 없다.
+  // 예전 형식(premium: true)은 의도적으로 무시한다 — 배포 직후 grant:entitlement로 재부여.
+  const premiumUntil =
+    typeof payload.premiumUntil === "number" && Number.isFinite(payload.premiumUntil)
+      ? payload.premiumUntil
+      : null;
+  return {
+    uid: payload.sub,
+    premium: premiumUntil !== null && premiumUntil > Date.now() / 1000,
+    premiumUntil,
+  };
 };
