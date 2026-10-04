@@ -2080,7 +2080,7 @@ export default {
 ## 배포 준비 (사용자 작업 — 비밀값은 본인 터미널에서)
 
 1. **Paddle 샌드박스**(sandbox-vendors.paddle.com)
-   - Catalog: 상품 "ToDoDo 프리미엄" + 월간 KRW 가격 → `pri_…`를 `wrangler.toml`의 `PADDLE_PRICE_ID`에.
+   - Catalog: 상품 "ToDoDo 프리미엄" + 월간 KRW 가격 **₩4,900, 세금 포함(tax inclusive)** — 클라이언트 표시 가격 `PREMIUM_MONTHLY_PRICE_LABEL`과 같아야 한다 → `pri_…`를 `wrangler.toml`의 `PADDLE_PRICE_ID`에.
    - Developer tools > Authentication: API 키(→ `PADDLE_API_KEY`), Client-side token(→ 클라이언트 `VITE_PADDLE_CLIENT_TOKEN`).
    - Checkout > Checkout settings: Default payment link = `https://tododo-83576.web.app` (transactionId로 결제창을 열려면 필수).
    - Developer tools > Notifications: 대상 URL `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/paddle`, 이벤트 `subscription.created`·`subscription.updated`·`subscription.canceled` → secret key(→ `PADDLE_WEBHOOK_SECRET`).
@@ -2781,7 +2781,7 @@ export const PADDLE_CLIENT_TOKEN = (import.meta.env.VITE_PADDLE_CLIENT_TOKEN as 
 export const PADDLE_ENV: "sandbox" | "production" =
   import.meta.env.VITE_PADDLE_ENV === "production" ? "production" : "sandbox";
 /** 표시용. 실제 청구 금액은 billing-proxy의 PADDLE_PRICE_ID가 정한다 — Paddle 가격을 바꾸면 함께 바꾼다. */
-export const PREMIUM_MONTHLY_PRICE_LABEL = "월 3,900원";
+export const PREMIUM_MONTHLY_PRICE_LABEL = "월 4,900원";
 ```
 
 `billing/api/billingApi.ts`:
@@ -3490,7 +3490,7 @@ describe("PremiumPage", () => {
   it("체험 전: 혜택·가격·체험(주)·바로 구독(보조)", () => {
     render(<PremiumPage />);
     expect(screen.getByText("AI 할 일 플랜")).toBeInTheDocument();
-    expect(screen.getByText("월 3,900원")).toBeInTheDocument();
+    expect(screen.getByText("월 4,900원")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "7일 무료 체험" }));
     expect(trial.mutate).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "바로 구독하기" }));
