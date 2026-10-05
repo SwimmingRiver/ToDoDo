@@ -25,12 +25,21 @@ export const commitEntitlement = async <R extends string>(
   uid: string,
   decide: (existing: EntitlementDoc) => Decision<R>,
 ): Promise<CommitOutcome<R>> => {
+  let wroteClaim = false;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const { doc, updateTime } = await deps.store.get(uid);
     const decision = decide(doc);
-    if ("skip" in decision) return { kind: "skipped", reason: decision.skip };
+    if ("skip" in decision) {
+      // 이전 시도에서 이미 클레임을 썼다면, 방금 읽은 문서(다른 탭의 결과)에 맞춰 재동기화한다.
+      // 이를 통해 경합에서 패한 탭의 클레임이 승자의 문서와 일치하게 한다.
+      if (wroteClaim) {
+        await deps.claims.setPremiumUntil(uid, toClaimSeconds(doc.premiumUntil));
+      }
+      return { kind: "skipped", reason: decision.skip };
+    }
 
     await deps.claims.setPremiumUntil(uid, toClaimSeconds(decision.write.premiumUntil));
+    wroteClaim = true;
     if ((await deps.store.write(uid, decision.write, updateTime)) === "ok") {
       return { kind: "written", doc: decision.write };
     }

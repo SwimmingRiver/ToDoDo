@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { commitEntitlement, type CommitDeps } from "../commit";
-import { EMPTY_ENTITLEMENT, applyTrial, type EntitlementDoc } from "../entitlement";
+import { EMPTY_ENTITLEMENT, applyTrial, toClaimSeconds, type EntitlementDoc } from "../entitlement";
 
 const NOW = new Date("2026-10-10T00:00:00.000Z");
 
@@ -76,5 +76,29 @@ describe("commitEntitlement", () => {
     const claims = { setPremiumUntil: vi.fn(async () => undefined) };
     await expect(commitEntitlement({ store, claims }, "u1", (existing) => applyTrial(existing, NOW))).rejects.toThrow("충돌");
     expect(store.write).toHaveBeenCalledTimes(3);
+    expect(claims.setPremiumUntil).toHaveBeenCalledTimes(3);
+  });
+
+  it("충돌 후 건너뛸 때 클레임을 최신 문서에 맞춰 재동기화한다", async () => {
+    const store = memoryStore(null);
+    const claims = { setPremiumUntil: vi.fn(async () => undefined) };
+    const deps: CommitDeps = { store, claims };
+
+    const now1 = NOW;
+    const now2 = new Date(NOW.getTime() + 3_600_000);
+
+    const [a, b] = await Promise.all([
+      commitEntitlement(deps, "u1", (existing) => applyTrial(existing, now1)),
+      commitEntitlement(deps, "u1", (existing) => applyTrial(existing, now2)),
+    ]);
+
+    const kinds = [a.kind, b.kind].sort();
+    expect(kinds).toEqual(["skipped", "written"]);
+
+    // 마지막 클레임 쓰기가 승리한 문서의 premiumUntil과 일치해야 한다.
+    const finalDoc = store.current()!;
+    const calls = claims.setPremiumUntil.mock.calls as unknown as Array<[string, number]>;
+    const lastCallArg = calls[calls.length - 1][1];
+    expect(lastCallArg).toBe(toClaimSeconds(finalDoc.premiumUntil));
   });
 });
