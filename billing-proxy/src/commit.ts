@@ -44,5 +44,11 @@ export const commitEntitlement = async <R extends string>(
       return { kind: "written", doc: decision.write };
     }
   }
+  // 포기하기 전에 클레임을 저장소의 현재 문서에 맞춘다 — 마지막 시도에서 쓴 클레임이 반영되지 못한
+  // 결정을 담고 있으면, 재시도(웹훅 재전송)가 오기 전까지 토큰과 문서가 어긋난 채로 남는다.
+  if (wroteClaim) {
+    const { doc } = await deps.store.get(uid);
+    await deps.claims.setPremiumUntil(uid, toClaimSeconds(doc.premiumUntil));
+  }
   throw new Error(`entitlements/${uid} 쓰기 충돌이 ${MAX_ATTEMPTS}회 반복됨`);
 };

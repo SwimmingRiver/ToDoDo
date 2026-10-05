@@ -76,7 +76,21 @@ describe("commitEntitlement", () => {
     const claims = { setPremiumUntil: vi.fn(async () => undefined) };
     await expect(commitEntitlement({ store, claims }, "u1", (existing) => applyTrial(existing, NOW))).rejects.toThrow("충돌");
     expect(store.write).toHaveBeenCalledTimes(3);
-    expect(claims.setPremiumUntil).toHaveBeenCalledTimes(3);
+    // 3번의 결정 + 포기 직전 재동기화 1번
+    expect(claims.setPremiumUntil).toHaveBeenCalledTimes(4);
+  });
+
+  it("충돌로 포기하기 전에 클레임을 저장소의 현재 문서에 맞춰 되돌린다", async () => {
+    const stored = { ...EMPTY_ENTITLEMENT, source: "manual" as const, premiumUntil: "2026-10-01T00:00:00.000Z" };
+    const store = memoryStore(stored);
+    store.write.mockResolvedValue("conflict");
+    const claims = { setPremiumUntil: vi.fn(async (_uid: string, _seconds: number) => undefined) };
+
+    await expect(commitEntitlement({ store, claims }, "u1", (existing) => applyTrial(existing, NOW))).rejects.toThrow("충돌");
+
+    const calls = claims.setPremiumUntil.mock.calls;
+    expect(calls[calls.length - 1]).toEqual(["u1", toClaimSeconds(store.current()!.premiumUntil)]);
+    expect(store.get).toHaveBeenCalledTimes(4);
   });
 
   it("충돌 후 건너뛸 때 클레임을 최신 문서에 맞춰 재동기화한다", async () => {
