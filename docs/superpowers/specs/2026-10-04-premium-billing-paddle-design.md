@@ -38,21 +38,22 @@
 | 결제창 생성 | 서버(Worker)가 거래 생성, 클라이언트는 `transactionId`로만 오픈 | 브라우저가 `customData.uid`를 넣으면 조작 가능 |
 | 서버 위치 | 신규 Cloudflare Worker `billing-proxy` | 기존 Worker 패턴. Blaze 불필요 |
 | 서비스 계정 | 결제 전용 신규(쓰기 권한) | reminder-proxy의 읽기 전용(Viewer) 계정은 그대로 유지 |
-| 샌드박스 게이트 | Worker `BILLING_ALLOWED_UIDS` + 클라이언트 `VITE_BILLING_ENABLED` | 운영 Firestore가 샌드박스 결제에 연결되므로 공개 테스트 카드로 권한 획득을 막아야 함 |
+| 샌드박스 게이트 | Worker `BILLING_ALLOWED_UIDS`(`/checkout`·`/trial`과 웹훅 양쪽) + 클라이언트 `VITE_BILLING_ENABLED` | 운영 Firestore가 샌드박스 결제에 연결되므로 공개 테스트 카드로 권한 획득을 막아야 함 |
+| 웹훅 uid 신뢰 | `/checkout`이 `custom_data`에 `uid`와 `uid_sig`(HMAC-SHA256, 키 `BILLING_UID_SECRET`)를 넣고 웹훅은 서명이 맞는 uid만 반영 | 레포가 공개이고 Paddle 클라이언트 토큰이 번들에 들어가므로, 누구나 Paddle.js로 결제창을 직접 열어 `customData`에 남의 uid를 넣을 수 있다(10-05 최종 리뷰에서 발견) |
 
 ## 전체 구조
 
 ```
-[client] 구독하기 ──POST /checkout──▶ [billing-proxy] ──Paddle API──▶ 거래 생성(custom_data.uid = 토큰 uid)
+[client] 구독하기 ──POST /checkout──▶ [billing-proxy] ──Paddle API──▶ 거래 생성(custom_data = { uid: 토큰 uid, uid_sig })
    │                                        │
    └─ Paddle.js 오버레이(transactionId)       │
                                             │
 [Paddle] ──웹훅 subscription.*──▶ POST /webhooks/paddle
-                                  서명 검증 → uid 확인 → 중복/역순 무시
+                                  Paddle 서명 검증 → uid·uid_sig 검증 → 허용 목록 → 중복/역순·다른 구독 해지 무시
                                   → 커스텀 클레임 premiumUntil 갱신 → entitlements/{uid} 갱신
 [client] 7일 체험 ──POST /trial──▶ 1회 확인 → trialing 부여
 [client] 구독 관리 ──POST /portal──▶ Paddle 고객 포털 세션 URL
-[client] useClaimSync: entitlements 문서 onSnapshot → premiumUntil이 토큰과 다르면 getIdToken(true)
+[client] useEntitlementSync: entitlements 문서 onSnapshot → premiumUntil이 토큰과 다르면 getIdToken(true)
 ```
 
 ## 데이터 모델
@@ -78,8 +79,8 @@
 
 - `premiumUntil: number` (epoch 초). 기존 클레임은 병합해서 보존하고, `premium` 키는 제거한다.
 - 판단식(모든 소비처 공통): `premiumUntil > 현재 시각`.
-  - `firestore.rules` `calendarIntegrations`: `request.auth.token.premiumUntil is int && request.auth.token.premiumUntil > request.time.toMillis() / 1000`
-  - `packages/worker-auth` `VerifiedToken`: `premium` 대신 `premiumUntil: number | null`을 노출하고, `isPremiumAt(token, nowSec)` 헬퍼를 제공. ai-proxy·calendar-proxy·billing-proxy가 공유
+  - `firestore.rules` `calendarIntegrations`: `request.auth.token.premiumUntil is number && request.auth.token.premiumUntil > request.time.toMillis() / 1000`
+  - `packages/worker-auth` `VerifiedToken`: `premiumUntil: number | null`과, 검증 시각 기준으로 계산한 `premium: boolean`(= `premiumUntil > now`)을 함께 노출한다. 소비처(ai-proxy·calendar-proxy)는 코드 변경 없이 `premium`만 본다(계획 단계에서 `isPremiumAt` 헬퍼 대신 택함)
   - client `useIsPremium`: 문서의 `premiumUntil > Date.now()`
 
 ## 상태 전이
@@ -93,7 +94,8 @@
 | 웹훅 status `active` + `scheduled_change.action = cancel` | `active` | `scheduled_change.effective_at` (유예 없음) | `cancelAt=effective_at` |
 | 웹훅 status `past_due` | `past_due` | `max(기존, ends_at + 3일)` | Paddle 재시도 기간 동안 유지(Paddle 권장) |
 | 웹훅 status `canceled` 또는 `paused` | `canceled` | `now` (즉시 회수) | `cancelAt=null`. 예약 해지 실행도 이 이벤트. 일시정지 기능은 켜지 않음 |
-| 웹훅 status `trialing` | — | — | Paddle 체험을 쓰지 않으므로 오지 않음. 오면 Sentry 경고 후 `active`와 동일 처리 |
+| 웹훅 `canceled`/`paused`인데 추적 중인 것과 **다른** `subscriptionId`이고 현재 Paddle 구독이 유효 | — (건너뜀) | — | 이중 구독 의심 경고 로그. 살아 있는 구독의 권한을 지키기 위함 |
+| 웹훅 status `trialing` | — | — | Paddle 체험을 쓰지 않으므로 오지 않음. 오면 경고 로그 후 `active`와 동일 처리 |
 | `grantEntitlement.ts --plan premium [--until <ISO>]` | `active` | 지정값(기본 2099-12-31) | `source=manual` |
 | `grantEntitlement.ts --plan free` | `none` | `null`(클레임 0) | |
 
@@ -105,7 +107,7 @@
 
 | 경로 | 인증 | 동작 |
 |---|---|---|
-| `POST /checkout` | Firebase ID 토큰 | 허용 목록 확인 → Paddle `POST /transactions`(price = env `PADDLE_PRICE_ID`, `custom_data.uid` = 토큰 uid, 기존 `customerId` 있으면 지정) → `{ transactionId }` |
+| `POST /checkout` | Firebase ID 토큰 | 허용 목록 확인 → Paddle `POST /transactions`(price = env `PADDLE_PRICE_ID`, `custom_data` = `{ uid: 토큰 uid, uid_sig: HMAC(BILLING_UID_SECRET, uid) }`, 기존 `customerId` 있으면 지정). 살아 있는 Paddle 구독이 있으면 409 `ALREADY_SUBSCRIBED` → `{ transactionId }` |
 | `POST /trial` | Firebase ID 토큰 | 허용 목록 확인 → 상태 전이표의 체험 규칙 → 클레임·문서 갱신 → `{ premiumUntil }` 또는 409 |
 | `POST /portal` | Firebase ID 토큰 | 문서의 `customerId`로 Paddle 고객 포털 세션 생성 → `{ url }`. `customerId` 없으면 404 |
 | `POST /webhooks/paddle` | `Paddle-Signature` | 아래 처리 순서 |
@@ -116,10 +118,10 @@
 
 1. `Paddle-Signature`(`ts=…;h1=…`)를 파싱하고 `ts:원문 body`의 HMAC-SHA256을 `PADDLE_WEBHOOK_SECRET`으로 계산해 타이밍 안전 비교. `ts`가 5분보다 오래됐으면 거부. 실패 시 401.
 2. `subscription.created` / `subscription.updated` / `subscription.canceled` 외 이벤트는 200으로 무시.
-3. `data.custom_data.uid`가 없으면 Sentry 기록 후 200(재시도해도 해결되지 않음).
-4. 문서를 읽어 `event_id == lastWebhookEventId` 이거나 `occurred_at <= lastEventOccurredAt` 이면 200으로 무시. `subscription.*` 본문은 구독 전체 스냅샷이므로 최신 이벤트 하나만 반영하면 정확하다.
+3. `data.custom_data.uid`가 없거나, `uid_sig`가 `BILLING_UID_SECRET`으로 검증되지 않거나, uid가 허용 목록 밖이면 로그 후 200(재시도해도 해결되지 않음). 날짜 필드를 해석할 수 없는 이벤트도 같은 처리.
+4. 문서를 읽어 `event_id == lastWebhookEventId` 이거나 `occurred_at <= lastEventOccurredAt`(마이크로초 정밀도 비교) 이면 200으로 무시. 다른 구독의 해지·일시정지도 무시(상태 전이표). `subscription.*` 본문은 구독 전체 스냅샷이므로 최신 이벤트 하나만 반영하면 정확하다.
 5. **클레임을 먼저 쓴다**(Identity Toolkit `accounts:lookup`으로 기존 클레임을 읽어 병합 → `accounts:update`의 `customAttributes`).
-6. **문서를 나중에 쓴다**(Firestore REST, 읽은 문서의 `updateTime`을 사전조건으로 걸고 충돌 시 2회까지 재읽기·재시도).
+6. **문서를 나중에 쓴다**(Firestore REST, 읽은 문서의 `updateTime`을 사전조건으로 걸고 충돌 시 재읽기·재시도, 최대 3회). 재시도 끝에 건너뛰거나 포기할 때 이 호출이 이미 클레임을 썼다면 최신 문서 기준으로 클레임을 다시 맞춘다.
    - 순서 이유: 중복 판정 기준이 문서에 있다. 문서 쓰기가 실패하면 500 → Paddle 재전송 → 클레임 재기록(같은 값, 무해) → 문서 기록. 반대 순서면 문서가 "처리됨"인데 클레임만 실패한 상태가 재전송에서도 무시되어 영구 고착된다.
 7. 5·6 중 실패는 500으로 응답해 Paddle 재전송에 맡긴다.
 
@@ -137,6 +139,7 @@
 | `PADDLE_API_KEY` | secret | 샌드박스 API 키 |
 | `PADDLE_WEBHOOK_SECRET` | secret | 웹훅 대상의 secret key |
 | `GOOGLE_SERVICE_ACCOUNT` | secret | 결제 전용 서비스 계정 JSON |
+| `BILLING_UID_SECRET` | secret | `uid_sig` 서명 키(32바이트 이상 무작위). **회전 금지** — 서명이 구독 `custom_data`에 영구 저장되어, 바꾸면 기존 구독의 웹훅이 모두 거부된다 |
 | `PADDLE_API_BASE` | var | `https://sandbox-api.paddle.com` → 실결제 시 `https://api.paddle.com` |
 | `PADDLE_PRICE_ID` | var | 월간 KRW 가격 id |
 | `BILLING_ALLOWED_UIDS` | var | 쉼표 구분 uid 목록. **비어 있거나 없으면 아무도 허용하지 않는다**(설정 누락이 게이트 개방으로 이어지지 않게). 전원 허용은 정확히 `*`일 때만 |
@@ -227,7 +230,7 @@
 
 ## 실결제 전환 시 (이번 스코프 밖, 체크리스트로만 기록)
 
-Paddle 운영 계정 승인(도메인 심사: 공개 요금제·이용약관·환불 정책 페이지 필요) → `PADDLE_API_BASE`·키·가격 id·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS=*` → `VITE_BILLING_ENABLED=true` 운영 빌드. 정산 계좌·사업자 요건은 그 시점에 Paddle 문서로 확인.
+Paddle 운영 계정 승인(도메인 심사: 공개 요금제·이용약관·환불 정책 페이지 필요) → `PADDLE_API_BASE`·키·가격 id·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS=*` → `VITE_BILLING_ENABLED=true` 운영 빌드 → CI deploy job `VITE_PADDLE_ENV=production`. 전환 전 코드 보강: 웹훅의 `price_id` 확인, 다른 구독의 `past_due` 처리 결정(`billing-proxy/README.md` 참고). 정산 계좌·사업자 요건은 그 시점에 Paddle 문서로 확인.
 
 ## 스코프 밖
 
@@ -239,13 +242,15 @@ Paddle 운영 계정 승인(도메인 심사: 공개 요금제·이용약관·�
 
 ## 계획 단계에서 실측으로 확인할 것
 
-- 거래의 `custom_data`가 그 거래로 생성된 구독 객체에 복사되는지. 복사되지 않으면 `transaction.completed`에서 `subscriptionId → uid` 매핑을 저장해야 한다.
+- 거래의 `custom_data`(`uid`·`uid_sig`)가 그 거래로 생성된 구독 객체와 `subscription.*` 웹훅에 그대로 들어오는지 — `uid_sig`가 빠지면 모든 웹훅이 거부된다.
+- `Paddle.Checkout.open({ transactionId, customData })`로 서버 거래의 `custom_data`를 덮어쓸 수 있는지(덮어써도 `uid_sig` 검증으로 막히는지 확인).
+- (기존) 거래의 `custom_data`가 그 거래로 생성된 구독 객체에 복사되는지. 복사되지 않으면 `transaction.completed`에서 `subscriptionId → uid` 매핑을 저장해야 한다.
 - `past_due` 시 `current_billing_period`가 다음 기간으로 넘어가 있는지.
 - Paddle 샌드박스에서 KRW 가격과 국내 결제수단(카카오페이·네이버페이)이 노출되는지.
 - Paddle 웹훅 재전송 시 `ts`가 새로 서명되는지(5분 허용 오차와의 호환).
 
 ## 알고 감수한 한계
 
-- 정기 갱신은 `기간 끝 + 3일` 유예가 있어, 웹훅이 3일 넘게 실패하면 정상 구독자도 잠길 수 있다(Paddle 재전송·Sentry 알림으로 대응).
+- 정기 갱신은 `기간 끝 + 3일` 유예가 있어, 웹훅이 3일 넘게 실패하면 정상 구독자도 잠길 수 있다(Paddle 재전송·Cloudflare Worker 로그로 대응 — billing-proxy에는 Sentry가 없다).
 - 즉시 회수(`canceled`) 후에도 이미 발급된 ID 토큰의 `premiumUntil`은 남아 있지만, 웹훅이 클레임을 `now`로 바꾸고 클라이언트 `useClaimSync`가 토큰을 갱신한다. 클라이언트가 꺼져 있는 공격자는 기존 토큰 만료(최대 1시간)까지 서버 접근이 가능하다.
 - 클라이언트 표시 가격은 상수라 Paddle 가격 변경 시 함께 바꿔야 한다.

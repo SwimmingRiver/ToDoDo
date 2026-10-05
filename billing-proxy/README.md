@@ -17,7 +17,7 @@
    - Checkout > Checkout settings: Default payment link = `https://tododo-83576.web.app` (transactionId로 결제창을 열려면 필수).
    - Developer tools > Notifications: 대상 URL `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/paddle`, 이벤트 `subscription.created`·`subscription.updated`·`subscription.canceled` → secret key(→ `PADDLE_WEBHOOK_SECRET`).
 2. **GCP 결제 전용 서비스 계정**(reminder-proxy 계정과 별도): 역할 `Cloud Datastore User` + `Firebase Authentication Admin` → JSON 키.
-3. **시크릿 등록** (`cd billing-proxy`). `BILLING_UID_SECRET`은 32바이트 이상 무작위 값(`openssl rand -hex 32`) — `/checkout`이 `custom_data.uid`에 붙이는 서명 키로, 웹훅은 이 서명이 맞는 uid만 반영한다(공개 클라이언트 토큰으로 남의 uid를 넣은 결제 위조 차단). 바꾸면 그 전에 연 결제창의 웹훅은 반영되지 않으니 결제가 없는 시점에만 교체한다:
+3. **시크릿 등록** (`cd billing-proxy`). `BILLING_UID_SECRET`은 32바이트 이상 무작위 값(`openssl rand -hex 32`) — `/checkout`이 `custom_data.uid`에 붙이는 서명 키로, 웹훅은 이 서명이 맞는 uid만 반영한다(공개 클라이언트 토큰으로 남의 uid를 넣은 결제 위조 차단). **한 번 정하면 회전하지 않는다** — 서명은 거래의 `custom_data`를 통해 구독에 영구 저장되므로, 키를 바꾸는 순간 기존 구독 전부의 갱신·해지 웹훅이 서명 불일치로 버려진다(200으로 응답해 Paddle도 재전송하지 않음). 그러면 구독자는 기간 끝+3일에 잠기고 해지도 반영되지 않는다. 유출 등으로 꼭 바꿔야 하면 먼저 이전 키도 함께 검증하도록 코드를 고친 뒤 교체한다:
    ```bash
    npx wrangler secret put PADDLE_API_KEY
    npx wrangler secret put PADDLE_WEBHOOK_SECRET
@@ -35,11 +35,15 @@
 
 Paddle 웹훅은 localhost에 닿지 않는다. `npx wrangler versions upload`로 만든 프리뷰 URL을 샌드박스 Notification 대상으로 임시 등록하고, 클라이언트는 `VITE_BILLING_PROXY_URL`을 그 URL로 덮어써 테스트한다. `past_due`·즉시 해지는 Paddle 대시보드의 웹훅 시뮬레이터로 보낸다.
 
-샌드박스 결제 테스트는 운영자 계정(2099년까지 수동 부여)이 아니라 **별도 테스트 계정**으로 한다(허용 목록에 그 uid를 임시로 추가). 운영자 계정으로 결제하면 수동 부여가 구독 기간으로 덮어써진다 — 이미 했다면 `npm run grant:entitlement`(루트)를 다시 실행한다.
+샌드박스 결제 테스트는 운영자 계정(2099년까지 수동 부여)이 아니라 **별도 테스트 계정**으로 한다(허용 목록에 그 uid를 임시로 추가). 운영자 계정으로 결제하면 수동 부여가 구독 기간으로 덮어써진다 — 이미 했다면 `npm run grant:entitlement`(루트)를 다시 실행한다. 테스트가 끝나면 **그 테스트 구독을 먼저 해지하고 나서** 허용 목록에서 uid를 뺀다 — 웹훅도 허용 목록을 확인하므로, 순서를 바꾸면 해지 웹훅이 버려져 테스트 계정이 마지막 `premiumUntil`(+3일)까지 프리미엄으로 남는다.
 
 ## 실결제 전환
 
 Paddle 운영 계정 승인 → `PADDLE_API_BASE=https://api.paddle.com`, 운영 키·가격 id·웹훅 secret·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS="*"` → 클라이언트 `VITE_BILLING_ENABLED=true` → `.github/workflows/ci.yml` deploy job의 `VITE_PADDLE_ENV: sandbox`를 `production`으로.
+
+전환 전에 코드로 보강할 것(샌드박스에서는 허용 목록이 막아 주지만 `*`로 열면 드러나는 빈틈):
+- 웹훅이 구독 항목의 `price_id`가 `PADDLE_PRICE_ID`인지 확인한다. 지금은 확인하지 않아, 카탈로그에 더 싼 가격이 생기면 Paddle.js로 직접 연 결제(자기 uid_sig 재사용)로 그 가격에 프리미엄을 얻을 수 있다.
+- 다른 구독의 `past_due` 이벤트는 지금 그대로 반영되어 추적 중인 `subscriptionId`가 바뀐다. 이후 그 구독의 해지가 살아 있는 구독의 권한을 회수할 수 있으므로 `isForeignCancel`처럼 다룰지 정한다.
 
 ## 알려진 한계
 
