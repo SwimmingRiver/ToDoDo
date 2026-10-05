@@ -26,15 +26,23 @@
    ```
 4. 첫 배포는 수동 `npx wrangler deploy`로 확인하고, 이후는 main push 시 CI가 배포한다.
 
+### 릴리스(develop→main) 전제
+
+- `PADDLE_PRICE_ID` placeholder 교체 완료 + 샌드박스 실측(Task 11) 완료 **후에만** 릴리스 PR을 연다. main CI의 `billing-proxy` job은 placeholder면 실패하는데, `deploy` job(rules·클라이언트)은 이 job을 기다리지 않아 rules·클라이언트만 먼저 나가 버린다.
+- 릴리스 직후 운영자 계정에 `npm run grant:entitlement`(루트)를 다시 실행한다.
+
 ## 로컬·프리뷰 테스트
 
 Paddle 웹훅은 localhost에 닿지 않는다. `npx wrangler versions upload`로 만든 프리뷰 URL을 샌드박스 Notification 대상으로 임시 등록하고, 클라이언트는 `VITE_BILLING_PROXY_URL`을 그 URL로 덮어써 테스트한다. `past_due`·즉시 해지는 Paddle 대시보드의 웹훅 시뮬레이터로 보낸다.
 
+샌드박스 결제 테스트는 운영자 계정(2099년까지 수동 부여)이 아니라 **별도 테스트 계정**으로 한다(허용 목록에 그 uid를 임시로 추가). 운영자 계정으로 결제하면 수동 부여가 구독 기간으로 덮어써진다 — 이미 했다면 `npm run grant:entitlement`(루트)를 다시 실행한다.
+
 ## 실결제 전환
 
-Paddle 운영 계정 승인 → `PADDLE_API_BASE=https://api.paddle.com`, 운영 키·가격 id·웹훅 secret·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS="*"` → 클라이언트 `VITE_BILLING_ENABLED=true`.
+Paddle 운영 계정 승인 → `PADDLE_API_BASE=https://api.paddle.com`, 운영 키·가격 id·웹훅 secret·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS="*"` → 클라이언트 `VITE_BILLING_ENABLED=true` → `.github/workflows/ci.yml` deploy job의 `VITE_PADDLE_ENV: sandbox`를 `production`으로.
 
 ## 알려진 한계
 
 - 즉시 해지된 사용자가 이미 받은 ID 토큰은 만료(최대 1시간)까지 서버 접근이 가능하다.
 - 웹훅이 3일 넘게 실패하면 정상 구독자도 유예가 끝나 잠길 수 있다.
+- 이중 구독(두 결제가 모두 성립)이면 문서는 한 구독만 추적한다. 추적 중인 구독이 유효한 동안 다른 구독의 해지·일시정지 이벤트는 무시하고 경고 로그(`이중 구독 의심`)만 남긴다 — 이중 결제 자체는 Paddle 대시보드에서 환불 처리한다.
