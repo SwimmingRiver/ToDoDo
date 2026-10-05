@@ -9,7 +9,7 @@ const payload = (overrides: Record<string, unknown> = {}, data: Record<string, u
     id: "sub_1",
     status: "active",
     customer_id: "ctm_1",
-    custom_data: { uid: "u1" },
+    custom_data: { uid: "u1", uid_sig: "sig_1" },
     current_billing_period: { starts_at: "2026-10-10T00:00:00Z", ends_at: "2026-11-10T00:00:00Z" },
     scheduled_change: null,
     ...data,
@@ -22,6 +22,7 @@ describe("parseWebhook", () => {
     expect(parseWebhook(payload())).toEqual({
       kind: "subscription",
       uid: "u1",
+      uidSig: "sig_1",
       event: {
         eventId: "evt_1",
         occurredAt: "2026-10-10T00:00:00.000000Z",
@@ -49,6 +50,13 @@ describe("parseWebhook", () => {
   it("custom_data.uid가 없으면 uid null", () => {
     const parsed = parseWebhook(payload({}, { custom_data: null }));
     expect(parsed.kind === "subscription" && parsed.uid).toBeNull();
+    expect(parsed.kind === "subscription" && parsed.uidSig).toBeNull();
+  });
+
+  it("custom_data.uid_sig가 없으면 uidSig null(uid는 그대로)", () => {
+    const parsed = parseWebhook(payload({}, { custom_data: { uid: "u1" } }));
+    expect(parsed.kind === "subscription" && parsed.uid).toBe("u1");
+    expect(parsed.kind === "subscription" && parsed.uidSig).toBeNull();
   });
 
   it("구독 이벤트가 아니면 ignored", () => {

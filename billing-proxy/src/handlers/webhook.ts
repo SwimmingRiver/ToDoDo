@@ -1,9 +1,11 @@
+import { isBillingAllowed } from "../allowlist";
 import { UserNotFoundError } from "../claims";
 import { commitEntitlement, type CommitDeps } from "../commit";
 import { applySubscriptionEvent, isStaleEvent } from "../entitlement";
 import type { Env } from "../env";
 import { parseWebhook } from "../paddleEvent";
 import { verifyPaddleSignature } from "../signature";
+import { verifyUidSignature } from "../uidSignature";
 
 const ok = () => new Response("ok", { status: 200 });
 
@@ -13,7 +15,7 @@ const ok = () => new Response("ok", { status: 200 });
  */
 export const handleWebhook = async (
   request: Request,
-  env: Pick<Env, "PADDLE_WEBHOOK_SECRET">,
+  env: Pick<Env, "PADDLE_WEBHOOK_SECRET" | "BILLING_UID_SECRET" | "BILLING_ALLOWED_UIDS">,
   deps: CommitDeps,
   now: Date,
 ): Promise<Response> => {
@@ -44,7 +46,18 @@ export const handleWebhook = async (
     return ok();
   }
 
-  const { uid, event } = parsed;
+  const { uid, uidSig, event } = parsed;
+  // Paddle 서명은 "Paddle이 보냈다"만 보장한다. custom_data는 결제창을 연 쪽이 넣을 수 있으므로
+  // /checkout이 붙인 서버 서명이 맞는 uid만 반영한다.
+  if (!(await verifyUidSignature(uid, uidSig, env.BILLING_UID_SECRET))) {
+    console.error("Paddle 웹훅 uid 서명 불일치(서버가 만들지 않은 결제):", uid, event.subscriptionId);
+    return ok();
+  }
+  // 샌드박스 기간 이중 방어: 서명이 맞아도 허용 목록 밖이면 반영하지 않는다.
+  if (!isBillingAllowed(uid, env.BILLING_ALLOWED_UIDS)) {
+    console.error("Paddle 웹훅 uid가 결제 허용 목록 밖:", uid, event.subscriptionId);
+    return ok();
+  }
   try {
     await commitEntitlement(deps, uid, (existing) =>
       isStaleEvent(existing, event) ? { skip: "STALE" } : { write: applySubscriptionEvent(existing, event, now) },

@@ -1,13 +1,4 @@
-const enc = new TextEncoder();
-
-const toHex = (bytes: Uint8Array): string => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-
-const timingSafeEqual = (a: string, b: string): boolean => {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-};
+import { hmacSha256Hex, timingSafeEqual } from "./hmac";
 
 /**
  * Paddle-Signature: ts=<unix초>;h1=<hex HMAC-SHA256("ts:원문 body")>.
@@ -32,7 +23,5 @@ export const verifyPaddleSignature = async (
   if (!Number.isInteger(ts) || !h1) return false;
   if (Math.abs(nowSec - ts) > toleranceSec) return false;
 
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(`${ts}:${rawBody}`)));
-  return timingSafeEqual(toHex(signature), h1);
+  return timingSafeEqual(await hmacSha256Hex(secret, `${ts}:${rawBody}`), h1);
 };

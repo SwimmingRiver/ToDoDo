@@ -19,6 +19,7 @@ const ENV: Env = {
   PADDLE_API_KEY: "key",
   PADDLE_WEBHOOK_SECRET: "whsec",
   GOOGLE_SERVICE_ACCOUNT: "{}",
+  BILLING_UID_SECRET: "uid-secret",
 };
 
 const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
@@ -122,6 +123,24 @@ describe("router", () => {
     expect(res.status).toBe(500);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://tododo-83576.web.app");
     expect(console.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST /webhooks/paddle은 Firebase 인증·허용 목록을 거치지 않고 웹훅 핸들러로 간다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
+    const deps = makeDeps();
+    const res = await call(
+      new Request("https://billing.example/webhooks/paddle", {
+        method: "POST",
+        headers: { "Paddle-Signature": "ts=1;h1=00" },
+        body: "{}",
+      }),
+      deps,
+    );
+    // 401 UNAUTHORIZED(JSON)나 403 NOT_ALLOWED가 아니라 핸들러의 서명 실패 응답이어야 한다.
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("Invalid signature");
+    expect(verifyFirebaseIdToken).not.toHaveBeenCalled();
+    expect(deps.store.get).not.toHaveBeenCalled();
   });
 
   it("모르는 경로는 404", async () => {

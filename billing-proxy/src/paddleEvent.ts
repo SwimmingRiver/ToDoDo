@@ -6,7 +6,7 @@ const STATUSES = new Set(["active", "trialing", "past_due", "paused", "canceled"
 export type ParsedWebhook =
   | { kind: "ignored" }
   | { kind: "invalid"; reason: string }
-  | { kind: "subscription"; uid: string | null; event: PaddleSubscriptionEvent };
+  | { kind: "subscription"; uid: string | null; uidSig: string | null; event: PaddleSubscriptionEvent };
 
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null;
@@ -43,6 +43,7 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
   return {
     kind: "subscription",
     uid: str(customData?.uid),
+    uidSig: str(customData?.uid_sig),
     event: {
       eventId,
       occurredAt,

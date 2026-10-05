@@ -17,10 +17,11 @@
    - Checkout > Checkout settings: Default payment link = `https://tododo-83576.web.app` (transactionId로 결제창을 열려면 필수).
    - Developer tools > Notifications: 대상 URL `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/paddle`, 이벤트 `subscription.created`·`subscription.updated`·`subscription.canceled` → secret key(→ `PADDLE_WEBHOOK_SECRET`).
 2. **GCP 결제 전용 서비스 계정**(reminder-proxy 계정과 별도): 역할 `Cloud Datastore User` + `Firebase Authentication Admin` → JSON 키.
-3. **시크릿 등록** (`cd billing-proxy`):
+3. **시크릿 등록** (`cd billing-proxy`). `BILLING_UID_SECRET`은 32바이트 이상 무작위 값(`openssl rand -hex 32`) — `/checkout`이 `custom_data.uid`에 붙이는 서명 키로, 웹훅은 이 서명이 맞는 uid만 반영한다(공개 클라이언트 토큰으로 남의 uid를 넣은 결제 위조 차단). 바꾸면 그 전에 연 결제창의 웹훅은 반영되지 않으니 결제가 없는 시점에만 교체한다:
    ```bash
    npx wrangler secret put PADDLE_API_KEY
    npx wrangler secret put PADDLE_WEBHOOK_SECRET
+   openssl rand -hex 32 | npx wrangler secret put BILLING_UID_SECRET
    npx wrangler secret put GOOGLE_SERVICE_ACCOUNT < ~/billing-service-account.json
    ```
 4. 첫 배포는 수동 `npx wrangler deploy`로 확인하고, 이후는 main push 시 CI가 배포한다.

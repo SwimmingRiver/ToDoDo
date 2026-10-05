@@ -15,7 +15,7 @@ const getDeps = (env: Env): BillingDeps => {
   const deps: BillingDeps = {
     store: new EntitlementStore(env.FIREBASE_PROJECT_ID, getToken),
     claims: new ClaimsClient(env.FIREBASE_PROJECT_ID, getToken),
-    paddle: new PaddleClient(env.PADDLE_API_BASE, env.PADDLE_API_KEY, env.PADDLE_PRICE_ID),
+    paddle: new PaddleClient(env.PADDLE_API_BASE, env.PADDLE_API_KEY, env.PADDLE_PRICE_ID, env.BILLING_UID_SECRET),
   };
   cached = { env, deps };
   return deps;
