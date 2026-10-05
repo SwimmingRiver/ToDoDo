@@ -58,6 +58,12 @@ export const handleWebhook = async (
     console.error("Paddle 웹훅 uid가 결제 허용 목록 밖:", uid, event.subscriptionId);
     return ok();
   }
+  // 체험은 우리 서버(/trial)가 주고 Paddle 가격에는 체험 기간이 없다. trialing이 오면 Paddle 설정이
+  // 바뀐 것이니 알아챌 수 있게 경고만 남기고, 처리는 active와 같다.
+  if (event.status === "trialing") {
+    console.warn("예상 밖 Paddle trialing 구독 — 가격에 체험 기간이 설정됐는지 확인:", uid, event.subscriptionId);
+  }
+
   try {
     await commitEntitlement(deps, uid, (existing) => {
       if (isStaleEvent(existing, event)) return { skip: "STALE" as const };

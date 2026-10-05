@@ -195,6 +195,18 @@ describe("handleWebhook", () => {
     expect(d.store.write.mock.calls[0][1]).toMatchObject({ status: "canceled", premiumUntil: NOW.toISOString() });
   });
 
+  it("Paddle trialing은 예상 밖이라 경고하되 active처럼 반영한다", async () => {
+    const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const d = deps();
+    const raw = body({
+      data: { id: "sub_1", status: "trialing", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" }, scheduled_change: null },
+    });
+    const res = await handleWebhook(await request(raw), ENV, d, NOW);
+    expect(res.status).toBe(200);
+    expect(warnLog).toHaveBeenCalledWith(expect.stringContaining("trialing"), "u1", "sub_1");
+    expect(d.store.write.mock.calls[0][1]).toMatchObject({ status: "active", premiumUntil: "2026-11-13T00:00:00.000Z" });
+  });
+
   it("JSON이 깨졌으면 400", async () => {
     const d = deps();
     const res = await handleWebhook(await request("{not json"), ENV, d, NOW);
