@@ -555,6 +555,9 @@ jobs:
           VITE_CALENDAR_PROXY_URL: ${{ secrets.VITE_CALENDAR_PROXY_URL }}
           VITE_AI_PROXY_URL: ${{ secrets.VITE_AI_PROXY_URL }}
           VITE_REMINDER_PROXY_URL: ${{ secrets.VITE_REMINDER_PROXY_URL }}
+          VITE_BILLING_PROXY_URL: ${{ secrets.VITE_BILLING_PROXY_URL }}
+          VITE_PADDLE_CLIENT_TOKEN: ${{ secrets.VITE_PADDLE_CLIENT_TOKEN }}
+          VITE_PADDLE_ENV: sandbox
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
           # VITE_ 접두사가 붙어 클라이언트 번들(import.meta.env)에 포함된다. Vite는
           # VITE_* 변수를 빌드 타임에 정적으로 인라인하므로, 이 스텝에서 주입되지
