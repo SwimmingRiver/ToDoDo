@@ -65,11 +65,21 @@ const withPlan = (doc: EntitlementDoc, now: Date): EntitlementDoc => ({
   plan: isPremiumAt(doc, now) ? "premium" : "free",
 });
 
+/**
+ * ISO 시각을 나노초 정수로. Paddle occurred_at은 마이크로초까지 오는데 Date.parse는 밀리초에서 잘라
+ * 같은 밀리초의 두 이벤트를 같은 순간으로 본다 — 소수부는 문자열에서 직접 읽어 정밀도를 지킨다.
+ */
+const toEpochNanos = (value: string): bigint => {
+  const fraction = /\.(\d+)/.exec(value)?.[1] ?? "";
+  const wholeSecondsMs = Date.parse(value.replace(/\.\d+/, ""));
+  return BigInt(wholeSecondsMs) * 1_000_000n + BigInt(fraction.slice(0, 9).padEnd(9, "0"));
+};
+
 /** subscription.* 본문은 구독 전체 스냅샷이라 가장 최신 이벤트 하나만 반영하면 정확하다. */
 export const isStaleEvent = (existing: EntitlementDoc, event: PaddleSubscriptionEvent): boolean =>
   existing.lastWebhookEventId === event.eventId ||
   (existing.lastEventOccurredAt !== null &&
-    Date.parse(event.occurredAt) <= Date.parse(existing.lastEventOccurredAt));
+    toEpochNanos(event.occurredAt) <= toEpochNanos(existing.lastEventOccurredAt));
 
 /**
  * 이중 구독(두 탭에서 각각 결제 등)일 때 한쪽 해지가 살아 있는 다른 구독의 권한을 지우지 않게 한다.

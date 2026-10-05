@@ -109,6 +109,20 @@ describe("isStaleEvent", () => {
     expect(isStaleEvent(doc({ lastEventOccurredAt: "2026-10-10T00:00:00.000Z" }), event({ eventId: "evt_2" }))).toBe(true);
   });
 
+  it("같은 밀리초 안의 이벤트도 마이크로초까지 비교한다(Paddle occurred_at은 µs 정밀도)", () => {
+    const existing = doc({ lastWebhookEventId: "evt_1", lastEventOccurredAt: "2026-10-10T00:00:00.123456Z" });
+    expect(isStaleEvent(existing, event({ eventId: "evt_2", occurredAt: "2026-10-10T00:00:00.123457Z" }))).toBe(false);
+    expect(isStaleEvent(existing, event({ eventId: "evt_0", occurredAt: "2026-10-10T00:00:00.123455Z" }))).toBe(true);
+    expect(isStaleEvent(existing, event({ eventId: "evt_3", occurredAt: "2026-10-10T00:00:00.123456Z" }))).toBe(true);
+  });
+
+  it("정밀도가 서로 달라도 같은 순간이면 같게 본다", () => {
+    const existing = doc({ lastWebhookEventId: "evt_1", lastEventOccurredAt: "2026-10-10T00:00:00.123Z" });
+    expect(isStaleEvent(existing, event({ eventId: "evt_2", occurredAt: "2026-10-10T00:00:00.123000Z" }))).toBe(true);
+    expect(isStaleEvent(existing, event({ eventId: "evt_2", occurredAt: "2026-10-10T00:00:00.123001Z" }))).toBe(false);
+    expect(isStaleEvent(existing, event({ eventId: "evt_2", occurredAt: "2026-10-10T00:00:01Z" }))).toBe(false);
+  });
+
   it("처음 받는 이벤트는 오래되지 않았다", () => {
     expect(isStaleEvent(doc(), event())).toBe(false);
   });
