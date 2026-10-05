@@ -51,8 +51,11 @@ service cloud.firestore {
     }
 
     match /calendarIntegrations/{userId} {
+      // premiumUntil(epoch 초) 커스텀 클레임이 지금보다 미래여야 한다. 만료 시각만 비교하므로
+      // 체험 종료·해지 후 기간 만료 시 별도 회수 작업이 필요 없다(billing-proxy가 설정).
       allow read, write: if request.auth != null && request.auth.uid == userId
-                          && request.auth.token.premium == true;
+                          && request.auth.token.premiumUntil is number
+                          && request.auth.token.premiumUntil > request.time.toMillis() / 1000;
     }
 
     match /userSettings/{userId} {
@@ -67,7 +70,7 @@ service cloud.firestore {
     match /entitlements/{userId} {
       // 구독 상태는 클라이언트가 절대 스스로 쓰지 못하게 막는다. 지금은 운영자가
       // scripts/grantEntitlement.ts로 이 문서와 커스텀 클레임을 함께 설정하고,
-      // 나중에 결제 웹훅을 붙이면 Admin SDK로 쓰는데 Admin SDK는 이 규칙을
+      // 결제 웹훅(billing-proxy)은 Admin SDK로 쓰는데 Admin SDK는 이 규칙을
       // 우회하므로 write:false로 막아도 문제없다.
       // write를 허용하면 브라우저 devtools에서 자기 자신의 plan을 premium으로
       // 바꿔치기하는 게 가능해진다.

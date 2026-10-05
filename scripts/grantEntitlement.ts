@@ -15,8 +15,7 @@
  * 하나만 있으면 각각 auth/insufficient-permission, 7 PERMISSION_DENIED로 실패한다.
  *
  * 사용법:
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan premium
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan free
+ *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan premium [--until 2027-01-01T00:00:00.000Z]
  */
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -25,50 +24,66 @@ import { getFirestore } from "firebase-admin/firestore";
 interface ParsedArgs {
   uid: string;
   plan: "premium" | "free";
+  /** premium일 때만 쓴다. 기본은 사실상 무기한. */
+  until: Date;
 }
 
+const DEFAULT_UNTIL = "2099-12-31T00:00:00.000Z";
+
 const parseArgs = (argv: string[]): ParsedArgs => {
-  const uidIndex = argv.indexOf("--uid");
-  const planIndex = argv.indexOf("--plan");
-  const uid = uidIndex !== -1 ? argv[uidIndex + 1] : undefined;
-  const plan = planIndex !== -1 ? argv[planIndex + 1] : undefined;
+  const valueOf = (flag: string) => {
+    const index = argv.indexOf(flag);
+    return index !== -1 ? argv[index + 1] : undefined;
+  };
+  const uid = valueOf("--uid");
+  const plan = valueOf("--plan");
+  const until = new Date(valueOf("--until") ?? DEFAULT_UNTIL);
 
   if (!uid) throw new Error("--uid <uid> 인자가 필요합니다");
   if (plan !== "premium" && plan !== "free") {
     throw new Error("--plan은 premium 또는 free여야 합니다");
   }
-  return { uid, plan };
+  if (Number.isNaN(until.getTime())) throw new Error("--until은 ISO 날짜여야 합니다");
+  if (plan === "premium" && until.getTime() <= Date.now()) throw new Error("--until은 미래여야 합니다");
+  return { uid, plan, until };
 };
 
 const run = async () => {
-  const { uid, plan } = parseArgs(process.argv.slice(2));
+  const { uid, plan, until } = parseArgs(process.argv.slice(2));
   const isPremium = plan === "premium";
+  const premiumUntil = isPremium ? until.toISOString() : null;
+  const now = new Date().toISOString();
 
   initializeApp({ credential: applicationDefault() });
   const db = getFirestore();
   const auth = getAuth();
 
-  // uid 존재 여부를 먼저 확인한다 — 여기서 실패하면(오타 등) Firestore 문서를
-  // 쓰기 전에 중단되므로, "문서는 premium인데 클레임은 없는" 불일치 상태가
-  // 생기지 않는다. 기존 커스텀 클레임도 함께 얻어 아래에서 병합한다.
-  const existingClaims = (await auth.getUser(uid)).customClaims ?? {};
+  // uid 존재 여부를 먼저 확인한다 — 여기서 실패하면(오타 등) 문서를 쓰기 전에 중단된다.
+  // 기존 커스텀 클레임도 함께 얻어 아래에서 병합한다.
+  const { premium: _legacy, ...existingClaims } = (await auth.getUser(uid)).customClaims ?? {};
+
+  // billing-proxy와 같은 순서(클레임 먼저)로 쓴다.
+  await auth.setCustomUserClaims(uid, {
+    ...existingClaims,
+    premiumUntil: premiumUntil === null ? 0 : Math.floor(Date.parse(premiumUntil) / 1000),
+  });
+  console.log(`${uid} 커스텀 클레임 갱신 완료 (premiumUntil: ${premiumUntil ?? "없음"})`);
 
   await db.doc(`entitlements/${uid}`).set(
     {
       plan,
       status: isPremium ? "active" : "none",
       source: "manual",
-      updatedAt: new Date().toISOString(),
+      premiumUntil,
+      cancelAt: null,
+      updatedAt: now,
     },
     { merge: true },
   );
   console.log(`entitlements/${uid} 문서 갱신 완료 (plan: ${plan})`);
 
-  await auth.setCustomUserClaims(uid, { ...existingClaims, premium: isPremium });
-  console.log(`${uid} 커스텀 클레임 갱신 완료 (premium: ${isPremium})`);
-
   console.log(
-    "클라이언트는 ID 토큰이 갱신되어야(최대 1시간, 또는 재로그인) 이 변경을 반영한다.",
+    "열려 있는 클라이언트는 문서 변경을 감지해 토큰을 바로 갱신한다. 닫혀 있던 클라이언트는 다음 로그인/토큰 갱신 때 반영된다.",
   );
 };
 
