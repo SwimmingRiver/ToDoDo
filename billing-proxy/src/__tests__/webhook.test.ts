@@ -158,6 +158,43 @@ describe("handleWebhook", () => {
     expect(errorLog).toHaveBeenCalled();
   });
 
+  it("살아 있는 다른 구독이 있으면 다른 구독의 해지 이벤트는 건너뛰고 이중 구독 경고를 남긴다", async () => {
+    const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const d = deps({
+      ...EMPTY_ENTITLEMENT,
+      source: "paddle",
+      status: "active",
+      subscriptionId: "sub_old",
+      premiumUntil: "2026-11-13T00:00:00.000Z",
+    });
+    const raw = body({
+      event_type: "subscription.canceled",
+      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null },
+    });
+    const res = await handleWebhook(await request(raw), ENV, d, NOW);
+    expect(res.status).toBe(200);
+    expect(d.claims.setPremiumUntil).not.toHaveBeenCalled();
+    expect(d.store.write).not.toHaveBeenCalled();
+    expect(warnLog).toHaveBeenCalledWith(expect.any(String), "u1", "sub_old", "sub_1");
+  });
+
+  it("같은 구독의 해지는 반영한다", async () => {
+    const d = deps({
+      ...EMPTY_ENTITLEMENT,
+      source: "paddle",
+      status: "active",
+      subscriptionId: "sub_1",
+      premiumUntil: "2026-11-13T00:00:00.000Z",
+    });
+    const raw = body({
+      event_type: "subscription.canceled",
+      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null },
+    });
+    const res = await handleWebhook(await request(raw), ENV, d, NOW);
+    expect(res.status).toBe(200);
+    expect(d.store.write.mock.calls[0][1]).toMatchObject({ status: "canceled", premiumUntil: NOW.toISOString() });
+  });
+
   it("JSON이 깨졌으면 400", async () => {
     const d = deps();
     const res = await handleWebhook(await request("{not json"), ENV, d, NOW);

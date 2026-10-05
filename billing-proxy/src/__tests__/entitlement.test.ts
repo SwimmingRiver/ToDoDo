@@ -5,6 +5,7 @@ import {
   TRIAL_MS,
   applySubscriptionEvent,
   applyTrial,
+  isForeignCancel,
   isPremiumAt,
   isStaleEvent,
   toClaimSeconds,
@@ -110,6 +111,30 @@ describe("isStaleEvent", () => {
 
   it("처음 받는 이벤트는 오래되지 않았다", () => {
     expect(isStaleEvent(doc(), event())).toBe(false);
+  });
+});
+
+describe("isForeignCancel", () => {
+  const live = doc({ source: "paddle", status: "active", subscriptionId: "sub_old", premiumUntil: "2026-11-13T00:00:00.000Z" });
+
+  it("살아 있는 다른 구독이 있는데 해지·일시정지 이벤트가 오면 true(이중 구독의 남은 쪽을 지킨다)", () => {
+    expect(isForeignCancel(live, event({ status: "canceled" }), NOW)).toBe(true);
+    expect(isForeignCancel(live, event({ status: "paused" }), NOW)).toBe(true);
+  });
+
+  it("같은 구독의 해지는 정상 반영한다", () => {
+    expect(isForeignCancel(live, event({ status: "canceled", subscriptionId: "sub_old" }), NOW)).toBe(false);
+  });
+
+  it("해지·일시정지가 아닌 상태는 다른 구독이어도 반영한다", () => {
+    expect(isForeignCancel(live, event({ status: "active" }), NOW)).toBe(false);
+    expect(isForeignCancel(live, event({ status: "past_due" }), NOW)).toBe(false);
+  });
+
+  it("기존 문서가 이미 만료됐거나 Paddle 구독이 아니면 false", () => {
+    expect(isForeignCancel({ ...live, premiumUntil: "2026-10-01T00:00:00.000Z" }, event({ status: "canceled" }), NOW)).toBe(false);
+    expect(isForeignCancel({ ...live, source: "manual" }, event({ status: "canceled" }), NOW)).toBe(false);
+    expect(isForeignCancel({ ...live, subscriptionId: null }, event({ status: "canceled" }), NOW)).toBe(false);
   });
 });
 

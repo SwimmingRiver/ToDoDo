@@ -1,7 +1,7 @@
 import { isBillingAllowed } from "../allowlist";
 import { UserNotFoundError } from "../claims";
 import { commitEntitlement, type CommitDeps } from "../commit";
-import { applySubscriptionEvent, isStaleEvent } from "../entitlement";
+import { applySubscriptionEvent, isForeignCancel, isStaleEvent } from "../entitlement";
 import type { Env } from "../env";
 import { parseWebhook } from "../paddleEvent";
 import { verifyPaddleSignature } from "../signature";
@@ -59,9 +59,19 @@ export const handleWebhook = async (
     return ok();
   }
   try {
-    await commitEntitlement(deps, uid, (existing) =>
-      isStaleEvent(existing, event) ? { skip: "STALE" } : { write: applySubscriptionEvent(existing, event, now) },
-    );
+    await commitEntitlement(deps, uid, (existing) => {
+      if (isStaleEvent(existing, event)) return { skip: "STALE" as const };
+      if (isForeignCancel(existing, event, now)) {
+        console.warn(
+          "이중 구독 의심 — 다른 구독의 해지 이벤트를 무시함(Paddle 대시보드에서 환불 확인):",
+          uid,
+          existing.subscriptionId,
+          event.subscriptionId,
+        );
+        return { skip: "FOREIGN_SUBSCRIPTION" as const };
+      }
+      return { write: applySubscriptionEvent(existing, event, now) };
+    });
   } catch (error) {
     if (error instanceof UserNotFoundError) {
       console.error("Paddle 웹훅 대상 사용자가 없음:", uid, event.subscriptionId);
