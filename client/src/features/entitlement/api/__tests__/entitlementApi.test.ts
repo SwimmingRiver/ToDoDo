@@ -8,6 +8,7 @@ vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
 vi.mock("firebase/firestore", () => ({
   doc: vi.fn(() => ({})),
   getDoc: vi.fn(),
+  onSnapshot: vi.fn(),
 }));
 
 describe("getEntitlement", () => {
@@ -26,10 +27,14 @@ describe("getEntitlement", () => {
       plan: "free",
       status: "none",
       source: null,
+      premiumUntil: null,
+      trialUsedAt: null,
+      cancelAt: null,
       currentPeriodEnd: null,
       customerId: null,
       subscriptionId: null,
       lastWebhookEventId: null,
+      lastEventOccurredAt: null,
       updatedAt: "",
     });
   });
@@ -70,12 +75,29 @@ describe("getEntitlement", () => {
       plan: "premium",
       status: "active",
       source: null,
+      premiumUntil: null,
+      trialUsedAt: null,
+      cancelAt: null,
       currentPeriodEnd: null,
       customerId: null,
       subscriptionId: null,
       lastWebhookEventId: null,
+      lastEventOccurredAt: null,
       updatedAt: "",
     });
+  });
+
+  it("문서의 새 필드를 그대로 읽고 없으면 null로 채운다", async () => {
+    const { getDoc } = await import("firebase/firestore");
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => ({ plan: "premium", status: "trialing", premiumUntil: "2026-10-17T00:00:00.000Z", trialUsedAt: "2026-10-10T00:00:00.000Z" }),
+    } as never);
+
+    const { getEntitlement } = await import("../entitlementApi");
+    const result = await getEntitlement();
+
+    expect(result).toMatchObject({ premiumUntil: "2026-10-17T00:00:00.000Z", trialUsedAt: "2026-10-10T00:00:00.000Z", cancelAt: null });
   });
 
   it("미인증 상태면 에러를 던진다", async () => {
@@ -89,5 +111,23 @@ describe("getEntitlement", () => {
       value: { uid: "user-1" },
       configurable: true,
     });
+  });
+});
+
+describe("subscribeEntitlement", () => {
+  it("스냅샷을 정규화해서 넘기고 해제 함수를 돌려준다", async () => {
+    const { onSnapshot } = await import("firebase/firestore");
+    const off = vi.fn();
+    vi.mocked(onSnapshot).mockImplementation(((_ref: unknown, next: (snap: unknown) => void) => {
+      next({ exists: () => false });
+      return off;
+    }) as never);
+
+    const { subscribeEntitlement } = await import("../entitlementApi");
+    const onNext = vi.fn();
+    const unsubscribe = subscribeEntitlement("user-1", onNext, vi.fn());
+
+    expect(onNext).toHaveBeenCalledWith(expect.objectContaining({ plan: "free", premiumUntil: null }));
+    expect(unsubscribe).toBe(off);
   });
 });

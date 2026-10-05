@@ -22,6 +22,7 @@ import { useReminderRefresh } from "@/features/reminders/hooks/useReminderRefres
 import { usePushTokenSync } from "@/features/reminders/hooks/usePushTokenSync";
 import { useForegroundReminders } from "@/features/reminders/hooks/useForegroundReminders";
 import { useNotificationClickNavigation } from "@/features/reminders/hooks/useNotificationClickNavigation";
+import { useEntitlementSync } from "@/features/entitlement/hooks/useEntitlementSync";
 import { ReminderPromptProvider } from "@/features/reminders/components/reminderPrompt/reminderPrompt";
 
 const App = () => {
@@ -35,6 +36,7 @@ const App = () => {
   usePushTokenSync();
   useForegroundReminders();
   useNotificationClickNavigation();
+  useEntitlementSync();
   const hasRunMaintenanceRef = useRef(false);
 
   // 인증된 레이아웃(App) 마운트 시 1회. 세션 중 재마운트되어도 다시 실행되지 않도록

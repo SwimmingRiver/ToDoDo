@@ -1,4 +1,6 @@
-export { useEntitlement, useIsPremium, useUpgradeInterest } from "./hooks";
+export { useEntitlement, useIsPremium, useUpgradeInterest, useEntitlementSync } from "./hooks";
 export { default as PremiumGate } from "./components/premiumGate";
 export { default as PremiumLockedNotice } from "./components/premiumLockedNotice";
 export type { Entitlement, EntitlementPlan, EntitlementStatus } from "./types";
+export { isPremiumEntitlement } from "./utils/isPremiumEntitlement";
+export type { EntitlementSource } from "./types";
