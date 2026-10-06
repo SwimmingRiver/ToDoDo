@@ -33,6 +33,8 @@
 
 ## 로컬·프리뷰 테스트
 
+Paddle 없이 로컬에서: `.dev.vars`에 결제용 서비스 계정 JSON(`GOOGLE_SERVICE_ACCOUNT='{"type":...}'` — 작은따옴표로 원문 그대로, 큰따옴표로 감싸면 wrangler가 `\"`를 풀지 않아 파싱 실패), 아무 값의 `PADDLE_WEBHOOK_SECRET`·`BILLING_UID_SECRET`, 테스트 계정 uid의 `BILLING_ALLOWED_UIDS`를 넣고 `npx wrangler dev`(값을 바꾸면 재시작). 그 뒤 `node scripts/sendTestWebhook.mjs <uid> <active|cancel-scheduled|past-due|canceled|forged-sig|trialing> [--sub id]`로 서명된 가짜 웹훅을 보내 클레임·문서 반영과 클라이언트 실시간 갱신을 확인한다. 클라이언트는 `VITE_BILLING_ENABLED=true VITE_BILLING_PROXY_URL=http://localhost:8787 npm run dev`. 로컬도 **운영 Firestore·Auth에 쓴다** — 반드시 테스트 계정으로.
+
 Paddle 웹훅은 localhost에 닿지 않는다. `npx wrangler versions upload`로 만든 프리뷰 URL을 샌드박스 Notification 대상으로 임시 등록하고, 클라이언트는 `VITE_BILLING_PROXY_URL`을 그 URL로 덮어써 테스트한다. `past_due`·즉시 해지는 Paddle 대시보드의 웹훅 시뮬레이터로 보낸다.
 
 샌드박스 결제 테스트는 운영자 계정(2099년까지 수동 부여)이 아니라 **별도 테스트 계정**으로 한다(허용 목록에 그 uid를 임시로 추가). 운영자 계정으로 결제하면 수동 부여가 구독 기간으로 덮어써진다 — 이미 했다면 `npm run grant:entitlement`(루트)를 다시 실행한다. 테스트가 끝나면 **그 테스트 구독을 먼저 해지하고 나서** 허용 목록에서 uid를 뺀다 — 웹훅도 허용 목록을 확인하므로, 순서를 바꾸면 해지 웹훅이 버려져 테스트 계정이 마지막 `premiumUntil`(+3일)까지 프리미엄으로 남는다.
