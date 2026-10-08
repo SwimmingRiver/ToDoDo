@@ -64,4 +64,14 @@ describe("법적 문서 본문", () => {
       LEGAL_LINKS.map((l) => LEGAL_DOCUMENTS[l.to.slice(1) as keyof typeof LEGAL_DOCUMENTS].title),
     );
   });
+
+  it("개인정보처리방침의 보유 기간 표가 Cloudflare로 이전하는 알림 데이터를 모두 다룬다", () => {
+    const retention = LEGAL_DOCUMENTS.privacy.sections.find((s) => s.heading.includes("보유 기간"));
+    const rows = retention?.table?.rows ?? [];
+    const periodOf = (item: string) => rows.find(([name]) => name.includes(item))?.[1];
+    expect(periodOf("알림 기기 토큰")).toBeDefined();
+    expect(periodOf("알림 일정")).toBeDefined();
+    // 7일이 지난 발송 기록은 다음 알림 처리 때 정리된다(reminder-proxy alarmRunner) — "7일 후 삭제"로 단정하지 않는다.
+    expect(periodOf("알림 발송 기록")).toContain("다음 알림 처리");
+  });
 });
