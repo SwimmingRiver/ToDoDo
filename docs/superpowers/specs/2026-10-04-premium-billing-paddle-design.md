@@ -249,6 +249,15 @@ Paddle 운영 계정 승인(도메인 심사: 공개 요금제·이용약관·�
 - Paddle 샌드박스에서 KRW 가격과 국내 결제수단(카카오페이·네이버페이)이 노출되는지.
 - Paddle 웹훅 재전송 시 `ts`가 새로 서명되는지(5분 허용 오차와의 호환).
 
+### 실측 결과 (2026-10-08, 샌드박스 + 배포된 billing-proxy, 테스트 계정)
+
+- ✅ `custom_data`(`uid`·`uid_sig`)가 구독과 `subscription.*` 웹훅에 그대로 온다 — 실제 웹훅이 서명 검증을 통과해 문서·클레임이 반영됐다(첫 항목·셋째 항목 해소, `transaction.completed` 매핑 불필요).
+- ✅ KRW ₩4,900 표시, 국내 결제수단 노출(샌드박스에서는 Paddle 테스트 승인 페이지로 연결).
+- ✅ 결제 → `active`(`premiumUntil` = 기간 끝 + 3일), 포털 예약 해지 → `cancelAt` 설정·`premiumUntil` = 기간 끝(유예 없음), 대시보드 즉시 해지 → `canceled`·`premiumUntil` = 해지 시각. 각 웹훅은 수 초~12초 안에 도착.
+- ⏸ `past_due`의 `current_billing_period`: 샌드박스 대시보드로 실제 갱신 실패를 만들 수 없고 시뮬레이터 페이로드에는 `uid_sig`가 없어 측정 불가 — 로컬 서명 가짜 웹훅 검증으로 갈음.
+- ⏸ `Checkout.open`의 `customData` 덮어쓰기, 재전송 `ts` 재서명: 미측정. 덮어써도 `uid_sig` 검증이 막고, `ts`는 Paddle이 재전송마다 새로 서명하는 것으로 문서화돼 있다(실결제 전환 전 재확인 후보).
+- 함정: 로컬 가짜 웹훅이 남긴 `customerId: "ctm_local_test"`가 있으면 `/checkout`이 그 id로 거래를 만들어 Paddle `400 bad_request`가 난다 — 샌드박스 결제 전에 테스트 계정 문서의 `customerId`·`subscriptionId`를 비운다.
+
 ## 알고 감수한 한계
 
 - 정기 갱신은 `기간 끝 + 3일` 유예가 있어, 웹훅이 3일 넘게 실패하면 정상 구독자도 잠길 수 있다(Paddle 재전송·Cloudflare Worker 로그로 대응 — billing-proxy에는 Sentry가 없다).
