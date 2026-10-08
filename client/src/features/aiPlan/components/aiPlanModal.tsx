@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { PremiumLockedNotice, useIsPremium, useUpgradeInterest } from "@/features/entitlement";
+import { X } from "lucide-react";
+import { PremiumLockedNotice, useIsPremium, usePremiumCta } from "@/features/entitlement";
 import { useCreatePlanTodos } from "@/features/todo/hooks";
 import { ConfirmModal, useToast } from "@/shared";
 import {
@@ -27,7 +28,7 @@ type PendingConfirm = "close" | "regenerate" | null;
  */
 const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
   const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
-  const { submitInterest } = useUpgradeInterest("AI 할 일 플랜 기능");
+  const premiumCta = usePremiumCta("AI 할 일 플랜 기능");
   const toast = useToast();
   const generate = useGeneratePlan();
   const createPlan = useCreatePlanTodos();
@@ -129,8 +130,8 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
         <PremiumLockedNotice
           title="AI 할 일 플랜은 프리미엄 기능입니다"
           description="목표를 적으면 AI가 실행 단계와 날짜를 나눠 제안해요. 프리미엄 구독이 필요합니다"
-          ctaLabel="관심 있어요"
-          onCtaClick={submitInterest}
+          ctaLabel={premiumCta.ctaLabel}
+          onCtaClick={premiumCta.onCtaClick}
         />
       );
     }
@@ -170,7 +171,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
           <ModalContainer role="dialog" aria-modal="true" aria-label="AI로 계획" onClick={(e) => e.stopPropagation()}>
             <ModalHeader>
               <ModalCloseButton onClick={requestClose} disabled={generate.isPending} aria-label="모달 닫기">
-                X
+                <X size={20} />
               </ModalCloseButton>
             </ModalHeader>
             <ModalBody>{renderBody()}</ModalBody>

@@ -1,0 +1,15 @@
+name = "tododo-billing-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "tododo-83576"
+CLIENT_APP_URL = "https://tododo-83576.web.app"
+# 샌드박스. 실결제 전환 시 https://api.paddle.com 으로 바꾼다.
+PADDLE_API_BASE = "https://sandbox-api.paddle.com"
+# Paddle 샌드박스 "ToDoDo 프리미엄" 월간 ₩4,900(세금 포함). 실결제 전환 시 live 가격 id로 바꾼다.
+PADDLE_PRICE_ID = "pri_01m4cvyj30dk394r30q3dy8frq"
+# 샌드박스 기간에는 운영 Firestore가 샌드박스 결제에 연결되므로 허용 목록으로 막는다.
+# 비우면 아무도 허용하지 않는다. 전원 허용은 정확히 "*".
+BILLING_ALLOWED_UIDS = "2pq9Zu8vv1R7WpgN3x0HXnecvix1"
+# PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET, BILLING_UID_SECRET, GOOGLE_SERVICE_ACCOUNT는 시크릿이다.

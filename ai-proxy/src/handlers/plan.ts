@@ -22,7 +22,7 @@ const readLimit = (env: Env): number => {
  * 있다 — 프리미엄을 수동 부여하는 동안은 감수하되, 결제로 공개 전 반드시 닫아야
  * 한다(예: 별도의 느슨한 시도 횟수 상한). incrementUsage는 쓰기 직전에 최신값을
  * 다시 읽으므로 여기서 넘기는 used는 게이트 체크용일 뿐 기록값이 아니다.
- * premium 클레임은 ID 토큰 갱신 전까지 최대 1시간 늦게 반영될 수 있다(캘린더와 동일).
+ * premiumUntil 클레임은 ID 토큰 갱신 전까지 최대 1시간 늦게 반영될 수 있다(캘린더와 동일).
  */
 export const handlePlan = async (request: Request, env: Env): Promise<Response> => {
   const idToken = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");

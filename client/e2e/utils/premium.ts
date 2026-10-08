@@ -6,7 +6,7 @@ const EMULATOR_PROJECT_ID = 'demo-tododo-e2e'
  * 에뮬레이터 Firestore에 현재 로그인 사용자의 entitlements 문서를 직접 쓴다.
  * 규칙상 클라이언트는 이 문서를 쓸 수 없으므로(write:false), 에뮬레이터 REST에
  * `Bearer owner`(규칙 우회)로 쓴다. 이 경로는 에뮬레이터 전용이다.
- * UI 잠금 판정(useIsPremium)만 풀면 되고, ai-proxy는 page.route로 가로채므로
+ * UI 잠금 판정(useIsPremium: premiumUntil > now)만 풀면 되고, ai-proxy는 page.route로 가로채므로
  * 커스텀 클레임은 필요 없다.
  */
 export async function grantPremiumInEmulator(page: Page, request: APIRequestContext): Promise<void> {
@@ -25,6 +25,7 @@ export async function grantPremiumInEmulator(page: Page, request: APIRequestCont
         plan: { stringValue: 'premium' },
         status: { stringValue: 'active' },
         source: { stringValue: 'manual' },
+        premiumUntil: { stringValue: new Date(Date.now() + 365 * 86_400_000).toISOString() },
         updatedAt: { stringValue: new Date().toISOString() },
       },
     },

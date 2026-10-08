@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import {
   ModalBackground,
   ModalContainer,
@@ -29,7 +30,9 @@ const Modal = ({
       <ModalBackground onClick={handleClose}>
         <ModalContainer role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
           <ModalHeader>
-            <ModalCloseButton onClick={handleClose} aria-label="모달 닫기">X</ModalCloseButton>
+            <ModalCloseButton onClick={handleClose} aria-label="모달 닫기">
+              <X size={20} />
+            </ModalCloseButton>
           </ModalHeader>
           <ModalBody>{children}</ModalBody>
           <ModalFooter>

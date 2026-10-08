@@ -48,7 +48,7 @@ describe("handleSyncTodos", () => {
   it("연동되지 않은 사용자면 409를 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord } = await import("../tokenStore");
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true, premiumUntil: null });
     vi.mocked(getTokenRecord).mockResolvedValue(null);
 
     const response = await handleSyncTodos(makeRequest({ todos: [] }), makeEnv());
@@ -61,7 +61,7 @@ describe("handleSyncTodos", () => {
     const { refreshAccessToken } = await import("../googleOAuth");
     const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true, premiumUntil: null });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
     vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([
@@ -83,7 +83,7 @@ describe("handleSyncTodos", () => {
     const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
     const { refreshAccessToken } = await import("../googleOAuth");
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: true, premiumUntil: null });
     vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
     vi.mocked(refreshAccessToken).mockRejectedValue(new Error("invalid_grant"));
 
@@ -97,7 +97,7 @@ describe("handleSyncTodos", () => {
 
   it("premium이 아니면 403 PREMIUM_REQUIRED를 반환한다", async () => {
     const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false, premiumUntil: null });
 
     const response = await handleSyncTodos(makeRequest({ todos: [] }), makeEnv());
     expect(response.status).toBe(403);
