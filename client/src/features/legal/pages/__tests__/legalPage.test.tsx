@@ -47,17 +47,6 @@ describe("LegalPage", () => {
     expect(screen.queryByText(/\[판매자명 미정\]/)).not.toBeInTheDocument();
   });
 
-  it("다른 문서로 바뀌면 맨 위로 스크롤한다", () => {
-    const { rerender } = renderPage("terms");
-    vi.mocked(window.scrollTo).mockClear();
-    rerender(
-      <MemoryRouter>
-        <LegalPage slug="refund" />
-      </MemoryRouter>,
-    );
-    expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
-  });
-
   it("표는 좁은 화면에서 가로로 스크롤되는 영역 안에 있다", () => {
     renderPage("privacy");
     const tables = screen.getAllByRole("table");

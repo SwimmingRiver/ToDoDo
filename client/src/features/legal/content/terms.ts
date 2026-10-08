@@ -53,7 +53,8 @@ export const TERMS: LegalDocument = {
     },
     {
       heading: "제7조 (환불)",
-      paragraphs: ["환불은 서비스의 환불 정책(/refund)에 따릅니다."],
+      paragraphs: ["환불은 서비스의 환불 정책에 따릅니다."],
+      links: [{ to: "/refund", label: "환불 정책 보기" }],
     },
     {
       heading: "제8조 (이용자의 의무)",

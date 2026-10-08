@@ -74,4 +74,16 @@ describe("법적 문서 본문", () => {
     // 7일이 지난 발송 기록은 다음 알림 처리 때 정리된다(reminder-proxy alarmRunner) — "7일 후 삭제"로 단정하지 않는다.
     expect(periodOf("알림 발송 기록")).toContain("다음 알림 처리");
   });
+
+  it("의견 항목은 실제로 저장하는 회원 식별자와 작성 시각까지 적는다(feedbackApi)", () => {
+    const purpose = LEGAL_DOCUMENTS.privacy.sections.find((s) => s.heading.includes("목적"));
+    const row = purpose?.table?.rows.find(([item]) => item.includes("의견"));
+    expect(row?.[0]).toContain("회원 식별자");
+    expect(row?.[0]).toContain("작성 시각");
+  });
+
+  it("이용약관의 환불 조항은 환불 정책 페이지로 링크한다", () => {
+    const refund = LEGAL_DOCUMENTS.terms.sections.find((s) => s.heading.includes("환불"));
+    expect(refund?.links).toEqual([{ to: "/refund", label: "환불 정책 보기" }]);
+  });
 });

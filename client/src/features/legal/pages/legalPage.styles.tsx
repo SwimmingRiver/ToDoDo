@@ -71,6 +71,10 @@ const Article = styled.article`
   ul {
     padding-left: 20px;
   }
+
+  a {
+    color: ${colors.brand.strong};
+  }
 `;
 
 const EffectiveDate = styled.p`
