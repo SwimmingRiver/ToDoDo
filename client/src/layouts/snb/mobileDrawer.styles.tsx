@@ -137,3 +137,11 @@ export const NavNavLink = styled(NavLink)`
     }
   }
 `;
+
+// 로그인한 모바일 화면은 Footer 대신 BottomTabBar를 보여주므로(App.tsx), 법적 링크를
+// 찾을 수 있는 곳이 드로어 하단뿐이다.
+export const DrawerLegalLinks = styled.div`
+  padding: 12px 22px 20px;
+  font-size: 13px;
+  color: ${colors.text.secondary};
+`;

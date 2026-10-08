@@ -1,6 +1,7 @@
 import { styled } from "styled-components";
 import { media } from "../../styles/breakpoints";
 import { colors } from "@/styles/colors";
+import LegalLinks from "@/features/legal/components/legalLinks";
 
 const FooterContainer = styled.footer`
   width: 100%;
@@ -10,6 +11,7 @@ const FooterContainer = styled.footer`
   justify-content: center;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   font-size: 14px;
   color: ${colors.text.secondary};
 
@@ -46,6 +48,8 @@ const Footer = () => {
       </FooterLink>
       <Divider>|</Divider>
       <FooterLink href="mailto:swimmingr@gmail.com">Contact</FooterLink>
+      <Divider>|</Divider>
+      <LegalLinks />
     </FooterContainer>
   );
 };

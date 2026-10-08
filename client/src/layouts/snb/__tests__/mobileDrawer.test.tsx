@@ -67,3 +67,17 @@ describe("MobileDrawer 안 의견 보내기", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });
+
+describe("MobileDrawer 법적 링크", () => {
+  it("이용약관을 누르면 드로어를 닫는다", async () => {
+    const user = setupUser();
+    const onClose = vi.fn();
+    renderDrawer({ onClose });
+
+    const link = screen.getByRole("link", { name: "이용약관" });
+    expect(link).toHaveAttribute("href", "/terms");
+    await user.click(link);
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+});
