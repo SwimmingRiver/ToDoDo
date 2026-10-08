@@ -13,9 +13,9 @@
 
 1. **Paddle 샌드박스**(sandbox-vendors.paddle.com)
    - Catalog: 상품 "ToDoDo 프리미엄" + 월간 KRW 가격 **₩4,900, 세금 포함(tax inclusive)** — 클라이언트 표시 가격 `PREMIUM_MONTHLY_PRICE_LABEL`과 같아야 한다 → `pri_…`를 `wrangler.toml`의 `PADDLE_PRICE_ID`에.
-   - Developer tools > Authentication: API 키(→ `PADDLE_API_KEY`), Client-side token(→ 클라이언트 `VITE_PADDLE_CLIENT_TOKEN`).
+   - 설정 > Authentication(`/settings/authentication`): API 키(→ `PADDLE_API_KEY`, 권한은 Transactions·Customer portal sessions Write만), Client-side token(→ 클라이언트 `VITE_PADDLE_CLIENT_TOKEN`, `test_`로 시작). **API 키는 만료일이 있다**(현재 샌드박스 키 2027-01-06 만료) — 만료 전에 새 키를 만들어 `wrangler secret put PADDLE_API_KEY`로 교체하지 않으면 `/checkout`·`/portal`이 그날부터 실패한다.
    - Checkout > Checkout settings: Default payment link = `https://tododo-83576.web.app` (transactionId로 결제창을 열려면 필수).
-   - Developer tools > Notifications: 대상 URL `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/paddle`, 이벤트 `subscription.created`·`subscription.updated`·`subscription.canceled` → secret key(→ `PADDLE_WEBHOOK_SECRET`).
+   - Notifications(`/notifications-v2`, Usage type은 Platform+Simulation): 대상 URL `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/paddle`, 이벤트 `subscription.created`·`subscription.updated`·`subscription.canceled` → secret key(→ `PADDLE_WEBHOOK_SECRET`).
 2. **GCP 결제 전용 서비스 계정**(reminder-proxy 계정과 별도): 역할 `Cloud Datastore User` + `Firebase Authentication Admin` → JSON 키.
 3. **시크릿 등록** (`cd billing-proxy`). `BILLING_UID_SECRET`은 32바이트 이상 무작위 값(`openssl rand -hex 32`) — `/checkout`이 `custom_data.uid`에 붙이는 서명 키로, 웹훅은 이 서명이 맞는 uid만 반영한다(공개 클라이언트 토큰으로 남의 uid를 넣은 결제 위조 차단). **한 번 정하면 회전하지 않는다** — 서명은 거래의 `custom_data`를 통해 구독에 영구 저장되므로, 키를 바꾸는 순간 기존 구독 전부의 갱신·해지 웹훅이 서명 불일치로 버려진다(200으로 응답해 Paddle도 재전송하지 않음). 그러면 구독자는 기간 끝+3일에 잠기고 해지도 반영되지 않는다. 유출 등으로 꼭 바꿔야 하면 먼저 이전 키도 함께 검증하도록 코드를 고친 뒤 교체한다:
    ```bash
