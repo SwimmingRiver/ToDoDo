@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import Footer from "@/layouts/footer/footer";
 import LandingHeader from "../components/landingHeader";
 import HeroSection from "../components/heroSection";
+import PricingSection from "../components/pricingSection";
 import FeatureGrid from "../components/featureGrid";
 import { SecondaryButton } from "../components/ctaButtons.styles";
 import {
@@ -21,6 +22,7 @@ const LandingPage = () => {
       <LandingHeader />
       <HeroSection onPrimaryClick={goToLogin} onSecondaryClick={goToGuest} />
       <FeatureGrid />
+      <PricingSection />
       <SecondaryCtaSection>
         <SecondaryCtaText>지금 바로 로그인 없이 둘러보세요</SecondaryCtaText>
         <SecondaryButton type="button" onClick={goToGuest}>
