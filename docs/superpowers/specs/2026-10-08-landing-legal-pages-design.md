@@ -61,7 +61,8 @@ client/src/
 │  ├─ components/pricingSection.tsx  새 요금제 섹션 (#pricing)
 │  ├─ components/landingHeader.tsx   + "요금제" 앵커 링크
 │  └─ components/featureGrid.tsx     + 마감 알림 카드
-└─ layouts/footer/footer.tsx         + 이용약관 · 개인정보처리방침 · 환불 정책 링크
+├─ layouts/footer/footer.tsx         + 이용약관 · 개인정보처리방침 · 환불 정책 링크
+└─ layouts/snb/mobileDrawer.tsx      + 같은 링크(로그인한 모바일 화면은 푸터 대신 하단 탭바라서)
 ```
 
 - **`features/legal`을 독립 feature로 둔 이유**: 랜딩 푸터·앱 셸 푸터·결제 화면·추후 모바일 앱이 모두 이 페이지를
