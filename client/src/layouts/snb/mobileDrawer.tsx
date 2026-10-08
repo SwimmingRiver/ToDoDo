@@ -8,6 +8,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
+import LegalLinks from "@/features/legal/components/legalLinks";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 import {
   Overlay,
@@ -19,6 +20,7 @@ import {
   NavList,
   NavNavLink,
   FeedbackNavRow,
+  DrawerLegalLinks,
 } from "./mobileDrawer.styles";
 
 interface MobileDrawerProps {
@@ -91,6 +93,9 @@ const MobileDrawer = ({ isOpen, onClose, onFeedbackClick }: MobileDrawerProps) =
           <MessageSquare size={20} />
           <span>의견 보내기</span>
         </FeedbackNavRow>
+        <DrawerLegalLinks>
+          <LegalLinks onNavigate={handleClose} />
+        </DrawerLegalLinks>
       </DrawerContainer>
     </>,
     document.body

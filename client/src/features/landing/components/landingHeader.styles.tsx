@@ -34,6 +34,27 @@ const Logo = styled.span`
   color: ${colors.text.primary};
 `;
 
+const HeaderNav = styled.nav`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const PricingLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${colors.text.secondary};
+  text-decoration: none;
+
+  &:hover {
+    color: ${colors.text.primary};
+  }
+`;
+
 const LoginLink = styled.button`
   min-height: 44px;
   padding: 0 12px;
@@ -50,4 +71,4 @@ const LoginLink = styled.button`
   }
 `;
 
-export { HeaderContainer, LogoGroup, LogoMark, Logo, LoginLink };
+export { HeaderContainer, LogoGroup, LogoMark, Logo, HeaderNav, PricingLink, LoginLink };
