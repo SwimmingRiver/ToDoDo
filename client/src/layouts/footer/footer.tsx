@@ -12,6 +12,7 @@ const FooterContainer = styled.footer`
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  container-type: inline-size;
   font-size: 14px;
   color: ${colors.text.secondary};
 
@@ -35,6 +36,25 @@ const Divider = styled.span`
   color: ${colors.text.tertiary};
 `;
 
+// 법적 링크 묶음이 줄바꿈되면 앞의 "|"가 윗줄 끝에 혼자 남는다(실측: 푸터 폭 270~490px).
+// 화면 폭이 아니라 푸터 폭 기준(컨테이너 쿼리)으로, 좁을 때는 구분자를 숨기고 링크를 다음 줄 가운데로 내린다.
+const LEGAL_LINE_BREAK = "@container (max-width: 500px)";
+
+const LegalDivider = styled(Divider)`
+  ${LEGAL_LINE_BREAK} {
+    display: none;
+  }
+`;
+
+const LegalGroup = styled.div`
+  display: flex;
+
+  ${LEGAL_LINE_BREAK} {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+`;
+
 const Footer = () => {
   return (
     <FooterContainer>
@@ -48,8 +68,10 @@ const Footer = () => {
       </FooterLink>
       <Divider>|</Divider>
       <FooterLink href="mailto:swimmingr@gmail.com">Contact</FooterLink>
-      <Divider>|</Divider>
-      <LegalLinks />
+      <LegalDivider>|</LegalDivider>
+      <LegalGroup>
+        <LegalLinks />
+      </LegalGroup>
     </FooterContainer>
   );
 };
