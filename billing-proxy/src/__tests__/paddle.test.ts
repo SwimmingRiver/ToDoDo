@@ -39,4 +39,20 @@ describe("PaddleClient", () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonRes({ error: {} }, 400));
     await expect(new PaddleClient("https://x", "key", "pri_1", "uid-secret", fetchFn).createCheckoutTransaction("u1", null)).rejects.toThrow("400");
   });
+
+  it("Paddle 오류 코드와 설명을 메시지에 담는다 — 400의 원인을 로그로 알 수 있게", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      jsonRes({ error: { code: "transaction_default_checkout_url_not_set", detail: "A Default Payment Link has not yet been defined" } }, 400),
+    );
+    await expect(new PaddleClient("https://x", "key", "pri_1", "uid-secret", fetchFn).createCheckoutTransaction("u1", null)).rejects.toThrow(
+      "Paddle /transactions 실패 (400): transaction_default_checkout_url_not_set — A Default Payment Link has not yet been defined",
+    );
+  });
+
+  it("오류 본문이 JSON이 아니어도 상태 코드로 던진다", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response("bad gateway", { status: 502 }));
+    await expect(new PaddleClient("https://x", "key", "pri_1", "uid-secret", fetchFn).createCheckoutTransaction("u1", null)).rejects.toThrow(
+      "Paddle /transactions 실패 (502)",
+    );
+  });
 });

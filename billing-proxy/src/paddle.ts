@@ -15,7 +15,7 @@ export class PaddleClient {
       headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`Paddle ${path} 실패 (${res.status})`);
+    if (!res.ok) throw new Error(`Paddle ${path} 실패 (${res.status})${await describePaddleError(res)}`);
     return (await res.json()) as T;
   }
 
@@ -40,3 +40,13 @@ export class PaddleClient {
     return data.urls.general.overview;
   }
 }
+
+/** Paddle 오류 본문의 code·detail. 키·결제 정보는 담기지 않아 로그에 남겨도 된다 — 400의 원인을 알 수 있는 유일한 단서다. */
+const describePaddleError = async (res: Response): Promise<string> => {
+  try {
+    const { error } = (await res.json()) as { error?: { code?: string; detail?: string } };
+    return error?.code ? `: ${error.code} — ${error.detail ?? ""}` : "";
+  } catch {
+    return "";
+  }
+};
