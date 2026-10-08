@@ -1,4 +1,4 @@
-import { LEGAL_LINKS } from "../content";
+import { LEGAL_LINKS } from "../content/legalLinks";
 import { LegalLink, LinksNav } from "./legalLinks.styles";
 
 interface LegalLinksProps {
