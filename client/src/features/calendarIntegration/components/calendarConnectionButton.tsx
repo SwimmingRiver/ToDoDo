@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/shared";
 import { useGetTodos } from "@/features/todo";
 import type { Todo } from "@/features/todo";
-import { useIsPremium, useUpgradeInterest, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
+import { useIsPremium, usePremiumCta, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
 import {
   useCalendarIntegrationStatus,
   useConnectCalendar,
@@ -18,7 +18,7 @@ const CalendarConnectionButton = () => {
   const { connect } = useConnectCalendar();
   const { disconnect } = useDisconnectCalendar();
   const { data: todos } = useGetTodos();
-  const { submitInterest } = useUpgradeInterest("구글 캘린더 연동 기능");
+  const premiumCta = usePremiumCta("구글 캘린더 연동 기능");
   const toast = useToast();
   const [isPending, setIsPending] = useState(false);
 
@@ -92,9 +92,9 @@ const CalendarConnectionButton = () => {
           <PremiumLockedNotice
             compact
             title="구글 캘린더 연동 (프리미엄)"
-            description="할 일을 구글 캘린더와 양방향으로 동기화하려면 프리미엄 구독이 필요합니다"
-            ctaLabel="관심 있어요"
-            onCtaClick={submitInterest}
+            description="할 일을 구글 캘린더에 동기화하려면 프리미엄 구독이 필요합니다"
+            ctaLabel={premiumCta.ctaLabel}
+            onCtaClick={premiumCta.onCtaClick}
           />
         </Wrapper>
       }

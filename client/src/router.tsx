@@ -32,6 +32,7 @@ const CalendarPage = lazy(
 );
 const KanbanPage = lazy(() => import("@/features/kanban/pages/kanbanPage"));
 const InsightsPage = lazy(() => import("@/features/insights/pages/insightsPage"));
+const PremiumPage = lazy(() => import("@/features/billing/pages/premiumPage"));
 
 // 청크를 받는 동안 보여줄 것. fallback이 null인 곳은 ProtectedRoute/RootGate가
 // 인증 로딩 중 null을 반환하는 기존 컨벤션과 맞춘 것이다(깜빡임 방지).
@@ -82,6 +83,10 @@ export const router = createBrowserRouter([
       {
         path: "insights",
         element: withSuspense(<InsightsPage />, <InsightsSkeleton />),
+      },
+      {
+        path: "premium",
+        element: withSuspense(<PremiumPage />),
       },
     ],
   },

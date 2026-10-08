@@ -125,35 +125,48 @@ describe("verifyFirebaseIdToken", () => {
     );
   });
 
-  it("premium 클레임이 true면 premium:true를 반환한다", async () => {
-    const { token, jwk } = await makeSignedToken({ premium: true });
+  it("premiumUntil이 미래면 premium:true와 그 값을 반환한다", async () => {
+    const until = Math.floor(Date.now() / 1000) + 3600;
+    const { token, jwk } = await makeSignedToken({ premiumUntil: until });
     stubJwksFetch(jwk);
 
     const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
-    expect(result.premium).toBe(true);
+    expect(result).toEqual({ uid: "user-123", premium: true, premiumUntil: until });
   });
 
-  it("premium 클레임이 없으면 premium:false를 반환한다", async () => {
+  it("premiumUntil이 과거면 premium:false다", async () => {
+    const until = Math.floor(Date.now() / 1000) - 60;
+    const { token, jwk } = await makeSignedToken({ premiumUntil: until });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.premium).toBe(false);
+    expect(result.premiumUntil).toBe(until);
+  });
+
+  it("premiumUntil 클레임이 없으면 premium:false, premiumUntil:null이다", async () => {
     const { token, jwk } = await makeSignedToken();
     stubJwksFetch(jwk);
 
     const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
     expect(result.premium).toBe(false);
+    expect(result.premiumUntil).toBeNull();
   });
 
-  it("premium 클레임이 false면 premium:false를 반환한다", async () => {
-    const { token, jwk } = await makeSignedToken({ premium: false });
+  it("예전 premium:true 클레임만 있으면 더 이상 프리미엄이 아니다", async () => {
+    const { token, jwk } = await makeSignedToken({ premium: true });
     stubJwksFetch(jwk);
 
     const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
     expect(result.premium).toBe(false);
   });
 
-  it("premium 클레임이 boolean이 아니면 premium:false를 반환한다", async () => {
-    const { token, jwk } = await makeSignedToken({ premium: "true" });
+  it("premiumUntil이 숫자가 아니면 null로 취급한다", async () => {
+    const { token, jwk } = await makeSignedToken({ premiumUntil: "9999999999" });
     stubJwksFetch(jwk);
 
     const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
     expect(result.premium).toBe(false);
+    expect(result.premiumUntil).toBeNull();
   });
 });

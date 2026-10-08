@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { DEFAULT_INSIGHTS_FILTER, PERIOD_TITLE_LABELS, type InsightsFilter } from "@tododo/core";
-import { useIsPremium, useUpgradeInterest, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
+import { useIsPremium, usePremiumCta, PremiumGate, PremiumLockedNotice } from "@/features/entitlement";
 import { EmptyState } from "@/shared";
 import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
 import { useProductivityMetrics } from "../hooks";
@@ -19,7 +19,7 @@ const InsightsPage = () => {
   const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
   const [filter, setFilter] = useState<InsightsFilter>(DEFAULT_INSIGHTS_FILTER);
   const metrics = useProductivityMetrics(filter);
-  const { submitInterest } = useUpgradeInterest("완료 통계/인사이트 기능");
+  const premiumCta = usePremiumCta("완료 통계/인사이트 기능");
   const periodLabel = PERIOD_TITLE_LABELS[filter.period];
 
   // 선택한 프로젝트가 삭제되는 등 옵션에서 사라지면 전체로 되돌린다.
@@ -72,8 +72,8 @@ const InsightsPage = () => {
             <PremiumLockedNotice
               title="완료 통계는 프리미엄 기능입니다"
               description="완료율, 연속 달성일, 우선순위별 분포 등 나만의 생산성 인사이트를 확인하려면 프리미엄 구독이 필요합니다"
-              ctaLabel="관심 있어요"
-              onCtaClick={submitInterest}
+              ctaLabel={premiumCta.ctaLabel}
+              onCtaClick={premiumCta.onCtaClick}
             />
           }
         >

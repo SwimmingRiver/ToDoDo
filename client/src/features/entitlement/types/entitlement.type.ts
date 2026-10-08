@@ -1,22 +1,29 @@
 type EntitlementPlan = "free" | "premium";
 
-type EntitlementStatus = "none" | "active" | "trialing" | "canceled" | "expired";
+type EntitlementStatus = "none" | "trialing" | "active" | "past_due" | "canceled";
 
-/** 결제사가 나중에 웹훅으로 채울 예약 필드. 지금은 항상 "manual"이거나 null이다. */
-type EntitlementSource = "manual" | "paddle" | "lemonsqueezy" | "stripe" | null;
+/** manual = 운영자 스크립트, trial = 카드 없는 체험, paddle = 결제 웹훅. */
+type EntitlementSource = "manual" | "trial" | "paddle" | null;
 
+/**
+ * entitlements/{uid}. 쓰기는 billing-proxy·운영자 스크립트만 한다(rules write:false).
+ * 프리미엄 여부는 premiumUntil 하나로만 판단한다 — 서버(rules·Worker)의 premiumUntil 클레임과 같은 기준.
+ */
 interface Entitlement {
   plan: EntitlementPlan;
   status: EntitlementStatus;
   source: EntitlementSource;
-  /** ISO. 결제 웹훅이 붙기 전까지는 사용하지 않는 예약 필드. */
+  /** ISO. 이 시각보다 이전이면 프리미엄. 클레임 premiumUntil(초)과 같은 순간. */
+  premiumUntil: string | null;
+  /** 체험을 쓴 시각. 값이 있으면 다시 체험할 수 없다. */
+  trialUsedAt: string | null;
+  /** 예약 해지가 실제로 끝나는 시각(표시용). */
+  cancelAt: string | null;
   currentPeriodEnd: string | null;
-  /** 결제사 고객 ID. 결제 웹훅이 붙기 전까지는 사용하지 않는 예약 필드. */
   customerId: string | null;
-  /** 결제사 구독 ID. 결제 웹훅이 붙기 전까지는 사용하지 않는 예약 필드. */
   subscriptionId: string | null;
-  /** 웹훅 이벤트 idempotency 키로 쓸 예약 필드. */
   lastWebhookEventId: string | null;
+  lastEventOccurredAt: string | null;
   updatedAt: string;
 }
 
@@ -25,10 +32,14 @@ const DEFAULT_ENTITLEMENT: Entitlement = {
   plan: "free",
   status: "none",
   source: null,
+  premiumUntil: null,
+  trialUsedAt: null,
+  cancelAt: null,
   currentPeriodEnd: null,
   customerId: null,
   subscriptionId: null,
   lastWebhookEventId: null,
+  lastEventOccurredAt: null,
   updatedAt: "",
 };
 
