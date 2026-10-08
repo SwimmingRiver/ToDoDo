@@ -124,20 +124,39 @@ client/src/
 
 ### 개인정보처리방침 `/privacy`
 
-수집 항목(코드 기준으로 확인):
+수집 항목(10-08 코드 전수 검색으로 확인 — client·mobile·Worker 4개·packages):
 
-| 항목 | 저장 위치 | 목적 |
-|---|---|---|
-| 이메일·이름·프로필 사진(구글 로그인) | Firebase Auth | 계정 |
-| 할 일 내용·설정 | Firestore `todos`, `userSettings` | 서비스 제공 |
-| 의견 보내기 내용·이메일 | Firestore `feedback` | 문의 응대 |
-| 구독 상태·Paddle 고객 id | Firestore `entitlements` | 프리미엄 권한 |
-| 구글 캘린더 연동 토큰 | Cloudflare KV (calendar-proxy) | 캘린더 동기화 |
-| 알림 기기 토큰·발송 기록 | Cloudflare Durable Object (reminder-proxy) | 마감 알림 |
-| AI 플랜 요청 문장 | Anthropic(Claude)으로 전송 | AI 할 일 플랜 |
-| 오류 정보(허용 목록 항목만) | Sentry | 오류 수정 |
+| 항목 | 저장·전송 위치 | 목적 | 근거 |
+|---|---|---|---|
+| 이메일·이름·프로필 사진(구글 로그인) | Firebase Auth | 계정, 화면 표시 | `header.tsx`·`mobileDrawer.tsx`에서 이름·사진 표시 |
+| 할 일(제목·설명·일정·반복·알림 설정) | Firestore `todos` | 서비스 제공 | |
+| 알림 기본값 | Firestore `userSettings` | 알림 설정 | `reminderDefaultOffsetMinutes` 하나뿐 |
+| 의견 내용·이메일·uid·작성 시각 | Firestore `feedback` | 문의 응대 | `feedbackApi.ts` |
+| 구독 상태·Paddle 고객/구독 id·체험 사용 시각·결제 기간 | Firestore `entitlements` | 프리미엄 권한 | 카드 정보는 받지 않음 |
+| 캘린더 연동 여부·연결 시각 | Firestore `calendarIntegrations` | 연동 상태 | |
+| 구글 캘린더 refresh token | Cloudflare KV (calendar-proxy) | 캘린더 동기화 | `tokenStore.ts` |
+| 할 일 제목·일정 → **사용자 본인의 구글 캘린더** | Google Calendar API | 캘린더 동기화 | `googleCalendar.ts` `summary: todo.title` |
+| 알림 기기 토큰·알림 일정·**발송 기록(할 일 제목, 7일)** | Cloudflare Durable Object (reminder-proxy) | 마감 알림 | `store.ts` history 테이블 |
+| 알림 내용(할 일 제목) | Google FCM으로 전송 | 푸시 발송 | `fcm.ts` |
+| AI 요청: 목표 문장·오늘 날짜·마감일 | Anthropic(Claude)으로 전송 | AI 할 일 플랜 | `prompt.ts` |
+| AI 일일 사용 횟수(uid별) | Cloudflare KV (ai-proxy) | 하루 20회 제한 | `usage.ts` |
+| 오류 정보: uid·브라우저/OS·페이지 URL(쿼리 제거)·에러 스택 | Sentry | 오류 수정 | `sentry.ts` 허용 목록, 이메일·입력값 제외 |
+| 접속 기록(IP 등) | Firebase Hosting·Cloudflare Workers 자동 기록 | 운영·보안 | 서비스 제공자가 자동 수집 |
 
-그 밖의 조항: 처리 위탁·국외 이전 표(Google·Cloudflare·Anthropic·Sentry·Paddle의 국가·항목·목적·보유 기간),
+결제 정보(카드·청구지·결제 이메일)는 **Paddle이 판매 주체로서 직접 수집**하고 우리는 받지 않는다.
+방침에는 "결제는 Paddle이 처리하며 Paddle의 개인정보처리방침이 적용된다"로 안내한다.
+이것을 처리 위탁으로 볼지 제3자 제공으로 볼지는 작성지침 대조 단계에서 판단한다.
+
+수집하지 않는 것(확인됨): Google Analytics(설정값 `measurementId`만 있고 호출 0건 — 켜면 방침 갱신 필요),
+게스트 모드 데이터(`useGuestTodos`가 메모리 상태만 사용, 저장 안 함), 모바일 앱 푸시 토큰(모바일은 로컬 알림만 사용).
+
+브라우저 저장소(localStorage): `tododo:theme`(테마), `calendarSyncSnapshot:{uid}`(캘린더 동기화 대상 id·수정 시각),
+`tododo:reminderPromptSnoozedUntil`(알림 권유 미루기), `tododo:pushReleasePending`(푸시 해제 재시도).
+
+심사 전 확인할 것: Sentry 프로젝트 설정의 "IP 주소 저장 안 함(Prevent Storing of IP Addresses)" 여부.
+클라이언트는 IP를 보내지 않지만 Sentry 서버가 접속 IP를 기록할 수 있어, 켜져 있지 않으면 방침의 Sentry 항목에 IP를 넣는다.
+
+그 밖의 조항: 처리 위탁·국외 이전 표(Google(Firebase·FCM)·Cloudflare·Anthropic·Sentry의 국가·항목·목적·보유 기간, Paddle 안내),
 보유 기간과 파기, 이용자 권리(열람·정정·삭제 — 삭제는 이메일 요청), 보호책임자(변수),
 브라우저 저장소(테마, 캘린더 동기화 스냅샷 등).
 
