@@ -55,4 +55,8 @@ export const markReminderHistorySeen = (seenUntil: number): Promise<void> =>
   });
 
 /** 탈퇴: 이 사용자의 푸시 토큰·알림 기록·예약 알람을 모두 지운다. */
-export const deleteReminderAccount = (): Promise<void> => call("/account", { method: "DELETE" });
+export const deleteReminderAccount = async (): Promise<void> => {
+  // 다른 호출과 달리 조용히 건너뛰면 탈퇴 때 알림 데이터가 남은 채 계정이 지워진다.
+  if (!REMINDER_PROXY_URL) throw new Error("reminder-proxy 주소 미설정(VITE_REMINDER_PROXY_URL)");
+  await call("/account", { method: "DELETE" });
+};
