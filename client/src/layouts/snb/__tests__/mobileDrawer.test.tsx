@@ -11,12 +11,10 @@ vi.mock("@/features/auth/context/useAuth", () => ({
   }),
 }));
 
-// ProfileMenu가 탈퇴 창을 위해 account 피처를 import하고, 그 안의 firebase 초기화가 CI(빈 API 키)에서 실패한다.
-vi.mock("@/features/account", () => ({ AccountDeletionDialog: () => null }));
-
 const renderDrawer = (props?: {
   onClose?: () => void;
   onFeedbackClick?: () => void;
+  onDeleteAccountClick?: () => void;
 }) =>
   render(
     <MemoryRouter>
@@ -24,6 +22,7 @@ const renderDrawer = (props?: {
         isOpen
         onClose={props?.onClose ?? vi.fn()}
         onFeedbackClick={props?.onFeedbackClick ?? vi.fn()}
+        onDeleteAccountClick={props?.onDeleteAccountClick ?? vi.fn()}
       />
     </MemoryRouter>
   );
@@ -67,6 +66,21 @@ describe("MobileDrawer 안 의견 보내기", () => {
     await user.click(screen.getByText("의견 보내기"));
 
     expect(onFeedbackClick).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("MobileDrawer 안 회원 탈퇴", () => {
+  it("프로필 메뉴에서 회원 탈퇴를 누르면 onDeleteAccountClick이 호출되고 드로어가 닫혀야 한다", async () => {
+    const onDeleteAccountClick = vi.fn();
+    const onClose = vi.fn();
+    const user = setupUser();
+    renderDrawer({ onClose, onDeleteAccountClick });
+
+    await user.click(screen.getByText("강수영"));
+    await user.click(screen.getByText("회원 탈퇴"));
+
+    expect(onDeleteAccountClick).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });

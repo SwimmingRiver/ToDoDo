@@ -32,7 +32,8 @@ const Overlay = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  /* 드로어(9999) 위. Modal/BottomSheet와 같은 최상위 오버레이 값 */
+  z-index: 10000;
   animation: ${fadeIn} 0.2s ease-out;
 `;
 
