@@ -53,3 +53,6 @@ export const markReminderHistorySeen = (seenUntil: number): Promise<void> =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ seenUntil }),
   });
+
+/** 탈퇴: 이 사용자의 푸시 토큰·알림 기록·예약 알람을 모두 지운다. */
+export const deleteReminderAccount = (): Promise<void> => call("/account", { method: "DELETE" });
