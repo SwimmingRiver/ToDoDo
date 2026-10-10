@@ -99,6 +99,19 @@ describe("AccountDeletionDialog", () => {
     await waitFor(() => expect(mockDeleteAccount).toHaveBeenCalledTimes(2));
   });
 
+  it("서버 삭제 뒤 logout이 거부돼도 로그만 남기고 캐시 비움·홈 이동·토스트는 끝까지 진행한다", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mockLogout.mockRejectedValueOnce(new Error("signOut failed"));
+    const user = setupUser();
+    const { clear } = await renderDialog();
+    await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+    await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith("탈퇴가 완료되었습니다"));
+    expect(consoleError).toHaveBeenCalled();
+    expect(clear).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith("/", { replace: true });
+  });
+
   it("취소를 누르면 onClose", async () => {
     const user = setupUser();
     const { onClose } = await renderDialog();

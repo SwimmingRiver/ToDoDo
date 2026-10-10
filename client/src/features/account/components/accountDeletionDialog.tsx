@@ -40,7 +40,12 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
       return;
     }
     if (uid) clearSnapshot(uid);
-    await logout();
+    try {
+      await logout();
+    } catch (error) {
+      // 서버 쪽 계정은 이미 사라졌다. 로그아웃 실패로 창을 pending에 가두지 말고 정리를 끝까지 진행한다.
+      console.error("탈퇴 후 로그아웃 실패:", error);
+    }
     queryClient.clear();
     navigate("/", { replace: true });
     toast.success("탈퇴가 완료되었습니다");
