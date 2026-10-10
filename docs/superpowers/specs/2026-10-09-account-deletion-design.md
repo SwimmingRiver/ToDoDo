@@ -88,8 +88,9 @@
 
 ### reminder-proxy `DELETE /account`
 
-- ID 토큰 검증 → uid의 Durable Object에서 `deleteAlarm()` 후 `storage.deleteAll()`. `204`.
-- DO에 `deleteAccount(uid)` RPC 메서드 추가.
+- ID 토큰 검증 → uid의 Durable Object에서 `deleteAlarm()` 후 저장소의 모든 테이블 행을 비운다(`ReminderStore.clearAll()`). `204`.
+  `storage.deleteAll()`을 쓰지 않는 이유: 테이블까지 사라져, 같은 DO 인스턴스가 이후 요청을 받으면 생성자에서 만든 테이블이 없어 SQL 오류가 난다.
+- DO에 `deleteAccount()` RPC 메서드 추가.
 
 ### 배포 전 확인
 

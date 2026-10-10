@@ -51,6 +51,12 @@ export class ReminderScheduler extends DurableObject<Env> {
     markSeen(this.store, seenUntil, Date.now());
   }
 
+  /** 탈퇴. 알람을 먼저 끄고 비운다 — meta의 uid가 사라지므로 혹시 남은 알람이 돌아도 alarm()이 바로 끝난다. */
+  async deleteAccount(): Promise<void> {
+    await this.ctx.storage.deleteAlarm();
+    this.store.clearAll();
+  }
+
   async alarm(): Promise<void> {
     const uid = this.store.getMeta("uid");
     if (!uid) return;

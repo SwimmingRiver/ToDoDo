@@ -32,6 +32,8 @@ export interface ReminderStore {
   pruneHistory(beforeSentAt: number, keep: number): void;
   getMeta(key: MetaKey): string | null;
   setMeta(key: MetaKey, value: string): void;
+  /** 탈퇴: 모든 행을 지운다. 테이블은 남겨 같은 DO 인스턴스가 이후 요청을 받아도 SQL 오류가 나지 않게 한다. */
+  clearAll(): void;
 }
 
 type ScheduleRow = { todoId: string; fireAt: number; dueAt: string; offsetMinutes: number };
@@ -159,5 +161,9 @@ export class SqliteReminderStore implements ReminderStore {
       key,
       value,
     );
+  }
+
+  clearAll(): void {
+    for (const table of ["tokens", "schedule", "sent", "meta", "history"]) this.sql.exec(`DELETE FROM ${table}`);
   }
 }

@@ -44,12 +44,17 @@ const route = async (request: Request, env: Env, path: string): Promise<Response
   const isRefresh = path === "/reminders/refresh" && request.method === "POST";
   const isHistory = path === "/reminders/history" && request.method === "GET";
   const isSeen = path === "/reminders/history/seen" && request.method === "POST";
-  if (!isTokens && !isRefresh && !isHistory && !isSeen) return new Response("Not Found", { status: 404 });
+  const isAccount = path === "/account" && request.method === "DELETE";
+  if (!isTokens && !isRefresh && !isHistory && !isSeen && !isAccount) return new Response("Not Found", { status: 404 });
 
   const uid = await authenticate(request, env);
   if (!uid) return json({ error: "UNAUTHORIZED" }, 401);
   const scheduler = env.REMINDER_SCHEDULER.get(env.REMINDER_SCHEDULER.idFromName(uid));
 
+  if (isAccount) {
+    await scheduler.deleteAccount();
+    return new Response(null, { status: 204 });
+  }
   if (isHistory) return json(await scheduler.getHistory(uid), 200);
   if (isSeen) {
     const seenUntil = await readSeenUntil(request);

@@ -17,6 +17,7 @@ const stub = {
     lastSeenAt: 0,
   })),
   markHistorySeen: vi.fn(async () => {}),
+  deleteAccount: vi.fn(async () => {}),
 };
 const env = {
   REMINDER_SCHEDULER: {
@@ -117,6 +118,26 @@ describe("handleRequest", () => {
     const res = await handleRequest(req("GET", "/reminders/history"), env);
     expect(res.status).toBe(401);
     expect(stub.getHistory).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /account → uid의 DO 저장소를 비우고 204 + CORS", async () => {
+    const res = await handleRequest(req("DELETE", "/account"), env);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
+    expect(env.REMINDER_SCHEDULER.idFromName).toHaveBeenCalledWith("u1");
+    expect(stub.deleteAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("DELETE /account도 토큰이 무효면 401이고 DO를 건드리지 않는다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValueOnce(new Error("bad"));
+    const res = await handleRequest(req("DELETE", "/account"), env);
+    expect(res.status).toBe(401);
+    expect(stub.deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it("POST /account는 404", async () => {
+    const res = await handleRequest(req("POST", "/account"), env);
+    expect(res.status).toBe(404);
   });
 
   it("GET /reminders/refresh처럼 메서드가 맞지 않으면 404", async () => {
