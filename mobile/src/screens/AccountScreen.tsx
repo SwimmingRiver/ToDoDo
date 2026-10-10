@@ -4,14 +4,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
+import { deleteAccount } from "../account/deleteAccount";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
+
+// 앱은 아직 구독 상태를 표시하지 않으므로 구독 해지 안내를 항상 함께 보여준다.
+const DELETE_MESSAGE =
+  "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.\n\n구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
 
 export const AccountScreen = () => {
   const { user } = useAuthState();
   const queryClient = useQueryClient();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 성공하면 RootNavigator가 user=null을 받아 로그인 화면으로 바꾸므로 여기서 이동하지 않는다.
   const runSignOut = async () => {
@@ -31,6 +37,31 @@ export const AccountScreen = () => {
     ]);
   };
 
+  // 성공하면 signOut이 user=null을 만들어 RootNavigator가 로그인 화면으로 바꾼다.
+  const runDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+    } catch {
+      setIsDeleting(false);
+      Alert.alert("탈퇴 실패", "일부만 처리되었습니다. 다시 시도해 주세요.");
+      return;
+    }
+    try {
+      await signOut(queryClient);
+    } catch {
+      // 계정은 이미 삭제됐다. 세션만 남은 상태라 재실행하면 토큰 갱신에서 끊긴다.
+      Alert.alert("탈퇴 완료", "앱을 다시 실행해 주세요.");
+    }
+  };
+
+  const handleDeletePress = () => {
+    Alert.alert("회원 탈퇴", DELETE_MESSAGE, [
+      { text: "취소", style: "cancel" },
+      { text: "탈퇴하기", style: "destructive", onPress: runDeleteAccount },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <View style={styles.section}>
@@ -41,7 +72,13 @@ export const AccountScreen = () => {
         title="로그아웃"
         variant="outline"
         onPress={handleSignOutPress}
-        disabled={isSigningOut}
+        disabled={isSigningOut || isDeleting}
+      />
+      <Button
+        title="회원 탈퇴"
+        variant="dangerText"
+        onPress={handleDeletePress}
+        disabled={isSigningOut || isDeleting}
       />
     </SafeAreaView>
   );

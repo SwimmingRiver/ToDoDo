@@ -76,4 +76,16 @@ describe("reminderProxyApi", () => {
     await api.markReminderHistorySeen(1);
     expect(authorizedFetchMock).not.toHaveBeenCalled();
   });
+
+  it("deleteReminderAccount는 DELETE /account를 부른다", async () => {
+    const api = await load("https://r.example.com");
+    await api.deleteReminderAccount();
+    expect(authorizedFetchMock).toHaveBeenCalledWith("https://r.example.com", "/account", { method: "DELETE" });
+  });
+
+  it("deleteReminderAccount는 URL이 비어 있으면 조용히 건너뛰지 않고 실패한다", async () => {
+    const api = await load("");
+    await expect(api.deleteReminderAccount()).rejects.toThrow("VITE_REMINDER_PROXY_URL");
+    expect(authorizedFetchMock).not.toHaveBeenCalled();
+  });
 });

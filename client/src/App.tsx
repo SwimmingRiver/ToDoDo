@@ -10,6 +10,7 @@ import MobileDrawer from "@/layouts/snb/mobileDrawer";
 import MobileHeader from "@/layouts/mobileHeader/mobileHeader";
 import BottomTabBar from "@/layouts/bottomTabBar/bottomTabBar";
 import { BOTTOM_TAB_BAR_HEIGHT } from "@/layouts/bottomTabBar/bottomTabBar.styles";
+import { AccountDeletionDialog } from "@/features/account";
 import FeedbackForm from "@/features/feedback/components/feedbackForm";
 import styled from "styled-components";
 import { useMediaQuery } from "@/shared/hooks";
@@ -31,6 +32,7 @@ const App = () => {
   const [isopen, setIsOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isDeletionOpen, setIsDeletionOpen] = useState(false);
   const isMobile = useMediaQuery("tablet");
   const runStartupMaintenance = useRunStartupMaintenance();
   useSyncTodosToCalendar();
@@ -56,7 +58,10 @@ const App = () => {
         {isMobile ? (
           <MobileHeader onAvatarClick={() => setIsMobileMenuOpen(true)} />
         ) : (
-          <Header onMenuOpen={() => setIsMobileMenuOpen(true)} />
+          <Header
+            onMenuOpen={() => setIsMobileMenuOpen(true)}
+            onDeleteAccountClick={() => setIsDeletionOpen(true)}
+          />
         )}
         <ContentContainer>
           <SNB
@@ -73,6 +78,7 @@ const App = () => {
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
           onFeedbackClick={() => setIsFeedbackOpen(true)}
+          onDeleteAccountClick={() => setIsDeletionOpen(true)}
         />
         {/* MobileDrawer/SNB의 트리거는 각자 자리에 두되, 폼 상태는 여기(App)에서
             소유한다 — 드로어는 닫히면 서브트리 전체가 언마운트되므로 폼이 그
@@ -81,6 +87,9 @@ const App = () => {
           isOpen={isFeedbackOpen}
           onClose={() => setIsFeedbackOpen(false)}
         />
+        {/* 탈퇴 창도 같은 이유로 여기서 소유한다. 프로필 메뉴·드로어가 닫히거나 언마운트돼도
+            진행 중인 탈퇴 처리와 실패 안내가 사라지지 않아야 한다. */}
+        {isDeletionOpen && <AccountDeletionDialog onClose={() => setIsDeletionOpen(false)} />}
       </Container>
     </ReminderPromptProvider>
   );

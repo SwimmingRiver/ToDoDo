@@ -61,4 +61,11 @@ export class MemoryReminderStore implements ReminderStore {
   setMeta(key: MetaKey, value: string) {
     this.meta.set(key, value);
   }
+  clearAll() {
+    this.tokens.clear();
+    this.schedule.clear();
+    this.sent.clear();
+    this.meta.clear();
+    this.history.clear();
+  }
 }

@@ -12,6 +12,11 @@ jest.mock("../../auth/signOut", () => ({
   signOut: (client: QueryClient) => mockSignOut(client),
 }));
 
+const mockDeleteAccount = jest.fn<() => Promise<void>>();
+jest.mock("../../account/deleteAccount", () => ({
+  deleteAccount: () => mockDeleteAccount(),
+}));
+
 const queryClient = new QueryClient();
 
 const renderScreen = async () => {
@@ -45,6 +50,7 @@ describe("AccountScreen", () => {
 
   beforeEach(() => {
     mockSignOut.mockReset().mockResolvedValue(undefined);
+    mockDeleteAccount.mockReset().mockResolvedValue(undefined);
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   });
 
@@ -97,6 +103,66 @@ describe("AccountScreen", () => {
 
     expect(screen.getByRole("button", { name: "로그아웃" }).props.accessibilityState).toMatchObject({
       disabled: true,
+    });
+  });
+
+  describe("회원 탈퇴", () => {
+    const DELETE_MESSAGE =
+      "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.\n\n구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
+
+    it("누르면 구독 안내가 담긴 확인 창을 띄우고, 확인하면 탈퇴 후 로그아웃한다", async () => {
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenCalledWith("회원 탈퇴", DELETE_MESSAGE, expect.any(Array));
+      expect(mockDeleteAccount).not.toHaveBeenCalled();
+
+      await pressAlertButton(alertSpy, "탈퇴하기");
+
+      expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
+      expect(mockSignOut).toHaveBeenCalledWith(queryClient);
+    });
+
+    it("취소하면 아무것도 하지 않는다", async () => {
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      await pressAlertButton(alertSpy, "취소");
+
+      expect(mockDeleteAccount).not.toHaveBeenCalled();
+    });
+
+    it("실패하면 안내 창을 띄우고 로그아웃하지 않으며 다시 누를 수 있다", async () => {
+      mockDeleteAccount.mockRejectedValueOnce(new Error("boom"));
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      await pressAlertButton(alertSpy, "탈퇴하기");
+
+      expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 실패", "일부만 처리되었습니다. 다시 시도해 주세요.");
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: false });
+    });
+
+    it("처리 중에는 탈퇴·로그아웃 버튼이 모두 비활성화된다", async () => {
+      mockDeleteAccount.mockReturnValueOnce(new Promise(() => {}));
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      await pressAlertButton(alertSpy, "탈퇴하기", false);
+
+      expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: true });
+      expect(screen.getByRole("button", { name: "로그아웃" }).props.accessibilityState).toMatchObject({ disabled: true });
+    });
+
+    it("탈퇴 후 로그아웃이 실패하면 앱을 다시 실행하라고 안내한다", async () => {
+      mockSignOut.mockRejectedValueOnce(new Error("signout"));
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      await pressAlertButton(alertSpy, "탈퇴하기");
+
+      expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 완료", "앱을 다시 실행해 주세요.");
     });
   });
 });

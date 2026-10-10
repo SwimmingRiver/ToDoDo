@@ -24,11 +24,13 @@ const ENV: Env = {
 
 const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   store: { get: vi.fn(async () => ({ doc: existing, updateTime: null })), write: vi.fn(async () => "ok" as const) },
-  claims: { setPremiumUntil: vi.fn(async () => undefined) },
+  claims: { setPremiumUntil: vi.fn(async () => undefined), deleteUser: vi.fn(async () => undefined) },
   paddle: {
     createCheckoutTransaction: vi.fn(async () => "txn_1"),
     createPortalUrl: vi.fn(async () => "https://portal/ov"),
+    cancelSubscriptionImmediately: vi.fn(async () => undefined),
   },
+  accountData: { deleteUserData: vi.fn(async () => undefined) },
 });
 
 const post = (path: string, body?: unknown) =>
@@ -145,5 +147,37 @@ describe("router", () => {
 
   it("모르는 경로는 404", async () => {
     expect((await call(post("/nope"), makeDeps())).status).toBe(404);
+  });
+
+  describe("/account/delete", () => {
+    it("허용 목록 밖 사용자도 탈퇴할 수 있다(204 + CORS)", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+      const deps = makeDeps();
+      const res = await call(post("/account/delete"), deps);
+      expect(res.status).toBe(204);
+      expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://tododo-83576.web.app");
+      expect(deps.accountData.deleteUserData).toHaveBeenCalledWith("stranger");
+      expect(deps.claims.deleteUser).toHaveBeenCalledWith("stranger");
+    });
+
+    it("토큰이 틀리면 401이고 아무것도 지우지 않는다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
+      const deps = makeDeps();
+      expect((await call(post("/account/delete"), deps)).status).toBe(401);
+      expect(deps.accountData.deleteUserData).not.toHaveBeenCalled();
+    });
+
+    it("GET은 404", async () => {
+      const res = await call(new Request("https://billing.example/account/delete", { method: "GET" }), makeDeps());
+      expect(res.status).toBe(404);
+    });
+
+    it("삭제 중 예외는 CORS가 붙은 500", async () => {
+      const deps = makeDeps();
+      deps.accountData.deleteUserData.mockRejectedValueOnce(new Error("boom"));
+      const res = await call(post("/account/delete"), deps);
+      expect(res.status).toBe(500);
+      expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://tododo-83576.web.app");
+    });
   });
 });

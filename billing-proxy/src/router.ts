@@ -1,13 +1,18 @@
 import { isAllowedOrigin, verifyFirebaseIdToken } from "@tododo/worker-auth";
+import type { AccountDataStore } from "./accountDataStore";
 import { isBillingAllowed } from "./allowlist";
+import type { ClaimsClient } from "./claims";
 import type { CommitDeps } from "./commit";
 import type { Env } from "./env";
 import { handleCheckout, handlePortal, handleTrial } from "./handlers/account";
+import { handleDeleteAccount } from "./handlers/deleteAccount";
 import { handleWebhook } from "./handlers/webhook";
 import type { PaddleClient } from "./paddle";
 
 export interface BillingDeps extends CommitDeps {
-  paddle: Pick<PaddleClient, "createCheckoutTransaction" | "createPortalUrl">;
+  claims: Pick<ClaimsClient, "setPremiumUntil" | "deleteUser">;
+  paddle: Pick<PaddleClient, "createCheckoutTransaction" | "createPortalUrl" | "cancelSubscriptionImmediately">;
+  accountData: Pick<AccountDataStore, "deleteUserData">;
 }
 
 type AccountRoute = (uid: string, deps: BillingDeps, now: Date) => Promise<Response>;
@@ -57,6 +62,13 @@ export const handleRequest = async (
       return await handleWebhook(request, env, getDeps(), now);
     }
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), origin, env);
+
+    // 탈퇴는 결제 허용 목록과 무관하게 누구나 할 수 있어야 한다 — ACCOUNT_ROUTES(허용 목록 적용)와 분리한다.
+    if (url.pathname === "/account/delete" && request.method === "POST") {
+      const uid = await authenticate(request, env);
+      if (!uid) return withCors(json({ error: "UNAUTHORIZED" }, 401), origin, env);
+      return withCors(await handleDeleteAccount(uid, getDeps()), origin, env);
+    }
 
     const route = request.method === "POST" ? ACCOUNT_ROUTES.get(url.pathname) : undefined;
     if (!route) return withCors(new Response("Not Found", { status: 404 }), origin, env);
