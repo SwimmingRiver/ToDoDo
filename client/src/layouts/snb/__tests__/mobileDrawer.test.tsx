@@ -11,6 +11,9 @@ vi.mock("@/features/auth/context/useAuth", () => ({
   }),
 }));
 
+// ProfileMenu가 탈퇴 창을 위해 account 피처를 import하고, 그 안의 firebase 초기화가 CI(빈 API 키)에서 실패한다.
+vi.mock("@/features/account", () => ({ AccountDeletionDialog: () => null }));
+
 const renderDrawer = (props?: {
   onClose?: () => void;
   onFeedbackClick?: () => void;

@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { BottomSheet } from "@/shared";
 import { BILLING_ENABLED } from "@/features/billing/config";
+import { AccountDeletionDialog } from "@/features/account";
 import { useAuth } from "@/features/auth/context/useAuth";
 import useModal from "@/shared/hooks/useModal";
 import { TriggerButton, MenuList, MenuRow } from "./profileMenu.styles";
@@ -29,11 +30,18 @@ const ProfileMenu = ({ children }: ProfileMenuProps) => {
   const { isOpen, setIsOpen } = useModal();
   const { user, logout } = useAuth();
 
+  const [isDeletionOpen, setIsDeletionOpen] = useState(false);
+
   const close = () => setIsOpen(false);
 
   const handleLogout = () => {
     close();
     logout();
+  };
+
+  const handleOpenDeletion = () => {
+    close();
+    setIsDeletionOpen(true);
   };
 
   return (
@@ -45,8 +53,10 @@ const ProfileMenu = ({ children }: ProfileMenuProps) => {
         <MenuList>
           {BILLING_ENABLED && <PremiumMenuRow onNavigate={close} />}
           <MenuRow onClick={handleLogout}>로그아웃</MenuRow>
+          <MenuRow onClick={handleOpenDeletion}>회원 탈퇴</MenuRow>
         </MenuList>
       </BottomSheet>
+      {isDeletionOpen && <AccountDeletionDialog onClose={() => setIsDeletionOpen(false)} />}
     </>
   );
 };
