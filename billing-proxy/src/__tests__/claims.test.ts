@@ -50,3 +50,23 @@ describe("ClaimsClient.setPremiumUntil", () => {
     await expect(new ClaimsClient("proj", getToken, fetchFn).setPremiumUntil("u1", 1)).rejects.toThrow("403");
   });
 });
+
+describe("ClaimsClient.deleteUser", () => {
+  it("accounts:delete로 사용자를 지운다", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    await new ClaimsClient("proj", getToken, fetchFn).deleteUser("u1");
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe(`${BASE}/accounts:delete`);
+    expect(JSON.parse(init.body)).toEqual({ localId: "u1" });
+  });
+
+  it("이미 없는 사용자면 성공으로 본다(재시도 멱등)", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonRes({ error: { message: "USER_NOT_FOUND" } }, 400));
+    await expect(new ClaimsClient("proj", getToken, fetchFn).deleteUser("u1")).resolves.toBeUndefined();
+  });
+
+  it("그 밖의 실패는 던진다", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonRes({ error: { message: "INTERNAL" } }, 500));
+    await expect(new ClaimsClient("proj", getToken, fetchFn).deleteUser("u1")).rejects.toThrow("Auth 사용자 삭제 실패 (500)");
+  });
+});

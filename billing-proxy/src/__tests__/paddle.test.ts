@@ -55,4 +55,47 @@ describe("PaddleClient", () => {
       "Paddle /transactions 실패 (502)",
     );
   });
+
+  describe("cancelSubscriptionImmediately", () => {
+    const client = (fetchFn: ReturnType<typeof vi.fn>) =>
+      new PaddleClient("https://x", "key", "pri_1", "uid-secret", fetchFn);
+
+    it("구독을 즉시 해지한다", async () => {
+      const fetchFn = vi.fn().mockResolvedValue(jsonRes({ data: { status: "canceled" } }));
+      await client(fetchFn).cancelSubscriptionImmediately("sub_1");
+      const [url, init] = fetchFn.mock.calls[0];
+      expect(url).toBe("https://x/subscriptions/sub_1/cancel");
+      expect(init.method).toBe("POST");
+      expect(init.headers.Authorization).toBe("Bearer key");
+      expect(JSON.parse(init.body)).toEqual({ effective_from: "immediately" });
+    });
+
+    it("해지 요청이 실패해도 구독이 이미 canceled면 성공으로 본다(재시도 멱등)", async () => {
+      const fetchFn = vi
+        .fn()
+        .mockResolvedValueOnce(jsonRes({ error: { code: "subscription_locked_canceled", detail: "x" } }, 400))
+        .mockResolvedValueOnce(jsonRes({ data: { status: "canceled" } }));
+      await expect(client(fetchFn).cancelSubscriptionImmediately("sub_1")).resolves.toBeUndefined();
+      expect(fetchFn.mock.calls[1][0]).toBe("https://x/subscriptions/sub_1");
+      expect(fetchFn.mock.calls[1][1].method).toBe("GET");
+    });
+
+    it("해지 요청이 실패하고 구독이 살아 있으면 던진다", async () => {
+      const fetchFn = vi
+        .fn()
+        .mockResolvedValueOnce(jsonRes({ error: { code: "internal_error", detail: "x" } }, 500))
+        .mockResolvedValueOnce(jsonRes({ data: { status: "active" } }));
+      await expect(client(fetchFn).cancelSubscriptionImmediately("sub_1")).rejects.toThrow(
+        "Paddle 구독 해지 실패 (500): internal_error — x",
+      );
+    });
+
+    it("상태 조회까지 실패하면 던진다", async () => {
+      const fetchFn = vi
+        .fn()
+        .mockResolvedValueOnce(jsonRes({ error: {} }, 500))
+        .mockResolvedValueOnce(jsonRes({ error: {} }, 503));
+      await expect(client(fetchFn).cancelSubscriptionImmediately("sub_1")).rejects.toThrow("503");
+    });
+  });
 });

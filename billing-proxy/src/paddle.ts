@@ -9,10 +9,14 @@ export class PaddleClient {
     private readonly fetchFn: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
+  private headers(): Record<string, string> {
+    return { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" };
+  }
+
   private async post<T>(path: string, body: unknown): Promise<T> {
     const res = await this.fetchFn(`${this.apiBase}${path}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`Paddle ${path} 실패 (${res.status})${await describePaddleError(res)}`);
@@ -38,6 +42,33 @@ export class PaddleClient {
       subscriptionId ? { subscription_ids: [subscriptionId] } : {},
     );
     return data.urls.general.overview;
+  }
+
+  /**
+   * 탈퇴용 즉시 해지. 이전 탈퇴 시도에서 이미 해지됐다면 Paddle이 오류를 돌려주므로,
+   * 실패하면 상태를 조회해 canceled일 때만 성공으로 본다 — 탈퇴 재시도가 여기서 막히지 않게.
+   */
+  async cancelSubscriptionImmediately(subscriptionId: string): Promise<void> {
+    const id = encodeURIComponent(subscriptionId);
+    const res = await this.fetchFn(`${this.apiBase}/subscriptions/${id}/cancel`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({ effective_from: "immediately" }),
+    });
+    if (res.ok) return;
+    const detail = await describePaddleError(res);
+    if ((await this.getSubscriptionStatus(id)) === "canceled") return;
+    throw new Error(`Paddle 구독 해지 실패 (${res.status})${detail}`);
+  }
+
+  private async getSubscriptionStatus(encodedId: string): Promise<string> {
+    const res = await this.fetchFn(`${this.apiBase}/subscriptions/${encodedId}`, {
+      method: "GET",
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(`Paddle 구독 조회 실패 (${res.status})${await describePaddleError(res)}`);
+    const { data } = (await res.json()) as { data: { status: string } };
+    return data.status;
   }
 }
 

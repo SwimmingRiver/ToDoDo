@@ -12,9 +12,10 @@ import logo from "@/assets/logo.png";
 
 interface HeaderProps {
   onMenuOpen: () => void;
+  onDeleteAccountClick: () => void;
 }
 
-const Header = ({ onMenuOpen }: HeaderProps) => {
+const Header = ({ onMenuOpen, onDeleteAccountClick }: HeaderProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -28,7 +29,7 @@ const Header = ({ onMenuOpen }: HeaderProps) => {
         <NotificationMenu />
         <ThemeMenu />
         <UserInfo>
-          <ProfileMenu>
+          <ProfileMenu onDeleteAccountClick={onDeleteAccountClick}>
             <UserInfoText>{user?.displayName}</UserInfoText>
             <UserInfoImage src={user?.photoURL || ""} alt="user" />
           </ProfileMenu>

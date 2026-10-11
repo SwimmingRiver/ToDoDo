@@ -43,4 +43,13 @@ export class ClaimsClient {
     });
     if (!update.ok) throw new Error(`커스텀 클레임 설정 실패 (${update.status})`);
   }
+
+  /** 탈퇴의 마지막 단계. 이전 시도에서 이미 지워졌으면(USER_NOT_FOUND) 성공으로 본다. */
+  async deleteUser(uid: string): Promise<void> {
+    const res = await this.post("/accounts:delete", { localId: uid });
+    if (res.ok) return;
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    if (body?.error?.message?.startsWith("USER_NOT_FOUND")) return;
+    throw new Error(`Auth 사용자 삭제 실패 (${res.status})`);
+  }
 }

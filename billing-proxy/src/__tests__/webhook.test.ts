@@ -102,6 +102,8 @@ describe("handleWebhook", () => {
     const res = await handleWebhook(await request(body()), ENV, d, NOW);
     expect(res.status).toBe(200);
     expect(errorLog).toHaveBeenCalled();
+    // 탈퇴 후 도착한 해지 웹훅이 entitlements 문서를 되살리지 않는다(클레임을 문서보다 먼저 쓰기 때문).
+    expect(d.store.write).not.toHaveBeenCalled();
   });
 
   it("구독 외 이벤트는 200으로 무시한다", async () => {
