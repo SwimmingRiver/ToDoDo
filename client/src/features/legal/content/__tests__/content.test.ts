@@ -82,6 +82,38 @@ describe("법적 문서 본문", () => {
     expect(row?.[0]).toContain("작성 시각");
   });
 
+  describe("회원 탈퇴(PR #145) 동작과 일치", () => {
+    const privacySection = (keyword: string) =>
+      LEGAL_DOCUMENTS.privacy.sections.find((s) => s.heading.includes(keyword));
+
+    it("이용자 권리 조항은 메뉴에서 직접 탈퇴하는 방법과 의견 익명화를 안내한다", () => {
+      const rights = privacySection("권리");
+      const text = [...(rights?.paragraphs ?? []), ...(rights?.items ?? [])].join("\n");
+      expect(text).toContain("회원 탈퇴");
+      expect(text).toContain("계정 화면");
+      // 의견은 지우지 않고 회원 식별자·이메일만 지운다(billing-proxy accountDataStore) — "모두 삭제"라고 단정하지 않는다.
+      expect(text).not.toContain("모두 삭제");
+      expect(text).toContain("의견");
+    });
+
+    it("보유 기간 표는 탈퇴 시 삭제와 의견의 익명 보관을 구분해 적는다", () => {
+      const rows = privacySection("보유 기간")?.table?.rows ?? [];
+      const periodOf = (item: string) => rows.find(([name]) => name.includes(item))?.[1];
+      expect(periodOf("계정")).toContain("회원 탈퇴");
+      expect(rows.find(([name]) => name.includes("계정"))?.[0]).not.toContain("의견");
+      expect(periodOf("의견")).toContain("회원 식별자");
+      expect(rows.flat().join("\n")).not.toContain("삭제를 요청할 때까지");
+    });
+
+    it("이용약관은 탈퇴 시 구독이 즉시 해지되고 남은 기간이 사라진다고 알린다", () => {
+      const account = LEGAL_DOCUMENTS.terms.sections.find((s) => s.heading.includes("계정"));
+      const text = [...(account?.paragraphs ?? []), ...(account?.items ?? [])].join("\n");
+      expect(text).toContain("회원 탈퇴");
+      expect(text).toContain("즉시 해지");
+      expect(text).toContain("남은 기간");
+    });
+  });
+
   it("이용약관의 환불 조항은 환불 정책 페이지로 링크한다", () => {
     const refund = LEGAL_DOCUMENTS.terms.sections.find((s) => s.heading.includes("환불"));
     expect(refund?.links).toEqual([{ to: "/refund", label: "환불 정책 보기" }]);
