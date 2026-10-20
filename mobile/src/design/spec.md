@@ -50,7 +50,7 @@
 | `brand.strongHover` | `#0A4E3C` | 위 요소의 pressed 상태 (RN에는 hover가 없으므로 `Pressable`의 `pressed` 스타일에 사용) |
 | `brand.fill` | `#1D9E75` | 흰/회색 배경 위 비텍스트 장식 전용 (예: 로딩 스피너 색, 루트 카드 `ColorDot`의 정상 상태 색) |
 | `brand.tint` | `#E8F5EF` | 연한 배경 (선택된 우선순위 칩, 포커스된 입력 필드 배경, `RecurrenceBadge` 배경 등) |
-| `statusColors.todo/doing/done` | 회색/파랑/틴 계열 (`main`/`light`/`border` 3톤) | 자식 카드 `ColorDot`·카드 전체 보더 색(`statusColors.ts` 값 그대로, 루트 카드에는 상태색을 쓰지 않음 — 아래 참고) |
+| `statusColors.todo/doing/done` | 회색/초록/보라 계열 (`main`/`light`/`border` 3톤) | 자식 카드 `ColorDot`·카드 전체 보더 색(`statusColors.ts` 값 그대로, 루트 카드에는 상태색을 쓰지 않음 — 아래 참고) |
 | `danger.main` `#E24B4A`, `danger.subtle` `#F5C2C1`, `danger.text` `#C53A39`, `danger.background` `#FBEAEA` | | 삭제 아이콘 버튼, 우선순위 "높음" 좌측 보더, overdue 관련 배지/점/진행률/카드 보더, 유효성 에러 텍스트 |
 | `background.primary` `#FFFFFF`, `background.secondary` `#F4F5F6` | | 화면/카드 배경 |
 | `text.primary` `#1A1A1A`, `text.secondary` `#5F6368`, `text.tertiary` `#9AA0A6` | | 제목/본문/보조 텍스트 |

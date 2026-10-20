@@ -61,7 +61,8 @@ export const WeekStrip = ({
               style={[styles.dayCell, isSelected && styles.dayCellSelected]}
             >
               <Text style={[styles.dayLabel, isSelected && styles.dayLabelSelected]}>{weekdayShort}</Text>
-              <Text style={[styles.dateLabel, isSelected && styles.dateLabelSelected, isToday && styles.dateLabelToday]}>
+              {/* 선택 스타일을 마지막에 둬야 오늘이 선택됐을 때 글자가 선택 배경색에 묻히지 않는다 */}
+              <Text style={[styles.dateLabel, isToday && styles.dateLabelToday, isSelected && styles.dateLabelSelected]}>
                 {date.getDate()}
               </Text>
               <View style={[styles.dot, dotColor ? { backgroundColor: dotColor } : styles.dotHidden]} />
