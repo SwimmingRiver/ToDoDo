@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react-native";
+import { ChevronDown, ChevronRight } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
 import type { ProjectCardData } from "../../utils/projectUtils";
 import { ColorDot } from "../colorDot/ColorDot";
@@ -7,7 +7,6 @@ import { ProgressBar } from "../progressBar/ProgressBar";
 import { OverdueBadge } from "../overdueBadge/OverdueBadge";
 import { RecurrenceBadge } from "../recurrenceBadge/RecurrenceBadge";
 import { RecurrenceMissedBadge } from "../recurrenceMissedBadge/RecurrenceMissedBadge";
-import { IconButton } from "../iconButton/IconButton";
 import { Button } from "../button/Button";
 import { ChildTodoCard } from "../childTodoCard/ChildTodoCard";
 import { colors } from "../../../theme/colors";
@@ -19,21 +18,16 @@ interface ProjectCardProps {
   onToggleExpand: (id: string) => void;
   onOpenDetail: (todo: Todo) => void;
   onOpenStatusSheet: (todo: Todo) => void;
-  onDelete: (id: string) => void;
   /**
    * 스펙(design/spec.md)의 ProjectCardProps 정의에는 없는 prop이지만, 스펙 자체가
    * "펼쳤을 때 ChildTodoCard를 카드 내부에 인라인으로 노출"하도록 요구하므로(웹
    * ProjectCard의 ExpandedArea와 동일 구조), 중첩된 ChildTodoCard에 onEdit을 전달할
-   * 통로가 필요하다 — onOpenStatusSheet/onDelete는 Todo/id를 그대로 받아 자식에도
+   * 통로가 필요하다 — onOpenStatusSheet는 Todo를 그대로 받아 자식에도
    * 재사용 가능하지만 onEdit은 루트 카드 자신에는 없는 개념이라 별도로 분리했다.
    */
   onEditChild: (todo: Todo) => void;
   /** 하위 할 일 추가 버튼(펼친 상태에서만 노출) */
   onAddChild: (parentId: string) => void;
-  /** 루트 카드 자신의 삭제 실패 에러 메시지 */
-  error?: string;
-  /** 자식 카드별 삭제 실패 에러 메시지 (todo id -> 메시지) */
-  childErrors?: Record<string, string>;
 }
 
 /**
@@ -47,11 +41,8 @@ export const ProjectCard = ({
   onToggleExpand,
   onOpenDetail,
   onOpenStatusSheet,
-  onDelete,
   onEditChild,
   onAddChild,
-  error,
-  childErrors,
 }: ProjectCardProps) => {
   const { todo, childTodos, progress, subtaskInfo, overdueInfo, recurringMissedCount } = data;
   const { isOverdue, daysOver } = overdueInfo;
@@ -90,13 +81,6 @@ export const ProjectCard = ({
           <Text style={styles.subtitle}>{subtitleText}</Text>
         </Pressable>
         <View style={styles.actions}>
-          <IconButton
-            testID={`delete-project-${todo.id}`}
-            icon={Trash2}
-            variant="danger"
-            accessibilityLabel="프로젝트 삭제"
-            onPress={() => onDelete(todo.id)}
-          />
           <Pressable
             testID={`toggle-expand-chevron-${todo.id}`}
             onPress={() => onToggleExpand(todo.id)}
@@ -114,7 +98,6 @@ export const ProjectCard = ({
         </View>
       </View>
       <ProgressBar progress={progress} isOverdue={isOverdue} />
-      {error && <Text style={styles.error}>{error}</Text>}
       {isExpanded && (
         <View style={styles.expandedArea}>
           {childTodos.length === 0 ? (
@@ -126,8 +109,6 @@ export const ProjectCard = ({
                 todo={child}
                 onOpenStatusSheet={onOpenStatusSheet}
                 onEdit={onEditChild}
-                onDelete={onDelete}
-                error={childErrors?.[child.id]}
               />
             ))
           )}
@@ -146,7 +127,7 @@ export const ProjectCard = ({
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: "hidden",
     backgroundColor: colors.background.primary,
   },
@@ -189,12 +170,6 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET,
     alignItems: "center",
     justifyContent: "center",
-  },
-  error: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    fontSize: 12,
-    color: colors.danger.text,
   },
   expandedArea: {
     gap: spacing.sm,

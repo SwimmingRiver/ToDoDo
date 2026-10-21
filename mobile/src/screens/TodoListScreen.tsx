@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -7,7 +7,6 @@ import { AlertCircle, ClipboardList, Plus } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
 import type { TodoListStackParamList } from "../navigation/types";
 import { useTodos } from "../hooks/useTodos";
-import { useDeleteTodo } from "../hooks/useDeleteTodo";
 import { useUpdateTodo } from "../hooks/useUpdateTodo";
 import { ProjectCard } from "../shared/ui/projectCard/ProjectCard";
 import { EmptyState } from "../shared/ui/emptyState/EmptyState";
@@ -37,11 +36,9 @@ const STATUS_OPTIONS: BottomSheetOption<Status>[] = [
 
 export const TodoListScreen = () => {
   const { data: todos, isLoading, isError } = useTodos();
-  const { mutateAsync: deleteTodoMutateAsync } = useDeleteTodo();
   const { mutate: updateTodoMutate, isPending: isTogglingStatus } = useUpdateTodo();
   const [statusSheetTodo, setStatusSheetTodo] = useState<Todo | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
   const navigation = useNavigation<NativeStackNavigationProp<TodoListStackParamList>>();
 
   const allTodos = useMemo(() => todos ?? [], [todos]);
@@ -87,43 +84,6 @@ export const TodoListScreen = () => {
       }
       return next;
     });
-  };
-
-  const handleDeleteConfirmed = async (todo: Todo) => {
-    try {
-      setDeleteErrors((prev) => {
-        if (!(todo.id in prev)) return prev;
-        const next = { ...prev };
-        delete next[todo.id];
-        return next;
-      });
-      await deleteTodoMutateAsync(todo.id);
-    } catch (e) {
-      setDeleteErrors((prev) => ({
-        ...prev,
-        [todo.id]: e instanceof Error ? e.message : "삭제에 실패했습니다",
-      }));
-    }
-  };
-
-  // 루트(프로젝트)/자식(할 일) 모두 이 함수 하나로 처리한다 — 웹처럼 삭제 확인 자체를
-  // 별도 모달로 구현하지 않고, 기존 모바일 관례(Alert.alert)를 그대로 유지한다
-  // (design/spec.md "의사결정 확정" 3번).
-  const handleDeleteRequest = (id: string) => {
-    const todo = allTodos.find((t) => t.id === id);
-    if (!todo) return;
-
-    const isRoot = todo.parentId === null;
-    Alert.alert(
-      isRoot ? "프로젝트 삭제" : "할 일 삭제",
-      isRoot
-        ? "하위 할 일도 함께 삭제됩니다. 삭제하시겠습니까?"
-        : `"${todo.title}"을(를) 삭제하시겠습니까?`,
-      [
-        { text: "취소", style: "cancel" },
-        { text: "삭제", style: "destructive", onPress: () => handleDeleteConfirmed(todo) },
-      ],
-    );
   };
 
   const handleOpenDetail = (todo: Todo) => {
@@ -185,11 +145,8 @@ export const TodoListScreen = () => {
               onToggleExpand={handleToggleExpand}
               onOpenDetail={handleOpenDetail}
               onOpenStatusSheet={handleOpenStatusSheet}
-              onDelete={handleDeleteRequest}
               onEditChild={handleOpenDetail}
               onAddChild={handleAddChild}
-              error={deleteErrors[card.todo.id]}
-              childErrors={deleteErrors}
             />
           ))}
         </ScrollView>

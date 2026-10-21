@@ -1,15 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { Alert } from "react-native";
 
 const mockUseTodos = jest.fn();
 jest.mock("../../hooks/useTodos", () => ({
   useTodos: () => mockUseTodos(),
-}));
-
-const mockDeleteTodoMutateAsync = jest.fn<() => Promise<void>>();
-jest.mock("../../hooks/useDeleteTodo", () => ({
-  useDeleteTodo: () => ({ mutateAsync: mockDeleteTodoMutateAsync }),
 }));
 
 const mockUpdateTodoMutate = jest.fn();
@@ -22,21 +16,6 @@ const mockNavigate = jest.fn();
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
-
-type AlertButton = { text: string; style?: string; onPress?: () => void };
-
-// Alert.alert는 네이티브 모듈이라 테스트 환경에서는 실제 다이얼로그를 띄우지 않는다.
-// "삭제"(style: destructive) 버튼의 onPress를 직접 호출해 사용자가 삭제를 확정한
-// 상황을 재현한다.
-const confirmAlertDelete = async () => {
-  const call = (Alert.alert as jest.Mock).mock.calls.at(-1) as [
-    string,
-    string,
-    AlertButton[],
-  ];
-  const destructive = call[2].find((button) => button.style === "destructive");
-  await destructive?.onPress?.();
-};
 
 const rootTodo = (overrides: Record<string, unknown> = {}) => ({
   id: "root-1",
@@ -66,12 +45,9 @@ const childTodo = (overrides: Record<string, unknown> = {}) => ({
 
 describe("TodoListScreen", () => {
   beforeEach(() => {
-    mockDeleteTodoMutateAsync.mockReset();
     mockUpdateTodoMutate.mockReset();
     mockUpdateTodoIsPending = false;
     mockNavigate.mockReset();
-    jest.spyOn(Alert, "alert").mockImplementation(() => {});
-    (Alert.alert as jest.Mock).mockClear();
   });
 
   it("루트 할 일 제목과 프로젝트 개수를 렌더링한다", async () => {
@@ -214,44 +190,7 @@ describe("TodoListScreen", () => {
     expect(screen.getByText(/일 초과/)).toBeTruthy();
   });
 
-  it("프로젝트 삭제 버튼을 누르면 확인 다이얼로그를 띄우고, 확인 전에는 삭제 요청을 보내지 않는다", async () => {
-    mockUseTodos.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [rootTodo()],
-    });
-
-    const { TodoListScreen } = await import("../TodoListScreen");
-    await render(<TodoListScreen />);
-
-    fireEvent.press(screen.getByLabelText("프로젝트 삭제"));
-
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "프로젝트 삭제",
-      expect.any(String),
-      expect.any(Array),
-    );
-    expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
-  });
-
-  it("프로젝트 삭제를 확정하면 실제로 삭제 요청을 보낸다", async () => {
-    mockUseTodos.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [rootTodo()],
-    });
-    mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
-
-    const { TodoListScreen } = await import("../TodoListScreen");
-    await render(<TodoListScreen />);
-
-    fireEvent.press(screen.getByLabelText("프로젝트 삭제"));
-    await confirmAlertDelete();
-
-    expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("root-1");
-  });
-
-  it("자식 할 일 삭제 버튼을 누르면 '할 일 삭제' 확인 다이얼로그를 띄운다", async () => {
+  it("목록 카드에는 삭제 버튼이 없다(삭제는 상세 화면에서만 — 웹 좁은 화면과 동일)", async () => {
     mockUseTodos.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -262,48 +201,10 @@ describe("TodoListScreen", () => {
     await render(<TodoListScreen />);
 
     fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
-    fireEvent.press(await screen.findByTestId("delete-child-child-1"));
+    await screen.findByTestId("child-card-child-1");
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "할 일 삭제",
-      expect.stringContaining("하위 할 일"),
-      expect.any(Array),
-    );
-  });
-
-  it("자식 삭제를 확정하면 실제로 삭제 요청을 보낸다", async () => {
-    mockUseTodos.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [rootTodo(), childTodo()],
-    });
-    mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
-
-    const { TodoListScreen } = await import("../TodoListScreen");
-    await render(<TodoListScreen />);
-
-    fireEvent.press(screen.getByTestId("toggle-expand-chevron-root-1"));
-    fireEvent.press(await screen.findByTestId("delete-child-child-1"));
-    await confirmAlertDelete();
-
-    expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("child-1");
-  });
-
-  it("삭제에 실패하면 해당 카드에 에러 메시지를 보여준다", async () => {
-    mockUseTodos.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [rootTodo()],
-    });
-    mockDeleteTodoMutateAsync.mockRejectedValue(new Error("네트워크 오류"));
-
-    const { TodoListScreen } = await import("../TodoListScreen");
-    await render(<TodoListScreen />);
-
-    fireEvent.press(screen.getByLabelText("프로젝트 삭제"));
-    await confirmAlertDelete();
-
-    expect(await screen.findByText("네트워크 오류")).toBeTruthy();
+    expect(screen.queryByLabelText("프로젝트 삭제")).toBeNull();
+    expect(screen.queryByLabelText("할 일 삭제")).toBeNull();
   });
 
   it("루트 상태 점을 누르면 상태 선택 바텀시트가 열린다", async () => {
@@ -419,7 +320,6 @@ describe("TodoListScreen", () => {
 
     expect(mockNavigate).toHaveBeenCalledWith("TodoDetail", { id: "child-1" });
     expect(mockUpdateTodoMutate).not.toHaveBeenCalled();
-    expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
   });
 
   it("펼친 카드의 하위 할 일 추가 버튼을 누르면 TodoForm으로 parentId와 함께 이동한다", async () => {
