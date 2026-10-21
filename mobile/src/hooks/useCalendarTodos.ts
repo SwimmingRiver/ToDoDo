@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type { Todo } from "@tododo/core";
 import { useTodos } from "./useTodos";
-import { useUpdateTodo } from "./useUpdateTodo";
 import { isDateInTodoRange } from "../shared/utils/dateRange";
 import { buildCalendarMarkedDates, type CalendarMarkedDates } from "../shared/utils/calendarMarkers";
 
@@ -10,7 +9,6 @@ export interface UseCalendarTodosResult {
   isLoading: boolean;
   isError: boolean;
   getTodosForDate: (dateKey: string) => Todo[];
-  toggleDone: (todo: Todo) => void;
 }
 
 /**
@@ -20,7 +18,6 @@ export interface UseCalendarTodosResult {
  */
 export const useCalendarTodos = (): UseCalendarTodosResult => {
   const { data: todos, isLoading, isError } = useTodos();
-  const { mutate: updateTodo } = useUpdateTodo();
 
   const markedDates = useMemo(() => buildCalendarMarkedDates(todos ?? []), [todos]);
 
@@ -29,19 +26,5 @@ export const useCalendarTodos = (): UseCalendarTodosResult => {
     [todos],
   );
 
-  // useTodayTodos.ts의 toggleDone과 동일 로직(웹 toggleDone과 동일 정책) — 화면마다
-  // 독립된 훅에 두는 기존 컨벤션(client/CLAUDE.md "커스텀 훅")을 따라 그대로 반복한다.
-  const toggleDone = useCallback(
-    (todo: Todo) => {
-      const isDone = todo.status === "done";
-      updateTodo({
-        id: todo.id,
-        fields: { status: isDone ? "todo" : "done", doneAt: isDone ? null : new Date().toISOString() },
-        title: todo.title,
-      });
-    },
-    [updateTodo],
-  );
-
-  return { markedDates, isLoading, isError, getTodosForDate, toggleDone };
+  return { markedDates, isLoading, isError, getTodosForDate };
 };

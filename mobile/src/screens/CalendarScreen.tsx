@@ -47,7 +47,7 @@ export const CalendarScreen = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<CalendarStackParamList>>();
-  const { markedDates, isLoading, isError, getTodosForDate, toggleDone } = useCalendarTodos();
+  const { markedDates, isLoading, isError, getTodosForDate } = useCalendarTodos();
   const markedDatesWithSelection = useMemo(
     () => withSelection(markedDates, selectedDate),
     [markedDates, selectedDate],
@@ -104,9 +104,7 @@ export const CalendarScreen = () => {
         isOpen={isSheetOpen}
         onClose={() => setIsSheetOpen(false)}
         dateLabel={selectedDate ? formatTodayLabel(selectedDate) : ""}
-        selectedDate={selectedDate ?? ""}
         todos={selectedDate ? getTodosForDate(selectedDate) : []}
-        onToggleDone={toggleDone}
         onPressTodo={handlePressTodo}
         onAddTodo={handleAddTodo}
       />
