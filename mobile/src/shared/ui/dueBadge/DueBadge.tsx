@@ -1,27 +1,37 @@
 import { StyleSheet, Text, View } from "react-native";
 import { getDueBadgeLabel } from "../../utils/due";
+import { colors } from "../../../theme/colors";
+import { urgencyColors } from "../../../theme/urgencyColors";
 
 interface DueBadgeProps {
   daysLeft: number;
+  /** getUrgency 결과 중 배지를 보여주는 두 단계. "danger"는 마감 당일(D-day)도 포함한다. */
+  urgency: "danger" | "soon";
+  testID?: string;
 }
 
+const BADGE_COLORS = {
+  danger: { backgroundColor: colors.danger.background, color: colors.danger.text },
+  soon: { backgroundColor: urgencyColors.soon.background, color: urgencyColors.soon.text },
+} as const;
+
 /**
- * 웹 todoListItem.styles.tsx DueBadge와 동일한 3단계 색상 로직을 그대로 이식한다.
- * (초과: 빨강 / D-day: 주황 / 임박: 호박색) — 토큰이 없는 web-only 리터럴이라
- * 시각 차이 없음을 우선해 그대로 가져온다(design/spec.md "색상" 절 참고).
+ * 웹 오늘 화면(todayTodoItem.styles.tsx)의 OverdueBadge/DueSoonBadge와 같은 연한 배경 +
+ * 진한 글자 pill.
  */
-export const DueBadge = ({ daysLeft }: DueBadgeProps) => {
-  const backgroundColor = daysLeft < 0 ? "#ef4444" : daysLeft === 0 ? "#f97316" : "#f59e0b";
+export const DueBadge = ({ daysLeft, urgency, testID }: DueBadgeProps) => {
+  const { backgroundColor, color } = BADGE_COLORS[urgency];
 
   return (
-    <View style={[styles.badge, { backgroundColor }]}>
-      <Text style={styles.label}>{getDueBadgeLabel(daysLeft)}</Text>
+    <View testID={testID} style={[styles.badge, { backgroundColor }]}>
+      <Text style={[styles.label, { color }]}>{getDueBadgeLabel(daysLeft)}</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   badge: {
+    flexShrink: 0,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 99,
@@ -29,6 +39,5 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#fff",
   },
 });
