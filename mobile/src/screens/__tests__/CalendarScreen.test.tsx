@@ -55,7 +55,6 @@ describe("CalendarScreen", () => {
       isLoading: true,
       isError: false,
       getTodosForDate: () => [],
-      toggleDone: jest.fn(),
     });
     const { CalendarScreen } = await import("../CalendarScreen");
     await render(<CalendarScreen />);
@@ -68,7 +67,6 @@ describe("CalendarScreen", () => {
       isLoading: false,
       isError: true,
       getTodosForDate: () => [],
-      toggleDone: jest.fn(),
     });
     const { CalendarScreen } = await import("../CalendarScreen");
     await render(<CalendarScreen />);
@@ -82,7 +80,6 @@ describe("CalendarScreen", () => {
       isLoading: false,
       isError: false,
       getTodosForDate,
-      toggleDone: jest.fn(),
     });
     const { CalendarScreen } = await import("../CalendarScreen");
     await render(<CalendarScreen />);
@@ -101,7 +98,6 @@ describe("CalendarScreen", () => {
       isLoading: false,
       isError: false,
       getTodosForDate: () => [],
-      toggleDone: jest.fn(),
     });
     const { CalendarScreen } = await import("../CalendarScreen");
     await render(<CalendarScreen />);
@@ -119,7 +115,6 @@ describe("CalendarScreen", () => {
       isLoading: false,
       isError: false,
       getTodosForDate: () => [],
-      toggleDone: jest.fn(),
     });
     const { CalendarScreen } = await import("../CalendarScreen");
     await render(<CalendarScreen />);
@@ -138,7 +133,6 @@ describe("CalendarScreen", () => {
       isLoading: false,
       isError: false,
       getTodosForDate: () => [baseTodo],
-      toggleDone: jest.fn(),
     });
     const { CalendarScreen } = await import("../CalendarScreen");
     await render(<CalendarScreen />);

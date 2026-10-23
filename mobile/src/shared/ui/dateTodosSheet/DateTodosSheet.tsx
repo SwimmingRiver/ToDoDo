@@ -1,21 +1,33 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CalendarDays } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
-import { TodayTodoItem } from "../todayTodoItem/TodayTodoItem";
 import { EmptyState } from "../emptyState/EmptyState";
 import { Button } from "../button/Button";
+import { RecurrenceBadge } from "../recurrenceBadge/RecurrenceBadge";
+import { isTodoOverdue } from "../../utils/due";
+import { formatRecurrenceSummary } from "../../utils/recurrenceSummary";
 import { colors } from "../../../theme/colors";
+import { statusColors, type Status } from "../../../theme/statusColors";
 import { spacing } from "../../../theme/spacing";
+
+const STATUS_LABEL: Record<Status, string> = {
+  todo: "할 일",
+  doing: "진행 중",
+  done: "완료",
+};
+
+/** 웹 캘린더 시트의 toLocaleDateString("ko-KR", { month: "short", day: "numeric" })와 같은 "6월 20일". */
+const formatMonthDay = (iso: string) => {
+  const date = new Date(iso);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+};
 
 interface DateTodosSheetProps {
   isOpen: boolean;
   onClose: () => void;
   /** formatTodayLabel(selectedDate) 결과, 예: "6월 20일, 토요일". */
   dateLabel: string;
-  /** 로컬 "yyyy-MM-dd". TodayTodoItem의 진행 일차 배지 계산 기준으로 그대로 전달한다. */
-  selectedDate: string;
   todos: Todo[];
-  onToggleDone: (todo: Todo) => void;
   onPressTodo: (todo: Todo) => void;
   onAddTodo: () => void;
 }
@@ -25,14 +37,15 @@ interface DateTodosSheetProps {
  * 옵션 단일 선택 전용(상태 변경 시트)이라 할 일 목록+추가 버튼을 담을 수 없어,
  * 같은 Modal+slide+overlay+handle 시각 언어로 새로 만든다(계획 문서 1절 참고).
  * 항목 유무와 무관하게 항상 열리고(스펙 8절 결정 1), 빈 상태에도 추가 버튼을 둔다.
+ *
+ * 항목은 웹 캘린더 시트(DayDetailItem)처럼 체크박스 없는 정보형으로 보여준다 — 상태·시작·마감과
+ * 반복 요약을 훑어보는 용도. 웹과 달리 항목 전체를 눌러 상세 화면으로 갈 수 있다.
  */
 export const DateTodosSheet = ({
   isOpen,
   onClose,
   dateLabel,
-  selectedDate,
   todos,
-  onToggleDone,
   onPressTodo,
   onAddTodo,
 }: DateTodosSheetProps) => {
@@ -50,13 +63,7 @@ export const DateTodosSheet = ({
           {hasTodos ? (
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               {todos.map((todo) => (
-                <TodayTodoItem
-                  key={todo.id}
-                  todo={todo}
-                  selectedDate={selectedDate}
-                  onToggleDone={onToggleDone}
-                  onPress={onPressTodo}
-                />
+                <DateTodoItem key={todo.id} todo={todo} onPress={onPressTodo} />
               ))}
             </ScrollView>
           ) : (
@@ -75,6 +82,44 @@ export const DateTodosSheet = ({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+};
+
+const DateTodoItem = ({ todo, onPress }: { todo: Todo; onPress: (todo: Todo) => void }) => {
+  const isOverdue = isTodoOverdue(todo);
+  const meta = [
+    STATUS_LABEL[todo.status],
+    todo.startAt && `시작: ${formatMonthDay(todo.startAt)}`,
+    todo.dueAt && `마감: ${formatMonthDay(todo.dueAt)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Pressable
+      testID={`date-todo-${todo.id}`}
+      onPress={() => onPress(todo)}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.item,
+        {
+          borderLeftColor: isOverdue ? colors.danger.main : statusColors[todo.status].main,
+          backgroundColor: isOverdue ? colors.danger.background : colors.background.primary,
+        },
+        pressed && styles.itemPressed,
+      ]}
+    >
+      <View style={styles.itemTitleRow}>
+        <Text style={styles.itemTitle} numberOfLines={2}>
+          {todo.title}
+        </Text>
+        {todo.recurrenceId != null && <RecurrenceBadge />}
+      </View>
+      <Text style={styles.itemMeta}>{meta}</Text>
+      {todo.recurrenceId != null && todo.recurrence && (
+        <Text style={styles.itemRecurrence}>{formatRecurrenceSummary(todo.recurrence, todo.dueAt)}</Text>
+      )}
+    </Pressable>
   );
 };
 
@@ -114,6 +159,39 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
+  },
+  // 웹 DayDetailItem: padding 12px 16px, 좌측 4px 보더, 오른쪽만 둥근 모서리 8px.
+  item: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderLeftWidth: 4,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  itemPressed: {
+    opacity: 0.7,
+  },
+  itemTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  itemTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.text.primary,
+  },
+  itemMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: colors.text.secondary,
+  },
+  itemRecurrence: {
+    marginTop: 2,
+    fontSize: 11,
+    color: colors.brand.strong,
   },
   empty: {
     minHeight: 240,

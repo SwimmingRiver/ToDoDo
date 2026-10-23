@@ -184,7 +184,8 @@ TodoListScreen" 및 컴포넌트 패턴 표 참고.
 - 배지(제목 옆, 순서 고정 — 반복 → 밀린 회차 → overdue): `todo.recurrenceId != null`이면
   `RecurrenceBadge`, `getRecurringMissedCount(...) > 0`이면 `RecurrenceMissedBadge`("N회
   밀림"), `isOverdue`면 `OverdueBadge`("N일 초과").
-- 우측: 삭제 아이콘(danger, `accessibilityLabel="프로젝트 삭제"`) + 펼치기/접기 chevron
+- 우측: 펼치기/접기 chevron. 삭제 아이콘은 두지 않는다(2026-10-21, 웹 좁은 화면과 같이 오탭
+  방지 — 삭제는 상세 화면에서)
   (`accessibilityLabel`은 "프로젝트 펼치기"/"프로젝트 접기"). **편집(연필) 아이콘 없음** —
   웹 `ProjectCard`도 루트에는 편집 버튼이 없다(편집은 자식 카드 전용).
 - 카드 하단 3px `ProgressBar`: 서브태스크 done 비율(%), `isOverdue ? danger.main : brand.fill`.
@@ -197,7 +198,7 @@ TodoListScreen" 및 컴포넌트 패턴 표 참고.
 **자식 카드 (`ChildTodoCard` 대응, 펼쳤을 때만 인라인으로 노출)**
 
 - 좌측 28px 들여쓰기(웹과 동일).
-- 카드 전체 보더: 0.5px, 색상은 `statusColors[status].border`(상태별로 옅게 다름 — todo 회색
+- 카드 전체 보더: 1px(2026-10-21, 웹 09-16 변경 반영), 색상은 `statusColors[status].border`(상태별로 옅게 다름 — todo 회색
   계열/doing 파랑 계열/done 초록 계열). **추가로** `priority === "high"`일 때만 좌측 3px
   `danger.main` 보더로 덮어쓴다(그 외 우선순위는 시각 표시 없음 — 기존 "!" 텍스트 아이콘
   방식은 폐기하고 좌측 보더로 통일한다).
@@ -207,7 +208,8 @@ TodoListScreen" 및 컴포넌트 패턴 표 참고.
 - 제목(13px, `text.primary`, 최대 2줄) — **탭해도 아무 동작 없음**(웹은 상세 페이지 이동이지만
   모바일에 상세 화면이 없고, 자식은 이미 펼쳐진 상태라 추가로 토글할 대상도 없다).
 - 우측: 편집(연필, `accessibilityLabel="할 일 편집"`, 현재는 no-op — 편집 화면 자체가 범위
-  밖이라 기존 동작 유지) + 삭제(휴지통, `accessibilityLabel="할 일 삭제"`) 아이콘.
+  밖이라 기존 동작 유지). 삭제(휴지통) 아이콘은 `onDelete`를 넘긴 TodoDetailScreen 하위 영역에서만
+  보이고, 목록 탭에서는 숨긴다(2026-10-21).
 - 자식이 0개인데 펼쳤을 때: "하위 항목이 없습니다" 텍스트 행(웹 `EmptyChildMessage`와 동일
   카피, `text.tertiary`/12px).
 - 하위 할 일 추가(웹 `onAddChild`의 Plus 아이콘)는 이번에도 범위 밖 — 루트 카드 우측에
@@ -485,7 +487,7 @@ interface ProjectCardProps {
   isExpanded: boolean;
   onToggleExpand: (id: string) => void;
   onOpenStatusSheet: (todo: Todo) => void;
-  onDelete: (id: string) => void;
+  // onDelete 없음 — 2026-10-21 목록 카드 휴지통 제거(삭제는 상세 화면에서)
   // onEdit/onAddChild 없음 — 루트 카드에는 편집/하위추가 UI가 없다(범위 밖, 웹과 동일)
 }
 
@@ -493,7 +495,7 @@ interface ChildTodoCardProps {
   todo: Todo;
   onOpenStatusSheet: (todo: Todo) => void;
   onEdit: (todo: Todo) => void; // 현재는 no-op — 편집 화면 자체가 범위 밖(기존 동작 유지)
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void; // 상세 화면 하위 영역만 전달 → 휴지통 노출
 }
 ```
 

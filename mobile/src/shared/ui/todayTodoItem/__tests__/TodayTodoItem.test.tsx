@@ -2,6 +2,8 @@ import { render, screen, fireEvent } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { Todo } from "@tododo/core";
 import { TodayTodoItem } from "../TodayTodoItem";
+import { colors } from "../../../../theme/colors";
+import { urgencyColors } from "../../../../theme/urgencyColors";
 
 const baseTodo: Todo = {
   id: "t1",
@@ -81,5 +83,54 @@ describe("TodayTodoItem", () => {
       <TodayTodoItem todo={done} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
     );
     expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(true);
+  });
+
+  it("마감 당일·지남(danger)은 체크박스 링과 배지를 위험 색으로 표시한다", async () => {
+    const dueToday = { ...baseTodo, dueAt: new Date(2026, 5, 15, 18).toISOString() };
+    await render(
+      <TodayTodoItem todo={dueToday} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
+    );
+    expect(screen.getByRole("checkbox")).toHaveStyle({ borderColor: colors.border.danger });
+    expect(screen.getByTestId("due-badge-t1")).toHaveStyle({ backgroundColor: colors.danger.background });
+  });
+
+  it("마감 임박(soon)은 체크박스 링과 배지를 주황 계열로 표시한다", async () => {
+    const dueSoon = { ...baseTodo, dueAt: new Date(2026, 5, 17, 18).toISOString() };
+    await render(
+      <TodayTodoItem todo={dueSoon} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
+    );
+    expect(screen.getByRole("checkbox")).toHaveStyle({ borderColor: urgencyColors.soon.main });
+    expect(screen.getByText("D-2")).toBeTruthy();
+    expect(screen.getByTestId("due-badge-t1")).toHaveStyle({ backgroundColor: urgencyColors.soon.background });
+  });
+
+  it("설명이 있으면 제목 아래에 보여준다", async () => {
+    const withDesc = { ...baseTodo, description: "회의록 정리" };
+    await render(
+      <TodayTodoItem todo={withDesc} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
+    );
+    expect(screen.getByText("회의록 정리")).toBeTruthy();
+  });
+
+  it("반복 할 일이면 아이콘만 있는 반복 배지를 보여준다", async () => {
+    const recurring = { ...baseTodo, recurrenceId: "r1" };
+    await render(
+      <TodayTodoItem todo={recurring} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
+    );
+    expect(screen.getByLabelText("반복 할 일")).toBeTruthy();
+    expect(screen.queryByText("반복")).toBeNull();
+  });
+
+  it("카드 대신 구분선 행으로 그리고, 마지막 행은 구분선을 숨긴다", async () => {
+    await render(
+      <TodayTodoItem todo={baseTodo} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
+    );
+    expect(screen.getByTestId("today-item-t1")).toHaveStyle({ borderBottomWidth: 1 });
+    expect(screen.getByTestId("today-item-t1")).not.toHaveStyle({ borderLeftWidth: 4 });
+
+    await render(
+      <TodayTodoItem todo={baseTodo} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} isLast />,
+    );
+    expect(screen.getByTestId("today-item-t1")).toHaveStyle({ borderBottomWidth: 0 });
   });
 });
