@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import { WeekStrip } from "../WeekStrip";
+import { colors } from "../../../../theme/colors";
 
 describe("WeekStrip", () => {
   beforeEach(() => {
@@ -45,6 +46,16 @@ describe("WeekStrip", () => {
     await fireEvent.press(screen.getByLabelText("다음 날짜"));
     expect(onShiftLeft).toHaveBeenCalledTimes(1);
     expect(onShiftRight).toHaveBeenCalledTimes(1);
+  });
+
+  it("오늘이 선택되면 날짜 숫자가 선택 배경과 같은 색이 되지 않는다", async () => {
+    await render(<WeekStrip {...defaultProps} />);
+    expect(screen.getByText("15")).toHaveStyle({ color: colors.background.primary });
+  });
+
+  it("오늘이 선택되지 않았으면 날짜 숫자를 브랜드 색으로 강조한다", async () => {
+    await render(<WeekStrip {...defaultProps} selectedDate="2026-06-16" />);
+    expect(screen.getByText("15")).toHaveStyle({ color: colors.brand.strong });
   });
 
   it("오늘이 스트립 안에 있으면 '오늘' 칩을 보여주지 않는다", async () => {

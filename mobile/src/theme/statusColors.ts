@@ -1,4 +1,5 @@
-// client/src/styles/statusColors.ts 값을 그대로 복제한다.
+// packages/core/src/theme/light.ts의 status 값을 그대로 복제한다(웹 client는 이 값을
+// CSS 변수로 참조한다). 원본이 바뀌면 이 파일도 함께 갱신해야 한다.
 export const statusColors = {
   todo: {
     main: "#4b5563", // 회색 - 대기 상태 (on light: 6.87:1)
@@ -6,14 +7,14 @@ export const statusColors = {
     border: "#9ca3af",
   },
   doing: {
-    main: "#1d4ed8", // 파란 - 진행 중 (on light: 5.49:1)
-    light: "#dbeafe", // 연한 배경
-    border: "#60a5fa",
+    main: "#117453", // 초록 - 진행 중, brand.fill과 같은 hue
+    light: "#e5faf3", // 연한 배경
+    border: "#5ae2b5",
   },
   done: {
-    main: "#065f46", // 초록(틸) - 완료 (on light: 6.78:1)
-    light: "#d1fae5", // 연한 배경
-    border: "#34d399",
+    main: "#6d28d9", // 보라 - 완료, doing/todo와 뚜렷이 구분
+    light: "#ede9fe", // 연한 배경
+    border: "#a78bfa",
   },
 } as const;
 
