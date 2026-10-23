@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
+import { Calendar, LocaleConfig, type CalendarProps, type DateData } from "react-native-calendars";
 import { AlertCircle } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
 import type { CalendarStackParamList } from "../navigation/types";
 import { useCalendarTodos } from "../hooks/useCalendarTodos";
+import { CalendarDayCell } from "../shared/ui/calendarDayCell/CalendarDayCell";
 import { DateTodosSheet } from "../shared/ui/dateTodosSheet/DateTodosSheet";
 import { EmptyState } from "../shared/ui/emptyState/EmptyState";
 import { ListSkeleton } from "../shared/ui/skeleton/ListSkeleton";
@@ -34,7 +35,20 @@ const CALENDAR_THEME = {
   arrowColor: colors.brand.strong,
   monthTextColor: colors.text.primary,
   textSectionTitleColor: colors.text.secondary,
-} as const;
+  // 화면 높이를 꽉 채우도록 주(week) 행을 늘린다. 라이브러리는 이 키를 런타임에
+  // theme["stylesheet.calendar.main"]으로 읽지만 Theme 타입에는 없어 아래에서 단언한다.
+  "stylesheet.calendar.main": {
+    monthView: { flex: 1 },
+    week: {
+      flex: 1,
+      marginVertical: 0,
+      flexDirection: "row",
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border.tertiary,
+    },
+    dayContainer: { flex: 1 },
+  },
+} as CalendarProps["theme"];
 
 /** selectedDate 항목에 선택 표시(selected)를 덧붙인다 — 기존 markedDates는 불변으로 둔다. */
 function withSelection(markedDates: CalendarMarkedDates, selectedDate: string | null): CalendarMarkedDates {
@@ -46,6 +60,9 @@ function withSelection(markedDates: CalendarMarkedDates, selectedDate: string | 
 export const CalendarScreen = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  // Calendar의 바깥 래퍼는 style을 받지 않아 flex로 늘릴 수 없다 — 남은 높이를 재서
+  // 안쪽 컨테이너에 고정 높이로 넘긴다.
+  const [calendarHeight, setCalendarHeight] = useState<number | null>(null);
   const navigation = useNavigation<NativeStackNavigationProp<CalendarStackParamList>>();
   const { markedDates, isLoading, isError, getTodosForDate } = useCalendarTodos();
   const markedDatesWithSelection = useMemo(
@@ -65,6 +82,10 @@ export const CalendarScreen = () => {
     if (!selectedDate) return;
     setIsSheetOpen(false);
     navigation.navigate("TodoForm", { dueAt: parseLocalDateOnly(selectedDate).toISOString() });
+  };
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    setCalendarHeight(event.nativeEvent.layout.height);
   };
 
   const handlePressTodo = (todo: Todo) => {
@@ -94,12 +115,16 @@ export const CalendarScreen = () => {
 
   return (
     <SafeAreaView style={styles.screen} edges={[]}>
-      <Calendar
-        markingType="multi-dot"
-        markedDates={markedDatesWithSelection}
-        onDayPress={handleDayPress}
-        theme={CALENDAR_THEME}
-      />
+      <View style={styles.calendarArea} onLayout={handleLayout}>
+        <Calendar
+          markingType="multi-dot"
+          markedDates={markedDatesWithSelection}
+          onDayPress={handleDayPress}
+          dayComponent={CalendarDayCell}
+          theme={CALENDAR_THEME}
+          style={calendarHeight != null ? { height: calendarHeight } : undefined}
+        />
+      </View>
       <DateTodosSheet
         isOpen={isSheetOpen}
         onClose={() => setIsSheetOpen(false)}
@@ -115,6 +140,9 @@ export const CalendarScreen = () => {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.primary,
+  },
+  calendarArea: {
+    flex: 1,
   },
 });
