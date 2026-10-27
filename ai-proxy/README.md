@@ -17,6 +17,7 @@ main push 한 번으로 ai-proxy 배포와 client Hosting 빌드가 같이 돈�
 
 - `AI_MODEL`: 기본 `claude-haiku-4-5`
 - `DAILY_LIMIT`: 사용자당 하루 성공 횟수 한도(서울 기준 날짜), 기본 `20`
+- `[placement] region = "aws:us-east-1"`: 지우지 말 것. 한국 요청이 Cloudflare 홍콩(HKG)으로 들어가면 Anthropic이 미지원 지역으로 보고 `403 forbidden "Request not allowed"`를 돌려준다(클라이언트에는 `AI_UNAVAILABLE`). 미국 리전 실행으로 고정해 피한다. `region` 키는 wrangler 4부터 지원한다.
 
 ## 알고 감수한 한계
 

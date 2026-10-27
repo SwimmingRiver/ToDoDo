@@ -14,3 +14,8 @@ CLIENT_APP_URL = "https://tododo-83576.web.app"
 # 모델·한도는 코드 수정 없이 여기서만 바꾼다.
 AI_MODEL = "claude-haiku-4-5"
 DAILY_LIMIT = "20"
+
+# 홍콩(HKG) 데이터센터는 Anthropic API 미지원 지역이라 403 forbidden을 받는다.
+# 한국 트래픽이 HKG로 자주 들어가므로 실행 위치를 미국 리전으로 고정한다.
+[placement]
+region = "aws:us-east-1"
