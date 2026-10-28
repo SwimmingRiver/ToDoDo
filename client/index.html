@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -25,7 +25,24 @@
         if (meta) meta.setAttribute("content", dark ? "#121212" : "#FFFFFF");
       })();
     </script>
-    <title>ToDoDo</title>
+    <title>ToDoDo — 해야 할 일, 오늘 안에 끝내는 가장 쉬운 방법</title>
+    <!-- 링크 미리보기 봇(카카오톡·슬랙 등)은 JS를 실행하지 않으므로 공유 카드 정보는
+         전부 여기 정적으로 있어야 한다. og:image는 임시로 정사각 로고(200×200) —
+         1200×630 이미지가 준비되면 파일 교체 후 twitter:card를 summary_large_image로 바꾼다. -->
+    <meta name="description" content="Today·칸반·캘린더에 마감 알림까지, 할 일을 한눈에" />
+    <link rel="canonical" href="https://tododo-app.com/" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ToDoDo" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:url" content="https://tododo-app.com/" />
+    <meta property="og:title" content="ToDoDo — 해야 할 일, 오늘 안에 끝내는 가장 쉬운 방법" />
+    <meta property="og:description" content="Today·칸반·캘린더에 마감 알림까지, 할 일을 한눈에" />
+    <meta property="og:image" content="https://tododo-app.com/og-image.png" />
+    <meta property="og:image:width" content="200" />
+    <meta property="og:image:height" content="200" />
+    <meta property="og:image:alt" content="ToDoDo 로고" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>
