@@ -8,4 +8,4 @@ kv_namespaces = [
 
 [vars]
 FIREBASE_PROJECT_ID = "tododo-83576"
-CLIENT_APP_URL = "https://tododo-83576.web.app"
+CLIENT_APP_URL = "https://tododo-app.com"
