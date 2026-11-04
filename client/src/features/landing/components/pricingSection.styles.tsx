@@ -121,6 +121,11 @@ const PlanButton = styled.button<{ $variant: "primary" | "secondary" }>`
   cursor: pointer;
   transition: background-color 0.2s ease;
 
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
   ${({ $variant }) =>
     $variant === "primary"
       ? css`
@@ -128,7 +133,7 @@ const PlanButton = styled.button<{ $variant: "primary" | "secondary" }>`
           background-color: ${colors.brand.strong};
           color: ${colors.brand.onStrong};
 
-          &:hover {
+          &:hover:not(:disabled) {
             background-color: ${colors.brand.strongHover};
           }
         `
@@ -137,7 +142,7 @@ const PlanButton = styled.button<{ $variant: "primary" | "secondary" }>`
           background-color: transparent;
           color: ${colors.brand.strong};
 
-          &:hover {
+          &:hover:not(:disabled) {
             background-color: ${colors.brand.tint};
           }
         `}
