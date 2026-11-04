@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toFormValue, toRecurrenceRule } from "../recurrenceTransform";
+import { toFormValue, toRecurrenceRule } from "../recurrenceForm";
 
 describe("toRecurrenceRule", () => {
   it("daily 타입일 때 weekdays 키를 아예 포함하지 않는다", () => {
@@ -32,6 +32,15 @@ describe("toRecurrenceRule", () => {
 
   it("value가 null이면 null을 반환한다", () => {
     expect(toRecurrenceRule(null, "2026-07-10T18:00")).toBeNull();
+  });
+});
+
+it("toRecurrenceRule의 endDate는 dueAt의 로컬 날짜 키다 (UTC split 금지)", () => {
+  const dueAt = "2026-11-05T15:30:00.000Z";
+  const d = new Date(dueAt);
+  const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  expect(toRecurrenceRule({ type: "daily" }, dueAt)).toEqual({
+    type: "daily", endType: "untilDate", endDate: expected,
   });
 });
 

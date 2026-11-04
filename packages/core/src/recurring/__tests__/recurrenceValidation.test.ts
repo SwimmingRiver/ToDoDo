@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { getRecurrenceValidationError } from "../recurrenceValidation";
-import type { RecurrenceFormValue } from "../recurrenceFields.types";
+import { getRecurrenceValidationError } from "../recurrenceForm";
+import type { RecurrenceFormValue } from "../recurrenceForm";
 
 describe("getRecurrenceValidationError", () => {
   const dailyValue: RecurrenceFormValue = { type: "daily" };
