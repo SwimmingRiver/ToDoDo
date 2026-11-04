@@ -373,3 +373,62 @@ it("toRecurrenceRule의 endDate는 dueAt의 로컬 날짜 키다 (UTC split 금�
   - 같은 계정의 웹에서 결과가 같게 보이는지
   - 간격 등 시각 세부 조정은 사용자 피드백으로 별도 커밋한다.
 - [ ] **Step 4: PR 2를 연다.** push 후 `develop` 대상 PR을 연다. PR 1이 아직 병합되지 않았으면 base를 PR 1 브랜치로 두고, PR 1 병합 후 develop으로 바꾼다.
+
+---
+
+## 추가 작업 (2026-11-04 `/code-review` 후속, 사용자 승인: "그렇게 진행하자")
+
+`/code-review`에서 웹에 원래 있던 버그를 발견했습니다. 반복 회차를 수정하면 `toRecurrenceRule(value, dueAt)`가 **그 회차의 dueAt**을 종료일로 삼습니다. 그래서 무기한 시리즈도 그 회차 날짜에서 끝나고, 이후 미래 회차가 모두 삭제됩니다. 웹 `todoDetail.tsx:318-319`와 `todoForm.tsx`의 수정 경로, 그리고 모바일 `TodoDetailScreen`이 모두 해당합니다.
+
+사용자는 A안을 선택했습니다. **이미 반복 중인 할 일을 수정할 때는 종료 조건(`endType`/`endDate`)을 기존 `todo.recurrence`에서 그대로 유지합니다.** dueAt 칸은 그 회차의 마감으로만 씁니다. 비반복 할 일을 반복으로 전환할 때와 새로 만들 때는 지금처럼 dueAt에서 종료일을 유도합니다.
+
+브랜치 구성:
+- `fix/recurring-series-end-date`: PR 1(`feat/mobile-recurring-parity`) 위에 쌓고, core와 웹을 고칩니다.
+- PR 2(`feat/mobile-recurring-parity-app`): 이 브랜치 위로 rebase합니다.
+
+### Task 11: core 수정용 규칙 변환 + 웹 수정 경로 (브랜치 `fix/recurring-series-end-date`)
+
+**Files:** `packages/core/src/recurring/recurrenceForm.ts`(+ `__tests__`, dist), `client/src/features/todo/components/recurrence/recurrenceFields.tsx`, `client/src/features/todo/components/todoDetail/todoDetail.tsx`, `client/src/features/todo/components/todoForm/todoForm.tsx`, 그리고 각 파일의 테스트
+
+**Interfaces (Produces):**
+- `toRecurrenceRuleForEdit(value: RecurrenceFormValue | null, existing: RecurrenceRule): RecurrenceRule | null`
+  - `value`가 null이면 null을 반환합니다(반복 끄기).
+  - 아니면 type/weekdays는 `value`에서 가져오고 `endType`/`endDate`는 `existing`에서 그대로 복사합니다. weekly일 때만 weekdays를 넣습니다.
+- `getRecurrenceValidationError`는 그대로 둡니다. 수정 모드의 범위 검증(dueAt < startAt)은 건너뜁니다. 회차 날짜 검증은 기존 `getTodoDateValidationError`가 계속 담당합니다.
+- 웹 `RecurrenceFields`에 optional prop `existingRule?: RecurrenceRule | null`을 추가합니다. 이 값이 있으면 범위 안내를 기존 규칙 기준으로 바꿉니다.
+  - `untilDate`이면 `{endDate}까지 반복됩니다`
+  - `indefinite`이면 `무기한으로 반복됩니다`
+  - 이 경우 범위 에러는 표시하지 않습니다.
+  - `existingRule`이 없을 때는 기존 문구와 동작을 그대로 유지합니다.
+
+**규칙:** 웹 `todoDetail`과 `todoForm`의 수정 경로에서 `todo.recurrence != null`이면 `toRecurrenceRuleForEdit(recurrenceValue, todo.recurrence)`를 쓰고, 범위 검증을 건너뛰고, `existingRule={todo.recurrence}`를 넘깁니다. 그 외에는 기존 경로를 그대로 탑니다.
+
+- [ ] core 테스트:
+  - indefinite 유지
+  - untilDate 유지
+  - weekly→daily 변경 시 weekdays 제거
+  - null이면 null
+- [ ] 회귀 테스트(core seriesApi): 무기한 매일 시리즈에서 내일 회차(startAt=dueAt=내일)를 `toRecurrenceRuleForEdit`로 만든 규칙으로 `editRecurringSeries`하면, 내일 이후 호라이즌까지의 회차가 재생성되는지 확인합니다. 시스템 시간은 mock합니다.
+- [ ] 웹 테스트:
+  - todoDetail/todoForm 수정 경로에서 dueAt이 있는 반복 회차의 제목만 바꿔 저장하면 `editRecurringSeries` payload의 `recurrence.endType`이 기존 값(`indefinite`)인지 확인합니다. 픽스처는 실제와 같게 dueAt=회차일로 둡니다.
+  - 비반복 → 반복 전환은 기존대로 dueAt에서 유도되는지 확인합니다.
+- [ ] core build + dist 커밋. 웹 tsc, vitest(기본 TZ와 NY TZ, redirect on), lint, build를 확인합니다.
+- [ ] 커밋: `fix(recurring): 반복 회차 수정 시 시리즈 종료 조건을 기존 규칙에서 유지`
+
+### Task 12: 모바일 상세·작성 화면 보완 (PR 2, rebase 후)
+
+- `TodoDetailScreen`: `todo.recurrence != null`이면 `toRecurrenceRuleForEdit`를 쓰고, 범위 검증을 건너뛰고, `RecurrenceSection`에 `existingRule`을 넘깁니다. `RecurrenceSection`에도 웹과 같은 `existingRule` prop을 추가합니다.
+- 테스트 픽스처 `recurringRoot`의 dueAt을 회차일로 바꿉니다. "제목만 수정해도 `endType` indefinite 유지"를 검증합니다.
+- 시리즈 삭제 중 저장 잠금: 삭제도 `saveInFlightRef`(또는 공용 in-flight ref)를 거칩니다. 시리즈 삭제의 pending을 저장 비활성 조건에 포함합니다. 삭제 확인을 두 번 눌러도 `deleteRecurringSeries`는 한 번만 불려야 합니다.
+- `TodoFormScreen`: `useRef` in-flight 가드를 둡니다. 같은 tick에 두 번 눌러도 `createRecurringTodo`/`createTodo`는 한 번만 불려야 합니다. 반복 경로에서는 쓰이지 않는 `order` 계산을 제거합니다. `RecurringTodoInput`에서 `order`는 optional입니다.
+- 하위 할 일 추가 버튼은 웹처럼 `todo.recurrence != null`일 때만 숨깁니다.
+- 커밋은 기능 단위로 나눕니다.
+
+### Task 13: 모바일 정리 작업 보완 (PR 2)
+
+- uid가 null로 바뀌면(로그아웃) 이전 uid의 claim을 해제합니다. 같은 계정으로 다시 로그인하면 정리 작업이 다시 돌아야 합니다.
+- 포그라운드 시도 사이에 최소 간격 `MAINTENANCE_RETRY_MIN_MS = 60 * 60 * 1000`을 둡니다. 마지막 **시도** 시각은 메모리(uid별)에 기록합니다. 실패가 이어져도 1시간에 한 번만 다시 돕니다.
+- 테스트:
+  - 로그아웃 후 같은 uid로 재로그인하면 실행됩니다.
+  - 실패 직후 `active`가 와도 1시간 이내면 실행하지 않고, 1시간이 지나면 실행합니다.
+  - 기존 테스트는 모두 통과해야 합니다.
