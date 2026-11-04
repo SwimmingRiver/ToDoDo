@@ -6,6 +6,7 @@ import WeekdayPicker from "./weekdayPicker";
 import { WEEKDAY_REQUIRED_ERROR } from "./weekdayConstants";
 import { getRecurrenceValidationError } from "./recurrenceValidation";
 import type { RecurrenceFormValue } from "./recurrenceFields.types";
+import type { RecurrenceRule } from "../../types";
 import {
   RecurrenceSection,
   CheckboxLabel,
@@ -27,6 +28,12 @@ interface RecurrenceFieldsProps {
   dueAt: string | null; // 있으면 반복 종료일(마지막 발생일) 역할
   value: RecurrenceFormValue | null; // null = 반복 OFF
   onChange: (value: RecurrenceFormValue | null) => void;
+  /**
+   * 이미 반복 중인 시리즈를 수정할 때의 기존 규칙. 이때 dueAt은 시리즈 종료일이 아니라
+   * 수정 중인 회차의 날짜라, 범위 안내는 기존 규칙의 종료 조건으로 보여주고 범위 에러는
+   * 띄우지 않는다(저장 시에도 종료 조건은 기존 규칙에서 유지된다).
+   */
+  existingRule?: RecurrenceRule | null;
 }
 
 const RecurrenceFields = ({
@@ -36,13 +43,25 @@ const RecurrenceFields = ({
   dueAt,
   value,
   onChange,
+  existingRule,
 }: RecurrenceFieldsProps) => {
   const hintId = useId();
   const checked = value !== null;
 
   const weekdayError = value?.type === "weekly" && (value.weekdays?.length ?? 0) === 0;
   const validationError = getRecurrenceValidationError(value, startAt, dueAt);
-  const rangeError = validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
+  const rangeError =
+    !existingRule && validationError && validationError !== WEEKDAY_REQUIRED_ERROR
+      ? validationError
+      : null;
+
+  const rangeText = existingRule
+    ? existingRule.endType === "untilDate" && existingRule.endDate
+      ? `${existingRule.endDate}까지 반복됩니다`
+      : "무기한으로 반복됩니다"
+    : dueAt
+      ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
+      : "마감일시가 없으면 무기한으로 반복됩니다";
 
   const handleToggle = () => {
     if (disabled) return;
@@ -132,11 +151,7 @@ const RecurrenceFields = ({
                 <FieldLabel>반복 범위</FieldLabel>
                 <InfoLine>
                   <Info size={14} aria-hidden="true" />
-                  <span>
-                    {dueAt
-                      ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
-                      : "마감일시가 없으면 무기한으로 반복됩니다"}
-                  </span>
+                  <span>{rangeText}</span>
                 </InfoLine>
                 {rangeError && <ErrorText role="alert">{rangeError}</ErrorText>}
               </FieldGroup>

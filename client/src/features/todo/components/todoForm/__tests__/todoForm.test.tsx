@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ToastProvider } from "@/shared/ui/toast/toastContext";
 import { setupUser } from "@/test/setupUser";
@@ -404,5 +404,115 @@ describe("알림 안내창 트리거", () => {
     fireEvent.submit(document.getElementById("todo-form")!);
     await vi.waitFor(() => expect(mockTodo.useCreateTodo.mutate).toHaveBeenCalled());
     expect(offerRemindersMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("반복 회차 수정 시 시리즈 종료 조건", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 6, 10, 8, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** 실제 회차처럼 startAt=dueAt=그 회차일(로컬 09:00)을 UTC Z 문자열로 둔다. */
+  const occurrenceIso = (offsetDays: number) => {
+    const now = new Date();
+    return new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + offsetDays,
+      9,
+      0,
+      0,
+    ).toISOString();
+  };
+
+  const localDateKey = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  it("무기한 시리즈의 회차 제목만 바꿔 저장하면 시리즈 수정 payload의 종료 조건이 무기한으로 유지된다", async () => {
+    const user = setupUser();
+    renderForm({
+      todo: makeTodo({
+        startAt: occurrenceIso(1),
+        dueAt: occurrenceIso(1),
+        recurrence: { type: "daily", endType: "indefinite", endDate: null },
+        recurrenceId: "series-1",
+      }),
+    });
+
+    const title = screen.getByDisplayValue("기존 할 일");
+    await user.clear(title);
+    await user.type(title, "바뀐 제목");
+    fireEvent.submit(title.closest("form")!);
+
+    await user.click(await screen.findByText("전체 적용"));
+
+    expect(mockTodo.useEditRecurringSeries.mutate).toHaveBeenCalledTimes(1);
+    const payload = mockTodo.useEditRecurringSeries.mutate.mock.calls[0][0] as Todo;
+    expect(payload.title).toBe("바뀐 제목");
+    expect(payload.recurrence).toEqual({ type: "daily", endType: "indefinite", endDate: null });
+  });
+
+  it("기한 있는 시리즈는 회차 날짜가 아니라 기존 종료일을 유지한다", async () => {
+    const user = setupUser();
+    renderForm({
+      todo: makeTodo({
+        startAt: occurrenceIso(1),
+        dueAt: occurrenceIso(1),
+        recurrence: { type: "weekly", weekdays: [1, 3], endType: "untilDate", endDate: "2026-12-31" },
+        recurrenceId: "series-1",
+      }),
+    });
+
+    fireEvent.submit(screen.getByDisplayValue("기존 할 일").closest("form")!);
+    await user.click(await screen.findByText("전체 적용"));
+
+    const payload = mockTodo.useEditRecurringSeries.mutate.mock.calls[0][0] as Todo;
+    expect(payload.recurrence).toEqual({
+      type: "weekly",
+      weekdays: [1, 3],
+      endType: "untilDate",
+      endDate: "2026-12-31",
+    });
+  });
+
+  it("수정 모드의 반복 범위 안내는 회차 dueAt이 아니라 기존 종료일을 보여준다", async () => {
+    const user = setupUser();
+    renderForm({
+      todo: makeTodo({
+        startAt: occurrenceIso(1),
+        dueAt: occurrenceIso(1),
+        recurrence: { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
+        recurrenceId: "series-1",
+      }),
+    });
+
+    await user.click(screen.getByText("더보기"));
+
+    expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeInTheDocument();
+  });
+
+  it("비반복 할 일을 반복으로 전환하면 기존대로 dueAt에서 종료일을 유도한다", async () => {
+    const user = setupUser();
+    const dueAt = occurrenceIso(5);
+    renderForm({ todo: makeTodo({ startAt: occurrenceIso(1), dueAt }) });
+
+    await user.click(screen.getByText("더보기"));
+    await user.click(screen.getByLabelText("이 할 일을 반복합니다"));
+    fireEvent.submit(screen.getByDisplayValue("기존 할 일").closest("form")!);
+
+    expect(await screen.findByText("반복 설정 완료")).toBeInTheDocument();
+    const payload = mockTodo.useCreateRecurringTodo.mutate.mock.calls[0][0] as Todo;
+    expect(payload.recurrence).toEqual({
+      type: "daily",
+      endType: "untilDate",
+      endDate: localDateKey(dueAt),
+    });
   });
 });

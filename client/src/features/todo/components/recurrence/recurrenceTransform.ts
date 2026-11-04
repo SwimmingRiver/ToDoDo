@@ -1,1 +1,5 @@
-export { toFormValue, toRecurrenceRule } from "@tododo/core/dist/recurring/index.js";
+export {
+  toFormValue,
+  toRecurrenceRule,
+  toRecurrenceRuleForEdit,
+} from "@tododo/core/dist/recurring/index.js";

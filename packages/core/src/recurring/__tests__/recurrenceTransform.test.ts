@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toFormValue, toRecurrenceRule } from "../recurrenceForm";
+import { toFormValue, toRecurrenceRule, toRecurrenceRuleForEdit } from "../recurrenceForm";
 
 describe("toRecurrenceRule", () => {
   it("daily 타입일 때 weekdays 키를 아예 포함하지 않는다", () => {
@@ -54,5 +54,52 @@ describe("toFormValue", () => {
     expect(result?.type).toBe("daily");
     expect(Object.prototype.hasOwnProperty.call(result, "endType")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(result, "endDate")).toBe(false);
+  });
+});
+
+describe("toRecurrenceRuleForEdit", () => {
+  it("기존 규칙이 무기한이면 회차 dueAt과 무관하게 무기한을 유지한다", () => {
+    expect(
+      toRecurrenceRuleForEdit({ type: "daily" }, { type: "daily", endType: "indefinite", endDate: null }),
+    ).toEqual({ type: "daily", endType: "indefinite", endDate: null });
+  });
+
+  it("기존 규칙이 untilDate면 endType/endDate를 그대로 유지한다", () => {
+    expect(
+      toRecurrenceRuleForEdit(
+        { type: "daily" },
+        { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
+      ),
+    ).toEqual({ type: "daily", endType: "untilDate", endDate: "2026-12-31" });
+  });
+
+  it("기존 규칙에 endDate 키가 없으면(무기한) null로 채운다", () => {
+    expect(
+      toRecurrenceRuleForEdit({ type: "monthly" }, { type: "daily", endType: "indefinite" }),
+    ).toEqual({ type: "monthly", endType: "indefinite", endDate: null });
+  });
+
+  it("weekly→daily로 바꾸면 weekdays 키를 넣지 않는다", () => {
+    const result = toRecurrenceRuleForEdit(
+      { type: "daily" },
+      { type: "weekly", weekdays: [1, 3], endType: "indefinite", endDate: null },
+    );
+    expect(result?.type).toBe("daily");
+    expect(Object.prototype.hasOwnProperty.call(result, "weekdays")).toBe(false);
+  });
+
+  it("weekly면 type/weekdays는 폼 값에서 가져온다", () => {
+    expect(
+      toRecurrenceRuleForEdit(
+        { type: "weekly", weekdays: [2, 4] },
+        { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
+      ),
+    ).toEqual({ type: "weekly", weekdays: [2, 4], endType: "untilDate", endDate: "2026-12-31" });
+  });
+
+  it("value가 null이면(반복 끄기) null을 반환한다", () => {
+    expect(
+      toRecurrenceRuleForEdit(null, { type: "daily", endType: "indefinite", endDate: null }),
+    ).toBeNull();
   });
 });
