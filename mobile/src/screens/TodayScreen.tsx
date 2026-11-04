@@ -79,14 +79,15 @@ export const TodayScreen = () => {
           {inProgressTodos.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>진행 중</Text>
-              <View style={styles.list}>
-                {inProgressTodos.map((todo) => (
+              <View>
+                {inProgressTodos.map((todo, index) => (
                   <TodayTodoItem
                     key={todo.id}
                     todo={todo}
                     selectedDate={selectedDate}
                     onToggleDone={toggleDone}
                     onPress={handleOpenDetail}
+                    isLast={index === inProgressTodos.length - 1}
                   />
                 ))}
               </View>
@@ -95,14 +96,15 @@ export const TodayScreen = () => {
           {doneTodos.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>완료</Text>
-              <View style={styles.list}>
-                {doneTodos.map((todo) => (
+              <View>
+                {doneTodos.map((todo, index) => (
                   <TodayTodoItem
                     key={todo.id}
                     todo={todo}
                     selectedDate={selectedDate}
                     onToggleDone={toggleDone}
                     onPress={handleOpenDetail}
+                    isLast={index === doneTodos.length - 1}
                   />
                 ))}
               </View>
@@ -125,24 +127,24 @@ export const TodayScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  // 웹 오늘 화면처럼 흰 바탕 위에 구분선 행을 놓는다(todaySection.styles.tsx: 섹션 padding
+  // 12px 16px, 제목 12px/500/tertiary, 제목 아래 8px).
   screen: {
     flex: 1,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.primary,
   },
   listContent: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    paddingVertical: spacing.xs,
   },
   section: {
-    gap: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text.secondary,
-  },
-  list: {
-    gap: spacing.sm,
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.text.tertiary,
   },
   addButton: {
     minHeight: 48,

@@ -1,7 +1,6 @@
-import { BarChart3, CalendarDays, Sparkles, type LucideIcon } from "lucide-react";
 import { useEntitlement } from "@/features/entitlement/hooks/useEntitlement";
 import { DEFAULT_ENTITLEMENT } from "@/features/entitlement/types";
-import { PREMIUM_MONTHLY_PRICE_LABEL } from "../config";
+import { PREMIUM_BENEFITS, PREMIUM_MONTHLY_PRICE_LABEL } from "../config";
 import { useCheckout, useOpenPortal, useStartTrial } from "../hooks";
 import { formatMonthDay, getPremiumView } from "../utils/premiumView";
 import {
@@ -22,12 +21,6 @@ import {
   StatusText,
   Warning,
 } from "./premiumPage.styles";
-
-const BENEFITS: { icon: LucideIcon; title: string; description: string }[] = [
-  { icon: Sparkles, title: "AI 할 일 플랜", description: "목표를 적으면 실행 단계와 날짜를 나눠 제안해요" },
-  { icon: CalendarDays, title: "구글 캘린더 연동", description: "할 일을 구글 캘린더에 동기화해요" },
-  { icon: BarChart3, title: "완료 통계", description: "완료율·연속 달성일·우선순위 분포를 확인해요" },
-];
 
 const PremiumPage = () => {
   const { data, isLoading } = useEntitlement();
@@ -116,7 +109,7 @@ const PremiumPage = () => {
         <Heading>ToDoDo 프리미엄</Heading>
         <Card>
           <BenefitList>
-            {BENEFITS.map(({ icon: Icon, title, description }) => (
+            {PREMIUM_BENEFITS.map(({ icon: Icon, title, description }) => (
               <Benefit key={title}>
                 <Icon size={20} aria-hidden="true" />
                 <BenefitText>

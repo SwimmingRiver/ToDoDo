@@ -8,6 +8,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
+import LegalLinks from "@/features/legal/components/legalLinks";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 import {
   Overlay,
@@ -19,12 +20,14 @@ import {
   NavList,
   NavNavLink,
   FeedbackNavRow,
+  DrawerLegalLinks,
 } from "./mobileDrawer.styles";
 
 interface MobileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onFeedbackClick: () => void;
+  onDeleteAccountClick: () => void;
 }
 
 const NAV_ITEMS = [
@@ -34,7 +37,7 @@ const NAV_ITEMS = [
   { path: "/insights", icon: <BarChart3 size={20} />, label: "인사이트" },
 ];
 
-const MobileDrawer = ({ isOpen, onClose, onFeedbackClick }: MobileDrawerProps) => {
+const MobileDrawer = ({ isOpen, onClose, onFeedbackClick, onDeleteAccountClick }: MobileDrawerProps) => {
   const [isClosing, setIsClosing] = useState(false);
   const { user } = useAuth();
 
@@ -54,6 +57,13 @@ const MobileDrawer = ({ isOpen, onClose, onFeedbackClick }: MobileDrawerProps) =
     handleClose();
   };
 
+  const handleDeleteAccountClick = () => {
+    // 탈퇴 창도 App이 소유한다(FeedbackForm과 같은 이유). 드로어 안에 두면 슬라이드 transform이
+    // position:fixed의 기준이 되어 창이 잘리고, 드로어가 닫힐 때 진행 중인 탈퇴 창까지 사라진다.
+    onDeleteAccountClick();
+    handleClose();
+  };
+
   useEffect(() => {
     if (isOpen) document.body.style.overflow = "hidden";
     return () => {
@@ -68,7 +78,7 @@ const MobileDrawer = ({ isOpen, onClose, onFeedbackClick }: MobileDrawerProps) =
       <Overlay $isClosing={isClosing} onClick={handleClose} />
       <DrawerContainer $isClosing={isClosing}>
         <UserSection>
-          <ProfileMenu>
+          <ProfileMenu onDeleteAccountClick={handleDeleteAccountClick}>
             <UserImage src={user?.photoURL || ""} alt="user" />
             <UserInfo>
               <UserName>{user?.displayName}</UserName>
@@ -91,6 +101,9 @@ const MobileDrawer = ({ isOpen, onClose, onFeedbackClick }: MobileDrawerProps) =
           <MessageSquare size={20} />
           <span>의견 보내기</span>
         </FeedbackNavRow>
+        <DrawerLegalLinks>
+          <LegalLinks onNavigate={handleClose} />
+        </DrawerLegalLinks>
       </DrawerContainer>
     </>,
     document.body

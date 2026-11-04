@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type Vi
 import { colors } from "../../../theme/colors";
 import { MIN_TOUCH_TARGET, radius } from "../../../theme/spacing";
 
-export type ButtonVariant = "primary" | "outline" | "text";
+export type ButtonVariant = "primary" | "outline" | "text" | "dangerText";
 
 interface ButtonProps {
   title: string;
@@ -40,7 +40,7 @@ export const Button = ({
         styles.base,
         variant === "primary" && styles.primary,
         variant === "outline" && styles.outline,
-        variant === "text" && styles.text,
+        (variant === "text" || variant === "dangerText") && styles.text,
         pressed && !isDisabled && variant === "primary" && styles.primaryPressed,
         pressed && !isDisabled && variant === "outline" && styles.outlinePressed,
         isDisabled && styles.disabled,
@@ -56,6 +56,7 @@ export const Button = ({
             variant === "primary" && styles.primaryLabel,
             variant === "outline" && styles.outlineLabel,
             variant === "text" && styles.textLabel,
+            variant === "dangerText" && [styles.textLabel, styles.dangerTextLabel],
           ]}
         >
           {title}
@@ -114,5 +115,8 @@ const styles = StyleSheet.create({
   },
   textLabel: {
     color: colors.brand.strong,
+  },
+  dangerTextLabel: {
+    color: colors.danger.text,
   },
 });

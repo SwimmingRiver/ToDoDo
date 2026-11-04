@@ -3,13 +3,14 @@ import Header from "@/layouts/header/header";
 import Footer from "@/layouts/footer/footer";
 import { Outlet } from "react-router-dom";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Container, Main } from "@/App.styles";
 import SNB from "@/layouts/snb/snb";
 import MobileDrawer from "@/layouts/snb/mobileDrawer";
 import MobileHeader from "@/layouts/mobileHeader/mobileHeader";
 import BottomTabBar from "@/layouts/bottomTabBar/bottomTabBar";
 import { BOTTOM_TAB_BAR_HEIGHT } from "@/layouts/bottomTabBar/bottomTabBar.styles";
+import { AccountDeletionDialog } from "@/features/account";
 import FeedbackForm from "@/features/feedback/components/feedbackForm";
 import styled from "styled-components";
 import { useMediaQuery } from "@/shared/hooks";
@@ -17,6 +18,8 @@ import { useMediaQuery } from "@/shared/hooks";
 // 모든 보호 라우트의 공통 경로라 여기 들어가는 건 전부 크리티컬 패스이므로,
 // 실제로 쓰는 훅만 직접 가져온다.
 import { useRunStartupMaintenance } from "@/features/todo/hooks";
+import { claimStartupMaintenance } from "@/features/todo/utils/startupMaintenanceGate";
+import { useAuth } from "@/features/auth/context/useAuth";
 import { useSyncTodosToCalendar } from "@/features/calendarIntegration/hooks";
 import { useReminderRefresh } from "@/features/reminders/hooks/useReminderRefresh";
 import { usePushTokenSync } from "@/features/reminders/hooks/usePushTokenSync";
@@ -29,6 +32,7 @@ const App = () => {
   const [isopen, setIsOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isDeletionOpen, setIsDeletionOpen] = useState(false);
   const isMobile = useMediaQuery("tablet");
   const runStartupMaintenance = useRunStartupMaintenance();
   useSyncTodosToCalendar();
@@ -37,17 +41,16 @@ const App = () => {
   useForegroundReminders();
   useNotificationClickNavigation();
   useEntitlementSync();
-  const hasRunMaintenanceRef = useRef(false);
+  const { user } = useAuth();
 
-  // 인증된 레이아웃(App) 마운트 시 1회. 세션 중 재마운트되어도 다시 실행되지 않도록
-  // ref로 막는다(라우트 이동으로는 App이 재마운트되지 않지만 방어적으로 둔다).
+  // 사용자별로 페이지 수명 동안 1회. App은 셸 밖 라우트(/terms 등)에 다녀오면 재마운트되므로
+  // useRef 대신 모듈 수준 가드로 막는다(StrictMode의 이중 실행도 같은 가드가 막는다).
   useEffect(() => {
-    if (!hasRunMaintenanceRef.current) {
-      hasRunMaintenanceRef.current = true;
+    if (user && claimStartupMaintenance(user.uid)) {
       runStartupMaintenance.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.uid]);
 
   return (
     <ReminderPromptProvider>
@@ -55,7 +58,10 @@ const App = () => {
         {isMobile ? (
           <MobileHeader onAvatarClick={() => setIsMobileMenuOpen(true)} />
         ) : (
-          <Header onMenuOpen={() => setIsMobileMenuOpen(true)} />
+          <Header
+            onMenuOpen={() => setIsMobileMenuOpen(true)}
+            onDeleteAccountClick={() => setIsDeletionOpen(true)}
+          />
         )}
         <ContentContainer>
           <SNB
@@ -72,6 +78,7 @@ const App = () => {
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
           onFeedbackClick={() => setIsFeedbackOpen(true)}
+          onDeleteAccountClick={() => setIsDeletionOpen(true)}
         />
         {/* MobileDrawer/SNB의 트리거는 각자 자리에 두되, 폼 상태는 여기(App)에서
             소유한다 — 드로어는 닫히면 서브트리 전체가 언마운트되므로 폼이 그
@@ -80,6 +87,9 @@ const App = () => {
           isOpen={isFeedbackOpen}
           onClose={() => setIsFeedbackOpen(false)}
         />
+        {/* 탈퇴 창도 같은 이유로 여기서 소유한다. 프로필 메뉴·드로어가 닫히거나 언마운트돼도
+            진행 중인 탈퇴 처리와 실패 안내가 사라지지 않아야 한다. */}
+        {isDeletionOpen && <AccountDeletionDialog onClose={() => setIsDeletionOpen(false)} />}
       </Container>
     </ReminderPromptProvider>
   );

@@ -12,7 +12,11 @@ interface ChildTodoCardProps {
   onOpenStatusSheet: (todo: Todo) => void;
   /** TodoDetailScreen으로 이동시킨다(연필 아이콘 = 상세/편집 진입점). */
   onEdit: (todo: Todo) => void;
-  onDelete: (id: string) => void;
+  /**
+   * 전달된 경우에만 휴지통을 보여준다. 목록 탭은 웹 좁은 화면과 같이 오탭 방지를 위해
+   * 넘기지 않고(삭제는 상세 화면에서), TodoDetailScreen의 하위 영역만 넘긴다.
+   */
+  onDelete?: (id: string) => void;
   /** 삭제 실패 시 카드 하단에 보여줄 에러 메시지 */
   error?: string;
 }
@@ -51,13 +55,15 @@ export const ChildTodoCard = ({ todo, onOpenStatusSheet, onEdit, onDelete, error
             accessibilityLabel="할 일 편집"
             onPress={() => onEdit(todo)}
           />
-          <IconButton
-            testID={`delete-child-${todo.id}`}
-            icon={Trash2}
-            variant="danger"
-            accessibilityLabel="할 일 삭제"
-            onPress={() => onDelete(todo.id)}
-          />
+          {onDelete && (
+            <IconButton
+              testID={`delete-child-${todo.id}`}
+              icon={Trash2}
+              variant="danger"
+              accessibilityLabel="할 일 삭제"
+              onPress={() => onDelete(todo.id)}
+            />
+          )}
         </View>
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
@@ -68,7 +74,8 @@ export const ChildTodoCard = ({ todo, onOpenStatusSheet, onEdit, onDelete, error
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    // 웹 ChildCardWrapper(09-16에 0.5→1px)와 같이 상태색 테두리가 잘 보이도록 1px.
+    borderWidth: 1,
     backgroundColor: colors.background.primary,
     overflow: "hidden",
   },

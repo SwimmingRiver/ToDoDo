@@ -5,6 +5,8 @@ import {
   LogoGroup,
   LogoMark,
   Logo,
+  HeaderNav,
+  PricingLink,
   LoginLink,
 } from "./landingHeader.styles";
 
@@ -17,9 +19,12 @@ const LandingHeader = () => {
         <LogoMark src={logo} alt="" />
         <Logo>ToDoDo</Logo>
       </LogoGroup>
-      <LoginLink type="button" onClick={() => navigate("/login")}>
-        로그인 →
-      </LoginLink>
+      <HeaderNav aria-label="랜딩 메뉴">
+        <PricingLink href="#pricing">요금제</PricingLink>
+        <LoginLink type="button" onClick={() => navigate("/login")}>
+          로그인 →
+        </LoginLink>
+      </HeaderNav>
     </HeaderContainer>
   );
 };

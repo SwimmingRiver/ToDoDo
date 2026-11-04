@@ -3,16 +3,24 @@ import { Repeat } from "lucide-react-native";
 import { colors } from "../../../theme/colors";
 import { radius } from "../../../theme/spacing";
 
+interface RecurrenceBadgeProps {
+  /** true면 아이콘만(스크린리더용 라벨 "반복 할 일"), false(기본)면 "반복" 텍스트 포함 */
+  compact?: boolean;
+}
+
 /**
  * 반복 할 일임을 나타내는 배지. 웹 shared/ui/recurrenceBadge/recurrenceBadge.tsx를
- * 그대로 포팅 — 항상 아이콘+"반복" 텍스트를 함께 보여준다(웹의 compact prop은 이번
- * TodoListScreen 재설계 범위에서 쓰이지 않아 이식하지 않았다).
+ * 그대로 포팅한다. compact는 오늘 탭 항목처럼 한 줄 공간이 좁은 곳에서 쓴다.
  */
-export const RecurrenceBadge = () => {
+export const RecurrenceBadge = ({ compact = false }: RecurrenceBadgeProps) => {
   return (
-    <View style={styles.badge}>
+    <View
+      style={styles.badge}
+      accessible={compact}
+      accessibilityLabel={compact ? "반복 할 일" : undefined}
+    >
       <Repeat size={12} color={colors.brand.strong} />
-      <Text style={styles.text}>반복</Text>
+      {!compact && <Text style={styles.text}>반복</Text>}
     </View>
   );
 };

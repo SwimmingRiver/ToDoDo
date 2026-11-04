@@ -1,4 +1,4 @@
-import { Sun, LayoutGrid, CalendarDays } from "lucide-react";
+import { Sun, LayoutGrid, CalendarDays, Bell } from "lucide-react";
 import FeatureCard from "./featureCard";
 import { Grid } from "./featureGrid.styles";
 
@@ -20,6 +20,12 @@ const FEATURES = [
     icon: CalendarDays,
     title: "캘린더",
     description: "마감일과 반복 일정을 한눈에 확인",
+    badgeLabel: LOGIN_REQUIRED_BADGE,
+  },
+  {
+    icon: Bell,
+    title: "마감 알림",
+    description: "마감 전에 푸시 알림으로 알려줘요",
     badgeLabel: LOGIN_REQUIRED_BADGE,
   },
 ] as const;

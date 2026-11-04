@@ -5,9 +5,6 @@ import type { Todo } from "@tododo/core";
 const mockUseTodos = jest.fn();
 jest.mock("../useTodos", () => ({ useTodos: () => mockUseTodos() }));
 
-const mockUpdateMutate = jest.fn();
-jest.mock("../useUpdateTodo", () => ({ useUpdateTodo: () => ({ mutate: mockUpdateMutate }) }));
-
 const makeTodo = (overrides: Partial<Todo>): Todo => ({
   id: "id",
   userId: "u1",
@@ -53,21 +50,6 @@ describe("useCalendarTodos", () => {
     const { result } = await renderHook(() => useCalendarTodos());
 
     expect(result.current.getTodosForDate("2026-06-20").map((t) => t.id)).toEqual(["a", "b"]);
-  });
-
-  it("toggleDone은 완료↔미완료 상태와 doneAt을 함께 갱신하도록 mutate를 호출한다", async () => {
-    mockUseTodos.mockReturnValue({ data: [], isLoading: false, isError: false });
-    const { useCalendarTodos } = await import("../useCalendarTodos");
-    const { result } = await renderHook(() => useCalendarTodos());
-
-    const todo = makeTodo({ id: "a", status: "todo", title: "제목" });
-    result.current.toggleDone(todo);
-
-    expect(mockUpdateMutate).toHaveBeenCalledWith({
-      id: "a",
-      fields: { status: "done", doneAt: expect.any(String) },
-      title: "제목",
-    });
   });
 
   it("isLoading/isError를 useTodos()에서 그대로 전달한다", async () => {

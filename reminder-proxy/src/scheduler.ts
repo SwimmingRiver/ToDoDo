@@ -6,6 +6,7 @@ import { FirestoreClient } from "./firestore";
 import { GoogleTokenProvider, parseServiceAccount } from "./googleAuth";
 import { SqliteReminderStore } from "./store";
 import { nextRefreshAlarm } from "./refreshAlarm";
+import { hasRefreshableTokens, registerTokenState, unregisterTokenState } from "./tokenRegistry";
 import { markSeen, readHistory, type HistoryResponse } from "./history";
 
 /**
@@ -22,20 +23,17 @@ export class ReminderScheduler extends DurableObject<Env> {
   }
 
   async registerToken(uid: string, token: string, platform: string): Promise<void> {
-    this.store.setMeta("uid", uid);
-    this.store.upsertToken(token, platform, Date.now());
+    registerTokenState(this.store, uid, token, platform, Date.now());
     await this.requestRefresh(uid);
   }
 
   async unregisterToken(uid: string, token: string): Promise<void> {
-    this.store.setMeta("uid", uid);
-    this.store.deleteToken(token);
+    unregisterTokenState(this.store, token);
   }
 
   async requestRefresh(uid: string): Promise<void> {
-    this.store.setMeta("uid", uid);
-    // 알림을 켠 기기가 없으면 알람조차 걸지 않는다(DO 쓰기·Firestore 읽기 0).
-    if (this.store.listTokens().length === 0) return;
+    // 알림을 켠 기기가 없으면 알람조차 걸지 않는다(DO 쓰기·Firestore 읽기 0). uid도 쓰지 않는다.
+    if (!hasRefreshableTokens(this.store, uid)) return;
     this.store.setMeta("refreshPending", "1");
     const next = nextRefreshAlarm(await this.ctx.storage.getAlarm(), Date.now());
     if (next !== null) await this.ctx.storage.setAlarm(next);
@@ -49,6 +47,12 @@ export class ReminderScheduler extends DurableObject<Env> {
   async markHistorySeen(uid: string, seenUntil: number): Promise<void> {
     this.store.setMeta("uid", uid);
     markSeen(this.store, seenUntil, Date.now());
+  }
+
+  /** 탈퇴. 알람을 먼저 끄고 비운다 — meta의 uid가 사라지므로 혹시 남은 알람이 돌아도 alarm()이 바로 끝난다. */
+  async deleteAccount(): Promise<void> {
+    await this.ctx.storage.deleteAlarm();
+    this.store.clearAll();
   }
 
   async alarm(): Promise<void> {

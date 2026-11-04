@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import ProtectedRoute from "@/features/auth/components/protectedRoute";
 import RootGate from "@/features/auth/components/rootGate";
 import CheckboxSkeleton from "@/shared/ui/skeleton/checkboxSkeleton";
@@ -33,6 +33,9 @@ const CalendarPage = lazy(
 const KanbanPage = lazy(() => import("@/features/kanban/pages/kanbanPage"));
 const InsightsPage = lazy(() => import("@/features/insights/pages/insightsPage"));
 const PremiumPage = lazy(() => import("@/features/billing/pages/premiumPage"));
+// 법적 페이지는 로그인 여부와 무관하게 열려야 한다(Paddle 심사자는 로그인하지 않는다).
+// 그래서 RootGate·ProtectedRoute 밖의 최상위 라우트로 둔다.
+const LegalPage = lazy(() => import("@/features/legal/pages/legalPage"));
 
 // 청크를 받는 동안 보여줄 것. fallback이 null인 곳은 ProtectedRoute/RootGate가
 // 인증 로딩 중 null을 반환하는 기존 컨벤션과 맞춘 것이다(깜빡임 방지).
@@ -40,7 +43,7 @@ const withSuspense = (element: ReactNode, fallback: ReactNode = null) => (
   <Suspense fallback={fallback}>{element}</Suspense>
 );
 
-export const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   {
     path: "/login",
     element: withSuspense(<LoginPage />),
@@ -53,6 +56,9 @@ export const router = createBrowserRouter([
     path: "/guest",
     element: withSuspense(<GuestTodayPage />),
   },
+  { path: "/terms", element: withSuspense(<LegalPage slug="terms" />) },
+  { path: "/privacy", element: withSuspense(<LegalPage slug="privacy" />) },
+  { path: "/refund", element: withSuspense(<LegalPage slug="refund" />) },
   {
     // Suspense가 2단인 이유: 바깥은 App 셸(헤더/SNB/푸터), 안쪽은 페이지 본문이다.
     // 셸 청크는 최초 1회만 받으므로 이후 라우트 이동에서는 안쪽 스켈레톤만 교체된다.
@@ -90,4 +96,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

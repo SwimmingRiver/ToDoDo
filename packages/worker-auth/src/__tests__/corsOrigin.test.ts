@@ -10,6 +10,12 @@ describe("isAllowedOrigin", () => {
   it("프로젝트의 firebaseapp.com 기본 도메인을 허용한다", () => {
     expect(isAllowedOrigin("https://tododo-test.firebaseapp.com", env)).toBe(true);
   });
+  it("CLIENT_APP_URL이 커스텀 도메인이어도 프로젝트의 web.app 기본 도메인을 허용한다", () => {
+    expect(isAllowedOrigin("https://tododo-test.web.app", env)).toBe(true);
+  });
+  it("다른 프로젝트의 web.app 도메인은 거부한다", () => {
+    expect(isAllowedOrigin("https://other-project.web.app", env)).toBe(false);
+  });
   it("localhost·127.0.0.1은 포트와 무관하게 허용한다", () => {
     expect(isAllowedOrigin("http://localhost:5174", env)).toBe(true);
     expect(isAllowedOrigin("http://127.0.0.1:3000", env)).toBe(true);

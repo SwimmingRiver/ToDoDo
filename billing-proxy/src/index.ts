@@ -1,3 +1,4 @@
+import { AccountDataStore } from "./accountDataStore";
 import { ClaimsClient } from "./claims";
 import { EntitlementStore } from "./entitlementStore";
 import type { Env } from "./env";
@@ -16,6 +17,7 @@ const getDeps = (env: Env): BillingDeps => {
     store: new EntitlementStore(env.FIREBASE_PROJECT_ID, getToken),
     claims: new ClaimsClient(env.FIREBASE_PROJECT_ID, getToken),
     paddle: new PaddleClient(env.PADDLE_API_BASE, env.PADDLE_API_KEY, env.PADDLE_PRICE_ID, env.BILLING_UID_SECRET),
+    accountData: new AccountDataStore(env.FIREBASE_PROJECT_ID, getToken),
   };
   cached = { env, deps };
   return deps;
