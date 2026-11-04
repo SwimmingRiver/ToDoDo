@@ -1,29 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { describe, it, expect, jest } from "@jest/globals";
-import { toDateKeyFromISO } from "@tododo/core";
 import { RecurrenceSection } from "../RecurrenceSection";
-
-// core 루트(dist)는 todoApi가 @babel/runtime을 못 찾아 jest에서 로드 실패한다(알려진 문제).
-// 전역 jest 설정은 건드리지 않고 이 테스트만 core src의 순수 모듈로 우회한다.
-jest.mock(
-  "@babel/runtime/helpers/interopRequireDefault",
-  () => require("../../../../../node_modules/@babel/runtime/helpers/interopRequireDefault"),
-  { virtual: true },
-);
-jest.mock(
-  "@babel/runtime/helpers/slicedToArray",
-  () => require("../../../../../node_modules/@babel/runtime/helpers/slicedToArray"),
-  { virtual: true },
-);
-jest.mock(
-  "@babel/runtime/helpers/toConsumableArray",
-  () => require("../../../../../node_modules/@babel/runtime/helpers/toConsumableArray"),
-  { virtual: true },
-);
-jest.mock("@tododo/core", () => ({
-  ...(jest.requireActual("../../../../../../packages/core/src/recurring/recurrenceForm") as object),
-  ...(jest.requireActual("../../../../../../packages/core/src/insights/date") as object),
-}));
 
 const START = new Date(2026, 10, 2, 9).toISOString();
 
@@ -53,7 +30,9 @@ describe("RecurrenceSection", () => {
       <RecurrenceSection disabled disabledReason="noStartAt" startAt={null} dueAt={null} value={null} onChange={onChange} />,
     );
     expect(screen.getByText("반복 설정은 시작일시를 입력해야 사용할 수 있습니다")).toBeTruthy();
-    await fireEvent(screen.getByRole("switch"), "valueChange", true);
+    const sw = screen.getByRole("switch");
+    expect(sw.props.disabled || sw.props.accessibilityState?.disabled).toBeTruthy();
+    await fireEvent(sw, "valueChange", true);
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -121,16 +100,14 @@ describe("RecurrenceSection", () => {
     expect(screen.getByText("마감일시가 없으면 무기한으로 반복됩니다")).toBeTruthy();
   });
 
-  it("dueAt은 로컬 날짜 키로 표시된다", async () => {
-    const dueAt = "2026-11-05T15:30:00.000Z";
+  it("dueAt은 로컬(KST) 날짜로 표시된다 — UTC 날짜(11-05)가 아니다", async () => {
+    // TZ가 Asia/Seoul로 고정돼 있는지 확인(split("T")[0] 버그와 구분되기 위한 전제)
+    expect(new Date("2026-11-05T15:30:00.000Z").getDate()).toBe(6);
     await render(
-      <RecurrenceSection disabled={false} startAt={START} dueAt={dueAt} value={{ type: "daily" }} onChange={jest.fn()} />,
+      <RecurrenceSection disabled={false} startAt={START} dueAt="2026-11-05T15:30:00.000Z" value={{ type: "daily" }} onChange={jest.fn()} />,
     );
-    const d = new Date(dueAt);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    expect(toDateKeyFromISO(dueAt)).toBe(key);
-    expect(screen.getByText(`${key}까지 반복됩니다`)).toBeTruthy();
+    expect(screen.getByText("2026-11-06까지 반복됩니다")).toBeTruthy();
+    expect(screen.queryByText("2026-11-05까지 반복됩니다")).toBeNull();
   });
 
   it("마감이 시작보다 이르면 범위 에러가 보인다", async () => {
