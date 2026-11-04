@@ -1,9 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { setupUser } from "@/test/setupUser";
 import { PREMIUM_BENEFITS, PREMIUM_MONTHLY_PRICE_LABEL } from "@/features/billing/config";
 import PricingSection from "../pricingSection";
+
+const billing = vi.hoisted(() => ({ enabled: true }));
+vi.mock("@/features/billing/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/billing/config")>();
+  return {
+    ...actual,
+    get BILLING_ENABLED() {
+      return billing.enabled;
+    },
+  };
+});
 
 const renderSection = () =>
   render(
@@ -16,6 +27,10 @@ const renderSection = () =>
   );
 
 describe("PricingSection", () => {
+  beforeEach(() => {
+    billing.enabled = true;
+  });
+
   it("#pricing 앵커를 가진다", () => {
     const { container } = renderSection();
     expect(container.querySelector("section#pricing")).not.toBeNull();
@@ -44,6 +59,37 @@ describe("PricingSection", () => {
     renderSection();
     await user.click(screen.getByRole("button", { name }));
     expect(screen.getByText("로그인 화면")).toBeInTheDocument();
+  });
+
+  describe("결제가 아직 열리지 않았을 때(BILLING_ENABLED=false)", () => {
+    beforeEach(() => {
+      billing.enabled = false;
+    });
+
+    it("가격·혜택은 그대로 보여준다(Paddle 심사 요건)", () => {
+      renderSection();
+      const premium = screen.getByRole("article", { name: "프리미엄" });
+      expect(within(premium).getByText(PREMIUM_MONTHLY_PRICE_LABEL)).toBeInTheDocument();
+      for (const { title } of PREMIUM_BENEFITS) {
+        expect(within(premium).getByText(title)).toBeInTheDocument();
+      }
+    });
+
+    it("프리미엄 버튼은 '곧 출시'로 비활성화되고 체험 안내 대신 준비 중 안내를 보여준다", () => {
+      renderSection();
+      const premium = screen.getByRole("article", { name: "프리미엄" });
+      expect(within(premium).getByRole("button", { name: "곧 출시" })).toBeDisabled();
+      expect(within(premium).queryByRole("button", { name: "7일 무료 체험 시작하기" })).toBeNull();
+      expect(within(premium).queryByText("카드 등록 없이 · 계정당 1회")).toBeNull();
+      expect(within(premium).getByText("결제 준비가 끝나면 바로 열려요")).toBeInTheDocument();
+    });
+
+    it("무료로 시작하기 버튼은 여전히 /login으로 간다", async () => {
+      const user = setupUser();
+      renderSection();
+      await user.click(screen.getByRole("button", { name: "무료로 시작하기" }));
+      expect(screen.getByText("로그인 화면")).toBeInTheDocument();
+    });
   });
 
   it("환불 정책 링크와 Paddle 안내가 있다", () => {
