@@ -77,7 +77,8 @@ const createRecurringTodoImpl = async (db, userId, todo, horizonEnd) => {
  *
  * recurrence를 null로 바꿔 반복을 끄는 저장도 동일한 3단 분기를 따른다: done/doing/overdue는
  * 그대로 두고, 미래 "todo" 인스턴스만 재생성 없이 완전히 삭제한다(문서 자체가 사라지므로
- * recurrenceId도 함께 사라진다).
+ * recurrenceId도 함께 사라진다). 단, 지금 수정 중인 회차는(done이 아니면) 삭제하지 않고
+ * 수정 내용을 반영한 뒤 recurrence/recurrenceId를 null로 끊어 일반 할 일로 남긴다.
  */
 export const editRecurringSeries = (db, userId, seriesTodo, horizonEnd = getDefaultHorizonEnd()) => withRecurringSeriesLock(() => editRecurringSeriesImpl(db, userId, seriesTodo, horizonEnd));
 const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
@@ -94,9 +95,16 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
     const seriesSnapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId), where("recurrenceId", "==", recurrenceId)));
     const seriesTodos = seriesSnapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
     const batch = writeBatch(db);
+    const editedOriginal = seriesTodos.find((t) => t.id === seriesTodo.id);
+    // 반복 OFF 전환이면 지금 수정 중인 회차(완료된 회차 제외)는 시리즈를 떠나 일반 할 일로
+    // 남긴다. 그러지 않으면 수정 중인 회차가 오늘/미래 todo일 때 아래 toDelete에 함께 들어가,
+    // 사용자 입장에서는 반복을 껐을 뿐인데 할 일이 통째로 사라진다.
+    const keepEditedAsStandalone = !seriesTodo.recurrence && !!editedOriginal && editedOriginal.status !== "done";
     // done/doing/overdue(todo && dueAt < 오늘) 인스턴스는 삭제 대상에서 제외(그대로 보존).
     // todo && dueAt >= 오늘 인 미래 인스턴스만 삭제 대상.
     const toDelete = seriesTodos.filter((t) => {
+        if (keepEditedAsStandalone && t.id === seriesTodo.id)
+            return false;
         if (t.status === "done" || t.status === "doing")
             return false;
         if (!t.dueAt)
@@ -120,13 +128,27 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
     // 방금 입력한 수정 내용(제목/설명/마감일 등)이 반영될 곳이 없다. 이 문서만 예외적으로
     // 직접 갱신한다. status/doneAt은 원본을 그대로 유지해 진행 상태를 잃지 않는다.
     // done 인스턴스(이미 완료된 과거 기록)는 대상에서 제외 — 완료된 회차는 그대로 보존한다.
-    const editedOriginal = seriesTodos.find((t) => t.id === seriesTodo.id);
-    const editedIsPreserved = !!editedOriginal &&
+    const editedIsPreserved = !keepEditedAsStandalone &&
+        !!editedOriginal &&
         (editedOriginal.status === "doing" ||
             (editedOriginal.status === "todo" &&
                 !!editedOriginal.dueAt &&
                 new Date(editedOriginal.dueAt).getTime() < todayStart.getTime()));
-    if (editedIsPreserved) {
+    if (keepEditedAsStandalone) {
+        // 보존 회차 직접 갱신과 같은 필드 처리(진행 상태 status/doneAt은 원본 유지)에 더해
+        // recurrence/recurrenceId를 끊어 일반 할 일로 만든다. 시리즈를 떠난 문서이고 재생성도
+        // 없으므로, 보존된 형제 회차와 같은 날짜가 되어도 "같은 시리즈의 중복 회차"가 아니다 —
+        // 그래서 아래 날짜 충돌 검사는 적용하지 않는다.
+        const { id: _editedId, recurrenceId: _editedRid, status: _s, doneAt: _d, userId: _uid, ...editableRest } = seriesTodo;
+        batch.update(doc(db, "todos", seriesTodo.id), {
+            ...editableRest,
+            recurrence: null,
+            recurrenceId: null,
+            userId,
+            updatedAt: now,
+        });
+    }
+    else if (editedIsPreserved) {
         if (seriesTodo.dueAt) {
             // 다른 보존된(done/doing/overdue) 형제 인스턴스가 이미 점유한 날짜로 마감일을
             // 옮기면, 그 문서와 지금 갱신하는 문서가 같은 날짜에 공존해 캘린더 중복이
@@ -187,7 +209,7 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
         });
     }
     // newRecurrence === null: 반복 OFF 전환. 미래 인스턴스는 위 toDelete에서 이미 삭제
-    // 대상에 포함되었고, 재생성하지 않는다.
+    // 대상에 포함되었고(수정 중인 회차는 일반 할 일로 남김), 재생성하지 않는다.
     await batch.commit();
 };
 /**

@@ -34,7 +34,8 @@ export declare const createRecurringTodo: (db: Firestore, userId: string, todo: 
  *
  * recurrence를 null로 바꿔 반복을 끄는 저장도 동일한 3단 분기를 따른다: done/doing/overdue는
  * 그대로 두고, 미래 "todo" 인스턴스만 재생성 없이 완전히 삭제한다(문서 자체가 사라지므로
- * recurrenceId도 함께 사라진다).
+ * recurrenceId도 함께 사라진다). 단, 지금 수정 중인 회차는(done이 아니면) 삭제하지 않고
+ * 수정 내용을 반영한 뒤 recurrence/recurrenceId를 null로 끊어 일반 할 일로 남긴다.
  */
 export declare const editRecurringSeries: (db: Firestore, userId: string, seriesTodo: RecurringTodoInput & {
     id: string;
