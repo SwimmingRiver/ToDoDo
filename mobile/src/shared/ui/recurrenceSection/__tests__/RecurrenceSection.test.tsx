@@ -21,8 +21,8 @@ jest.mock(
   { virtual: true },
 );
 jest.mock("@tododo/core", () => ({
-  ...jest.requireActual("../../../../../../packages/core/src/recurring/recurrenceForm"),
-  ...jest.requireActual("../../../../../../packages/core/src/insights/date"),
+  ...(jest.requireActual("../../../../../../packages/core/src/recurring/recurrenceForm") as object),
+  ...(jest.requireActual("../../../../../../packages/core/src/insights/date") as object),
 }));
 
 const START = new Date(2026, 10, 2, 9).toISOString();
