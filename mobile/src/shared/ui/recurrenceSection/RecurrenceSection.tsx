@@ -5,6 +5,7 @@ import {
   getRecurrenceValidationError,
   toDateKeyFromISO,
   type RecurrenceFormValue,
+  type RecurrenceRule,
 } from "@tododo/core";
 import { colors } from "../../../theme/colors";
 import { MIN_TOUCH_TARGET, radius, spacing } from "../../../theme/spacing";
@@ -20,6 +21,12 @@ interface RecurrenceSectionProps {
   /** null = 반복 OFF */
   value: RecurrenceFormValue | null;
   onChange: (value: RecurrenceFormValue | null) => void;
+  /**
+   * 이미 반복 중인 시리즈를 수정할 때의 기존 규칙(웹 RecurrenceFields와 동일). 이때 dueAt은
+   * 시리즈 종료일이 아니라 수정 중인 회차의 날짜라, 범위 안내는 기존 규칙의 종료 조건으로
+   * 보여주고 범위 에러는 띄우지 않는다(저장 시에도 종료 조건은 기존 규칙에서 유지된다).
+   */
+  existingRule?: RecurrenceRule | null;
 }
 
 const TYPE_OPTIONS: { value: RecurrenceFormValue["type"]; label: string }[] = [
@@ -36,12 +43,23 @@ export const RecurrenceSection = ({
   dueAt,
   value,
   onChange,
+  existingRule,
 }: RecurrenceSectionProps) => {
   const checked = value !== null;
   const weekdayError = value?.type === "weekly" && (value.weekdays?.length ?? 0) === 0;
   const validationError = getRecurrenceValidationError(value, startAt, dueAt);
   const rangeError =
-    validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
+    !existingRule && validationError && validationError !== WEEKDAY_REQUIRED_ERROR
+      ? validationError
+      : null;
+
+  const rangeText = existingRule
+    ? existingRule.endType === "untilDate" && existingRule.endDate
+      ? `${existingRule.endDate}까지 반복됩니다`
+      : "무기한으로 반복됩니다"
+    : dueAt
+      ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
+      : "마감일시가 없으면 무기한으로 반복됩니다";
 
   const handleToggle = (next: boolean) => {
     if (disabled) return;
@@ -166,11 +184,7 @@ export const RecurrenceSection = ({
           <View style={styles.group}>
             <Text style={styles.groupLabel}>반복 범위</Text>
             <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
-                {dueAt
-                  ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
-                  : "마감일시가 없으면 무기한으로 반복됩니다"}
-              </Text>
+              <Text style={styles.infoText}>{rangeText}</Text>
             </View>
             {rangeError && (
               <Text style={styles.errorText} accessibilityRole="alert">

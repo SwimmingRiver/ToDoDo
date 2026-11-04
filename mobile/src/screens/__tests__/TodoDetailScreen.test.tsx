@@ -343,9 +343,17 @@ describe("TodoDetailScreen", () => {
   describe("반복", () => {
     type AlertButton = { text: string; style?: string; onPress?: () => unknown };
     const START_AT = "2026-11-10T01:00:00.000Z";
+    // 실제 반복 인스턴스처럼 dueAt은 그 회차 날짜(시작과 같은 날, KST 기준)다.
+    const OCCURRENCE_DUE_AT = "2026-11-10T09:00:00.000Z";
     const DAILY = { type: "daily", endType: "indefinite", endDate: null };
     const recurringRoot = (overrides: Record<string, unknown> = {}) =>
-      rootTodo({ recurrenceId: "series-1", recurrence: DAILY, startAt: START_AT, ...overrides });
+      rootTodo({
+        recurrenceId: "series-1",
+        recurrence: DAILY,
+        startAt: START_AT,
+        dueAt: OCCURRENCE_DUE_AT,
+        ...overrides,
+      });
     const spyAlert = () => {
       const { Alert } = require("react-native");
       return jest.spyOn(Alert, "alert").mockImplementation(() => {}) as unknown as jest.Mock;
@@ -380,11 +388,40 @@ describe("TodoDetailScreen", () => {
           id: "root-1",
           title: "바뀐 제목",
           recurrenceId: "series-1",
+          dueAt: OCCURRENCE_DUE_AT,
           recurrence: DAILY,
         }),
       );
+      // 회차의 dueAt이 시리즈 종료일(untilDate)로 바뀌어 무기한 시리즈가 잘리면 안 된다.
+      expect(
+        (mockEditSeries.mock.calls[0][0] as { recurrence: { endType: string } }).recurrence.endType,
+      ).toBe("indefinite");
       expect(mockUpdateTodoMutateAsync).not.toHaveBeenCalled();
       expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("종료일이 있는 시리즈를 수정하면 회차 날짜가 아니라 기존 종료일을 유지한다", async () => {
+      const alertSpy = spyAlert();
+      const UNTIL = { type: "daily", endType: "untilDate", endDate: "2026-12-31" };
+      mockUseTodos.mockReturnValue({ data: [recurringRoot({ recurrence: UNTIL })] });
+      mockEditSeries.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText("반복 주기 매주"));
+      await fireEvent.press(screen.getByLabelText("화요일"));
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await act(async () => {
+        await apply?.onPress?.();
+      });
+
+      expect(mockEditSeries).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recurrence: { type: "weekly", endType: "untilDate", endDate: "2026-12-31", weekdays: [2] },
+        }),
+      );
     });
 
     it("시리즈 수정 확인에서 취소하면 아무 mutation도 호출하지 않는다", async () => {

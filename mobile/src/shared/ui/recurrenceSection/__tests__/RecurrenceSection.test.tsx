@@ -117,4 +117,67 @@ describe("RecurrenceSection", () => {
     );
     expect(screen.getByText("마감일은 시작일과 같거나 이후여야 합니다")).toBeTruthy();
   });
+
+  describe("existingRule (이미 반복 중인 시리즈 수정)", () => {
+    it("기존 규칙이 untilDate면 dueAt(회차 날짜)이 아니라 기존 종료일을 안내한다", async () => {
+      const dueAt = new Date(2026, 10, 2, 18).toISOString();
+      await render(
+        <RecurrenceSection
+          disabled={false}
+          startAt={START}
+          dueAt={dueAt}
+          value={{ type: "daily" }}
+          onChange={jest.fn()}
+          existingRule={{ type: "daily", endType: "untilDate", endDate: "2026-12-31" }}
+        />,
+      );
+      expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeTruthy();
+      expect(screen.queryByText("2026-11-02까지 반복됩니다")).toBeNull();
+    });
+
+    it("기존 규칙이 무기한이면 dueAt이 있어도 무기한으로 안내한다", async () => {
+      const dueAt = new Date(2026, 10, 2, 18).toISOString();
+      await render(
+        <RecurrenceSection
+          disabled={false}
+          startAt={START}
+          dueAt={dueAt}
+          value={{ type: "daily" }}
+          onChange={jest.fn()}
+          existingRule={{ type: "daily", endType: "indefinite", endDate: null }}
+        />,
+      );
+      expect(screen.getByText("무기한으로 반복됩니다")).toBeTruthy();
+      expect(screen.queryByText("2026-11-02까지 반복됩니다")).toBeNull();
+    });
+
+    it("마감이 시작보다 일러도 범위 에러를 띄우지 않는다", async () => {
+      const dueAt = new Date(2026, 10, 1, 9).toISOString();
+      await render(
+        <RecurrenceSection
+          disabled={false}
+          startAt={START}
+          dueAt={dueAt}
+          value={{ type: "daily" }}
+          onChange={jest.fn()}
+          existingRule={{ type: "daily", endType: "indefinite", endDate: null }}
+        />,
+      );
+      expect(screen.queryByText("마감일은 시작일과 같거나 이후여야 합니다")).toBeNull();
+    });
+
+    it("요일 미선택 에러는 그대로 보인다", async () => {
+      await render(
+        <RecurrenceSection
+          disabled={false}
+          startAt={START}
+          dueAt={null}
+          value={{ type: "weekly", weekdays: [] }}
+          onChange={jest.fn()}
+          existingRule={{ type: "weekly", endType: "indefinite", endDate: null, weekdays: [1] }}
+        />,
+      );
+      expect(screen.getByText("요일을 하나 이상 선택해주세요")).toBeTruthy();
+    });
+  });
 });
