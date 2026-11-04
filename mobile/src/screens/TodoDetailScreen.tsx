@@ -405,8 +405,9 @@ export const TodoDetailScreen = () => {
             <View style={styles.subtaskSection}>
               <View style={styles.subtaskHeader}>
                 <Text style={styles.label}>하위 할 일 {childTodos.length}개</Text>
-                {/* 반복 할 일은 하위 할 일을 가질 수 없다 (웹과 동일) */}
-                {todo.recurrenceId == null && (
+                {/* 반복 할 일은 하위 할 일을 가질 수 없다. 웹과 같이 recurrenceId가 아니라
+                    현재 반복 규칙(recurrence) 유무로 판단한다. */}
+                {todo.recurrence == null && (
                   <Button
                     title="+ 하위 할 일 추가"
                     onPress={handleAddChild}

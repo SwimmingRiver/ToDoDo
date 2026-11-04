@@ -641,6 +641,15 @@ describe("TodoDetailScreen", () => {
       expect(screen.queryByLabelText("하위 할 일 추가")).toBeNull();
     });
 
+    it("반복이 꺼진 옛 시리즈 회차(recurrenceId만 있고 recurrence 없음)에는 웹처럼 하위 할 일 추가 버튼이 보인다", async () => {
+      mockUseTodos.mockReturnValue({ data: [recurringRoot({ recurrence: null })] });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.getByLabelText("하위 할 일 추가")).toBeTruthy();
+    });
+
     it("반복 할 일을 열면 반복 스위치가 켜진 상태로 채워진다", async () => {
       mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
 
