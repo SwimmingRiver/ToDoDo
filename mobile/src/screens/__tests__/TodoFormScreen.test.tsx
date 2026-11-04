@@ -6,6 +6,42 @@ jest.mock("../../hooks/useCreateTodo", () => ({
   useCreateTodo: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
 }));
 
+const mockCreateRecurring = jest.fn<(input: unknown) => Promise<unknown[]>>();
+// 실제 useMutation처럼 mutateAsync 호출 시 isPending이 true로 바뀌어 리렌더되게 한다.
+jest.mock("../../hooks/useCreateRecurringTodo", () => {
+  const { useState } = require("react");
+  return {
+    useCreateRecurringTodo: () => {
+      const [isPending, setPending] = useState(false);
+      return {
+        mutateAsync: (input: unknown) => {
+          setPending(true);
+          return mockCreateRecurring(input);
+        },
+        isPending,
+      };
+    },
+  };
+});
+
+// 네이티브 피커 대신 값을 즉시 설정/해제하는 스텁 (startAt 제어용)
+jest.mock("../../shared/ui/dateTimeField/DateTimeField", () => {
+  const { Pressable, Text } = require("react-native");
+  return {
+    DateTimeField: ({ label, onChange }: { label: string; onChange: (v: string | null) => void }) => (
+      <>
+        <Text>{label}</Text>
+        <Pressable onPress={() => onChange("2026-11-10T01:00:00.000Z")}>
+          <Text>{`${label} 설정`}</Text>
+        </Pressable>
+        <Pressable onPress={() => onChange(null)}>
+          <Text>{`${label} 해제`}</Text>
+        </Pressable>
+      </>
+    ),
+  };
+});
+
 const mockUseTodos = jest.fn();
 jest.mock("../../hooks/useTodos", () => ({
   useTodos: () => mockUseTodos(),
@@ -21,6 +57,7 @@ jest.mock("@react-navigation/native", () => ({
 describe("TodoFormScreen", () => {
   beforeEach(() => {
     mockMutateAsync.mockReset();
+    mockCreateRecurring.mockReset();
     mockGoBack.mockReset();
     mockUseTodos.mockReturnValue({ data: [] });
     mockRouteParams = undefined;
@@ -137,5 +174,84 @@ describe("TodoFormScreen", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ dueAt: "2026-06-18T00:00:00.000Z" }),
     );
+  });
+
+  describe("반복 설정", () => {
+    const openAndSetStart = async () => {
+      const { TodoFormScreen } = await import("../TodoFormScreen");
+      await render(<TodoFormScreen />);
+      await fireEvent.changeText(screen.getByPlaceholderText("할 일 제목"), "반복 할 일");
+      await screen.findByDisplayValue("반복 할 일");
+      await fireEvent.press(screen.getByText("더보기"));
+      await fireEvent.press(screen.getByText("시작일시 설정"));
+    };
+    const toggleRecurrence = async () => {
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", true);
+    };
+
+    it("parentId가 있으면 반복 섹션을 렌더링하지 않는다", async () => {
+      mockRouteParams = { parentId: "root-1" };
+      const { TodoFormScreen } = await import("../TodoFormScreen");
+      await render(<TodoFormScreen />);
+      await fireEvent.press(screen.getByText("더보기"));
+
+      expect(screen.queryByText("이 할 일을 반복합니다")).toBeNull();
+    });
+
+    it("시작일시를 정하고 반복을 켜서 저장하면 createRecurringTodo만 호출한다", async () => {
+      mockCreateRecurring.mockResolvedValue([]);
+      await openAndSetStart();
+      await toggleRecurrence();
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockCreateRecurring).toHaveBeenCalledTimes(1);
+      expect(mockCreateRecurring).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "반복 할 일",
+          startAt: "2026-11-10T01:00:00.000Z",
+          parentId: null,
+          recurrence: { type: "daily", endType: "indefinite", endDate: null },
+        }),
+      );
+      expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("반복을 켠 뒤 시작일시를 지우면 일반 createTodo 경로로 저장한다", async () => {
+      mockMutateAsync.mockResolvedValue("id");
+      await openAndSetStart();
+      await toggleRecurrence();
+      await fireEvent.press(screen.getByText("시작일시 해제"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+      expect(mockCreateRecurring).not.toHaveBeenCalled();
+    });
+
+    it("매주 반복에 요일이 없으면 에러를 보여 주고 아무 mutation도 호출하지 않는다", async () => {
+      await openAndSetStart();
+      await toggleRecurrence();
+      await fireEvent.press(screen.getByLabelText("반복 주기 매주"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect((await screen.findAllByText("요일을 하나 이상 선택해주세요")).length).toBeGreaterThan(0);
+      expect(mockCreateRecurring).not.toHaveBeenCalled();
+      expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("반복 저장 중에는 저장을 두 번 눌러도 한 번만 호출한다", async () => {
+      mockCreateRecurring.mockReturnValue(new Promise(() => {}));
+      await openAndSetStart();
+      await toggleRecurrence();
+      // 끝나지 않는 mutation을 시작하는 press는 handler 완료를 기다리면 멈추므로
+      // act 안에서 시작만 하고 pending 리렌더가 반영된 뒤 두 번째 press를 보낸다.
+      await act(async () => {
+        void fireEvent.press(screen.getByText("추가"));
+      });
+      await act(async () => {
+        void fireEvent.press(screen.getByLabelText("추가 중..."));
+      });
+
+      expect(mockCreateRecurring).toHaveBeenCalledTimes(1);
+    });
   });
 });

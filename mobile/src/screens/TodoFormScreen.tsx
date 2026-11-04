@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { TodoListStackParamList } from "../navigation/types";
+import { getRecurrenceValidationError, toRecurrenceRule, type RecurrenceFormValue } from "@tododo/core";
 import { useCreateTodo } from "../hooks/useCreateTodo";
+import { useCreateRecurringTodo } from "../hooks/useCreateRecurringTodo";
 import { useTodos } from "../hooks/useTodos";
 import { Button } from "../shared/ui/button/Button";
 import { PriorityChips, type Priority } from "../shared/ui/priorityChips/PriorityChips";
 import { DateTimeField } from "../shared/ui/dateTimeField/DateTimeField";
+import { RecurrenceSection } from "../shared/ui/recurrenceSection/RecurrenceSection";
 import { getTodoDateValidationError } from "../shared/utils/todoDateValidation";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
@@ -25,15 +28,31 @@ export const TodoFormScreen = () => {
   // dueAt이 프리필된 경우(TodayScreen에서 날짜를 선택하고 넘어온 경우) 사용자가
   // "더보기"를 눌러야만 보이는 문제를 막기 위해 처음부터 펼쳐서 보여준다.
   const [showMore, setShowMore] = useState(!!route.params?.dueAt);
-  const { mutateAsync, isPending } = useCreateTodo();
+  const [recurrenceValue, setRecurrenceValue] = useState<RecurrenceFormValue | null>(null);
+  const { mutateAsync, isPending: isCreatePending } = useCreateTodo();
+  const { mutateAsync: createRecurringTodo, isPending: isRecurringPending } = useCreateRecurringTodo();
+  const isPending = isCreatePending || isRecurringPending;
   const { data: todos } = useTodos();
 
   const dateValidationError = getTodoDateValidationError(startAt, dueAt);
 
+  // 시작일시가 지워지면 반복은 의미가 없으므로 끈다 (웹 todoForm과 동일)
+  useEffect(() => {
+    if (!startAt) setRecurrenceValue(null);
+  }, [startAt]);
+
   const handleSubmit = async () => {
+    if (isPending) return;
     if (!title.trim()) return;
     if (dateValidationError) {
       setError(dateValidationError);
+      setShowMore(true);
+      return;
+    }
+
+    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt, dueAt);
+    if (recurrenceError) {
+      setError(recurrenceError);
       setShowMore(true);
       return;
     }
@@ -44,6 +63,20 @@ export const TodoFormScreen = () => {
         .filter((todo) => todo.parentId === parentId)
         .map((todo) => todo.order);
       const nextOrder = Math.max(-1, ...siblingOrders) + 1;
+      if (recurrenceValue) {
+        await createRecurringTodo({
+          title,
+          description,
+          priority,
+          startAt,
+          dueAt,
+          parentId: null,
+          order: nextOrder,
+          recurrence: toRecurrenceRule(recurrenceValue, dueAt),
+        });
+        navigation.goBack();
+        return;
+      }
       await mutateAsync({
         title,
         description,
@@ -98,6 +131,16 @@ export const TodoFormScreen = () => {
               <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
               <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />
               {dateValidationError && <Text style={styles.fieldError}>{dateValidationError}</Text>}
+              {!parentId && (
+                <RecurrenceSection
+                  disabled={!startAt}
+                  disabledReason="noStartAt"
+                  startAt={startAt}
+                  dueAt={dueAt}
+                  value={recurrenceValue}
+                  onChange={setRecurrenceValue}
+                />
+              )}
             </View>
           )}
 
