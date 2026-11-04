@@ -5,16 +5,17 @@ module.exports = {
   preset: "jest-expo",
   setupFiles: ["<rootDir>/jest.setup.js"],
   // jest-expo(@react-native/jest-preset)는 customExportConditions에 "react-native"를
-  // 포함시킨다. lucide-react-native의 package.json exports는 "react-native" 조건을
-  // ESM(.mjs) 번들로 매핑해 두어서, 테스트 환경에서 그대로 두면
-  // "Unexpected token 'export'" 파싱 에러가 난다. CJS 번들로 직접 리다이렉트한다.
+  // 포함시킨다. 일부 패키지는 이 조건을 ESM(.mjs) 번들로 매핑해 두어서, 그대로 두면
+  // "Unexpected token 'export'" 파싱 에러가 난다. 아래에서 개별로 우회한다.
   moduleNameMapper: {
-    // @tododo/core(심볼릭 링크된 packages/core)의 babel 변환 결과가 요구하는
-    // @babel/runtime 헬퍼를 mobile의 node_modules에서 찾도록 한다.
     // @tododo/core 루트는 todoApi가 firebase/firestore를 import한다. 순수 로직만 쓰는
     // 테스트에서 firestore ESM(.mjs)을 변환하지 않도록 빈 스텁으로 치환한다.
     "^firebase/firestore$": "<rootDir>/jest.firestoreStub.js",
+    // @tododo/core(심볼릭 링크된 packages/core)의 babel 변환 결과가 요구하는
+    // @babel/runtime 헬퍼를 mobile의 node_modules에서 찾도록 한다.
     "^@babel/runtime/(.*)$": "<rootDir>/node_modules/@babel/runtime/$1",
+    // lucide-react-native의 exports는 "react-native" 조건을 ESM(.mjs)으로 매핑해
+    // 위 파싱 에러가 나므로 CJS 번들로 직접 리다이렉트한다.
     "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js",
   },
   // react-native-calendars는 package.json의 main이 "src/index.ts"라 미컴파일 TS
