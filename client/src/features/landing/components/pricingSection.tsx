@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { PREMIUM_BENEFITS, PREMIUM_MONTHLY_PRICE_LABEL } from "@/features/billing/config";
+import { BILLING_ENABLED, PREMIUM_BENEFITS, PREMIUM_MONTHLY_PRICE_LABEL } from "@/features/billing/config";
 import {
   FeatureDescription,
   FeatureItem,
@@ -25,6 +25,8 @@ const FREE_FEATURES = ["Today·목록·칸반·캘린더", "반복 할 일", "�
  * 비로그인 방문자에게 무료/프리미엄 차이와 가격을 보여준다. Paddle 도메인 심사는 로그인 없이
  * 가격을 볼 수 있어야 통과하므로 BILLING_ENABLED와 무관하게 항상 렌더한다. 버튼은 결제로
  * 바로 이어지지 않고 로그인으로 보낸다(체험·결제는 로그인 후 /premium에서).
+ * 결제가 아직 열리지 않은 빌드(BILLING_ENABLED=false)에서는 로그인해도 체험·결제 진입점이 없으므로,
+ * 프리미엄 버튼만 "곧 출시"로 비활성화한다. 가격·혜택 표시는 심사 요건이라 그대로 둔다.
  */
 const PricingSection = () => {
   const navigate = useNavigate();
@@ -68,10 +70,21 @@ const PricingSection = () => {
               </FeatureItem>
             ))}
           </FeatureList>
-          <PlanButton type="button" $variant="primary" onClick={goToLogin}>
-            7일 무료 체험 시작하기
-          </PlanButton>
-          <PlanHint>카드 등록 없이 · 계정당 1회</PlanHint>
+          {BILLING_ENABLED ? (
+            <>
+              <PlanButton type="button" $variant="primary" onClick={goToLogin}>
+                7일 무료 체험 시작하기
+              </PlanButton>
+              <PlanHint>카드 등록 없이 · 계정당 1회</PlanHint>
+            </>
+          ) : (
+            <>
+              <PlanButton type="button" $variant="primary" disabled>
+                곧 출시
+              </PlanButton>
+              <PlanHint>결제 준비가 끝나면 바로 열려요</PlanHint>
+            </>
+          )}
         </PlanCard>
       </Plans>
       <Notes>
