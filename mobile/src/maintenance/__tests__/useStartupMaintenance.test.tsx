@@ -76,6 +76,7 @@ describe("useStartupMaintenance", () => {
     await renderHook(() => useStartupMaintenance("a"), { wrapper });
     await flush();
     runMock.mockClear();
+    jest.setSystemTime(NOW + HOUR);
     readMock.mockResolvedValue(NOW - HOUR);
     await foreground();
     expect(runMock).not.toHaveBeenCalled();
@@ -92,8 +93,9 @@ describe("useStartupMaintenance", () => {
 
     runMock.mockResolvedValue({ written: 0, failedSweeps: [] });
     readMock.mockResolvedValue(null);
+    jest.setSystemTime(NOW + HOUR);
     await foreground();
-    expect(writeMock).toHaveBeenCalledWith("a", NOW);
+    expect(writeMock).toHaveBeenCalledWith("a", NOW + HOUR);
   });
 
   it("written이 0이면 무효화하지 않고 3이면 todos를 무효화한다", async () => {
@@ -101,6 +103,7 @@ describe("useStartupMaintenance", () => {
     await flush();
     expect(invalidateSpy).not.toHaveBeenCalled();
     runMock.mockResolvedValue({ written: 3, failedSweeps: [] });
+    jest.setSystemTime(NOW + HOUR);
     await foreground();
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos"] });
   });
@@ -141,5 +144,47 @@ describe("useStartupMaintenance", () => {
     await act(async () => { resolve({ written: 0, failedSweeps: [] }); });
     await flush();
     expect(runMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("로그아웃 후 같은 계정으로 다시 로그인하면 다시 실행한다", async () => {
+    const { rerender } = await renderHook(({ uid }: { uid: string | null }) => useStartupMaintenance(uid), {
+      wrapper,
+      initialProps: { uid: "a" as string | null },
+    });
+    await flush();
+    await rerender({ uid: null });
+    await flush();
+    expect(runMock).toHaveBeenCalledTimes(1);
+    await rerender({ uid: "a" });
+    await flush();
+    expect(runMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("실패한 실행 후 1시간 안의 포그라운드 복귀는 실행하지 않고 1시간 뒤에는 실행한다", async () => {
+    runMock.mockResolvedValue({ written: 0, failedSweeps: ["extension"] });
+    await renderHook(() => useStartupMaintenance("a"), { wrapper });
+    await flush();
+    runMock.mockClear();
+    readMock.mockResolvedValue(null);
+    jest.setSystemTime(NOW + HOUR - 1000);
+    await foreground();
+    expect(runMock).not.toHaveBeenCalled();
+    jest.setSystemTime(NOW + HOUR);
+    await foreground();
+    expect(runMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("언마운트 뒤에 끝난 포그라운드 읽기는 오래된 uid로 실행하지 않는다", async () => {
+    const { unmount } = await renderHook(() => useStartupMaintenance("a"), { wrapper });
+    await flush();
+    runMock.mockClear();
+    jest.setSystemTime(NOW + HOUR);
+    let resolve!: (v: number | null) => void;
+    readMock.mockReturnValue(new Promise((r) => { resolve = r; }));
+    await act(async () => { listener("active"); });
+    await unmount();
+    await act(async () => { resolve(null); });
+    await flush();
+    expect(runMock).not.toHaveBeenCalled();
   });
 });

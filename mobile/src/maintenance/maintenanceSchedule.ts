@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** 성공 기록이 없어도(실패 반복) 포그라운드 재시도는 마지막 시도 후 이 간격 안에는 하지 않는다. */
+export const MAINTENANCE_RETRY_MIN_MS = 60 * 60 * 1000;
 
 const keyFor = (uid: string) => `startupMaintenance:lastSuccess:${uid}`;
 
