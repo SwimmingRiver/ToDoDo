@@ -219,6 +219,8 @@ const editRecurringSeriesImpl = async (
   // 방금 입력한 수정 내용(제목/설명/마감일 등)이 반영될 곳이 없다. 이 문서만 예외적으로
   // 직접 갱신한다. status/doneAt은 원본을 그대로 유지해 진행 상태를 잃지 않는다.
   // done 인스턴스(이미 완료된 과거 기록)는 대상에서 제외 — 완료된 회차는 그대로 보존한다.
+  // 반복 OFF 저장에서는 doing/overdue 회차도 이 분기가 아니라 위 keepEditedAsStandalone
+  // 분기(일반 할 일로 분리)를 탄다 — 이 분기는 반복이 유지되는 저장에서만 실행된다.
   const editedIsPreserved =
     !keepEditedAsStandalone &&
     !!editedOriginal &&
@@ -282,6 +284,25 @@ const editRecurringSeriesImpl = async (
   }
 
   const newRecurrence = seriesTodo.recurrence;
+
+  if (!newRecurrence) {
+    // 반복 OFF: 삭제되지 않고 남는 다른 회차(done/doing/overdue)의 반복 규칙도 지운다.
+    // 규칙이 남아 있으면 앱 시작 정리 작업(planIndefiniteExtension)이 recurrenceId로 묶어
+    // 무기한 시리즈를 호라이즌까지 다시 채운다 — 꺼진 반복이 되살아나고, 결정론적 문서 ID
+    // ({recurrenceId}_{날짜})가 일반 할 일로 남긴 문서와 겹치면 그 문서를 덮어쓴다.
+    // recurrenceId는 이력(목록 묶음·배지)용으로 유지하고 다른 필드는 건드리지 않는다.
+    // 수정 중인 회차가 done이면 그 회차도 여기서 규칙만 지워진다.
+    seriesTodos
+      .filter(
+        (t) =>
+          !toDeleteIds.has(t.id) &&
+          !(keepEditedAsStandalone && t.id === seriesTodo.id) &&
+          t.recurrence != null,
+      )
+      .forEach((t) => {
+        batch.update(doc(db, "todos", t.id), { recurrence: null, updatedAt: now });
+      });
+  }
 
   if (newRecurrence) {
     if (!seriesTodo.startAt) {
