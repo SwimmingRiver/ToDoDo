@@ -22,6 +22,34 @@ jest.mock("../../hooks/useDeleteTodo", () => ({
   useDeleteTodo: () => ({ mutateAsync: mockDeleteTodoMutateAsync }),
 }));
 
+const mockCreateRecurring = jest.fn<(input: unknown) => Promise<unknown[]>>();
+jest.mock("../../hooks/useCreateRecurringTodo", () => ({
+  useCreateRecurringTodo: () => ({ mutateAsync: mockCreateRecurring, isPending: false }),
+}));
+
+const mockEditSeries = jest.fn<(input: unknown) => Promise<void>>();
+// 실제 useMutation처럼 mutateAsync 호출 시 isPending이 true로 바뀌어 리렌더되게 한다.
+jest.mock("../../hooks/useEditRecurringSeries", () => {
+  const { useState } = require("react");
+  return {
+    useEditRecurringSeries: () => {
+      const [isPending, setPending] = useState(false);
+      return {
+        mutateAsync: (input: unknown) => {
+          setPending(true);
+          return mockEditSeries(input);
+        },
+        isPending,
+      };
+    },
+  };
+});
+
+const mockDeleteSeries = jest.fn<(recurrenceId: string) => Promise<void>>();
+jest.mock("../../hooks/useDeleteRecurringSeries", () => ({
+  useDeleteRecurringSeries: () => ({ mutateAsync: mockDeleteSeries, isPending: false }),
+}));
+
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
 const mockPush = jest.fn();
@@ -57,6 +85,9 @@ describe("TodoDetailScreen", () => {
     mockNavigate.mockReset();
     mockPush.mockReset();
     mockRouteParams = { id: "root-1" };
+    mockCreateRecurring.mockReset();
+    mockEditSeries.mockReset();
+    mockDeleteSeries.mockReset();
   });
 
   it("route id에 해당하는 할 일이 캐시에 없으면 안내 문구를 보여준다", async () => {
@@ -307,5 +338,229 @@ describe("TodoDetailScreen", () => {
     await render(<TodoDetailScreen />);
 
     expect(screen.getByText("반복")).toBeTruthy();
+  });
+
+  describe("반복", () => {
+    type AlertButton = { text: string; style?: string; onPress?: () => unknown };
+    const START_AT = "2026-11-10T01:00:00.000Z";
+    const DAILY = { type: "daily", endType: "indefinite", endDate: null };
+    const recurringRoot = (overrides: Record<string, unknown> = {}) =>
+      rootTodo({ recurrenceId: "series-1", recurrence: DAILY, startAt: START_AT, ...overrides });
+    const spyAlert = () => {
+      const { Alert } = require("react-native");
+      return jest.spyOn(Alert, "alert").mockImplementation(() => {}) as unknown as jest.Mock;
+    };
+    const lastButtons = (alertSpy: jest.Mock) =>
+      (alertSpy.mock.calls.at(-1) as [string, string, AlertButton[]])[2];
+
+    it("반복 할 일의 제목만 바꿔 저장해도 시리즈 수정 확인을 띄우고, 전체 적용 시 editRecurringSeries만 호출한다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockEditSeries.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.changeText(screen.getByDisplayValue("루트 할 일"), "바뀐 제목");
+      await screen.findByDisplayValue("바뀐 제목");
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        "반복 일정 전체 수정",
+        "이 변경은 앞으로의 일정과 지금 수정 중인 일정에 적용됩니다.\n\n그 외 이미 완료됐거나 진행 중/지난 다른 회차는 그대로 유지됩니다.",
+        expect.any(Array),
+      );
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await act(async () => {
+        await apply?.onPress?.();
+      });
+
+      expect(mockEditSeries).toHaveBeenCalledTimes(1);
+      expect(mockEditSeries).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "root-1",
+          title: "바뀐 제목",
+          recurrenceId: "series-1",
+          recurrence: DAILY,
+        }),
+      );
+      expect(mockUpdateTodoMutateAsync).not.toHaveBeenCalled();
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("시리즈 수정 확인에서 취소하면 아무 mutation도 호출하지 않는다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("저장"));
+
+      const cancel = lastButtons(alertSpy).find((b) => b.text === "취소");
+      await act(async () => {
+        await cancel?.onPress?.();
+      });
+
+      expect(mockEditSeries).not.toHaveBeenCalled();
+      expect(mockUpdateTodoMutateAsync).not.toHaveBeenCalled();
+      expect(mockCreateRecurring).not.toHaveBeenCalled();
+      expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
+      expect(mockGoBack).not.toHaveBeenCalled();
+    });
+
+    it("editRecurringSeries가 실패하면 시리즈 저장 실패 문구를 보여 주고 뒤로 가지 않는다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockEditSeries.mockRejectedValue(new Error("boom"));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await act(async () => {
+        await apply?.onPress?.();
+      });
+
+      expect(
+        await screen.findByText("반복 일정 저장 중 오류가 발생했습니다. 다시 시도해주세요"),
+      ).toBeTruthy();
+      expect(mockGoBack).not.toHaveBeenCalled();
+    });
+
+    it("전체 적용을 두 번 눌러도 pending 동안 editRecurringSeries는 한 번만 호출된다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockEditSeries.mockReturnValue(new Promise(() => {}));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await act(async () => {
+        void apply?.onPress?.();
+        void apply?.onPress?.();
+      });
+
+      expect(mockEditSeries).toHaveBeenCalledTimes(1);
+    });
+
+    it("비반복 할 일에서 반복을 켜고 저장하면 createRecurringTodo 다음 deleteTodo(원본) 순서로 호출한다", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ startAt: START_AT })] });
+      mockCreateRecurring.mockResolvedValue([]);
+      mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", true);
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect(mockCreateRecurring).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "루트 할 일", startAt: START_AT, recurrence: DAILY }),
+      );
+      expect(mockDeleteTodoMutateAsync).toHaveBeenCalledWith("root-1");
+      expect(mockCreateRecurring.mock.invocationCallOrder[0]).toBeLessThan(
+        mockDeleteTodoMutateAsync.mock.invocationCallOrder[0],
+      );
+      expect(mockUpdateTodoMutateAsync).not.toHaveBeenCalled();
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("createRecurringTodo가 실패하면 원본을 지우지 않고 에러를 보여 준다", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ startAt: START_AT })] });
+      mockCreateRecurring.mockRejectedValue(new Error("생성 실패"));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", true);
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect(await screen.findByText("생성 실패")).toBeTruthy();
+      expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
+      expect(mockGoBack).not.toHaveBeenCalled();
+    });
+
+    it("전환 후 원본 삭제만 실패하면 정리 실패 문구를 띄우고 뒤로 간다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ startAt: START_AT })] });
+      mockCreateRecurring.mockResolvedValue([]);
+      mockDeleteTodoMutateAsync.mockRejectedValue(new Error("삭제 실패"));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", true);
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        "새 반복 일정은 생성되었지만 기존 항목 정리에 실패했습니다. 목록을 확인해주세요",
+      );
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("반복 할 일을 삭제하면 반복 삭제 문구를 띄우고, 확인 시 deleteRecurringSeries만 호출한다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockDeleteSeries.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("삭제"));
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        "할 일 삭제",
+        '"루트 할 일"은(는) 반복 일정입니다.\n\n삭제하면 이 반복 시리즈의 모든 일정이 함께 삭제됩니다.',
+        expect.any(Array),
+      );
+      const destructive = lastButtons(alertSpy).find((b) => b.style === "destructive");
+      expect(destructive?.text).toBe("삭제");
+      await act(async () => {
+        await destructive?.onPress?.();
+      });
+
+      expect(mockDeleteSeries).toHaveBeenCalledWith("series-1");
+      expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("반복 할 일에는 하위 할 일 추가 버튼이 없다", async () => {
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.queryByLabelText("하위 할 일 추가")).toBeNull();
+    });
+
+    it("반복 할 일을 열면 반복 스위치가 켜진 상태로 채워진다", async () => {
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.getByLabelText("이 할 일을 반복합니다").props.value).toBe(true);
+    });
+
+    it("하위 할 일이 있는 루트에서는 반복 섹션이 비활성이고 하위 할 일 사유를 먼저 보여 준다", async () => {
+      mockUseTodos.mockReturnValue({
+        data: [rootTodo(), rootTodo({ id: "child-1", title: "하위 항목", parentId: "root-1" })],
+      });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.getByLabelText("이 할 일을 반복합니다").props.disabled).toBe(true);
+      expect(screen.getByText("하위 할 일이 있는 항목은 반복을 설정할 수 없습니다")).toBeTruthy();
+    });
+
+    it("하위 할 일 상세에서는 반복 섹션을 렌더링하지 않는다", async () => {
+      mockRouteParams = { id: "child-1" };
+      mockUseTodos.mockReturnValue({
+        data: [rootTodo(), rootTodo({ id: "child-1", title: "하위 항목", parentId: "root-1", startAt: START_AT })],
+      });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.queryByText("이 할 일을 반복합니다")).toBeNull();
+    });
   });
 });

@@ -1,13 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { Todo } from "@tododo/core";
+import {
+  getRecurrenceValidationError,
+  toFormValue,
+  toRecurrenceRule,
+  type RecurrenceFormValue,
+  type RecurringTodoInput,
+  type Todo,
+} from "@tododo/core";
 import type { TodoListStackParamList } from "../navigation/types";
 import { useTodos } from "../hooks/useTodos";
 import { useUpdateTodo } from "../hooks/useUpdateTodo";
 import { useDeleteTodo } from "../hooks/useDeleteTodo";
+import { useCreateRecurringTodo } from "../hooks/useCreateRecurringTodo";
+import { useEditRecurringSeries } from "../hooks/useEditRecurringSeries";
+import { useDeleteRecurringSeries } from "../hooks/useDeleteRecurringSeries";
 import { Button } from "../shared/ui/button/Button";
 import { PriorityChips, type Priority } from "../shared/ui/priorityChips/PriorityChips";
 import { DateTimeField } from "../shared/ui/dateTimeField/DateTimeField";
@@ -15,6 +25,7 @@ import { BottomSheet, type BottomSheetOption } from "../shared/ui/bottomSheet/Bo
 import { ChildTodoCard } from "../shared/ui/childTodoCard/ChildTodoCard";
 import { ProgressBar } from "../shared/ui/progressBar/ProgressBar";
 import { RecurrenceBadge } from "../shared/ui/recurrenceBadge/RecurrenceBadge";
+import { RecurrenceSection } from "../shared/ui/recurrenceSection/RecurrenceSection";
 import { getTodoDateValidationError } from "../shared/utils/todoDateValidation";
 import { getProjectOverdue, getProjectProgress } from "../shared/utils/projectUtils";
 import { colors } from "../theme/colors";
@@ -26,6 +37,14 @@ const STATUS_OPTIONS: BottomSheetOption<Status>[] = [
   { value: "doing", label: "진행 중" },
   { value: "done", label: "완료" },
 ];
+
+// 웹 todoDetail.tsx와 동일한 문구
+const SERIES_EDIT_TITLE = "반복 일정 전체 수정";
+const SERIES_EDIT_MESSAGE =
+  "이 변경은 앞으로의 일정과 지금 수정 중인 일정에 적용됩니다.\n\n그 외 이미 완료됐거나 진행 중/지난 다른 회차는 그대로 유지됩니다.";
+const SERIES_SAVE_ERROR = "반복 일정 저장 중 오류가 발생했습니다. 다시 시도해주세요";
+const CONVERSION_CLEANUP_ERROR =
+  "새 반복 일정은 생성되었지만 기존 항목 정리에 실패했습니다. 목록을 확인해주세요";
 
 const STATUS_LABEL: Record<Status, string> = {
   todo: "할 일",
@@ -43,7 +62,17 @@ export const TodoDetailScreen = () => {
     mutate: updateTodoStatus,
     isPending: isSaving,
   } = useUpdateTodo();
-  const { mutateAsync: deleteTodo } = useDeleteTodo();
+  const { mutateAsync: deleteTodo, isPending: isDeletePending } = useDeleteTodo();
+  const { mutateAsync: createRecurringTodo, isPending: isCreateRecurringPending } =
+    useCreateRecurringTodo();
+  const { mutateAsync: editRecurringSeries, isPending: isEditSeriesPending } =
+    useEditRecurringSeries();
+  const { mutateAsync: deleteRecurringSeries } = useDeleteRecurringSeries();
+  const isSavePending =
+    isSaving || isCreateRecurringPending || isEditSeriesPending || !!isDeletePending;
+  // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭(Alert 버튼 두 번 등)은
+  // ref로 막는다.
+  const saveInFlightRef = useRef(false);
 
   const allTodos = todos ?? [];
   const todo = allTodos.find((t: Todo) => t.id === id);
@@ -57,6 +86,14 @@ export const TodoDetailScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusSheetTodo, setStatusSheetTodo] = useState<Todo | null>(null);
   const [childErrors, setChildErrors] = useState<Record<string, string>>({});
+  const [recurrenceValue, setRecurrenceValue] = useState<RecurrenceFormValue | null>(
+    toFormValue(todo?.recurrence),
+  );
+
+  // 시작일시가 지워지면 반복은 의미가 없으므로 끈다 (웹 todoDetail과 동일)
+  useEffect(() => {
+    if (!startAt) setRecurrenceValue(null);
+  }, [startAt]);
 
   // 마운트 시점에 useTodos() 캐시가 아직 채워지지 않아 todo가 undefined였다가
   // 나중에 도착하는 경우, useState 초기값만으로는 절대 갱신되지 않는다(초기화는
@@ -69,6 +106,7 @@ export const TodoDetailScreen = () => {
     setPriority(todo.priority);
     setStartAt(todo.startAt);
     setDueAt(todo.dueAt);
+    setRecurrenceValue(toFormValue(todo.recurrence));
   }, [todo?.id]);
 
   if (!todo) {
@@ -83,23 +121,94 @@ export const TodoDetailScreen = () => {
 
   const dateValidationError = getTodoDateValidationError(startAt, dueAt);
 
+  const runSave = async (task: () => Promise<void>) => {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    try {
+      await task();
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  };
+
+  const handleConfirmSeriesEdit = (updated: RecurringTodoInput & { id: string }) =>
+    runSave(async () => {
+      try {
+        setError(null);
+        await editRecurringSeries(updated);
+        navigation.goBack();
+      } catch {
+        setError(SERIES_SAVE_ERROR);
+      }
+    });
+
   const handleSave = async () => {
+    if (saveInFlightRef.current || isSavePending) return;
     if (dateValidationError) {
       setError(dateValidationError);
       return;
     }
 
-    try {
-      setError(null);
-      await updateTodo({
-        id: todo.id,
-        fields: { title, description, priority, startAt, dueAt },
-        title,
-      });
-      navigation.goBack();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "저장에 실패했습니다");
+    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt, dueAt);
+    if (recurrenceError) {
+      setError(recurrenceError);
+      return;
     }
+
+    const updated = {
+      ...todo,
+      title,
+      description,
+      priority,
+      startAt,
+      dueAt,
+      recurrence: toRecurrenceRule(recurrenceValue, dueAt),
+    };
+
+    // 웹과 동일: 반복 시리즈였던 할 일의 저장(규칙 변경·끄기·일반 필드만 수정 모두)은
+    // 시리즈 전체 수정 확인을 먼저 거친다.
+    if (todo.recurrence != null) {
+      Alert.alert(SERIES_EDIT_TITLE, SERIES_EDIT_MESSAGE, [
+        { text: "취소", style: "cancel" },
+        { text: "전체 적용", onPress: () => handleConfirmSeriesEdit(updated) },
+      ]);
+      return;
+    }
+
+    if (updated.recurrence != null) {
+      // 비반복 → 반복 전환: editRecurringSeries는 recurrenceId가 필요하므로 새 시리즈를
+      // 먼저 만들고, 성공한 뒤에만 원본을 지운다.
+      await runSave(async () => {
+        try {
+          setError(null);
+          await createRecurringTodo(updated);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "저장에 실패했습니다");
+          return;
+        }
+        try {
+          await deleteTodo(todo.id);
+        } catch {
+          Alert.alert("정리 실패", CONVERSION_CLEANUP_ERROR);
+        }
+        navigation.goBack();
+      });
+      return;
+    }
+
+    await runSave(async () => {
+      try {
+        setError(null);
+        await updateTodo({
+          id: todo.id,
+          fields: { title, description, priority, startAt, dueAt },
+          title,
+        });
+        navigation.goBack();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "저장에 실패했습니다");
+      }
+    });
   };
 
   const handleDeleteSelfConfirmed = async () => {
@@ -111,7 +220,33 @@ export const TodoDetailScreen = () => {
     }
   };
 
+  const handleDeleteSeriesConfirmed = async (recurrenceId: string) => {
+    try {
+      await deleteRecurringSeries(recurrenceId);
+      navigation.goBack();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "삭제에 실패했습니다");
+    }
+  };
+
   const handleDeleteSelfRequest = () => {
+    const { recurrenceId } = todo;
+    if (recurrenceId) {
+      Alert.alert(
+        "할 일 삭제",
+        `"${todo.title}"은(는) 반복 일정입니다.\n\n삭제하면 이 반복 시리즈의 모든 일정이 함께 삭제됩니다.`,
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: "삭제",
+            style: "destructive",
+            onPress: () => handleDeleteSeriesConfirmed(recurrenceId),
+          },
+        ],
+      );
+      return;
+    }
+
     const isRoot = todo.parentId === null;
     Alert.alert(
       isRoot ? "프로젝트 삭제" : "할 일 삭제",
@@ -187,6 +322,7 @@ export const TodoDetailScreen = () => {
   const isRoot = todo.parentId === null;
   const progress = isRoot ? getProjectProgress(allTodos, todo.id) : 0;
   const isOverdue = isRoot ? getProjectOverdue(allTodos, todo).isOverdue : false;
+  const hasChildren = childTodos.length > 0;
 
   return (
     <SafeAreaView style={styles.screen} edges={[]}>
@@ -230,21 +366,39 @@ export const TodoDetailScreen = () => {
 
           <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
           <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />
+          {isRoot && (
+            <RecurrenceSection
+              disabled={hasChildren || !startAt}
+              disabledReason={hasChildren ? "hasChildren" : "noStartAt"}
+              startAt={startAt}
+              dueAt={dueAt}
+              value={recurrenceValue}
+              onChange={setRecurrenceValue}
+            />
+          )}
           {error && <Text style={styles.fieldError}>{error}</Text>}
 
-          <Button title="저장" onPress={handleSave} disabled={isSaving} loading={isSaving} />
+          <Button
+            title="저장"
+            onPress={handleSave}
+            disabled={isSavePending}
+            loading={isSavePending}
+          />
           <Button title="삭제" onPress={handleDeleteSelfRequest} variant="outline" />
 
           {isRoot && (
             <View style={styles.subtaskSection}>
               <View style={styles.subtaskHeader}>
                 <Text style={styles.label}>하위 할 일 {childTodos.length}개</Text>
-                <Button
-                  title="+ 하위 할 일 추가"
-                  onPress={handleAddChild}
-                  variant="text"
-                  accessibilityLabel="하위 할 일 추가"
-                />
+                {/* 반복 할 일은 하위 할 일을 가질 수 없다 (웹과 동일) */}
+                {todo.recurrenceId == null && (
+                  <Button
+                    title="+ 하위 할 일 추가"
+                    onPress={handleAddChild}
+                    variant="text"
+                    accessibilityLabel="하위 할 일 추가"
+                  />
+                )}
               </View>
               <ProgressBar progress={progress} isOverdue={isOverdue} />
               {childTodos.length === 0 ? (
