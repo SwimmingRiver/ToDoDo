@@ -17,6 +17,7 @@ import { AccountScreen } from "../screens/AccountScreen";
 import { IconButton } from "../shared/ui/iconButton/IconButton";
 import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList } from "./types";
 import { colors } from "../theme/colors";
+import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -69,7 +70,9 @@ const CalendarTabStack = () => (
   </CalendarStack.Navigator>
 );
 
-const MainTabs = () => (
+const MainTabs = ({ uid }: { uid: string }) => {
+  useStartupMaintenance(uid);
+  return (
   <Tab.Navigator
     screenOptions={{
       headerShown: false,
@@ -93,7 +96,8 @@ const MainTabs = () => (
       options={{ tabBarIcon: ({ color, size }) => <CalendarDays color={color} size={size} /> }}
     />
   </Tab.Navigator>
-);
+  );
+};
 
 export const RootNavigator = () => {
   const { user, loading } = useAuthState();
@@ -106,5 +110,5 @@ export const RootNavigator = () => {
     );
   }
 
-  return <NavigationContainer>{user ? <MainTabs /> : <LoginScreen />}</NavigationContainer>;
+  return <NavigationContainer>{user ? <MainTabs uid={user.uid} /> : <LoginScreen />}</NavigationContainer>;
 };
