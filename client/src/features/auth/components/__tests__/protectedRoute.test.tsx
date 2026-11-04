@@ -97,4 +97,56 @@ describe('ProtectedRoute 컴포넌트', () => {
     // 로딩 중에는 null 반환
     expect(container.firstChild).toBeNull()
   })
+  it('로그인돼 있다가 로그아웃되면(로그아웃·탈퇴·다른 탭) 랜딩(/)으로 보낸다', () => {
+    const tree = (user: User | null) => (
+      <MemoryRouter initialEntries={['/protected']}>
+        <AuthContext.Provider value={mockAuthContext(user)}>
+          <Routes>
+            <Route
+              path="/protected"
+              element={
+                <ProtectedRoute>
+                  <div>보호된 콘텐츠</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<div>랜딩 페이지</div>} />
+            <Route path="/login" element={<div>로그인 페이지</div>} />
+          </Routes>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    )
+    const { rerender } = render(tree(mockUser))
+    expect(screen.getByText('보호된 콘텐츠')).toBeInTheDocument()
+
+    rerender(tree(null))
+
+    expect(screen.getByText('랜딩 페이지')).toBeInTheDocument()
+    expect(screen.queryByText('로그인 페이지')).not.toBeInTheDocument()
+  })
+
+  it('인증 로딩이 끝났을 때 처음부터 비로그인이면 여전히 /login으로 보낸다', () => {
+    const tree = (user: User | null, loading: boolean) => (
+      <MemoryRouter initialEntries={['/protected']}>
+        <AuthContext.Provider value={mockAuthContext(user, loading)}>
+          <Routes>
+            <Route
+              path="/protected"
+              element={
+                <ProtectedRoute>
+                  <div>보호된 콘텐츠</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<div>랜딩 페이지</div>} />
+            <Route path="/login" element={<div>로그인 페이지</div>} />
+          </Routes>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    )
+    const { rerender } = render(tree(null, true))
+    rerender(tree(null, false))
+
+    expect(screen.getByText('로그인 페이지')).toBeInTheDocument()
+  })
 })
