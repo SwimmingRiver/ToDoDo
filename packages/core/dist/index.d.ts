@@ -3,3 +3,4 @@ export { getTodos, createTodo, updateTodo, deleteTodo, calcParentStatus } from "
 export * from "./insights";
 export * from "./theme";
 export * from "./reminders";
+export * from "./recurring";

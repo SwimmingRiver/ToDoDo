@@ -4,7 +4,7 @@ import {
   getDefaultHorizonEnd,
   RECURRENCE_HORIZON_WEEKS,
 } from "../recurrence";
-import type { RecurrenceRule } from "../../types/todo.type";
+import type { RecurrenceRule } from "../../types/todo";
 
 // NOTE: 타임존에 따른 날짜 경계 이슈를 피하기 위해 모든 날짜/시각은 로컬 타임 문자열
 // (Z suffix 없음, 예: "2026-07-10T18:00:00")로 표기한다. 이는 실제 dueAt 입력이

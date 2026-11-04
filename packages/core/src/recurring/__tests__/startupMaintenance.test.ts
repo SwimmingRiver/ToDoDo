@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toDateKeyFromISO } from "@/shared/utils/date";
-import type { Todo } from "../../types/todo.type";
+import { toDateKeyFromISO } from "../../insights/date";
+import type { Todo } from "../../types/todo";
 import {
   buildExtensionCreates,
   planArchivedSweep,
