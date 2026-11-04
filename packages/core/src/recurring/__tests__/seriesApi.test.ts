@@ -869,6 +869,86 @@ describe("editRecurringSeries", () => {
   });
 });
 
+describe("editRecurringSeries — 회차 수정 시 시리즈 종료 조건 유지 (회귀)", () => {
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+  });
+
+  const toDocSnapshot = (todos: Todo[]) => ({
+    docs: todos.map((t) => ({
+      id: t.id,
+      data: () => {
+        const { id: _id, ...rest } = t;
+        return rest;
+      },
+    })),
+  });
+
+  it("무기한 매일 시리즈의 내일 회차를 수정해도 호라이즌까지의 회차가 모두 재생성된다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    // 시스템 시간은 파일 상단 beforeEach에서 mock된다. 실제 회차처럼 startAt=dueAt=그 회차일(UTC Z)로 둔다.
+    const today = new Date();
+    const occurrence = (offsetDays: number) =>
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + offsetDays,
+        9,
+        0,
+        0,
+      ).toISOString();
+    const tomorrowIso = occurrence(1);
+    const indefiniteDaily: RecurrenceRule = { type: "daily", endType: "indefinite", endDate: null };
+
+    const instances = [1, 2, 3].map((d) =>
+      makeTodo({
+        id: `series-1_${d}`,
+        startAt: occurrence(d),
+        dueAt: occurrence(d),
+        recurrenceId: "series-1",
+        recurrence: indefiniteDaily,
+      }),
+    );
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot(instances) as ReturnType<typeof getDocs> extends Promise<infer T>
+          ? T
+          : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../seriesApi");
+    const { toRecurrenceRule, toRecurrenceRuleForEdit } = await import("../recurrenceForm");
+
+    // 수정 폼은 회차의 dueAt(=내일)을 그대로 채운다. 예전 경로(toRecurrenceRule)는 이 값을
+    // 종료일로 바꿔 시리즈를 내일에서 끊었다.
+    expect(toRecurrenceRule({ type: "daily" }, tomorrowIso)?.endType).toBe("untilDate");
+    const rule = toRecurrenceRuleForEdit({ type: "daily" }, indefiniteDaily);
+    const horizonEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 10);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...instances[0], title: "바뀐 제목", recurrence: rule },
+      horizonEnd,
+    );
+
+    // 내일(+1)부터 호라이즌(+10)까지 10개 회차가 다시 만들어져야 한다.
+    const setDueAts = batch.set.mock.calls.map(
+      (call) => (call[1] as { dueAt: string }).dueAt,
+    );
+    expect(setDueAts).toEqual(Array.from({ length: 10 }, (_, i) => occurrence(i + 1)));
+    const setRules = batch.set.mock.calls.map(
+      (call) => (call[1] as { recurrence: RecurrenceRule }).recurrence,
+    );
+    setRules.forEach((r) => expect(r.endType).toBe("indefinite"));
+  });
+});
+
 describe("deleteRecurringSeries", () => {
   beforeEach(async () => {
     await resetFirestoreMocks();

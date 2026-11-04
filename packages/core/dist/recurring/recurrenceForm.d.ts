@@ -20,3 +20,11 @@ export declare const toFormValue: (recurrence: RecurrenceRule | null | undefined
  * startAt이므로, 여기서는 종료 조건 계산만 담당한다.
  */
 export declare const toRecurrenceRule: (value: RecurrenceFormValue | null, dueAt: string | null) => RecurrenceRule | null;
+/**
+ * 이미 반복 중인 시리즈를 수정할 때 쓰는 규칙 변환. 수정 폼의 dueAt은 시리즈 종료일이
+ * 아니라 "지금 수정 중인 회차의 날짜"다. 이를 toRecurrenceRule에 넣으면 그 회차 날짜가
+ * 종료일(untilDate)로 바뀌어, editRecurringSeries가 미래 회차를 지운 뒤 그 날짜까지만
+ * 다시 만들어 무기한 시리즈가 잘린다. 그래서 종료 조건(endType/endDate)은 기존 규칙에서
+ * 그대로 가져오고, 사용자가 바꿀 수 있는 주기/요일만 폼 값에서 가져온다.
+ */
+export declare const toRecurrenceRuleForEdit: (value: RecurrenceFormValue | null, existing: RecurrenceRule) => RecurrenceRule | null;

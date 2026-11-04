@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import TodoDetail from '../todoDetail'
 import type { Todo } from '../../../types/todo.type'
@@ -40,6 +40,8 @@ const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
  */
 const mockState = vi.hoisted(() => ({
   todo: null as unknown,
+  editRecurringSeries: vi.fn(),
+  createRecurringTodo: vi.fn(),
   /** true면 요청받은 id에 맞는 todo를 만들어 반환한다(다른 todo로 이동하는 시나리오용). */
   byId: false,
 }))
@@ -67,8 +69,8 @@ vi.mock('../../../hooks', () => ({
       : mockState.todo,
   }),
   useUpdateTodo: () => ({ mutate: vi.fn() }),
-  useCreateRecurringTodo: () => ({ mutate: vi.fn() }),
-  useEditRecurringSeries: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateRecurringTodo: () => ({ mutate: mockState.createRecurringTodo }),
+  useEditRecurringSeries: () => ({ mutate: mockState.editRecurringSeries, isPending: false }),
   useDeleteTodo: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteRecurringSeries: () => ({ mutate: vi.fn(), isPending: false }),
   useGetTodos: () => ({ data: [] }),
@@ -94,6 +96,8 @@ const renderDetail = () => render(detailUi())
 beforeEach(() => {
   mockState.todo = makeTodo()
   mockState.byId = false
+  mockState.editRecurringSeries.mockReset()
+  mockState.createRecurringTodo.mockReset()
 })
 
 const GoToOtherTodo = () => {
@@ -185,5 +189,98 @@ describe('TodoDetail 컴포넌트', () => {
       expect(screen.getByPlaceholderText('할 일 제목')).toHaveValue('B 제목')
       expect(screen.getByPlaceholderText('상세 설명을 입력하세요')).toHaveValue('B 설명')
     })
+  })
+})
+
+describe('반복 회차 수정 시 시리즈 종료 조건', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 10, 8, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** 실제 회차처럼 startAt=dueAt=그 회차일(로컬 09:00)을 UTC Z 문자열로 둔다. */
+  const occurrenceIso = (offsetDays: number) => {
+    const now = new Date()
+    return new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + offsetDays,
+      9,
+      0,
+      0,
+    ).toISOString()
+  }
+
+  it('무기한 시리즈의 회차 제목만 바꿔 저장하면 시리즈 수정 payload의 종료 조건이 무기한으로 유지된다', async () => {
+    const user = setupUser()
+    mockState.todo = makeTodo({
+      startAt: occurrenceIso(1),
+      dueAt: occurrenceIso(1),
+      recurrence: { type: 'daily', endType: 'indefinite', endDate: null },
+      recurrenceId: 'series-1',
+    })
+    renderDetail()
+
+    const title = screen.getByPlaceholderText('할 일 제목')
+    await user.clear(title)
+    await user.type(title, '바뀐 제목')
+    fireEvent.submit(title.closest('form')!)
+
+    expect(await screen.findByText('반복 일정 전체 수정')).toBeInTheDocument()
+    await user.click(screen.getByText('전체 적용'))
+
+    expect(mockState.editRecurringSeries).toHaveBeenCalledTimes(1)
+    const payload = mockState.editRecurringSeries.mock.calls[0][0] as Todo
+    expect(payload.title).toBe('바뀐 제목')
+    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'indefinite', endDate: null })
+  })
+
+  it('기한 있는 시리즈는 회차 날짜가 아니라 기존 종료일을 유지한다', async () => {
+    const user = setupUser()
+    mockState.todo = makeTodo({
+      startAt: occurrenceIso(1),
+      dueAt: occurrenceIso(1),
+      recurrence: { type: 'daily', endType: 'untilDate', endDate: '2026-12-31' },
+      recurrenceId: 'series-1',
+    })
+    renderDetail()
+
+    fireEvent.submit(screen.getByPlaceholderText('할 일 제목').closest('form')!)
+    await user.click(await screen.findByText('전체 적용'))
+
+    const payload = mockState.editRecurringSeries.mock.calls[0][0] as Todo
+    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'untilDate', endDate: '2026-12-31' })
+  })
+
+  it('수정 모드의 반복 범위 안내는 회차 dueAt이 아니라 기존 규칙을 보여준다', () => {
+    mockState.todo = makeTodo({
+      startAt: occurrenceIso(1),
+      dueAt: occurrenceIso(1),
+      recurrence: { type: 'daily', endType: 'indefinite', endDate: null },
+      recurrenceId: 'series-1',
+    })
+    renderDetail()
+
+    expect(screen.getByText('무기한으로 반복됩니다')).toBeInTheDocument()
+  })
+
+  it('비반복 할 일을 반복으로 전환하면 기존대로 dueAt에서 종료일을 유도한다', async () => {
+    const user = setupUser()
+    const dueAt = occurrenceIso(5)
+    mockState.todo = makeTodo({ startAt: occurrenceIso(1), dueAt })
+    renderDetail()
+
+    await user.click(screen.getByLabelText('이 할 일을 반복합니다'))
+    fireEvent.submit(screen.getByPlaceholderText('할 일 제목').closest('form')!)
+
+    await waitFor(() => expect(mockState.createRecurringTodo).toHaveBeenCalledTimes(1))
+    const payload = mockState.createRecurringTodo.mock.calls[0][0] as Todo
+    const d = new Date(dueAt)
+    const expectedKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'untilDate', endDate: expectedKey })
   })
 })
