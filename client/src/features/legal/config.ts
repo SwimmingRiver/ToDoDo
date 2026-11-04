@@ -16,6 +16,6 @@ export interface LegalConfig {
 export const LEGAL_CONFIG: LegalConfig = {
   sellerName: "강수영",
   contactEmail: "dodonriver@gmail.com",
-  effectiveDate: "",
+  effectiveDate: "2026년 11월 4일",
   privacyOfficer: "강수영",
 };
