@@ -68,11 +68,15 @@ export const TodoDetailScreen = () => {
     useCreateRecurringTodo();
   const { mutateAsync: editRecurringSeries, isPending: isEditSeriesPending } =
     useEditRecurringSeries();
-  const { mutateAsync: deleteRecurringSeries } = useDeleteRecurringSeries();
+  const { mutateAsync: deleteRecurringSeries, isPending: isDeleteSeriesPending } =
+    useDeleteRecurringSeries();
   const isSavePending =
     isSaving || isCreateRecurringPending || isEditSeriesPending || !!isDeletePending;
+  // 시리즈 삭제 중 저장이 끼어들면 editRecurringSeries가 삭제된 시리즈를 되살릴 수 있어
+  // 삭제 pending도 저장 잠금 조건에 포함한다(저장 버튼 스피너는 저장 중에만 보인다).
+  const isSaveLocked = isSavePending || isDeleteSeriesPending;
   // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭(Alert 버튼 두 번 등)은
-  // ref로 막는다.
+  // ref로 막는다. 저장과 시리즈 삭제가 같은 ref를 공유해 서로도 겹치지 않는다.
   const saveInFlightRef = useRef(false);
 
   const allTodos = todos ?? [];
@@ -144,7 +148,7 @@ export const TodoDetailScreen = () => {
     });
 
   const handleSave = async () => {
-    if (saveInFlightRef.current || isSavePending) return;
+    if (saveInFlightRef.current || isSaveLocked) return;
     if (dateValidationError) {
       setError(dateValidationError);
       return;
@@ -229,14 +233,15 @@ export const TodoDetailScreen = () => {
     }
   };
 
-  const handleDeleteSeriesConfirmed = async (recurrenceId: string) => {
-    try {
-      await deleteRecurringSeries(recurrenceId);
-      navigation.goBack();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "삭제에 실패했습니다");
-    }
-  };
+  const handleDeleteSeriesConfirmed = (recurrenceId: string) =>
+    runSave(async () => {
+      try {
+        await deleteRecurringSeries(recurrenceId);
+        navigation.goBack();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "삭제에 실패했습니다");
+      }
+    });
 
   const handleDeleteSelfRequest = () => {
     const { recurrenceId } = todo;
@@ -391,7 +396,7 @@ export const TodoDetailScreen = () => {
           <Button
             title="저장"
             onPress={handleSave}
-            disabled={isSavePending}
+            disabled={isSaveLocked}
             loading={isSavePending}
           />
           <Button title="삭제" onPress={handleDeleteSelfRequest} variant="outline" />

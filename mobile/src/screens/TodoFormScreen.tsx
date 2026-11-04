@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
@@ -32,6 +32,8 @@ export const TodoFormScreen = () => {
   const { mutateAsync, isPending: isCreatePending } = useCreateTodo();
   const { mutateAsync: createRecurringTodo, isPending: isRecurringPending } = useCreateRecurringTodo();
   const isPending = isCreatePending || isRecurringPending;
+  // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
+  const submitInFlightRef = useRef(false);
   const { data: todos } = useTodos();
 
   const dateValidationError = getTodoDateValidationError(startAt, dueAt);
@@ -42,7 +44,7 @@ export const TodoFormScreen = () => {
   }, [startAt]);
 
   const handleSubmit = async () => {
-    if (isPending) return;
+    if (submitInFlightRef.current || isPending) return;
     if (!title.trim()) return;
     if (dateValidationError) {
       setError(dateValidationError);
@@ -57,13 +59,11 @@ export const TodoFormScreen = () => {
       return;
     }
 
+    submitInFlightRef.current = true;
     try {
       setError(null);
-      const siblingOrders = (todos ?? [])
-        .filter((todo) => todo.parentId === parentId)
-        .map((todo) => todo.order);
-      const nextOrder = Math.max(-1, ...siblingOrders) + 1;
       if (recurrenceValue) {
+        // order는 core createRecurringTodo가 루트 할 일 기준으로 직접 계산한다.
         await createRecurringTodo({
           title,
           description,
@@ -71,12 +71,15 @@ export const TodoFormScreen = () => {
           startAt,
           dueAt,
           parentId: null,
-          order: nextOrder,
           recurrence: toRecurrenceRule(recurrenceValue, dueAt),
         });
         navigation.goBack();
         return;
       }
+      const siblingOrders = (todos ?? [])
+        .filter((todo) => todo.parentId === parentId)
+        .map((todo) => todo.order);
+      const nextOrder = Math.max(-1, ...siblingOrders) + 1;
       await mutateAsync({
         title,
         description,
@@ -92,6 +95,8 @@ export const TodoFormScreen = () => {
       navigation.goBack();
     } catch (e) {
       setError(e instanceof Error ? e.message : "할 일 추가에 실패했습니다");
+    } finally {
+      submitInFlightRef.current = false;
     }
   };
 

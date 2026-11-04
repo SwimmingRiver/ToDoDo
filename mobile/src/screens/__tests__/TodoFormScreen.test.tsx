@@ -253,5 +253,45 @@ describe("TodoFormScreen", () => {
 
       expect(mockCreateRecurring).toHaveBeenCalledTimes(1);
     });
+
+    it("반복 추가를 같은 틱에 두 번 눌러도 createRecurringTodo는 한 번만 호출된다", async () => {
+      mockCreateRecurring.mockReturnValue(new Promise(() => {}));
+      await openAndSetStart();
+      await toggleRecurrence();
+      const button = screen.getByText("추가");
+      await act(async () => {
+        void fireEvent.press(button);
+        void fireEvent.press(button);
+      });
+
+      expect(mockCreateRecurring).toHaveBeenCalledTimes(1);
+      expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("반복 경로에는 order를 넘기지 않는다(core가 루트 order를 직접 계산)", async () => {
+      mockUseTodos.mockReturnValue({ data: [{ id: "a", parentId: null, order: 3 }] });
+      mockCreateRecurring.mockResolvedValue([]);
+      await openAndSetStart();
+      await toggleRecurrence();
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockCreateRecurring).toHaveBeenCalledTimes(1);
+      expect(mockCreateRecurring.mock.calls[0][0]).not.toHaveProperty("order");
+    });
+  });
+
+  it("추가를 같은 틱에 두 번 눌러도 createTodo는 한 번만 호출된다", async () => {
+    mockMutateAsync.mockReturnValue(new Promise(() => {}));
+    const { TodoFormScreen } = await import("../TodoFormScreen");
+    await render(<TodoFormScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText("할 일 제목"), "일반 할 일");
+    await screen.findByDisplayValue("일반 할 일");
+    const button = screen.getByText("추가");
+    await act(async () => {
+      void fireEvent.press(button);
+      void fireEvent.press(button);
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
   });
 });

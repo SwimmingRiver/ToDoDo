@@ -46,9 +46,22 @@ jest.mock("../../hooks/useEditRecurringSeries", () => {
 });
 
 const mockDeleteSeries = jest.fn<(recurrenceId: string) => Promise<void>>();
-jest.mock("../../hooks/useDeleteRecurringSeries", () => ({
-  useDeleteRecurringSeries: () => ({ mutateAsync: mockDeleteSeries, isPending: false }),
-}));
+// useEditRecurringSeries 목과 같이 호출 시 isPending이 true로 바뀌어 리렌더되게 한다.
+jest.mock("../../hooks/useDeleteRecurringSeries", () => {
+  const { useState } = require("react");
+  return {
+    useDeleteRecurringSeries: () => {
+      const [isPending, setPending] = useState(false);
+      return {
+        mutateAsync: (recurrenceId: string) => {
+          setPending(true);
+          return mockDeleteSeries(recurrenceId);
+        },
+        isPending,
+      };
+    },
+  };
+});
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
@@ -556,6 +569,67 @@ describe("TodoDetailScreen", () => {
       expect(mockDeleteSeries).toHaveBeenCalledWith("series-1");
       expect(mockDeleteTodoMutateAsync).not.toHaveBeenCalled();
       expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("반복 삭제 확인을 같은 틱에 두 번 눌러도 deleteRecurringSeries는 한 번만 호출된다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockDeleteSeries.mockReturnValue(new Promise(() => {}));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("삭제"));
+      const destructive = lastButtons(alertSpy).find((b) => b.style === "destructive");
+      await act(async () => {
+        void destructive?.onPress?.();
+        void destructive?.onPress?.();
+      });
+
+      expect(mockDeleteSeries).toHaveBeenCalledTimes(1);
+    });
+
+    it("시리즈 삭제가 진행 중이면 저장을 눌러도 아무것도 하지 않는다(삭제된 시리즈 부활 방지)", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockDeleteSeries.mockReturnValue(new Promise(() => {}));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("삭제"));
+      const destructive = lastButtons(alertSpy).find((b) => b.style === "destructive");
+      await act(async () => {
+        void destructive?.onPress?.();
+      });
+      alertSpy.mockClear();
+
+      expect(screen.getByRole("button", { name: "저장" }).props.accessibilityState).toEqual(
+        expect.objectContaining({ disabled: true }),
+      );
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(mockEditSeries).not.toHaveBeenCalled();
+      expect(mockUpdateTodoMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("시리즈 삭제와 같은 틱에 저장 확인(전체 적용)이 눌려도 editRecurringSeries는 호출되지 않는다", async () => {
+      const alertSpy = spyAlert();
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      mockDeleteSeries.mockReturnValue(new Promise(() => {}));
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await fireEvent.press(screen.getByText("삭제"));
+      const destructive = lastButtons(alertSpy).find((b) => b.style === "destructive");
+      await act(async () => {
+        void destructive?.onPress?.();
+        void apply?.onPress?.();
+      });
+
+      expect(mockDeleteSeries).toHaveBeenCalledTimes(1);
+      expect(mockEditSeries).not.toHaveBeenCalled();
     });
 
     it("반복 할 일에는 하위 할 일 추가 버튼이 없다", async () => {
