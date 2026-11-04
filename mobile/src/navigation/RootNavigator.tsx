@@ -70,8 +70,7 @@ const CalendarTabStack = () => (
   </CalendarStack.Navigator>
 );
 
-const MainTabs = ({ uid }: { uid: string }) => {
-  useStartupMaintenance(uid);
+const MainTabs = () => {
   return (
   <Tab.Navigator
     screenOptions={{
@@ -101,6 +100,8 @@ const MainTabs = ({ uid }: { uid: string }) => {
 
 export const RootNavigator = () => {
   const { user, loading } = useAuthState();
+  // MainTabs는 로그인 중에만 마운트되므로, 로그아웃(uid -> null)을 보려면 항상 마운트된 여기서 호출해야 한다.
+  useStartupMaintenance(user?.uid ?? null);
 
   if (loading) {
     return (
@@ -110,5 +111,5 @@ export const RootNavigator = () => {
     );
   }
 
-  return <NavigationContainer>{user ? <MainTabs uid={user.uid} /> : <LoginScreen />}</NavigationContainer>;
+  return <NavigationContainer>{user ? <MainTabs /> : <LoginScreen />}</NavigationContainer>;
 };

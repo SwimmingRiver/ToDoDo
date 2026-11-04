@@ -14,12 +14,15 @@ import {
 // 콜드 스타트/로그인 때 uid당 1회 + 포그라운드 복귀 시 마지막 성공 후 24시간 경과하면 재실행한다.
 const claimedUids = new Set<string>();
 const inFlight = new Set<string>();
+// 포그라운드 판단(저장소 읽기)부터 실행 끝까지 uid당 1건만 처리한다. active가 연달아 와도 겹치지 않는다.
+const checking = new Set<string>();
 // 성공 여부와 무관한 마지막 시도 시각(메모리). 포그라운드 재시도 최소 간격 판단용이다.
 const lastAttempt = new Map<string, number>();
 
 export function resetStartupMaintenanceState(): void {
   claimedUids.clear();
   inFlight.clear();
+  checking.clear();
   lastAttempt.clear();
 }
 
@@ -70,12 +73,18 @@ export function useStartupMaintenance(uid: string | null): void {
     let cancelled = false;
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
+      if (checking.has(uid)) return;
+      checking.add(uid);
       void (async () => {
-        const attempted = lastAttempt.get(uid);
-        if (attempted !== undefined && Date.now() - attempted < MAINTENANCE_RETRY_MIN_MS) return;
-        const last = await readLastSuccess(uid);
-        if (cancelled) return;
-        if (shouldRunOnForeground(last, Date.now())) await run(uid, queryClient);
+        try {
+          const attempted = lastAttempt.get(uid);
+          if (attempted !== undefined && Date.now() - attempted < MAINTENANCE_RETRY_MIN_MS) return;
+          const last = await readLastSuccess(uid);
+          if (cancelled) return;
+          if (shouldRunOnForeground(last, Date.now())) await run(uid, queryClient);
+        } finally {
+          checking.delete(uid);
+        }
       })();
     });
     return () => {

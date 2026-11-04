@@ -72,12 +72,12 @@ describe("useStartupMaintenance", () => {
     expect(runMock).not.toHaveBeenCalled();
   });
 
-  it("포그라운드 복귀: 1시간 전 성공이면 실행 안 하고 25시간 전이면 실행한다", async () => {
+  it("포그라운드 복귀: 2시간 전 성공이면 실행 안 하고 25시간 전이면 실행한다", async () => {
     await renderHook(() => useStartupMaintenance("a"), { wrapper });
     await flush();
     runMock.mockClear();
     jest.setSystemTime(NOW + HOUR);
-    readMock.mockResolvedValue(NOW - HOUR);
+    readMock.mockResolvedValue(NOW);
     await foreground();
     expect(runMock).not.toHaveBeenCalled();
     readMock.mockResolvedValue(NOW - 25 * HOUR);
@@ -186,5 +186,16 @@ describe("useStartupMaintenance", () => {
     await act(async () => { resolve(null); });
     await flush();
     expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("active가 연달아 두 번 와도 한 번만 실행한다", async () => {
+    await renderHook(() => useStartupMaintenance("a"), { wrapper });
+    await flush();
+    runMock.mockClear();
+    jest.setSystemTime(NOW + HOUR);
+    readMock.mockResolvedValue(null);
+    await act(async () => { listener("active"); listener("active"); });
+    await flush();
+    expect(runMock).toHaveBeenCalledTimes(1);
   });
 });
