@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const config = vi.hoisted(() => ({
-  sellerName: "",
-  contactEmail: "",
-  effectiveDate: "",
-  privacyOfficer: "",
+const revisions = vi.hoisted(() => [
+  { effectiveOn: "", change: "", config: { sellerName: "", contactEmail: "", privacyOfficer: "" } },
+]);
+vi.mock("../../config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../config")>()),
+  LEGAL_REVISIONS: revisions,
 }));
-vi.mock("../../config", () => ({ LEGAL_CONFIG: config }));
 
 import LegalPage from "../legalPage";
 
@@ -21,8 +21,16 @@ const renderPage = (slug: "terms" | "privacy" | "refund") =>
 
 describe("LegalPage", () => {
   beforeEach(() => {
-    Object.assign(config, { sellerName: "", contactEmail: "", effectiveDate: "", privacyOfficer: "" });
+    revisions.splice(0, revisions.length, {
+      effectiveOn: "",
+      change: "",
+      config: { sellerName: "", contactEmail: "", privacyOfficer: "" },
+    });
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it.each([
@@ -41,10 +49,45 @@ describe("LegalPage", () => {
   });
 
   it("판매자 표기를 채우면 그 이름이 본문에 들어간다", () => {
-    config.sellerName = "홍길동";
+    revisions[0].config.sellerName = "홍길동";
     renderPage("terms");
     expect(screen.getAllByText(/홍길동/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/\[판매자명 미정\]/)).not.toBeInTheDocument();
+  });
+
+  describe("판 전환", () => {
+    beforeEach(() => {
+      revisions.splice(
+        0,
+        revisions.length,
+        { effectiveOn: "2030-03-01", change: "제정", config: { sellerName: "첫판", contactEmail: "", privacyOfficer: "" } },
+        { effectiveOn: "2030-03-10", change: "판매자 변경", config: { sellerName: "둘째판", contactEmail: "", privacyOfficer: "" } },
+      );
+    });
+
+    it("다음 판 시행 전에는 이전 판 본문과 변경 예정 공지를 보여준다", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2030-03-05T00:00:00Z"));
+      renderPage("terms");
+      expect(screen.getAllByText(/첫판/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/둘째판/)).not.toBeInTheDocument();
+      expect(screen.getByText(/시행일: 2030년 3월 1일/)).toBeInTheDocument();
+      const notice = screen.getByRole("note", { name: "변경 예정 안내" });
+      expect(notice).toHaveTextContent("2030년 3월 10일");
+      expect(notice).toHaveTextContent("판매자 변경");
+    });
+
+    it("시행일이 되면 새 판 본문과 변경 이력을 보여주고 공지는 없다", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2030-03-10T03:00:00Z"));
+      renderPage("privacy");
+      expect(screen.getAllByText(/둘째판/).length).toBeGreaterThan(0);
+      expect(screen.queryByRole("note", { name: "변경 예정 안내" })).not.toBeInTheDocument();
+      const history = screen.getByRole("region", { name: "변경 이력" });
+      expect(history).toHaveTextContent("2030년 3월 1일");
+      expect(history).toHaveTextContent("2030년 3월 10일");
+      expect(history).toHaveTextContent("판매자 변경");
+    });
   });
 
   it("표는 좁은 화면에서 가로로 스크롤되는 영역 안에 있다", () => {

@@ -95,4 +95,38 @@ describe('ConfirmModal 컴포넌트', () => {
 
     expect(onCancel).not.toHaveBeenCalled()
   })
+  describe('pending (되돌릴 수 없는 작업 진행 중)', () => {
+    it('확인·취소 버튼이 모두 비활성이고 aria-busy가 켜진다', () => {
+      render(<ConfirmModal {...defaultProps} pending />)
+
+      expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '취소' })).toBeDisabled()
+      expect(screen.getByText('삭제 확인').parentElement).toHaveAttribute('aria-busy', 'true')
+    })
+
+    it('오버레이를 눌러도 onCancel이 호출되지 않는다', async () => {
+      const onCancel = vi.fn()
+      const user = userEvent.setup()
+      const { container } = render(<ConfirmModal {...defaultProps} onCancel={onCancel} pending />)
+
+      await user.click(container.firstChild as HTMLElement)
+
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it('pending이 아니면 aria-busy가 없다', () => {
+      render(<ConfirmModal {...defaultProps} />)
+      expect(screen.getByText('삭제 확인').parentElement).not.toHaveAttribute('aria-busy')
+    })
+  })
+
+  it('statusMessage는 role="status"로 읽힌다', () => {
+    render(<ConfirmModal {...defaultProps} statusMessage="처리 중이에요" />)
+    expect(screen.getByRole('status')).toHaveTextContent('처리 중이에요')
+  })
+
+  it('statusMessage가 없으면 status 영역도 없다', () => {
+    render(<ConfirmModal {...defaultProps} />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
 })

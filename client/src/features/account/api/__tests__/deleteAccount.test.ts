@@ -52,4 +52,10 @@ describe("deleteAccount", () => {
     await expect(deleteAccount()).rejects.toThrow("reminder down");
     expect(mockServer).not.toHaveBeenCalled();
   });
+  it("단계가 바뀔 때마다 onStep으로 알린다(각 단계 호출 직전)", async () => {
+    const { deleteAccount } = await import("../deleteAccount");
+    const onStep = vi.fn((step: string) => void calls.push(`step:${step}`));
+    await deleteAccount(onStep);
+    expect(calls).toEqual(["step:calendar", "calendar", "step:reminders", "reminder", "step:account", "server"]);
+  });
 });

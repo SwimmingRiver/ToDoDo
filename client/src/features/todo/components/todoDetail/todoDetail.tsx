@@ -27,7 +27,11 @@ import Modal from "@/shared/ui/modal/modal";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
 import { getTodoDateValidationError } from "../../utils/todoDateValidation";
-import { toFormValue, toRecurrenceRule } from "../recurrence/recurrenceTransform";
+import {
+  toFormValue,
+  toRecurrenceRule,
+  toRecurrenceRuleForEdit,
+} from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import ChildTodoCard from "../childTodoCard";
 import TodoForm from "../todoForm/todoForm";
@@ -305,18 +309,22 @@ const TodoDetailView = ({ id }: { id: string }) => {
       return;
     }
 
-    const validationError = getRecurrenceValidationError(
-      recurrenceValue,
-      startAtWatch ?? null,
-      dueAtWatch ?? null,
-    );
+    // 이미 반복 중인 시리즈를 수정할 때 dueAt은 시리즈 종료일이 아니라 이 회차의 날짜다.
+    // 그래서 범위 검증(dueAt < startAt)은 건너뛰고(회차 날짜 검증은 위에서 이미 했다),
+    // 종료 조건은 기존 규칙에서 그대로 가져온다. 비반복→반복 전환은 기존대로 dueAt에서 유도한다.
+    const existingRule = todo.recurrence ?? null;
+    const validationError = existingRule
+      ? getRecurrenceValidationError(recurrenceValue, null, null)
+      : getRecurrenceValidationError(recurrenceValue, startAtWatch ?? null, dueAtWatch ?? null);
     if (validationError) {
       toast.error("입력 확인", validationError);
       return;
     }
 
     const dueAtIso = data.dueAt ? new Date(data.dueAt).toISOString() : null;
-    const newRecurrence = toRecurrenceRule(recurrenceValue, dueAtIso);
+    const newRecurrence = existingRule
+      ? toRecurrenceRuleForEdit(recurrenceValue, existingRule)
+      : toRecurrenceRule(recurrenceValue, dueAtIso);
     const updatedFields = {
       ...todo,
       ...data,
@@ -522,6 +530,7 @@ const TodoDetailView = ({ id }: { id: string }) => {
                   dueAt={dueAtWatch ?? null}
                   value={recurrenceValue}
                   onChange={setRecurrenceValue}
+                  existingRule={todo.recurrence}
                 />
               </FormGroup>
             )}

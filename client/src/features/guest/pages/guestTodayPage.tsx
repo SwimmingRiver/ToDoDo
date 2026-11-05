@@ -88,7 +88,7 @@ const GuestTodayPage = () => {
           </>
         )}
       </Content>
-      <Footer />
+      <Footer showBusinessInfo />
     </PageContainer>
   );
 };

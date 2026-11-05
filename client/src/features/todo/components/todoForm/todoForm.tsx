@@ -33,7 +33,11 @@ import type { RecurrenceRule, Todo } from "../../types";
 import RecurrenceFields from "../recurrence/recurrenceFields";
 import { getRecurrenceValidationError } from "../recurrence/recurrenceValidation";
 import { getTodoDateValidationError } from "../../utils/todoDateValidation";
-import { toFormValue, toRecurrenceRule } from "../recurrence/recurrenceTransform";
+import {
+  toFormValue,
+  toRecurrenceRule,
+  toRecurrenceRuleForEdit,
+} from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import {
   FormContainer,
@@ -203,12 +207,15 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       return;
     }
 
+    // 이미 반복 중인 시리즈를 수정할 때 dueAt은 시리즈 종료일이 아니라 이 회차의 날짜다.
+    // 그래서 범위 검증(dueAt < startAt)은 건너뛰고(회차 날짜 검증은 위에서 이미 했다),
+    // 저장 시 종료 조건도 기존 규칙에서 그대로 가져온다(아래 toRecurrenceRuleForEdit).
+    const existingRule = todo?.recurrence ?? null;
+
     if (showRecurrenceSection) {
-      const validationError = getRecurrenceValidationError(
-        recurrenceValue,
-        startAtWatch ?? null,
-        dueAtWatch ?? null,
-      );
+      const validationError = existingRule
+        ? getRecurrenceValidationError(recurrenceValue, null, null)
+        : getRecurrenceValidationError(recurrenceValue, startAtWatch ?? null, dueAtWatch ?? null);
       if (validationError) {
         toast.error("입력 확인", validationError);
         return;
@@ -223,9 +230,11 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
     const reminderOffsetMinutes = dueAtIso ? parseReminderSetting(reminder) : null;
 
     if (todo) {
-      const newRecurrence = showRecurrenceSection
-        ? toRecurrenceRule(recurrenceValue, dueAtIso)
-        : null;
+      const newRecurrence = !showRecurrenceSection
+        ? null
+        : existingRule
+          ? toRecurrenceRuleForEdit(recurrenceValue, existingRule)
+          : toRecurrenceRule(recurrenceValue, dueAtIso);
       const updatedFields = {
         ...todo,
         ...fields,
@@ -448,6 +457,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
                 dueAt={dueAtWatch ?? null}
                 value={recurrenceValue}
                 onChange={setRecurrenceValue}
+                existingRule={todo?.recurrence}
               />
             )}
           </DetailContent>
