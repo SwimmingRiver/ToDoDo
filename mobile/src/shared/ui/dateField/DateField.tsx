@@ -15,6 +15,10 @@ interface DateFieldProps {
   placeholder?: string;
 }
 
+const CLEAR_SIZE = MIN_TOUCH_TARGET / 2;
+/** 지우기 버튼의 실제 터치 영역(박스 + hitSlop 양쪽)이 MIN_TOUCH_TARGET 이상이 되도록 유도한다. */
+const CLEAR_HIT_SLOP = (MIN_TOUCH_TARGET - CLEAR_SIZE) / 2;
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** 선택한 Date의 로컬 연·월·일로 키를 만든다. ISO(UTC)로 바꿔 자르지 않는다. */
@@ -77,7 +81,7 @@ export const DateField = ({ label, value, onChange, placeholder = "날짜 선택
             onPress={handleClear}
             accessibilityRole="button"
             accessibilityLabel={`${label} 지우기`}
-            hitSlop={8}
+            hitSlop={CLEAR_HIT_SLOP}
             style={styles.clearButton}
           >
             <X size={16} color={colors.text.tertiary} />
@@ -130,8 +134,8 @@ const styles = StyleSheet.create({
   placeholderText: { fontSize: 14, color: colors.text.tertiary },
   valueText: { fontSize: 14, color: colors.text.primary },
   clearButton: {
-    width: MIN_TOUCH_TARGET / 2,
-    height: MIN_TOUCH_TARGET / 2,
+    width: CLEAR_SIZE,
+    height: CLEAR_SIZE,
     alignItems: "center",
     justifyContent: "center",
   },

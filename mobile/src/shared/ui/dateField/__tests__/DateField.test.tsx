@@ -1,3 +1,5 @@
+import { StyleSheet } from "react-native";
+import { MIN_TOUCH_TARGET } from "../../../../theme/spacing";
 import { render, screen, fireEvent, act } from "@testing-library/react-native";
 import { describe, it, expect, jest } from "@jest/globals";
 import { DateField } from "../DateField";
@@ -35,5 +37,14 @@ describe("DateField", () => {
     await render(<DateField label="반복 종료일" value={null} onChange={jest.fn()} />);
     expect(screen.getByText("날짜 선택")).toBeTruthy();
     expect(screen.getByLabelText("반복 종료일, 선택 안 함")).toBeTruthy();
+  });
+
+  it("지우기 버튼의 터치 영역(박스+hitSlop)은 양 축 모두 MIN_TOUCH_TARGET 이상이다", async () => {
+    await render(<DateField label="반복 종료일" value="2026-12-31" onChange={jest.fn()} />);
+    const clear = screen.getByLabelText("반복 종료일 지우기");
+    const { width, height } = StyleSheet.flatten(clear.props.style);
+    const slop = clear.props.hitSlop as number;
+    expect(width + slop * 2).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+    expect(height + slop * 2).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
   });
 });
