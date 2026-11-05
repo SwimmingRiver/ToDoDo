@@ -6,7 +6,6 @@ import { WEEKDAY_REQUIRED_ERROR } from "./weekdayConstants";
 import { getRecurrenceValidationError } from "./recurrenceValidation";
 import { DEFAULT_RECURRENCE_FORM_VALUE } from "./recurrenceTransform";
 import type { RecurrenceFormValue } from "./recurrenceFields.types";
-import type { RecurrenceRule } from "../../types";
 import {
   RecurrenceSection,
   CheckboxLabel,
@@ -19,17 +18,22 @@ import {
   InfoLine,
   MonthlySubCaption,
   ErrorText,
+  TabList,
+  TabButton,
+  EndDateInput,
 } from "./recurrence.styles";
+
+const END_TYPES: { type: RecurrenceFormValue["endType"]; label: string }[] = [
+  { type: "indefinite", label: "없음" },
+  { type: "untilDate", label: "날짜 지정" },
+];
 
 interface RecurrenceFieldsProps {
   disabled: boolean; // 하위 할 일 존재 또는 startAt 미입력 시 true
   disabledReason?: "hasChildren" | "noStartAt";
   startAt: string | null; // 반복 시작 앵커. 매월 반복 시 '일(day)' 유도에도 사용
-  dueAt: string | null; // 더 이상 종료일로 쓰지 않는다(종료는 value.endType/endDate)
   value: RecurrenceFormValue | null; // null = 반복 OFF
   onChange: (value: RecurrenceFormValue | null) => void;
-  /** 호출부 호환용. 종료 조건 표시는 value에서 온다(이후 태스크에서 제거 예정). */
-  existingRule?: RecurrenceRule | null;
 }
 
 const RecurrenceFields = ({
@@ -65,6 +69,17 @@ const RecurrenceFields = ({
       type,
       weekdays: type === "weekly" ? value.weekdays ?? [] : undefined,
     });
+  };
+
+  const handleEndTypeChange = (endType: RecurrenceFormValue["endType"]) => {
+    if (!value || value.endType === endType) return;
+    // 「날짜 지정」의 초기 날짜는 빈 칸(추측 값을 넣지 않는다). 「없음」으로 돌아가면 날짜를 비운다.
+    onChange({ ...value, endType, endDate: null });
+  };
+
+  const handleEndDateChange = (endDate: string) => {
+    if (!value) return;
+    onChange({ ...value, endDate: endDate || null });
   };
 
   const handleWeekdayToggle = (day: number) => {
@@ -138,7 +153,30 @@ const RecurrenceFields = ({
               )}
 
               <FieldGroup>
-                <FieldLabel>반복 범위</FieldLabel>
+                <FieldLabel>반복 종료</FieldLabel>
+                <TabList role="tablist" aria-label="반복 종료">
+                  {END_TYPES.map(({ type, label }) => (
+                    <TabButton
+                      key={type}
+                      type="button"
+                      role="tab"
+                      aria-selected={value.endType === type}
+                      aria-controls="recurrence-detail-panel"
+                      $active={value.endType === type}
+                      onClick={() => handleEndTypeChange(type)}
+                    >
+                      {label}
+                    </TabButton>
+                  ))}
+                </TabList>
+                {value.endType === "untilDate" && (
+                  <EndDateInput
+                    type="date"
+                    aria-label="반복 종료일"
+                    value={value.endDate ?? ""}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
+                  />
+                )}
                 <InfoLine>
                   <Info size={14} aria-hidden="true" />
                   <span>{rangeText}</span>
