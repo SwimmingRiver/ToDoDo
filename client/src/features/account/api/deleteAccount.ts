@@ -15,15 +15,22 @@ const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
   return [...tracked, ...findOrphanGoogleEventIds(loadSnapshot(uid), tracked)];
 };
 
+/** 탈퇴 진행 단계. 화면이 "지금 무엇을 하는 중인지" 보여주는 데 쓴다. */
+export type AccountDeletionStep = "calendar" | "reminders" | "account";
+
 /**
  * 탈퇴. 각 단계는 멱등이라 실패하면 처음부터 다시 부르면 된다.
  * 서버 계정 삭제(마지막)가 끝나기 전까지는 ID 토큰이 유효하므로 앞 단계 재시도가 항상 가능하다.
  * 캘린더 연동이 없어도 /disconnect는 성공한다 — 연동 여부(프리미엄 전용 문서)를 미리 읽지 않는 이유.
+ * onStep은 각 단계를 시작하기 직전에 불린다.
  */
-export const deleteAccount = async (): Promise<void> => {
+export const deleteAccount = async (onStep?: (step: AccountDeletionStep) => void): Promise<void> => {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Not authenticated");
+  onStep?.("calendar");
   await disconnectCalendar(await collectGoogleEventIds(uid));
+  onStep?.("reminders");
   await deleteReminderAccount();
+  onStep?.("account");
   await deleteAccountOnServer();
 };

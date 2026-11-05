@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setupUser } from "@/test/setupUser";
 
-const mockDeleteAccount = vi.fn<() => Promise<void>>();
-vi.mock("../../api/deleteAccount", () => ({ deleteAccount: () => mockDeleteAccount() }));
+const mockDeleteAccount = vi.fn<(onStep?: (step: "calendar" | "reminders" | "account") => void) => Promise<void>>();
+vi.mock("../../api/deleteAccount", () => ({
+  deleteAccount: (onStep?: (step: "calendar" | "reminders" | "account") => void) => mockDeleteAccount(onStep),
+}));
 
 const mockLogout = vi.fn(async () => undefined);
 vi.mock("@/features/auth/context/useAuth", () => ({ useAuth: () => ({ logout: mockLogout }) }));
@@ -117,5 +119,75 @@ describe("AccountDeletionDialog", () => {
     const { onClose } = await renderDialog();
     await user.click(screen.getByRole("button", { name: "취소" }));
     expect(onClose).toHaveBeenCalled();
+  });
+  describe("진행 표시", () => {
+    it("진행 중에는 현재 단계와 '창을 닫지 마세요' 안내를 보여주고, 단계가 바뀌면 갱신한다", async () => {
+      let reportStep: ((step: "calendar" | "reminders" | "account") => void) | undefined;
+      mockDeleteAccount.mockImplementation((onStep) => {
+        reportStep = onStep;
+        onStep?.("calendar");
+        return new Promise(() => {});
+      });
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+      const status = screen.getByRole("status");
+      expect(status).toHaveTextContent("구글 캘린더 연동 해제 중…");
+      expect(status).toHaveTextContent("완료될 때까지 창을 닫지 마세요");
+
+      act(() => reportStep?.("reminders"));
+      expect(screen.getByRole("status")).toHaveTextContent("알림 정리 중…");
+      act(() => reportStep?.("account"));
+      expect(screen.getByRole("status")).toHaveTextContent("계정과 데이터 삭제 중…");
+    });
+
+    it("진행 중에는 취소 버튼도 비활성이다", async () => {
+      mockDeleteAccount.mockReturnValue(new Promise(() => {}));
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+      expect(screen.getByRole("button", { name: "취소" })).toBeDisabled();
+    });
+
+    it("진행 전과 실패 후에는 진행 표시가 없다", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockRejectedValueOnce(new Error("boom"));
+      const user = setupUser();
+      await renderDialog();
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+      await screen.findByText(/일부만 처리되었습니다/);
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("탭 닫기 경고(beforeunload)", () => {
+    const fireBeforeUnload = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    it("진행 중에만 페이지 이탈을 막는다", async () => {
+      mockDeleteAccount.mockReturnValue(new Promise(() => {}));
+      const user = setupUser();
+      await renderDialog();
+      expect(fireBeforeUnload().defaultPrevented).toBe(false);
+
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+      expect(fireBeforeUnload().defaultPrevented).toBe(true);
+    });
+
+    it("실패해서 진행이 끝나면 다시 막지 않는다", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockRejectedValueOnce(new Error("boom"));
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+      await screen.findByText(/일부만 처리되었습니다/);
+      expect(fireBeforeUnload().defaultPrevented).toBe(false);
+    });
   });
 });
