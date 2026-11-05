@@ -4,6 +4,10 @@ process.env.TZ = "Asia/Seoul";
 module.exports = {
   preset: "jest-expo",
   setupFiles: ["<rootDir>/jest.setup.js"],
+  // 화면 테스트는 테스트 안에서 화면 모듈을 처음 불러오고 렌더한다. 변환 캐시가 없는 CI의
+  // 첫 실행에서는 이 단계가 모듈 그래프 전체(@tododo/core 포함)를 변환하느라 기본 5초를
+  // 넘긴다(로컬 --no-cache 실측 2.5초, CI 러너는 더 느림). 캐시가 있으면 수백 ms다.
+  testTimeout: 20000,
   // jest-expo(@react-native/jest-preset)는 customExportConditions에 "react-native"를
   // 포함시킨다. 일부 패키지는 이 조건을 ESM(.mjs) 번들로 매핑해 두어서, 그대로 두면
   // "Unexpected token 'export'" 파싱 에러가 난다. 아래에서 개별로 우회한다.
