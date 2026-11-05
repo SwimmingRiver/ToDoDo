@@ -148,6 +148,53 @@ describe("createRecurringTodo", () => {
     );
   });
 
+  // 일반 할 일을 반복으로 전환하면 웹 폼은 원본 Todo 전체를 넘긴다. 원본이 숨김(overdueArchived)
+  // 상태였거나 구글 이벤트에 매핑돼 있었다면 그 값이 새 회차 전부에 복사되면 안 된다.
+  it("입력의 overdueArchived: true를 물려받지 않고 모든 인스턴스를 overdueArchived: false로 생성한다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../seriesApi");
+    await createRecurringTodo(
+      fakeDb,
+      UID,
+      makeTodo({ recurrence: dailyRule, startAt: "2026-07-10T09:00:00", overdueArchived: true }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledTimes(4);
+    batch.set.mock.calls.forEach(([, data]) => {
+      expect(data.overdueArchived).toBe(false);
+    });
+  });
+
+  it("입력의 googleEventId를 인스턴스에 복사하지 않는다 (회차 N개가 구글 이벤트 1개에 매핑되는 것 방지)", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValueOnce(
+      emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+    );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { createRecurringTodo } = await import("../seriesApi");
+    const created = await createRecurringTodo(
+      fakeDb,
+      UID,
+      makeTodo({ recurrence: dailyRule, startAt: "2026-07-10T09:00:00", googleEventId: "gev-1" }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledTimes(4);
+    batch.set.mock.calls.forEach(([, data]) => {
+      expect(data).not.toHaveProperty("googleEventId");
+    });
+    created.forEach((t) => expect(t).not.toHaveProperty("googleEventId"));
+  });
+
   it("생성한 인스턴스 문서 ID는 {recurrenceId}_{날짜} 형태로 결정론적이다 (멀티탭/멀티기기 동시 생성 시 중복 방지)", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     vi.mocked(getDocs).mockResolvedValueOnce(
@@ -436,6 +483,72 @@ describe("editRecurringSeries", () => {
     );
   });
 
+  // 보존된(overdue) 회차를 직접 갱신하는 경로. 입력은 폼을 연 시점의 값이라 문서에 저장된
+  // 최신 값보다 오래됐을 수 있다.
+  describe("보존된 회차 직접 갱신 시 문서별 필드", () => {
+    const pastIso = "2020-01-01T09:00:00";
+    const stored = (overrides: Partial<Todo> = {}) =>
+      makeTodo({
+        id: "overdue-1",
+        status: "todo",
+        startAt: pastIso,
+        dueAt: pastIso,
+        recurrenceId: "series-1",
+        recurrence: dailyRule,
+        ...overrides,
+      });
+
+    const run = async (storedTodo: Todo, input: Todo) => {
+      const { getDocs, writeBatch } = await import("firebase/firestore");
+      vi.mocked(getDocs)
+        .mockResolvedValueOnce(
+          toDocSnapshot([storedTodo]) as ReturnType<typeof getDocs> extends Promise<infer T>
+            ? T
+            : never,
+        )
+        .mockResolvedValueOnce(
+          emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+        );
+      const batch = makeBatch();
+      vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+      const { editRecurringSeries } = await import("../seriesApi");
+      await editRecurringSeries(fakeDb, UID, input, new Date("2026-08-01T00:00:00"));
+      const calls = batch.update.mock.calls.filter(
+        (call) => (call[0] as { id: string }).id === "overdue-1",
+      );
+      expect(calls).toHaveLength(1);
+      return calls[0][1] as Record<string, unknown>;
+    };
+
+    it("폼 입력의 googleEventId로 문서를 덮어쓰지 않는다 (동기화가 기록한 최신 값 보존)", async () => {
+      const data = await run(
+        stored({ googleEventId: "gev-new" }),
+        stored({ googleEventId: "gev-stale", description: "수정" }),
+      );
+
+      expect(data).not.toHaveProperty("googleEventId");
+    });
+
+    it("숨겨진 회차의 마감일을 오늘 이후로 옮기면 숨김을 해제한다", async () => {
+      const futureIso = "2026-07-20T09:00:00";
+      const data = await run(
+        stored({ overdueArchived: true }),
+        stored({ overdueArchived: true, startAt: futureIso, dueAt: futureIso }),
+      );
+
+      expect(data.overdueArchived).toBe(false);
+    });
+
+    it("숨겨진 회차를 수정해도 마감일이 여전히 지났으면 숨김 값을 건드리지 않는다", async () => {
+      const data = await run(
+        stored({ overdueArchived: true }),
+        stored({ overdueArchived: true, description: "수정" }),
+      );
+
+      expect(data).not.toHaveProperty("overdueArchived");
+    });
+  });
+
   it("미래 todo 인스턴스는 삭제 후 새 규칙으로 재생성한다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     const now = new Date();
@@ -510,6 +623,74 @@ describe("editRecurringSeries", () => {
       expect.anything(),
       expect.objectContaining({ archived: false }),
     );
+  });
+
+  // 숨겨진(overdueArchived) 회차나 구글 이벤트에 매핑된 회차를 열어 시리즈를 수정하면
+  // 그 회차의 값이 입력으로 들어온다 — 재생성되는 새 회차들이 이를 물려받으면 안 된다.
+  it("입력의 overdueArchived: true를 물려받지 않고 재생성 인스턴스는 overdueArchived: false다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      ) // 시리즈 조회 결과 없음 → 전부 재생성
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      ); // getNextRootOrder
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../seriesApi");
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      makeTodo({
+        id: "series-1",
+        recurrenceId: "rec-1",
+        recurrence: dailyRule,
+        startAt: "2026-07-10T09:00:00",
+        dueAt: "2026-07-10T09:00:00",
+        overdueArchived: true,
+      }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledTimes(4);
+    batch.set.mock.calls.forEach(([, data]) => {
+      expect(data.overdueArchived).toBe(false);
+    });
+  });
+
+  it("구글 이벤트에 매핑된 회차를 열어 수정해도 재생성 인스턴스에 googleEventId를 복사하지 않는다", async () => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { editRecurringSeries } = await import("../seriesApi");
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      makeTodo({
+        id: "series-1",
+        recurrenceId: "rec-1",
+        recurrence: dailyRule,
+        startAt: "2026-07-10T09:00:00",
+        dueAt: "2026-07-10T09:00:00",
+        googleEventId: "gev-1",
+      }),
+      new Date("2026-07-13T00:00:00"),
+    );
+
+    expect(batch.set).toHaveBeenCalledTimes(4);
+    batch.set.mock.calls.forEach(([, data]) => {
+      expect(data).not.toHaveProperty("googleEventId");
+    });
   });
 
   it("재생성되는 인스턴스 문서 ID도 {recurrenceId}_{날짜} 형태로 결정론적이다", async () => {
@@ -1063,6 +1244,24 @@ describe("editRecurringSeries — 반복 OFF 시 수정 중인 회차를 일반 
     expect(data).not.toHaveProperty("doneAt");
     expect(batch.set).not.toHaveBeenCalled();
     expect(vi.mocked(getDocs)).toHaveBeenCalledTimes(1);
+  });
+
+  it("일반 할 일로 남기는 갱신은 폼 입력의 googleEventId로 문서를 덮어쓰지 않는다", async () => {
+    const { batch, editRecurringSeries } = await setup([
+      instance(0),
+      instance(1, { googleEventId: "gev-new" }),
+    ]);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...instance(1), googleEventId: "gev-stale", recurrence: null },
+      horizon(),
+    );
+
+    const keptCalls = updateFor(batch, idOf(1));
+    expect(keptCalls).toHaveLength(1);
+    expect(keptCalls[0][1]).not.toHaveProperty("googleEventId");
   });
 
   it("오늘 회차를 수정하며 반복을 끄면 그 문서가 일반 할 일로 남는다", async () => {

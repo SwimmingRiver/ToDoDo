@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, query, where, writeBatch, } from "firebase/firestore";
 import { parseDateKey, toDateKeyFromISO } from "../insights/date";
-import { buildRecurringInstanceId, generateRecurringDueDates, getDefaultHorizonEnd, } from "./recurrence";
+import { buildRecurringInstanceId, buildRecurringOccurrenceDoc, generateRecurringDueDates, getDefaultHorizonEnd, } from "./recurrence";
 import { withRecurringSeriesLock } from "./seriesLock";
 const mapDocToTodo = (id, data) => ({ id, ...data });
 /** 인증된 사용자의 루트(parentId === null) 할 일 중 다음에 쓸 order 값을 계산한다. */
@@ -35,30 +35,18 @@ const createRecurringTodoImpl = async (db, userId, todo, horizonEnd) => {
         throw new Error("설정한 마감일이 반복 생성 가능 기간을 벗어나 일정을 생성할 수 없습니다. 마감일을 더 가깝게 설정해주세요.");
     }
     let nextOrder = await getNextRootOrder(db, userId);
-    const { id: _id, ...todoData } = todo;
     const batch = writeBatch(db);
     const created = [];
     for (const dueAt of dueDates) {
         const newDocRef = doc(db, "todos", buildRecurringInstanceId(recurrenceId, dueAt));
-        const instanceData = {
-            ...todoData,
+        // 회차별 필드 정리(googleEventId 제외, archived/overdueArchived 초기화 등)는 공용 빌더가 맡는다.
+        const instanceData = buildRecurringOccurrenceDoc(todo, {
             userId,
-            // 인스턴스별 startAt도 그 발생일(dueAt과 같은 날짜) + 원래 startAt의 시:분으로 갱신한다.
-            // generateRecurringDueDates가 이미 todo.startAt을 앵커로 시:분을 적용해 dueAt을
-            // 계산하므로(applyTimeOfDay), dueAt 자체가 "발생일 + 원래 startAt 시각"이다 — 원본
-            // todoData.startAt(모든 인스턴스에 동일한 고정값)을 그대로 물려받으면 캘린더가
-            // startAt~dueAt을 다중일 span으로 잘못 렌더링하는 회귀가 생긴다.
-            startAt: dueAt,
-            dueAt,
-            status: "todo",
-            doneAt: null,
-            parentId: null,
-            archived: false,
             recurrenceId,
-            createdAt: now,
-            updatedAt: now,
+            dueAt,
+            now,
             order: nextOrder,
-        };
+        });
         batch.set(newDocRef, instanceData);
         created.push({ ...instanceData, id: newDocRef.id });
         nextOrder += 1;
@@ -158,7 +146,10 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
         // recurrence/recurrenceId를 끊어 일반 할 일로 만든다. 시리즈를 떠난 문서이고 재생성도
         // 없으므로, 보존된 형제 회차와 같은 날짜가 되어도 "같은 시리즈의 중복 회차"가 아니다 —
         // 그래서 아래 날짜 충돌 검사는 적용하지 않는다.
-        const { id: _editedId, recurrenceId: _editedRid, status: _s, doneAt: _d, userId: _uid, ...editableRest } = seriesTodo;
+        // googleEventId는 폼을 연 시점의 값이라, 그 사이 동기화가 기록한 최신 값을 덮어쓸 수 있다
+        // — 쓰지 않고 문서에 저장된 값을 그대로 둔다. overdueArchived는 recurrenceId가 끊긴
+        // 일반 할 일에는 의미가 없어(collapseRecurringInstances가 보지 않음) 건드리지 않는다.
+        const { id: _editedId, recurrenceId: _editedRid, status: _s, doneAt: _d, userId: _uid, googleEventId: _gid, overdueArchived: _oa, ...editableRest } = seriesTodo;
         batch.update(doc(db, "todos", seriesTodo.id), {
             ...editableRest,
             recurrence: null,
@@ -181,8 +172,18 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
                 throw new Error("이미 다른 인스턴스가 있는 날짜로는 마감일을 변경할 수 없습니다");
             }
         }
-        const { id: _editedId, recurrenceId: _editedRid, status: _s, doneAt: _d, userId: _uid, ...editableRest } = seriesTodo;
-        batch.update(doc(db, "todos", seriesTodo.id), { ...editableRest, userId, updatedAt: now });
+        // googleEventId·overdueArchived는 폼을 연 시점의 값이라 문서에 저장된 최신 값(동기화가
+        // 기록한 이벤트 id, 정리 작업이 세운 숨김)보다 오래됐을 수 있다 — 입력으로는 쓰지 않는다.
+        // 다만 숨겨진 회차의 마감일을 오늘 이후로 옮겼다면 더 이상 지난 회차가 아니므로 숨김을
+        // 푼다(그대로 두면 목록 대표 후보에서 빠져 할 일이 사라진다). 여전히 지난 날짜면 숨김 유지.
+        const { id: _editedId, recurrenceId: _editedRid, status: _s, doneAt: _d, userId: _uid, googleEventId: _gid, overdueArchived: _oa, ...editableRest } = seriesTodo;
+        const movedToTodayOrLater = !!seriesTodo.dueAt && new Date(seriesTodo.dueAt).getTime() >= todayStart.getTime();
+        batch.update(doc(db, "todos", seriesTodo.id), {
+            ...editableRest,
+            ...(movedToTodayOrLater ? { overdueArchived: false } : {}),
+            userId,
+            updatedAt: now,
+        });
         if (seriesTodo.dueAt) {
             preservedDateKeys.add(new Date(seriesTodo.dueAt).toDateString());
         }
@@ -223,25 +224,15 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
             throw new Error("설정한 마감일이 반복 생성 가능 기간을 벗어나 일정을 생성할 수 없습니다. 마감일을 더 가깝게 설정해주세요.");
         }
         let nextOrder = await getNextRootOrder(db, userId);
-        const { id: _id, recurrenceId: _rid, ...rest } = seriesTodo;
         dueDates.forEach((dueAt) => {
             const newDocRef = doc(db, "todos", buildRecurringInstanceId(recurrenceId, dueAt));
-            batch.set(newDocRef, {
-                ...rest,
+            batch.set(newDocRef, buildRecurringOccurrenceDoc(seriesTodo, {
                 userId,
-                // createRecurringTodoImpl과 동일한 이유: 인스턴스별 startAt을 원본 시리즈의 고정값
-                // 그대로 물려받지 않고 발생일(dueAt)로 갱신한다.
-                startAt: dueAt,
-                dueAt,
-                status: "todo",
-                doneAt: null,
-                parentId: null,
-                archived: false,
                 recurrenceId,
-                createdAt: now,
-                updatedAt: now,
+                dueAt,
+                now,
                 order: nextOrder,
-            });
+            }));
             nextOrder += 1;
         });
     }

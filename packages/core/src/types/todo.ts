@@ -40,6 +40,9 @@ interface Todo {
    *  목록/칸반의 대표 노출(collapseRecurringInstances) 후보에서 제외된다.
    *  기존 문서엔 필드가 없을 수 있어 optional — 없으면 아닌 것으로 취급한다. */
   overdueArchived?: boolean;
+  /** 구글 캘린더에 매핑된 이벤트 ID(웹 useSyncTodosToCalendar가 기록). 문서 1개 ↔ 이벤트 1개라
+   *  반복 회차를 새로 만들 때는 복사하지 않는다(buildRecurringOccurrenceDoc). 없으면 미동기화. */
+  googleEventId?: string | null;
   /** 마감 알림 오프셋. 없거나 null이면 사용자 기본값(userSettings)을 따른다.
    *  "off"면 이 할 일만 알림을 끈다. */
   reminderOffsetMinutes?: ReminderSetting | null;
