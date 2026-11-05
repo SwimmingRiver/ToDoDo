@@ -40,9 +40,9 @@ const STATUS_OPTIONS: BottomSheetOption<Status>[] = [
 ];
 
 // 웹 todoDetail.tsx와 동일한 문구
-const SERIES_EDIT_TITLE = "반복 일정 전체 수정";
+const SERIES_EDIT_TITLE = "반복 일정 수정";
 const SERIES_EDIT_MESSAGE =
-  "이 변경은 앞으로의 일정과 지금 수정 중인 일정에 적용됩니다.\n\n그 외 이미 완료됐거나 진행 중/지난 다른 회차는 그대로 유지됩니다.";
+  "이 변경은 이 일정과 이후 일정에 적용됩니다.\n\n이전 일정과 이미 완료됐거나 진행 중인 회차는 그대로 유지됩니다.";
 const SERIES_SAVE_ERROR = "반복 일정 저장 중 오류가 발생했습니다. 다시 시도해주세요";
 const CONVERSION_CLEANUP_ERROR =
   "새 반복 일정은 생성되었지만 기존 항목 정리에 실패했습니다. 목록을 확인해주세요";
