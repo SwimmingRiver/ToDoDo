@@ -408,7 +408,9 @@ describe("runStartupMaintenance — 무기한 반복 시리즈 확장", () => {
     expect(vi.mocked(getDocs)).toHaveBeenCalledTimes(1);
   });
 
-  it("종료 조건이 특정 날짜(untilDate)인 시리즈는 확장 대상에서 제외한다", async () => {
+  // 생성 시 회차는 min(endDate, 호라이즌)까지만 만들어지므로, untilDate 시리즈도 종료일까지는
+  // 이어 채워야 한다(예전에는 제외해서 종료일이 호라이즌보다 먼 시리즈가 조용히 멈췄다).
+  it("종료 조건이 특정 날짜(untilDate)인 시리즈는 종료일까지만 이어 채운다", async () => {
     const { getDocs, writeBatch } = await import("firebase/firestore");
     const untilDateInstance = makeTodo({
       id: "until-1",
@@ -430,8 +432,17 @@ describe("runStartupMaintenance — 무기한 반복 시리즈 확장", () => {
     const { runStartupMaintenance } = await import("../todoApi");
     await runStartupMaintenance(30, horizonEnd);
 
-    expect(batch.set).not.toHaveBeenCalled();
-    expect(vi.mocked(writeBatch)).not.toHaveBeenCalled();
+    const createdIds = (batch.set.mock.calls as [{ id: string }, unknown][]).map(([ref]) => ref.id);
+    expect(createdIds).toEqual([
+      "series-until_2026-07-13",
+      "series-until_2026-07-14",
+      "series-until_2026-07-15",
+      "series-until_2026-07-16",
+      "series-until_2026-07-17",
+      "series-until_2026-07-18",
+      "series-until_2026-07-19",
+      "series-until_2026-07-20",
+    ]);
   });
 
   it("반복 시리즈가 하나도 없으면 아무 조회/쓰기도 추가로 하지 않는다", async () => {
