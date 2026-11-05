@@ -36,7 +36,6 @@ import { getTodoDateValidationError } from "../../utils/todoDateValidation";
 import {
   toFormValue,
   toRecurrenceRule,
-  toRecurrenceRuleForEdit,
 } from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import {
@@ -207,22 +206,16 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       return;
     }
 
-    // 이미 반복 중인 시리즈를 수정할 때 dueAt은 시리즈 종료일이 아니라 이 회차의 날짜다.
-    // 그래서 범위 검증(dueAt < startAt)은 건너뛰고(회차 날짜 검증은 위에서 이미 했다),
-    // 저장 시 종료 조건도 기존 규칙에서 그대로 가져온다(아래 toRecurrenceRuleForEdit).
-    const existingRule = todo?.recurrence ?? null;
-
+    // 반복 종료 조건은 dueAt이 아니라 폼 값(recurrenceValue)에서 온다.
     if (showRecurrenceSection) {
-      const validationError = existingRule
-        ? getRecurrenceValidationError(recurrenceValue, null, null)
-        : getRecurrenceValidationError(recurrenceValue, startAtWatch ?? null, dueAtWatch ?? null);
+      const validationError = getRecurrenceValidationError(recurrenceValue, startAtWatch ?? null);
       if (validationError) {
         toast.error("입력 확인", validationError);
         return;
       }
     }
 
-    // datetime-local input의 값을 ISO string으로 변환 (반복 종료일 유도에도 재사용)
+    // datetime-local input의 값을 ISO string으로 변환
     const dueAtIso = data.dueAt ? new Date(data.dueAt).toISOString() : null;
     // disabled select는 DOM 속성일 뿐 register 밖이라 RHF가 값을 계속 제출한다.
     // 마감일을 지운 채로 저장하면 이전에 재지정해둔 값이 그대로 남으므로,
@@ -230,11 +223,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
     const reminderOffsetMinutes = dueAtIso ? parseReminderSetting(reminder) : null;
 
     if (todo) {
-      const newRecurrence = !showRecurrenceSection
-        ? null
-        : existingRule
-          ? toRecurrenceRuleForEdit(recurrenceValue, existingRule)
-          : toRecurrenceRule(recurrenceValue, dueAtIso);
+      const newRecurrence = !showRecurrenceSection ? null : toRecurrenceRule(recurrenceValue);
       const updatedFields = {
         ...todo,
         ...fields,
@@ -328,7 +317,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
       );
     } else if (recurrenceValue) {
       // 반복 설정된 신규 할 일 생성 — 확인 모달 없음(4-4절)
-      const newRecurrence = toRecurrenceRule(recurrenceValue, dueAtIso) as RecurrenceRule;
+      const newRecurrence = toRecurrenceRule(recurrenceValue) as RecurrenceRule;
       createRecurringTodo.mutate(
         {
           ...fields,

@@ -260,7 +260,7 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
     expect(payload.recurrence).toEqual({ type: 'daily', endType: 'untilDate', endDate: '2026-12-31' })
   })
 
-  it('수정 모드의 반복 범위 안내는 회차 dueAt이 아니라 기존 규칙을 보여준다', () => {
+  it('수정 모드의 반복 범위 안내는 회차 dueAt이 아니라 기존 규칙(폼 값)을 보여준다', () => {
     mockState.todo = makeTodo({
       startAt: occurrenceIso(1),
       dueAt: occurrenceIso(1),
@@ -269,10 +269,10 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
     })
     renderDetail()
 
-    expect(screen.getByText('무기한으로 반복됩니다')).toBeInTheDocument()
+    expect(screen.getByText('계속 반복됩니다')).toBeInTheDocument()
   })
 
-  it('비반복 할 일을 반복으로 전환하면 기존대로 dueAt에서 종료일을 유도한다', async () => {
+  it('비반복 할 일을 반복으로 전환하면 dueAt이 있어도 무기한으로 시작한다 (종료는 폼 값에서 온다)', async () => {
     const user = setupUser()
     const dueAt = occurrenceIso(5)
     mockState.todo = makeTodo({ startAt: occurrenceIso(1), dueAt })
@@ -283,8 +283,6 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
 
     await waitFor(() => expect(mockState.createRecurringTodo).toHaveBeenCalledTimes(1))
     const payload = mockState.createRecurringTodo.mock.calls[0][0] as Todo
-    const d = new Date(dueAt)
-    const expectedKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'untilDate', endDate: expectedKey })
+    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'indefinite', endDate: null })
   })
 })

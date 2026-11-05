@@ -434,11 +434,6 @@ describe("반복 회차 수정 시 시리즈 종료 조건", () => {
     ).toISOString();
   };
 
-  const localDateKey = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
   it("무기한 시리즈의 회차 제목만 바꿔 저장하면 시리즈 수정 payload의 종료 조건이 무기한으로 유지된다", async () => {
     const user = setupUser();
     renderForm({
@@ -502,7 +497,7 @@ describe("반복 회차 수정 시 시리즈 종료 조건", () => {
     expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeInTheDocument();
   });
 
-  it("비반복 할 일을 반복으로 전환하면 기존대로 dueAt에서 종료일을 유도한다", async () => {
+  it("비반복 할 일을 반복으로 전환하면 dueAt이 있어도 무기한으로 시작한다 (종료는 폼 값에서 온다)", async () => {
     const user = setupUser();
     const dueAt = occurrenceIso(5);
     renderForm({ todo: makeTodo({ startAt: occurrenceIso(1), dueAt }) });
@@ -515,8 +510,8 @@ describe("반복 회차 수정 시 시리즈 종료 조건", () => {
     const payload = mockTodo.useCreateRecurringTodo.mutate.mock.calls[0][0] as Todo;
     expect(payload.recurrence).toEqual({
       type: "daily",
-      endType: "untilDate",
-      endDate: localDateKey(dueAt),
+      endType: "indefinite",
+      endDate: null,
     });
   });
 });

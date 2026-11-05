@@ -4,6 +4,7 @@ import {
   buildRecurringOccurrenceDoc,
   generateRecurringDueDates,
 } from "./recurrence";
+import { isDateOnlyKey } from "./recurrenceForm";
 
 /** 기존 문서의 일부 필드를 갱신하는 계획 항목. */
 export type TodoFieldUpdate = { id: string; fields: Partial<Omit<Todo, "id">> };
@@ -112,10 +113,6 @@ export type SeriesExtension = {
   template: Omit<Todo, "id">;
   dueDates: string[];
 };
-
-/** 반복 규칙의 endDate는 "YYYY-MM-DD"로 저장된다(toRecurrenceRule). */
-const isDateOnlyKey = (value: string | null | undefined): value is string =>
-  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 /**
  * 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.

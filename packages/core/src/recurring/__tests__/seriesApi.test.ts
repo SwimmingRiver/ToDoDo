@@ -1088,7 +1088,6 @@ describe("editRecurringSeries — 회차 수정 시 시리즈 종료 조건 유�
         0,
         0,
       ).toISOString();
-    const tomorrowIso = occurrence(1);
     const indefiniteDaily: RecurrenceRule = { type: "daily", endType: "indefinite", endDate: null };
 
     const instances = [1, 2, 3].map((d) =>
@@ -1113,12 +1112,11 @@ describe("editRecurringSeries — 회차 수정 시 시리즈 종료 조건 유�
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 
     const { editRecurringSeries } = await import("../seriesApi");
-    const { toRecurrenceRule, toRecurrenceRuleForEdit } = await import("../recurrenceForm");
+    const { toFormValue, toRecurrenceRule } = await import("../recurrenceForm");
 
-    // 수정 폼은 회차의 dueAt(=내일)을 그대로 채운다. 예전 경로(toRecurrenceRule)는 이 값을
-    // 종료일로 바꿔 시리즈를 내일에서 끊었다.
-    expect(toRecurrenceRule({ type: "daily" }, tomorrowIso)?.endType).toBe("untilDate");
-    const rule = toRecurrenceRuleForEdit({ type: "daily" }, indefiniteDaily);
+    // 종료 조건은 dueAt이 아니라 폼 값에서 온다. 무기한 시리즈를 폼 값으로 왕복해도
+    // (회차 dueAt=내일과 무관하게) 무기한이 유지돼야 한다.
+    const rule = toRecurrenceRule(toFormValue(indefiniteDaily));
     const horizonEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 10);
 
     await editRecurringSeries(

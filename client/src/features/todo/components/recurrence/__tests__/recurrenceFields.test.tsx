@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import RecurrenceFields from "../recurrenceFields";
 import type { RecurrenceFormValue } from "../recurrenceFields.types";
 
+const DAILY: RecurrenceFormValue = { type: "daily", endType: "indefinite", endDate: null };
+
 describe("RecurrenceFields", () => {
   it("시작일시가 없으면 반복 체크박스가 비활성화되고 안내 문구를 보여준다", () => {
     render(
@@ -21,52 +23,76 @@ describe("RecurrenceFields", () => {
     ).toBeInTheDocument();
   });
 
-  it("마감일시가 없으면 무기한으로 반복된다는 요약을 보여준다", () => {
-    const value: RecurrenceFormValue = { type: "daily" };
+  it("종료가 없음이면 '계속 반복됩니다' 요약을 보여준다", () => {
     render(
       <RecurrenceFields
         disabled={false}
         startAt="2026-07-07T09:00"
         dueAt={null}
-        value={value}
+        value={DAILY}
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText(/무기한으로 반복됩니다/)).toBeInTheDocument();
+    expect(screen.getByText(/계속 반복됩니다/)).toBeInTheDocument();
   });
 
-  it("마감일시가 있으면 그 날짜까지 반복된다는 요약을 보여준다", () => {
-    const value: RecurrenceFormValue = { type: "daily" };
+  it("마감일시가 있어도 종료일로 유도하지 않는다 — 종료는 폼 값에서만 온다", () => {
     render(
       <RecurrenceFields
         disabled={false}
         startAt="2026-07-07T09:00"
         dueAt="2026-07-10T18:00"
-        value={value}
+        value={DAILY}
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText(/2026-07-10까지 반복됩니다/)).toBeInTheDocument();
+    expect(screen.getByText(/계속 반복됩니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-07-10까지 반복됩니다/)).not.toBeInTheDocument();
   });
 
-  it("마감일이 시작일보다 이전이면 에러 문구를 보여준다", () => {
-    const value: RecurrenceFormValue = { type: "daily" };
+  it("값에 종료일이 있으면 그 날짜까지 반복된다는 요약을 보여준다", () => {
+    render(
+      <RecurrenceFields
+        disabled={false}
+        startAt="2026-07-07T09:00"
+        dueAt={null}
+        value={{ type: "daily", endType: "untilDate", endDate: "2026-12-31" }}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeInTheDocument();
+  });
+
+  it("종료일이 시작일보다 이전이면 에러 문구를 보여준다", () => {
     render(
       <RecurrenceFields
         disabled={false}
         startAt="2026-07-10T09:00"
-        dueAt="2026-07-07T18:00"
-        value={value}
+        dueAt={null}
+        value={{ type: "daily", endType: "untilDate", endDate: "2026-07-07" }}
         onChange={vi.fn()}
       />,
     );
     expect(
-      screen.getByText("마감일은 시작일과 같거나 이후여야 합니다"),
+      screen.getByText("종료일은 시작일과 같거나 이후여야 합니다"),
     ).toBeInTheDocument();
   });
 
+  it("마감일이 시작일보다 이전이어도 반복 범위 에러는 없다", () => {
+    render(
+      <RecurrenceFields
+        disabled={false}
+        startAt="2026-07-10T09:00"
+        dueAt="2026-07-05T09:00"
+        value={DAILY}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("마감일은 시작일과 같거나 이후여야 합니다")).not.toBeInTheDocument();
+  });
+
   it("매월 반복일 때 '일(day)'은 마감일이 아니라 시작일 기준으로 안내한다", () => {
-    const value: RecurrenceFormValue = { type: "monthly" };
+    const value: RecurrenceFormValue = { type: "monthly", endType: "indefinite", endDate: null };
     render(
       <RecurrenceFields
         disabled={false}
@@ -77,49 +103,5 @@ describe("RecurrenceFields", () => {
       />,
     );
     expect(screen.getByText("매월 15일에 반복됩니다 (시작일시 기준)")).toBeInTheDocument();
-  });
-
-  describe("existingRule(이미 반복 중인 시리즈 수정)", () => {
-    it("untilDate면 회차 dueAt이 아니라 기존 종료일로 범위를 안내한다", () => {
-      render(
-        <RecurrenceFields
-          disabled={false}
-          startAt="2026-07-07T09:00"
-          dueAt="2026-07-07T09:00"
-          value={{ type: "daily" }}
-          onChange={vi.fn()}
-          existingRule={{ type: "daily", endType: "untilDate", endDate: "2026-12-31" }}
-        />,
-      );
-      expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeInTheDocument();
-    });
-
-    it("indefinite면 '무기한으로 반복됩니다'로 안내한다", () => {
-      render(
-        <RecurrenceFields
-          disabled={false}
-          startAt="2026-07-07T09:00"
-          dueAt="2026-07-07T09:00"
-          value={{ type: "daily" }}
-          onChange={vi.fn()}
-          existingRule={{ type: "daily", endType: "indefinite", endDate: null }}
-        />,
-      );
-      expect(screen.getByText("무기한으로 반복됩니다")).toBeInTheDocument();
-    });
-
-    it("마감일이 시작일보다 이전이어도 범위 에러를 보여주지 않는다", () => {
-      render(
-        <RecurrenceFields
-          disabled={false}
-          startAt="2026-07-10T09:00"
-          dueAt="2026-07-05T09:00"
-          value={{ type: "daily" }}
-          onChange={vi.fn()}
-          existingRule={{ type: "daily", endType: "indefinite", endDate: null }}
-        />,
-      );
-      expect(screen.queryByText("마감일은 시작일과 같거나 이후여야 합니다")).not.toBeInTheDocument();
-    });
   });
 });

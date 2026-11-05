@@ -52,7 +52,7 @@ export const TodoFormScreen = () => {
       return;
     }
 
-    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt, dueAt);
+    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt);
     if (recurrenceError) {
       setError(recurrenceError);
       setShowMore(true);
@@ -71,7 +71,7 @@ export const TodoFormScreen = () => {
           startAt,
           dueAt,
           parentId: null,
-          recurrence: toRecurrenceRule(recurrenceValue, dueAt),
+          recurrence: toRecurrenceRule(recurrenceValue),
         });
         navigation.goBack();
         return;
