@@ -271,6 +271,44 @@ describe("buildExtensionCreates", () => {
     expect(create.doc.parentId).toBeNull();
   });
 
+  // 템플릿은 시리즈의 마지막 회차다. 그 회차가 구글 캘린더에 동기화돼 있으면 googleEventId를
+  // 갖는데, 새 회차가 이를 물려받으면 동기화 시 전부 같은 이벤트를 PATCH해 하나로 뭉친다.
+  it("마지막 회차의 googleEventId를 새 회차에 복사하지 않는다", () => {
+    const [create] = buildExtensionCreates(
+      [
+        {
+          recurrenceId: "series-1",
+          template: makeTodo({ id: "x", googleEventId: "gev-latest" }) as Omit<Todo, "id">,
+          dueDates: ["2026-07-11T00:00:00.000Z"],
+        },
+      ],
+      0,
+      "test-user-id",
+      NOW,
+    );
+
+    expect(create.doc).not.toHaveProperty("googleEventId");
+  });
+
+  // fetchAllUserTodos는 archived 문서도 포함하므로 마지막 회차가 숨김·보관 상태일 수 있다.
+  it("마지막 회차가 숨김(overdueArchived)·보관(archived) 상태여도 새 회차는 둘 다 false로 만든다", () => {
+    const [create] = buildExtensionCreates(
+      [
+        {
+          recurrenceId: "series-1",
+          template: makeTodo({ id: "x", overdueArchived: true, archived: true }) as Omit<Todo, "id">,
+          dueDates: ["2026-07-11T00:00:00.000Z"],
+        },
+      ],
+      0,
+      "test-user-id",
+      NOW,
+    );
+
+    expect(create.doc.overdueArchived).toBe(false);
+    expect(create.doc.archived).toBe(false);
+  });
+
   it("여러 시리즈에 걸쳐 order가 계속 증가한다", () => {
     const template = makeTodo({ id: "x" }) as Omit<Todo, "id">;
     const extensions = [

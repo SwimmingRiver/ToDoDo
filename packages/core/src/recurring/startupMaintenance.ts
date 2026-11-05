@@ -1,5 +1,9 @@
 import type { RecurrenceRule, Todo } from "../types/todo";
-import { buildRecurringInstanceId, generateRecurringDueDates } from "./recurrence";
+import {
+  buildRecurringInstanceId,
+  buildRecurringOccurrenceDoc,
+  generateRecurringDueDates,
+} from "./recurrence";
 
 /** 기존 문서의 일부 필드를 갱신하는 계획 항목. */
 export type TodoFieldUpdate = { id: string; fields: Partial<Omit<Todo, "id">> };
@@ -180,21 +184,15 @@ export const buildExtensionCreates = (
     for (const dueAt of dueDates) {
       creates.push({
         id: buildRecurringInstanceId(recurrenceId, dueAt),
-        doc: {
-          ...template,
+        // template은 시리즈의 마지막 회차다. 동기화돼 있으면 googleEventId를, 오래 방치됐으면
+        // archived/overdueArchived를 갖고 있을 수 있어 공용 빌더로 회차별 필드를 정리한다.
+        doc: buildRecurringOccurrenceDoc(template, {
           userId,
-          // template(마지막 인스턴스 필드 승계)에 담긴 startAt은 그 인스턴스 자신의
-          // 발생일 기준 값이라 새로 만드는 인스턴스에는 맞지 않으므로 매번 덮어쓴다.
-          startAt: dueAt,
-          dueAt,
-          status: "todo",
-          doneAt: null,
-          parentId: null,
           recurrenceId,
-          createdAt: now,
-          updatedAt: now,
+          dueAt,
+          now,
           order: nextOrder,
-        },
+        }),
       });
       nextOrder += 1;
     }

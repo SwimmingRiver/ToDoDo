@@ -31,3 +31,38 @@ export declare function generateRecurringDueDates(baseDueAt: string, rule: Recur
  * 있으면 덮어쓰는 upsert) 마지막에 커밋된 내용으로 수렴할 뿐 중복 문서가 생기지 않는다.
  */
 export declare const buildRecurringInstanceId: (recurrenceId: string, dueAt: string) => string;
+/**
+ * 반복 회차 문서를 새로 만들 때 쓰는 공용 빌더. 회차를 만드는 세 경로(createRecurringTodo,
+ * editRecurringSeries의 재생성, runStartupMaintenance의 확장 스윕)가 모두 이 함수를 거친다.
+ *
+ * 템플릿(폼 입력 또는 시리즈의 마지막 회차)의 나머지 필드(제목·설명·우선순위·반복 규칙·알림
+ * 설정 등)는 그대로 물려받되, 회차마다 따로 가져야 하는 값은 여기서 한 번에 정리한다:
+ * - googleEventId: 문서 1개 ↔ 구글 이벤트 1개 매핑이다. 물려주면 동기화 시 회차 N개가 같은
+ *   이벤트를 PATCH해 이벤트 하나로 뭉치므로 빼서 각 회차가 미동기화 상태로 시작하게 한다.
+ * - archived / overdueArchived: 템플릿이 보관·숨김 상태여도 새 회차는 항상 보여야 한다.
+ * - status/doneAt/parentId/startAt/timestamps/order: 새 회차의 초기값.
+ * 회차별 필드가 새로 생기면 여기에만 추가하면 된다.
+ */
+export declare const buildRecurringOccurrenceDoc: <T extends {
+    id?: string;
+    googleEventId?: string | null;
+}>(template: T, params: {
+    userId: string;
+    recurrenceId: string;
+    dueAt: string;
+    now: string;
+    order: number;
+}) => Omit<T, "id" | "googleEventId"> & {
+    userId: string;
+    startAt: string;
+    dueAt: string;
+    status: "todo";
+    doneAt: null;
+    parentId: null;
+    archived: boolean;
+    overdueArchived: boolean;
+    recurrenceId: string;
+    createdAt: string;
+    updatedAt: string;
+    order: number;
+};
