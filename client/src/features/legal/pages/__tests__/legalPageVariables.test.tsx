@@ -2,8 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-vi.mock("../../config", () => ({
-  LEGAL_CONFIG: { sellerName: "홍길동", contactEmail: "", effectiveDate: "", privacyOfficer: "" },
+vi.mock("../../config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../config")>()),
+  LEGAL_REVISIONS: [
+    { effectiveOn: "", change: "", config: { sellerName: "홍길동", contactEmail: "", privacyOfficer: "" } },
+  ],
 }));
 vi.mock("../../content", () => ({
   LEGAL_DOCUMENTS: {

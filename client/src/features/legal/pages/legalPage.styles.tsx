@@ -81,6 +81,34 @@ const EffectiveDate = styled.p`
   color: ${colors.text.secondary};
 `;
 
+const ChangeNotice = styled.p`
+  margin: 16px 0 !important;
+  padding: 12px 16px;
+  border-radius: ${radius.md};
+  background-color: ${colors.brand.tint};
+  color: ${colors.text.primary};
+
+  strong {
+    color: ${colors.brand.strong};
+  }
+`;
+
+const History = styled.section`
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid ${colors.border.tertiary};
+  color: ${colors.text.secondary};
+
+  h2 {
+    margin-top: 0;
+    font-size: 15px;
+  }
+
+  li {
+    font-size: 14px;
+  }
+`;
+
 const TableWrapper = styled.div`
   overflow-x: auto;
   margin: 12px 0;
@@ -112,4 +140,14 @@ const TableWrapper = styled.div`
   }
 `;
 
-export { PageContainer, Header, HomeLink, LogoMark, Article, EffectiveDate, TableWrapper };
+export {
+  PageContainer,
+  Header,
+  HomeLink,
+  LogoMark,
+  Article,
+  EffectiveDate,
+  ChangeNotice,
+  History,
+  TableWrapper,
+};

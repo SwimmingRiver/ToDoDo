@@ -29,7 +29,7 @@ const LandingPage = () => {
           체험하기 →
         </SecondaryButton>
       </SecondaryCtaSection>
-      <Footer />
+      <Footer showBusinessInfo />
     </PageContainer>
   );
 };
