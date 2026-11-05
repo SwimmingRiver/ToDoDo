@@ -34,6 +34,22 @@ export type RecurringTodoInput = {
   recurrenceId?: string | null;
 } & Partial<Omit<Todo, "id">>;
 
+/** 두 반복 규칙이 같은지. 저장 문서엔 endDate/weekdays 키가 없을 수 있어 없음을 null/[]로 맞춘다. */
+const isSameRecurrenceRule = (
+  a: RecurrenceRule | null | undefined,
+  b: RecurrenceRule,
+): boolean => {
+  if (!a) return false;
+  const weekdaysKey = (r: RecurrenceRule) =>
+    r.type === "weekly" ? [...(r.weekdays ?? [])].sort((x, y) => x - y).join(",") : "";
+  return (
+    a.type === b.type &&
+    a.endType === b.endType &&
+    (a.endType === "untilDate" ? (a.endDate ?? null) === (b.endDate ?? null) : true) &&
+    weekdaysKey(a) === weekdaysKey(b)
+  );
+};
+
 const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
   ({ id, ...data }) as Todo;
 
@@ -156,6 +172,17 @@ const editRecurringSeriesImpl = async (
   }
   if (seriesTodo.parentId) {
     throw new Error("하위 할 일은 반복 시리즈를 가질 수 없습니다");
+  }
+  // 재생성 0개가 정상이 된 뒤로(종료일 선택), 잘못된 입력도 0개로 계산되어 창 안 todo 회차를
+  // 지우기만 하고 아무것도 만들지 않는 조용한 삭제가 된다. 폼 검증을 거치지 않은 호출에
+  // 대비해 조회·스테이징 전에 막는다.
+  if (seriesTodo.recurrence) {
+    if (seriesTodo.recurrence.type === "weekly" && !seriesTodo.recurrence.weekdays?.length) {
+      throw new Error("매주 반복은 요일을 하나 이상 선택해야 합니다");
+    }
+    if (seriesTodo.startAt && Number.isNaN(new Date(seriesTodo.startAt).getTime())) {
+      throw new Error("반복 할 일의 시작일시를 해석할 수 없습니다");
+    }
   }
 
   const now = new Date().toISOString();
@@ -330,6 +357,28 @@ const editRecurringSeriesImpl = async (
   }
 
   if (newRecurrence) {
+    // 반복이 유지되는 저장: 삭제되지 않고 남는 다른 회차(done/doing/overdue)에도 새 규칙을
+    // 기록한다. 앱 시작 정리 작업(planIndefiniteExtension)은 dueAt이 가장 늦은 회차의 규칙으로
+    // 시리즈를 이어 채우는데, 종료일을 당기면 재생성이 0~몇 개라 가장 늦은 회차가 보존된
+    // 회차인 경우가 흔하다 — 그 회차가 옛(무기한) 규칙을 갖고 있으면 끝낸 시리즈가 다음 시작에
+    // 호라이즌까지 되살아난다. 수정 회차보다 앞선 회차도 함께 바꾼다: 규칙은 회차별 기록이
+    // 아니라 시리즈 메타데이터(비정규화 사본)이고, 연장은 가장 늦은 회차만 보므로 앞선 회차의
+    // 규칙이 바뀌어도 그 회차의 상태·날짜에는 영향이 없다. 범위를 수정 회차 이후로 가르는
+    // 것보다 "남는 회차는 모두 같은 규칙"이 단순하고 어느 회차가 가장 늦든 안전하다.
+    // 제외: 삭제 대상(같은 id로 set될 수 있음), 직접 갱신한 수정 회차(그 update에 이미 새
+    // 규칙이 실려 있음 — 같은 문서에 update를 두 번 걸지 않는다), 일반 할 일로 분리한 회차(이
+    // 분기에선 해당 없음), 이미 같은 규칙인 회차(불필요한 쓰기 방지).
+    seriesTodos
+      .filter(
+        (t) =>
+          !toDeleteIds.has(t.id) &&
+          !(editedIsPreserved && t.id === seriesTodo.id) &&
+          !isSameRecurrenceRule(t.recurrence, newRecurrence),
+      )
+      .forEach((t) => {
+        batch.update(doc(db, "todos", t.id), { recurrence: newRecurrence, updatedAt: now });
+      });
+
     if (!seriesTodo.startAt) {
       throw new Error("반복 할 일은 startAt(시작일시)이 필요합니다");
     }
