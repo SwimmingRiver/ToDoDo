@@ -230,7 +230,7 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
     await user.type(title, '바뀐 제목')
     fireEvent.submit(title.closest('form')!)
 
-    expect(await screen.findByText('반복 일정 전체 수정')).toBeInTheDocument()
+    expect(await screen.findByText('반복 일정 수정')).toBeInTheDocument()
     // 시리즈 수정은 이 회차와 이후 회차에만 적용된다(core editRecurringSeries 계약과 같은 안내).
     expect(
       screen.getByText('이 변경은 이 일정과 이후 일정에 적용됩니다.', { exact: false }),
