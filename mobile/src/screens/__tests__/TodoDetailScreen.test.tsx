@@ -437,6 +437,73 @@ describe("TodoDetailScreen", () => {
       );
     });
 
+    it("기존 untilDate 시리즈는 「날짜 지정」과 그 날짜로 채워지고, 제목만 바꿔도 endDate가 유지된다", async () => {
+      const alertSpy = spyAlert();
+      const UNTIL = { type: "daily", endType: "untilDate", endDate: "2026-12-31" };
+      mockUseTodos.mockReturnValue({ data: [recurringRoot({ recurrence: UNTIL })] });
+      mockEditSeries.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      expect(screen.getByRole("radio", { name: "반복 종료 날짜 지정" }).props.accessibilityState.selected).toBe(true);
+      expect(screen.getByLabelText("반복 종료일, 2026-12-31")).toBeTruthy();
+      await fireEvent.changeText(screen.getByDisplayValue("루트 할 일"), "바뀐 제목");
+      await screen.findByDisplayValue("바뀐 제목");
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await act(async () => {
+        await apply?.onPress?.();
+      });
+
+      expect(mockEditSeries).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "바뀐 제목", recurrence: UNTIL }),
+      );
+    });
+
+    it("종료를 없음으로 바꾸면 indefinite + endDate null로 저장한다", async () => {
+      const alertSpy = spyAlert();
+      const UNTIL = { type: "daily", endType: "untilDate", endDate: "2026-12-31" };
+      mockUseTodos.mockReturnValue({ data: [recurringRoot({ recurrence: UNTIL })] });
+      mockEditSeries.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByRole("radio", { name: "반복 종료 없음" }));
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = lastButtons(alertSpy).find((b) => b.text === "전체 적용");
+      await act(async () => {
+        await apply?.onPress?.();
+      });
+
+      expect(mockEditSeries).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrence: { type: "daily", endType: "indefinite", endDate: null } }),
+      );
+    });
+
+    it("기존 시리즈 수정에서는 만료일시가 보인다", async () => {
+      mockUseTodos.mockReturnValue({ data: [recurringRoot()] });
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      expect(screen.getByText("만료일시")).toBeTruthy();
+    });
+
+    it("endDate가 없는 옛 untilDate 문서는 「날짜 지정」+빈 날짜로 열리고 저장이 막힌다", async () => {
+      const alertSpy = spyAlert();
+      alertSpy.mockClear(); // spy는 테스트 간 호출 기록을 공유한다
+      mockUseTodos.mockReturnValue({
+        data: [recurringRoot({ recurrence: { type: "daily", endType: "untilDate" } })],
+      });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      expect(screen.getByLabelText("반복 종료일, 선택 안 함")).toBeTruthy();
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect((await screen.findAllByText("종료일을 선택해주세요")).length).toBeGreaterThan(0);
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(mockEditSeries).not.toHaveBeenCalled();
+    });
+
     it("시리즈 수정 확인에서 취소하면 아무 mutation도 호출하지 않는다", async () => {
       const alertSpy = spyAlert();
       mockUseTodos.mockReturnValue({ data: [recurringRoot()] });

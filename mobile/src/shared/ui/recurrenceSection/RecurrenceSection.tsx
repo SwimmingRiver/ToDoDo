@@ -5,8 +5,8 @@ import {
   WEEKDAY_REQUIRED_ERROR,
   getRecurrenceValidationError,
   type RecurrenceFormValue,
-  type RecurrenceRule,
 } from "@tododo/core";
+import { DateField } from "../dateField/DateField";
 import { colors } from "../../../theme/colors";
 import { MIN_TOUCH_TARGET, radius, spacing } from "../../../theme/spacing";
 
@@ -16,19 +16,20 @@ interface RecurrenceSectionProps {
   disabledReason?: "hasChildren" | "noStartAt";
   /** 반복 시작 앵커. 매월 반복의 '일(day)' 유도에도 사용 */
   startAt: string | null;
-  /** 더 이상 종료일로 쓰지 않는다(종료는 value.endType/endDate) */
-  dueAt: string | null;
   /** null = 반복 OFF */
   value: RecurrenceFormValue | null;
   onChange: (value: RecurrenceFormValue | null) => void;
-  /** 호출부 호환용. 종료 조건 표시는 value에서 온다(이후 태스크에서 제거 예정). */
-  existingRule?: RecurrenceRule | null;
 }
 
 const TYPE_OPTIONS: { value: RecurrenceFormValue["type"]; label: string }[] = [
   { value: "daily", label: "매일" },
   { value: "weekly", label: "매주" },
   { value: "monthly", label: "매월" },
+];
+
+const END_OPTIONS: { value: RecurrenceFormValue["endType"]; label: string }[] = [
+  { value: "indefinite", label: "없음" },
+  { value: "untilDate", label: "날짜 지정" },
 ];
 
 /** 웹 recurrenceFields.tsx의 모바일 대응(A안): 스위치를 켜면 주기·요일·범위 안내가 펼쳐진다. */
@@ -45,11 +46,18 @@ export const RecurrenceSection = ({
   const rangeError =
     validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
 
-  // 종료 조건은 폼 값에서 온다(dueAt에서 유도하지 않는다).
+  // 종료 조건은 폼 값에서 온다. 날짜 지정인데 날짜가 없으면 안내 대신 검증 오류가 보인다.
   const rangeText =
-    value?.endType === "untilDate" && value.endDate
-      ? `${value.endDate}까지 반복됩니다`
+    value?.endType === "untilDate"
+      ? value.endDate
+        ? `${value.endDate}까지 반복됩니다`
+        : null
       : "계속 반복됩니다";
+
+  const handleEndTypeChange = (endType: RecurrenceFormValue["endType"]) => {
+    if (!value || value.endType === endType) return;
+    onChange({ ...value, endType, endDate: null });
+  };
 
   const handleToggle = (next: boolean) => {
     if (disabled) return;
@@ -172,10 +180,38 @@ export const RecurrenceSection = ({
           )}
 
           <View style={styles.group}>
-            <Text style={styles.groupLabel}>반복 범위</Text>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>{rangeText}</Text>
+            <Text style={styles.groupLabel}>반복 종료</Text>
+            <View style={styles.row} accessibilityRole="radiogroup">
+              {END_OPTIONS.map((option) => {
+                const selected = option.value === value.endType;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => handleEndTypeChange(option.value)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`반복 종료 ${option.label}`}
+                    style={[styles.chip, styles.typeChip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
+            {value.endType === "untilDate" && (
+              <DateField
+                label="반복 종료일"
+                value={value.endDate ?? null}
+                onChange={(endDate) => onChange({ ...value, endDate })}
+              />
+            )}
+            {rangeText && (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>{rangeText}</Text>
+              </View>
+            )}
             {rangeError && (
               <Text style={styles.errorText} accessibilityRole="alert">
                 {rangeError}

@@ -123,7 +123,10 @@ export const TodoDetailScreen = () => {
     );
   }
 
-  const dateValidationError = getTodoDateValidationError(startAt, dueAt);
+  // 새로 반복을 거는 동안(기존 시리즈가 아님) 만료일시는 반복 회차에 쓰이지 않으므로 숨기고
+  // 검증에서도 뺀다. 값은 지우지 않아 반복을 끄면 그대로 다시 보인다(웹 todoForm과 동일).
+  const hideDueAt = recurrenceValue !== null && !todo.recurrence;
+  const dateValidationError = getTodoDateValidationError(startAt, hideDueAt ? null : dueAt);
 
   const runSave = async (task: () => Promise<void>) => {
     if (saveInFlightRef.current) return;
@@ -371,16 +374,14 @@ export const TodoDetailScreen = () => {
           <PriorityChips value={priority} onChange={setPriority} />
 
           <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
-          <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />
+          {!hideDueAt && <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />}
           {isRoot && (
             <RecurrenceSection
               disabled={hasChildren || !startAt}
               disabledReason={hasChildren ? "hasChildren" : "noStartAt"}
               startAt={startAt}
-              dueAt={dueAt}
               value={recurrenceValue}
               onChange={setRecurrenceValue}
-              existingRule={todo.recurrence}
             />
           )}
           {error && <Text style={styles.fieldError}>{error}</Text>}
