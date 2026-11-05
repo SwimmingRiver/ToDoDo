@@ -1760,3 +1760,123 @@ describe("반복 시리즈 쓰기 함수 직렬화(withRecurringSeriesLock)", ()
     expect(deleteReadOrder).toBeGreaterThan(editCommitOrder);
   });
 });
+
+describe("editRecurringSeries — 재생성 0개 허용 (종료일 선택 도입)", () => {
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+  });
+
+  const toDocSnapshot = (todos: Todo[]) => ({
+    docs: todos.map((t) => ({
+      id: t.id,
+      data: () => {
+        const { id: _id, ...rest } = t;
+        return rest;
+      },
+    })),
+  });
+
+  // 7월 기준 로컬 시각(09:00) 회차. UTC 리터럴을 쓰지 않는다(뉴욕 TZ에서 날짜가 밀림).
+  const julyAt = (day: number) => new Date(2026, 6, day, 9, 0).toISOString();
+  const RID = "series-end";
+  const instanceOn = (day: number, rule: RecurrenceRule, overrides: Partial<Todo> = {}) =>
+    makeTodo({
+      id: buildRecurringInstanceId(RID, julyAt(day)),
+      title: "원래 제목",
+      startAt: julyAt(day),
+      dueAt: julyAt(day),
+      recurrenceId: RID,
+      recurrence: rule,
+      ...overrides,
+    });
+
+  const setup = async (todos: Todo[]) => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot(todos) as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+    const { editRecurringSeries } = await import("../seriesApi");
+    return { batch, editRecurringSeries };
+  };
+
+  const idsOf = (mock: { mock: { calls: unknown[][] } }) =>
+    mock.mock.calls.map((call) => (call[0] as { id: string }).id).sort();
+
+  it("이미 지난 종료일 시리즈의 지난 회차 제목만 고쳐도 저장된다", async () => {
+    vi.setSystemTime(new Date(2026, 6, 20, 0, 0));
+    const rule: RecurrenceRule = {
+      type: "daily",
+      endType: "untilDate",
+      endDate: "2026-07-15",
+    };
+    const series = [10, 11, 12].map((d) => instanceOn(d, rule));
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await expect(
+      editRecurringSeries(
+        fakeDb,
+        UID,
+        { ...series[2], title: "바뀐 제목" },
+        new Date(2026, 6, 25),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+    expect(batch.set).not.toHaveBeenCalled();
+    expect(idsOf(batch.update)).toEqual([series[2].id]);
+    expect(batch.update.mock.calls[0][1]).toMatchObject({ title: "바뀐 제목" });
+  });
+
+  it("종료일을 수정 회차 날짜로 줄이면 그 회차는 남고 이후 todo 회차만 지워진다", async () => {
+    const openRule: RecurrenceRule = { type: "daily", endType: "indefinite", endDate: null };
+    const series = [
+      instanceOn(9, openRule, { status: "done", doneAt: julyAt(9) }),
+      ...[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((d) => instanceOn(d, openRule)),
+    ];
+    const edited = series.find((t) => t.id === buildRecurringInstanceId(RID, julyAt(12)))!;
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      {
+        ...edited,
+        recurrence: { type: "daily", endType: "untilDate", endDate: "2026-07-12" },
+      },
+      new Date(2026, 6, 20),
+    );
+
+    expect(idsOf(batch.delete)).toEqual(
+      [12, 13, 14, 15, 16, 17, 18, 19, 20]
+        .map((d) => buildRecurringInstanceId(RID, julyAt(d)))
+        .sort(),
+    );
+    expect(idsOf(batch.set)).toEqual([`${RID}_2026-07-12`]);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("시작일시가 호라이즌 밖이면 여전히 실패하고 commit하지 않는다", async () => {
+    const rule: RecurrenceRule = { type: "daily", endType: "indefinite", endDate: null };
+    const series = [10, 11].map((d) => instanceOn(d, rule));
+    const { batch, editRecurringSeries } = await setup(series);
+    const horizon = new Date(2026, 6, 20);
+    const farStart = new Date(2026, 6, 30, 9, 0).toISOString();
+
+    await expect(
+      editRecurringSeries(
+        fakeDb,
+        UID,
+        { ...series[1], startAt: farStart, dueAt: farStart },
+        horizon,
+      ),
+    ).rejects.toThrow("생성 가능 기간");
+
+    expect(batch.commit).not.toHaveBeenCalled();
+  });
+});

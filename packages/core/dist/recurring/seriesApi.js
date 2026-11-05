@@ -216,12 +216,17 @@ const editRecurringSeriesImpl = async (db, userId, seriesTodo, horizonEnd) => {
         const dueDates = generateRecurringDueDates(seriesTodo.startAt, newRecurrence, horizonEnd)
             .filter((iso) => new Date(iso).getTime() >= todayStart.getTime())
             .filter((iso) => !preservedDateKeys.has(new Date(iso).toDateString()));
-        // 새 마감일이 호라이즌을 벗어나 재생성할 발생일이 하나도 없으면, 여기서(commit 전에)
-        // 명시적으로 실패시킨다. 위 batch.delete/batch.set은 스테이징일 뿐 commit 전에는
-        // Firestore에 반영되지 않으므로, 이 throw로 시리즈 삭제 자체가 취소되어 기존 미래
-        // 인스턴스가 소실되지 않는다.
+        // 재생성할 발생일이 0개일 때의 처리. 시작일시(로컬 날짜)가 호라이즌보다 뒤라서 만들 수
+        // 없는 경우만 commit 전에 실패시킨다(9f659ea: 위 batch.delete/batch.set은 스테이징일 뿐
+        // commit 전에는 반영되지 않으므로, 이 throw로 시리즈 삭제가 취소되어 기존 미래 인스턴스가
+        // 소실되지 않는다). 종료일 선택이 생기면서 그 밖의 0개(종료일이 재생성 창보다 앞서거나
+        // 창 안에 해당 요일이 없음)는 정상이다 — 창 안의 todo 회차만 지워지고 새로 만들지 않는다.
         if (dueDates.length === 0) {
-            throw new Error("설정한 마감일이 반복 생성 가능 기간을 벗어나 일정을 생성할 수 없습니다. 마감일을 더 가깝게 설정해주세요.");
+            const startDay = new Date(seriesTodo.startAt);
+            startDay.setHours(0, 0, 0, 0);
+            if (startDay.getTime() > horizonEnd.getTime()) {
+                throw new Error("설정한 마감일이 반복 생성 가능 기간을 벗어나 일정을 생성할 수 없습니다. 마감일을 더 가깝게 설정해주세요.");
+            }
         }
         let nextOrder = await getNextRootOrder(db, userId);
         dueDates.forEach((dueAt) => {
