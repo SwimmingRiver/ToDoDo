@@ -7,6 +7,7 @@ import {
   writeBatch,
   type Firestore,
 } from "firebase/firestore";
+import { parseDateKey, toDateKeyFromISO } from "../insights/date";
 import type { RecurrenceRule, Todo } from "../types/todo";
 import {
   buildRecurringInstanceId,
@@ -130,19 +131,22 @@ const createRecurringTodoImpl = async (
 };
 
 /**
- * 반복 시리즈 전체 수정. 입력은 시리즈 대표 todo(수정 폼에서 편집 중인 인스턴스)의
+ * 반복 시리즈 수정("이 회차와 이후 회차"). 입력은 수정 폼에서 편집 중인 회차의
  * 새 필드값 + 새 recurrence 규칙이다 (recurrence가 null이면 반복 OFF 전환).
  *
- * 같은 recurrenceId를 가진 모든 인스턴스를 조회한 뒤 3단 분기로 처리한다:
+ * 창 시작 = max(수정 회차의 저장된 날짜, 오늘). 같은 recurrenceId를 가진 모든 인스턴스를
+ * 조회한 뒤 3단 분기로 처리한다:
  *  1) status가 "done" 또는 "doing" → 그대로 보존 (필드 값 포함 전혀 건드리지 않음)
- *  2) status가 "todo"이고 dueAt < 오늘(지난 미완료 = overdue) → 그대로 보존
- *  3) status가 "todo"이고 dueAt >= 오늘(미래) → 삭제 후, 새 규칙/새 필드값으로 재생성
- *     (재생성 시작 기준일은 새 dueAt부터 horizonEnd까지, 오늘 이전 발생일은 제외)
+ *  2) status가 "todo"이고 dueAt < 창 시작(지난 미완료 overdue, 수정 회차보다 앞선 회차)
+ *     → 그대로 보존
+ *  3) status가 "todo"이고 dueAt >= 창 시작 → 삭제 후, 새 규칙/새 필드값으로 재생성
+ *     (재생성 시작 기준일은 새 startAt부터 horizonEnd까지, 오늘 이전 발생일과 보존된
+ *     회차가 점유한 날짜는 제외)
  *
- * recurrence를 null로 바꿔 반복을 끄는 저장도 동일한 3단 분기를 따른다: done/doing/overdue는
- * 그대로 두고, 미래 "todo" 인스턴스만 재생성 없이 완전히 삭제한다(문서 자체가 사라지므로
- * recurrenceId도 함께 사라진다). 단, 지금 수정 중인 회차는(done이 아니면) 삭제하지 않고
- * 수정 내용을 반영한 뒤 recurrence/recurrenceId를 null로 끊어 일반 할 일로 남긴다.
+ * recurrence를 null로 바꿔 반복을 끄는 저장도 동일한 3단 분기를 따른다: 보존 대상은
+ * 그대로 두되 반복 규칙만 지우고, 창 안의 "todo" 인스턴스만 재생성 없이 완전히 삭제한다.
+ * 단, 지금 수정 중인 회차는(done이 아니면) 삭제하지 않고 수정 내용을 반영한 뒤
+ * recurrence/recurrenceId를 null로 끊어 일반 할 일로 남긴다.
  */
 export const editRecurringSeries = (
   db: Firestore,
@@ -189,13 +193,28 @@ const editRecurringSeriesImpl = async (
   const keepEditedAsStandalone =
     !seriesTodo.recurrence && !!editedOriginal && editedOriginal.status !== "done";
 
-  // done/doing/overdue(todo && dueAt < 오늘) 인스턴스는 삭제 대상에서 제외(그대로 보존).
-  // todo && dueAt >= 오늘 인 미래 인스턴스만 삭제 대상.
+  // 시리즈 수정은 "이 회차와 이후 회차"에만 적용한다. 삭제·재생성 창의 시작은 수정 중인
+  // 회차의 저장된 날짜(로컬 자정)와 오늘 자정 중 늦은 쪽이다. 그 이전 회차는 상태와 무관하게
+  // 지우지도 다시 만들지도 않는다 — 그러지 않으면 오늘 시작한 매일 시리즈에서 내일 회차를
+  // 고칠 때, 오늘 회차가 지워지고(재생성은 수정 회차 날짜부터라) 다시 생기지 않는다.
+  // 기준은 입력(seriesTodo.dueAt, 사용자가 바꿨을 수 있음)이 아니라 저장된 문서의 dueAt이다.
+  // 저장된 회차를 못 찾거나 dueAt이 없으면 이전 동작대로 오늘 자정부터로 둔다(정확한 회차
+  // 위치를 모를 때 더 이른 쪽으로 넓히는 것이 기존 계약과 같다).
+  const editedDayStart = editedOriginal?.dueAt
+    ? parseDateKey(toDateKeyFromISO(editedOriginal.dueAt))
+    : null;
+  const windowStart =
+    editedDayStart && editedDayStart.getTime() > todayStart.getTime()
+      ? editedDayStart
+      : todayStart;
+
+  // done/doing 인스턴스와 창 이전(지난 미완료 overdue, 수정 회차보다 앞선 회차) 인스턴스는
+  // 삭제 대상에서 제외(그대로 보존). 창 안의 todo 인스턴스만 삭제 대상.
   const toDelete = seriesTodos.filter((t) => {
     if (keepEditedAsStandalone && t.id === seriesTodo.id) return false;
     if (t.status === "done" || t.status === "doing") return false;
     if (!t.dueAt) return false; // dueAt 없는 todo 상태 인스턴스는 방어적으로 보존
-    return new Date(t.dueAt).getTime() >= todayStart.getTime();
+    return new Date(t.dueAt).getTime() >= windowStart.getTime();
   });
 
   toDelete.forEach((t) => {
@@ -310,7 +329,10 @@ const editRecurringSeriesImpl = async (
     }
 
     // 오늘 이후 첫 유효 발생일부터 horizonEnd까지 새 규칙으로 재생성하되, 이미 보존된
-    // 인스턴스가 점유한 날짜는 건너뛴다.
+    // 인스턴스가 점유한 날짜는 건너뛴다. 발생일은 seriesTodo.startAt(보통 수정 회차 날짜)부터
+    // 계산되므로 창 이전 날짜는 원래 나오지 않는다. 사용자가 시작일을 수정 회차보다 앞당긴
+    // 경우에만 그 사이 날짜가 나오는데, 그때도 남아 있는 앞선 회차가 점유한 날짜는
+    // preservedDateKeys로 건너뛰어 중복이 생기지 않는다(앞당긴 날짜 자체는 사용자 의도대로 반영).
     const dueDates = generateRecurringDueDates(
       seriesTodo.startAt,
       newRecurrence,
@@ -353,7 +375,7 @@ const editRecurringSeriesImpl = async (
       nextOrder += 1;
     });
   }
-  // newRecurrence === null: 반복 OFF 전환. 미래 인스턴스는 위 toDelete에서 이미 삭제
+  // newRecurrence === null: 반복 OFF 전환. 창 안의 todo 인스턴스는 위 toDelete에서 이미 삭제
   // 대상에 포함되었고(수정 중인 회차는 일반 할 일로 남김), 재생성하지 않는다.
 
   await batch.commit();

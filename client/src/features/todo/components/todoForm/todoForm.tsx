@@ -474,7 +474,7 @@ const TodoForm = ({ todo, parentId, initialDueAt, onClose, onSubmittingChange }:
         isOpen={isSeriesConfirmOpen}
         title="반복 일정 전체 수정"
         message={
-          "이 변경은 앞으로의 일정과 지금 수정 중인 일정에 적용됩니다.\n\n그 외 이미 완료됐거나 진행 중/지난 다른 회차는 그대로 유지됩니다."
+          "이 변경은 이 일정과 이후 일정에 적용됩니다.\n\n이전 일정과 이미 완료됐거나 진행 중인 회차는 그대로 유지됩니다."
         }
         confirmText="전체 적용"
         cancelText="취소"

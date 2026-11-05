@@ -23,19 +23,22 @@ export type RecurringTodoInput = {
  */
 export declare const createRecurringTodo: (db: Firestore, userId: string, todo: RecurringTodoInput, horizonEnd?: Date) => Promise<Todo[]>;
 /**
- * 반복 시리즈 전체 수정. 입력은 시리즈 대표 todo(수정 폼에서 편집 중인 인스턴스)의
+ * 반복 시리즈 수정("이 회차와 이후 회차"). 입력은 수정 폼에서 편집 중인 회차의
  * 새 필드값 + 새 recurrence 규칙이다 (recurrence가 null이면 반복 OFF 전환).
  *
- * 같은 recurrenceId를 가진 모든 인스턴스를 조회한 뒤 3단 분기로 처리한다:
+ * 창 시작 = max(수정 회차의 저장된 날짜, 오늘). 같은 recurrenceId를 가진 모든 인스턴스를
+ * 조회한 뒤 3단 분기로 처리한다:
  *  1) status가 "done" 또는 "doing" → 그대로 보존 (필드 값 포함 전혀 건드리지 않음)
- *  2) status가 "todo"이고 dueAt < 오늘(지난 미완료 = overdue) → 그대로 보존
- *  3) status가 "todo"이고 dueAt >= 오늘(미래) → 삭제 후, 새 규칙/새 필드값으로 재생성
- *     (재생성 시작 기준일은 새 dueAt부터 horizonEnd까지, 오늘 이전 발생일은 제외)
+ *  2) status가 "todo"이고 dueAt < 창 시작(지난 미완료 overdue, 수정 회차보다 앞선 회차)
+ *     → 그대로 보존
+ *  3) status가 "todo"이고 dueAt >= 창 시작 → 삭제 후, 새 규칙/새 필드값으로 재생성
+ *     (재생성 시작 기준일은 새 startAt부터 horizonEnd까지, 오늘 이전 발생일과 보존된
+ *     회차가 점유한 날짜는 제외)
  *
- * recurrence를 null로 바꿔 반복을 끄는 저장도 동일한 3단 분기를 따른다: done/doing/overdue는
- * 그대로 두고, 미래 "todo" 인스턴스만 재생성 없이 완전히 삭제한다(문서 자체가 사라지므로
- * recurrenceId도 함께 사라진다). 단, 지금 수정 중인 회차는(done이 아니면) 삭제하지 않고
- * 수정 내용을 반영한 뒤 recurrence/recurrenceId를 null로 끊어 일반 할 일로 남긴다.
+ * recurrence를 null로 바꿔 반복을 끄는 저장도 동일한 3단 분기를 따른다: 보존 대상은
+ * 그대로 두되 반복 규칙만 지우고, 창 안의 "todo" 인스턴스만 재생성 없이 완전히 삭제한다.
+ * 단, 지금 수정 중인 회차는(done이 아니면) 삭제하지 않고 수정 내용을 반영한 뒤
+ * recurrence/recurrenceId를 null로 끊어 일반 할 일로 남긴다.
  */
 export declare const editRecurringSeries: (db: Firestore, userId: string, seriesTodo: RecurringTodoInput & {
     id: string;

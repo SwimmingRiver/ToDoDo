@@ -1043,8 +1043,9 @@ describe("editRecurringSeries — 반복 OFF 시 수정 중인 회차를 일반 
       horizon(),
     );
 
-    // 수정 중인 내일(+1) 회차는 남고, 나머지 미래 todo(오늘, +2)만 삭제. done/overdue 보존.
-    expect(deletedIds(batch)).toEqual(sorted([idOf(0), idOf(2)]));
+    // 수정 중인 내일(+1) 회차는 남고, 그 이후 todo(+2)만 삭제. 앞선 오늘 회차와 done/overdue는
+    // 보존(규칙만 지움) — 시리즈 수정은 "이 회차와 이후 회차"에만 적용된다.
+    expect(deletedIds(batch)).toEqual(sorted([idOf(2)]));
     const keptCalls = updateFor(batch, idOf(1));
     expect(keptCalls).toHaveLength(1);
     const data = keptCalls[0][1] as Record<string, unknown>;
@@ -1121,7 +1122,7 @@ describe("editRecurringSeries — 반복 OFF 시 수정 중인 회차를 일반 
     expect(batch.set).not.toHaveBeenCalled();
   });
 
-  it("반복을 끄면 남는 done/overdue 형제 회차는 recurrence만 null로 바뀌고 recurrenceId 등 다른 필드는 그대로다", async () => {
+  it("반복을 끄면 남는 done/overdue/앞선 todo 형제 회차는 recurrence만 null로 바뀌고 recurrenceId 등 다른 필드는 그대로다", async () => {
     const { batch, editRecurringSeries } = await setup(fullSeries());
 
     await editRecurringSeries(
@@ -1132,14 +1133,14 @@ describe("editRecurringSeries — 반복 OFF 시 수정 중인 회차를 일반 
     );
 
     const now = new Date().toISOString();
-    for (const siblingId of [idOf(-2), idOf(-1)]) {
+    for (const siblingId of [idOf(-2), idOf(-1), idOf(0)]) {
       const calls = updateFor(batch, siblingId);
       expect(calls).toHaveLength(1);
       expect(calls[0][1]).toEqual({ recurrence: null, updatedAt: now });
     }
-    // 형제 2개 + 일반 할 일로 남는 회차 1개
-    expect(batch.update).toHaveBeenCalledTimes(3);
-    expect(deletedIds(batch)).toEqual(sorted([idOf(0), idOf(2)]));
+    // 앞선 형제 3개(overdue, done, 오늘 todo) + 일반 할 일로 남는 회차 1개
+    expect(batch.update).toHaveBeenCalledTimes(4);
+    expect(deletedIds(batch)).toEqual(sorted([idOf(2)]));
   });
 
   it("(회귀) 반복 OFF 후 상태로 앱 시작 정리 작업을 돌려도 시리즈를 이어 만들지 않고, 남긴 문서 ID를 덮어쓰지 않는다", async () => {
@@ -1194,6 +1195,223 @@ describe("editRecurringSeries — 반복 OFF 시 수정 중인 회차를 일반 
     const data = keptCalls[0][1] as Record<string, unknown>;
     expect(data).toMatchObject({ dueAt: occurrence(-1), recurrenceId: null });
     expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("editRecurringSeries — 이 회차와 이후 회차에만 적용 (앞선 회차 보존)", () => {
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+  });
+
+  const toDocSnapshot = (todos: Todo[]) => ({
+    docs: todos.map((t) => ({
+      id: t.id,
+      data: () => {
+        const { id: _id, ...rest } = t;
+        return rest;
+      },
+    })),
+  });
+
+  // 시스템 시간은 파일 상단 beforeEach에서 mock된다. 실제 회차처럼 startAt=dueAt=그 회차일(UTC Z).
+  const occurrence = (offsetDays: number) => {
+    const today = new Date();
+    return new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + offsetDays,
+      9,
+      0,
+      0,
+    ).toISOString();
+  };
+  const idOf = (offsetDays: number) => buildRecurringInstanceId("series-1", occurrence(offsetDays));
+  const instance = (offsetDays: number, rule: RecurrenceRule, overrides: Partial<Todo> = {}) =>
+    makeTodo({
+      id: idOf(offsetDays),
+      title: "원래 제목",
+      startAt: occurrence(offsetDays),
+      dueAt: occurrence(offsetDays),
+      recurrenceId: "series-1",
+      recurrence: rule,
+      ...overrides,
+    });
+  const horizonAt = (offsetDays: number) => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate() + offsetDays);
+  };
+
+  const setup = async (todos: Todo[]) => {
+    const { getDocs, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(
+        toDocSnapshot(todos) as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      )
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
+      );
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+    const { editRecurringSeries } = await import("../seriesApi");
+    return { batch, editRecurringSeries };
+  };
+
+  const deletedIds = (batch: ReturnType<typeof makeBatch>) =>
+    batch.delete.mock.calls.map((call) => (call[0] as { id: string }).id).sort();
+  const setIds = (batch: ReturnType<typeof makeBatch>) =>
+    batch.set.mock.calls.map((call) => (call[0] as { id: string }).id);
+  const updateFor = (batch: ReturnType<typeof makeBatch>, id: string) =>
+    batch.update.mock.calls.filter((call) => (call[0] as { id: string }).id === id);
+  const sorted = (ids: string[]) => [...ids].sort();
+
+  it("오늘 시작한 매일 시리즈의 내일 회차 제목을 바꾸면 오늘 회차는 지우지 않고 내일부터 호라이즌까지만 새 제목으로 재생성한다", async () => {
+    const series = [0, 1, 2, 3].map((d) => instance(d, dailyRule));
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[1], title: "바뀐 제목" },
+      horizonAt(5),
+    );
+
+    expect(deletedIds(batch)).toEqual(sorted([idOf(1), idOf(2), idOf(3)]));
+    expect(setIds(batch)).toEqual([1, 2, 3, 4, 5].map(idOf));
+    batch.set.mock.calls.forEach((call) => {
+      expect(call[1]).toMatchObject({ title: "바뀐 제목", status: "todo" });
+    });
+    // 오늘 회차에는 아무 쓰기도 가지 않는다.
+    expect(updateFor(batch, idOf(0))).toHaveLength(0);
+    expect(batch.update).not.toHaveBeenCalled();
+  });
+
+  it("내일 회차에서 반복을 끄면 오늘 회차는 규칙만 지워 남기고, 내일 회차는 일반 할 일로 남기고, 모레부터만 삭제한다", async () => {
+    const series = [0, 1, 2, 3].map((d) => instance(d, dailyRule));
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[1], title: "바뀐 제목", recurrence: null },
+      horizonAt(5),
+    );
+
+    expect(deletedIds(batch)).toEqual(sorted([idOf(2), idOf(3)]));
+    const todayCalls = updateFor(batch, idOf(0));
+    expect(todayCalls).toHaveLength(1);
+    expect(todayCalls[0][1]).toEqual({ recurrence: null, updatedAt: new Date().toISOString() });
+    const keptCalls = updateFor(batch, idOf(1));
+    expect(keptCalls).toHaveLength(1);
+    expect(keptCalls[0][1]).toMatchObject({
+      title: "바뀐 제목",
+      recurrence: null,
+      recurrenceId: null,
+    });
+    expect(batch.set).not.toHaveBeenCalled();
+  });
+
+  it("오늘 회차를 수정하면 오늘부터 호라이즌까지 전부 재생성한다 (기존 동작 유지)", async () => {
+    const series = [0, 1, 2, 3].map((d) => instance(d, dailyRule));
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[0], title: "바뀐 제목" },
+      horizonAt(5),
+    );
+
+    expect(deletedIds(batch)).toEqual(sorted([0, 1, 2, 3].map(idOf)));
+    expect(setIds(batch)).toEqual([0, 1, 2, 3, 4, 5].map(idOf));
+  });
+
+  it("앞선 회차가 doing/done이어도 그대로 두고, 수정 회차부터만 재생성한다", async () => {
+    const series = [
+      instance(-1, dailyRule, { status: "done", doneAt: occurrence(-1) }),
+      instance(0, dailyRule, { status: "doing" }),
+      instance(1, dailyRule),
+      instance(2, dailyRule),
+      instance(3, dailyRule),
+    ];
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[3], title: "바뀐 제목" },
+      horizonAt(4),
+    );
+
+    // 앞선 todo(+1)도 지우지 않는다.
+    expect(deletedIds(batch)).toEqual(sorted([idOf(2), idOf(3)]));
+    expect(setIds(batch)).toEqual([2, 3, 4].map(idOf));
+    expect(batch.update).not.toHaveBeenCalled();
+  });
+
+  it("수정 회차가 지난 미완료(overdue)면 그 회차만 직접 갱신하고 오늘부터 재생성한다 (기존 동작 유지)", async () => {
+    const series = [-2, 0, 1].map((d) => instance(d, dailyRule));
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[0], title: "바뀐 제목" },
+      horizonAt(2),
+    );
+
+    expect(deletedIds(batch)).toEqual(sorted([idOf(0), idOf(1)]));
+    expect(setIds(batch)).toEqual([0, 1, 2].map(idOf));
+    const editedCalls = updateFor(batch, idOf(-2));
+    expect(editedCalls).toHaveLength(1);
+    expect(editedCalls[0][1]).toMatchObject({ title: "바뀐 제목" });
+  });
+
+  it("매주 시리즈: 다음 주 회차를 수정하면 이번 주 회차는 지우지 않는다", async () => {
+    const weekday = new Date(occurrence(0)).getDay();
+    const weeklyRule: RecurrenceRule = {
+      type: "weekly",
+      weekdays: [weekday],
+      endType: "indefinite",
+    };
+    const series = [0, 7, 14].map((d) => instance(d, weeklyRule));
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[1], title: "바뀐 제목" },
+      horizonAt(21),
+    );
+
+    expect(deletedIds(batch)).toEqual(sorted([idOf(7), idOf(14)]));
+    expect(setIds(batch)).toEqual([7, 14, 21].map(idOf));
+  });
+
+  it("매월 시리즈: 다음 달 회차를 수정하면 이번 달 회차는 지우지 않는다", async () => {
+    const today = new Date();
+    const monthOcc = (m: number) =>
+      new Date(today.getFullYear(), today.getMonth() + m, today.getDate(), 9, 0, 0).toISOString();
+    const monthlyRule: RecurrenceRule = { type: "monthly", endType: "indefinite" };
+    const series = [0, 1].map((m) =>
+      makeTodo({
+        id: buildRecurringInstanceId("series-1", monthOcc(m)),
+        startAt: monthOcc(m),
+        dueAt: monthOcc(m),
+        recurrenceId: "series-1",
+        recurrence: monthlyRule,
+      }),
+    );
+    const { batch, editRecurringSeries } = await setup(series);
+
+    await editRecurringSeries(
+      fakeDb,
+      UID,
+      { ...series[1], title: "바뀐 제목" },
+      new Date(today.getFullYear(), today.getMonth() + 2, today.getDate()),
+    );
+
+    expect(deletedIds(batch)).toEqual([series[1].id]);
+    expect(setIds(batch)).toEqual([1, 2].map((m) => buildRecurringInstanceId("series-1", monthOcc(m))));
   });
 });
 
