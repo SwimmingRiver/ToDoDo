@@ -434,11 +434,6 @@ describe("반복 회차 수정 시 시리즈 종료 조건", () => {
     ).toISOString();
   };
 
-  const localDateKey = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
   it("무기한 시리즈의 회차 제목만 바꿔 저장하면 시리즈 수정 payload의 종료 조건이 무기한으로 유지된다", async () => {
     const user = setupUser();
     renderForm({
@@ -502,7 +497,7 @@ describe("반복 회차 수정 시 시리즈 종료 조건", () => {
     expect(screen.getByText("2026-12-31까지 반복됩니다")).toBeInTheDocument();
   });
 
-  it("비반복 할 일을 반복으로 전환하면 기존대로 dueAt에서 종료일을 유도한다", async () => {
+  it("비반복 할 일을 반복으로 전환하면 dueAt이 있어도 무기한으로 시작한다 (종료는 폼 값에서 온다)", async () => {
     const user = setupUser();
     const dueAt = occurrenceIso(5);
     renderForm({ todo: makeTodo({ startAt: occurrenceIso(1), dueAt }) });
@@ -515,8 +510,141 @@ describe("반복 회차 수정 시 시리즈 종료 조건", () => {
     const payload = mockTodo.useCreateRecurringTodo.mutate.mock.calls[0][0] as Todo;
     expect(payload.recurrence).toEqual({
       type: "daily",
-      endType: "untilDate",
-      endDate: localDateKey(dueAt),
+      endType: "indefinite",
+      endDate: null,
+    });
+  });
+});
+
+describe("반복 종료 컨트롤과 만료일시 숨김", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 6, 10, 8, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const dueAtInput = () => document.querySelector('input[name="dueAt"]');
+
+  const openNewWithDates = async (user: ReturnType<typeof setupUser>, due = "2026-07-05T09:00") => {
+    renderForm();
+    await user.type(screen.getByPlaceholderText("무엇을 해야 하나요?"), "반복 할 일");
+    await user.click(screen.getByRole("button", { name: "더보기" }));
+    fireEvent.change(document.querySelector('input[name="startAt"]')!, {
+      target: { value: "2026-07-10T09:00" },
+    });
+    fireEvent.change(dueAtInput()!, { target: { value: due } });
+  };
+
+  it("새 반복을 켜면 만료일시 입력이 사라지고, 끄면 원래 값으로 다시 보인다", async () => {
+    const user = setupUser();
+    await openNewWithDates(user, "2026-07-20T18:00");
+    expect((dueAtInput() as HTMLInputElement).value).toBe("2026-07-20T18:00");
+
+    await user.click(screen.getByLabelText("이 할 일을 반복합니다"));
+    expect(dueAtInput()).toBeNull();
+    expect(screen.queryByText("만료일시")).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("이 할 일을 반복합니다"));
+    expect((dueAtInput() as HTMLInputElement).value).toBe("2026-07-20T18:00");
+  });
+
+  it("만료일시가 시작일시보다 앞서도 반복을 켜고 저장하면 무기한 반복으로 생성되고 날짜 오류 토스트는 없다", async () => {
+    const user = setupUser();
+    await openNewWithDates(user, "2026-07-05T09:00");
+    await user.click(screen.getByLabelText("이 할 일을 반복합니다"));
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useCreateRecurringTodo.mutate).toHaveBeenCalled());
+    const payload = mockTodo.useCreateRecurringTodo.mutate.mock.calls[0][0] as Todo;
+    expect(payload.recurrence).toEqual({ type: "daily", endType: "indefinite", endDate: null });
+    expect(screen.queryByText("시작일시는 마감일시보다 늦을 수 없습니다")).not.toBeInTheDocument();
+  });
+
+  it("반복이 켜져 있으면 만료일시 없이도 마감 알림이 활성화되고 고른 값이 저장된다", async () => {
+    const user = setupUser();
+    await openNewWithDates(user, "");
+    const select = screen.getByLabelText("마감 알림");
+    expect(select).toBeDisabled();
+
+    await user.click(screen.getByLabelText("이 할 일을 반복합니다"));
+    expect(select).not.toBeDisabled();
+    await user.selectOptions(select, "60");
+    fireEvent.submit(document.getElementById("todo-form")!);
+
+    await vi.waitFor(() => expect(mockTodo.useCreateRecurringTodo.mutate).toHaveBeenCalled());
+    const payload = mockTodo.useCreateRecurringTodo.mutate.mock.calls[0][0] as Todo;
+    expect(payload.reminderOffsetMinutes).toBe(60);
+  });
+
+  it("반복 시작 시 알림 권한 안내를 시작일시 기준으로 띄운다", async () => {
+    const user = setupUser();
+    await openNewWithDates(user, "");
+    await user.click(screen.getByLabelText("이 할 일을 반복합니다"));
+    fireEvent.submit(document.getElementById("todo-form")!);
+    await vi.waitFor(() => expect(offerRemindersMock).toHaveBeenCalled());
+  });
+
+  describe("기존 시리즈 수정", () => {
+    const series = (rule: Todo["recurrence"]) =>
+      makeTodo({
+        startAt: new Date(2026, 6, 11, 9, 0, 0).toISOString(),
+        dueAt: new Date(2026, 6, 11, 9, 0, 0).toISOString(),
+        recurrence: rule,
+        recurrenceId: "series-1",
+      });
+
+    it("날짜 지정과 기존 종료일이 선택돼 있고, 제목만 바꿔 저장해도 종료일이 유지되며 만료일시는 보인다", async () => {
+      const user = setupUser();
+      renderForm({ todo: series({ type: "daily", endType: "untilDate", endDate: "2026-12-31" }) });
+      await user.click(screen.getByText("더보기"));
+
+      expect(screen.getByRole("tab", { name: "날짜 지정" })).toHaveAttribute("aria-selected", "true");
+      expect((screen.getByLabelText("반복 종료일") as HTMLInputElement).value).toBe("2026-12-31");
+      expect(dueAtInput()).not.toBeNull();
+
+      const title = screen.getByDisplayValue("기존 할 일");
+      await user.clear(title);
+      await user.type(title, "바뀐 제목");
+      fireEvent.submit(title.closest("form")!);
+      await user.click(await screen.findByText("전체 적용"));
+
+      const payload = mockTodo.useEditRecurringSeries.mutate.mock.calls[0][0] as Todo;
+      expect(payload.recurrence).toMatchObject({ endType: "untilDate", endDate: "2026-12-31" });
+    });
+
+    it("종료일을 바꾸면 payload에 반영된다", async () => {
+      const user = setupUser();
+      renderForm({ todo: series({ type: "daily", endType: "untilDate", endDate: "2026-12-31" }) });
+      await user.click(screen.getByText("더보기"));
+      fireEvent.change(screen.getByLabelText("반복 종료일"), { target: { value: "2027-01-31" } });
+      fireEvent.submit(screen.getByDisplayValue("기존 할 일").closest("form")!);
+      await user.click(await screen.findByText("전체 적용"));
+
+      const payload = mockTodo.useEditRecurringSeries.mutate.mock.calls[0][0] as Todo;
+      expect(payload.recurrence).toMatchObject({ endType: "untilDate", endDate: "2027-01-31" });
+    });
+
+    it("endDate가 ISO 형식인 옛 시리즈는 날짜 지정 + 빈 날짜로 열리고 저장이 막힌다", async () => {
+      const user = setupUser();
+      renderForm({
+        todo: series({
+          type: "daily",
+          endType: "untilDate",
+          endDate: "2026-12-31T00:00:00.000Z",
+        } as Todo["recurrence"]),
+      });
+      await user.click(screen.getByText("더보기"));
+
+      expect(screen.getByRole("tab", { name: "날짜 지정" })).toHaveAttribute("aria-selected", "true");
+      expect((screen.getByLabelText("반복 종료일") as HTMLInputElement).value).toBe("");
+
+      fireEvent.submit(screen.getByDisplayValue("기존 할 일").closest("form")!);
+      expect(await screen.findByText("종료일을 선택해주세요", { selector: "div,p,span" })).toBeInTheDocument();
+      expect(screen.queryByText("전체 적용")).not.toBeInTheDocument();
+      expect(mockTodo.useEditRecurringSeries.mutate).not.toHaveBeenCalled();
     });
   });
 });

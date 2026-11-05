@@ -1,105 +1,86 @@
 import { describe, it, expect } from "vitest";
-import { toFormValue, toRecurrenceRule, toRecurrenceRuleForEdit } from "../recurrenceForm";
+import { toFormValue, toRecurrenceRule, DEFAULT_RECURRENCE_FORM_VALUE } from "../recurrenceForm";
+import type { RecurrenceRule } from "../../types/todo";
 
-describe("toRecurrenceRule", () => {
-  it("daily 타입일 때 weekdays 키를 아예 포함하지 않는다", () => {
-    const result = toRecurrenceRule({ type: "daily" }, null);
-    expect(result).not.toBeNull();
-    expect(Object.prototype.hasOwnProperty.call(result, "weekdays")).toBe(false);
-  });
-
-  it("monthly 타입일 때도 weekdays 키를 포함하지 않는다", () => {
-    const result = toRecurrenceRule({ type: "monthly" }, null);
-    expect(Object.prototype.hasOwnProperty.call(result, "weekdays")).toBe(false);
-  });
-
-  it("weekly 타입일 때는 weekdays 배열을 그대로 포함한다", () => {
-    const result = toRecurrenceRule({ type: "weekly", weekdays: [1, 3, 5] }, null);
-    expect(result?.weekdays).toEqual([1, 3, 5]);
-  });
-
-  it("dueAt이 없으면 endType을 indefinite로, endDate를 null로 유도한다", () => {
-    const result = toRecurrenceRule({ type: "daily" }, null);
-    expect(result?.endType).toBe("indefinite");
-    expect(result?.endDate).toBeNull();
-  });
-
-  it("dueAt이 있으면 endType을 untilDate로, endDate를 그 날짜(YYYY-MM-DD)로 유도한다", () => {
-    const result = toRecurrenceRule({ type: "daily" }, "2026-07-10T18:00");
-    expect(result?.endType).toBe("untilDate");
-    expect(result?.endDate).toBe("2026-07-10");
-  });
-
-  it("value가 null이면 null을 반환한다", () => {
-    expect(toRecurrenceRule(null, "2026-07-10T18:00")).toBeNull();
+describe("DEFAULT_RECURRENCE_FORM_VALUE", () => {
+  it("새로 켤 때의 기본값은 매일 + 무기한", () => {
+    expect(DEFAULT_RECURRENCE_FORM_VALUE).toEqual({ type: "daily", endType: "indefinite", endDate: null });
   });
 });
 
-it("toRecurrenceRule의 endDate는 dueAt의 로컬 날짜 키다 (UTC split 금지)", () => {
-  const dueAt = "2026-11-05T15:30:00.000Z";
-  const d = new Date(dueAt);
-  const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  expect(toRecurrenceRule({ type: "daily" }, dueAt)).toEqual({
-    type: "daily", endType: "untilDate", endDate: expected,
+describe("toRecurrenceRule", () => {
+  it("daily 타입일 때 weekdays 키를 아예 포함하지 않는다", () => {
+    const result = toRecurrenceRule({ type: "daily", endType: "untilDate", endDate: "2026-12-31" });
+    expect(result).not.toBeNull();
+    expect("weekdays" in (result as object)).toBe(false);
+  });
+
+  it("monthly 타입일 때도 weekdays 키를 포함하지 않는다", () => {
+    const result = toRecurrenceRule({ type: "monthly", endType: "indefinite", endDate: null });
+    expect("weekdays" in (result as object)).toBe(false);
+  });
+
+  it("weekly + untilDate는 weekdays와 종료일을 그대로 포함한다", () => {
+    expect(
+      toRecurrenceRule({ type: "weekly", weekdays: [1, 3], endType: "untilDate", endDate: "2026-12-31" }),
+    ).toEqual({ type: "weekly", weekdays: [1, 3], endType: "untilDate", endDate: "2026-12-31" });
+  });
+
+  it("무기한이면 endDate를 버린다", () => {
+    expect(
+      toRecurrenceRule({ type: "daily", endType: "indefinite", endDate: "2026-12-31" }),
+    ).toEqual({ type: "daily", endType: "indefinite", endDate: null });
+  });
+
+  it("value가 null이면 null을 반환한다", () => {
+    expect(toRecurrenceRule(null)).toBeNull();
   });
 });
 
 describe("toFormValue", () => {
   it("recurrence가 null이면 null을 반환한다", () => {
     expect(toFormValue(null)).toBeNull();
+    expect(toFormValue(undefined)).toBeNull();
   });
 
-  it("endType/endDate는 폼 값에 포함하지 않는다 (파생값이라 폼 상태로 들지 않음)", () => {
-    const result = toFormValue({ type: "daily", endType: "untilDate", endDate: "2026-07-10" });
-    expect(result?.type).toBe("daily");
-    expect(Object.prototype.hasOwnProperty.call(result, "endType")).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(result, "endDate")).toBe(false);
+  it("종료 조건을 폼 값에 담는다", () => {
+    expect(
+      toFormValue({ type: "weekly", weekdays: [1], endType: "untilDate", endDate: "2026-12-31" }),
+    ).toEqual({ type: "weekly", weekdays: [1], endType: "untilDate", endDate: "2026-12-31" });
+  });
+
+  it("무기한 규칙은 endDate를 null로 채운다", () => {
+    expect(toFormValue({ type: "daily", endType: "indefinite" })).toEqual({
+      type: "daily", endType: "indefinite", endDate: null,
+    });
+  });
+
+  it("옛 문서: endType이 없으면 indefinite로 본다", () => {
+    const old = { type: "daily" } as unknown as RecurrenceRule;
+    expect(toFormValue(old)?.endType).toBe("indefinite");
+    expect(toFormValue(old)?.endDate).toBeNull();
+  });
+
+  it("옛 문서: untilDate인데 endDate 형식이 다르면 endDate는 null (조용히 무기한으로 바꾸지 않음)", () => {
+    const result = toFormValue({ type: "daily", endType: "untilDate", endDate: "2026-12-31T00:00:00.000Z" });
+    expect(result?.endType).toBe("untilDate");
+    expect(result?.endDate).toBeNull();
+  });
+
+  it("옛 문서: untilDate인데 endDate 키가 없으면 endDate는 null", () => {
+    const result = toFormValue({ type: "daily", endType: "untilDate" });
+    expect(result?.endType).toBe("untilDate");
+    expect(result?.endDate).toBeNull();
   });
 });
 
-describe("toRecurrenceRuleForEdit", () => {
-  it("기존 규칙이 무기한이면 회차 dueAt과 무관하게 무기한을 유지한다", () => {
-    expect(
-      toRecurrenceRuleForEdit({ type: "daily" }, { type: "daily", endType: "indefinite", endDate: null }),
-    ).toEqual({ type: "daily", endType: "indefinite", endDate: null });
-  });
-
-  it("기존 규칙이 untilDate면 endType/endDate를 그대로 유지한다", () => {
-    expect(
-      toRecurrenceRuleForEdit(
-        { type: "daily" },
-        { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
-      ),
-    ).toEqual({ type: "daily", endType: "untilDate", endDate: "2026-12-31" });
-  });
-
-  it("기존 규칙에 endDate 키가 없으면(무기한) null로 채운다", () => {
-    expect(
-      toRecurrenceRuleForEdit({ type: "monthly" }, { type: "daily", endType: "indefinite" }),
-    ).toEqual({ type: "monthly", endType: "indefinite", endDate: null });
-  });
-
-  it("weekly→daily로 바꾸면 weekdays 키를 넣지 않는다", () => {
-    const result = toRecurrenceRuleForEdit(
-      { type: "daily" },
-      { type: "weekly", weekdays: [1, 3], endType: "indefinite", endDate: null },
-    );
-    expect(result?.type).toBe("daily");
-    expect(Object.prototype.hasOwnProperty.call(result, "weekdays")).toBe(false);
-  });
-
-  it("weekly면 type/weekdays는 폼 값에서 가져온다", () => {
-    expect(
-      toRecurrenceRuleForEdit(
-        { type: "weekly", weekdays: [2, 4] },
-        { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
-      ),
-    ).toEqual({ type: "weekly", weekdays: [2, 4], endType: "untilDate", endDate: "2026-12-31" });
-  });
-
-  it("value가 null이면(반복 끄기) null을 반환한다", () => {
-    expect(
-      toRecurrenceRuleForEdit(null, { type: "daily", endType: "indefinite", endDate: null }),
-    ).toBeNull();
+describe("toFormValue/toRecurrenceRule 왕복", () => {
+  const rules: RecurrenceRule[] = [
+    { type: "daily", endType: "indefinite", endDate: null },
+    { type: "weekly", weekdays: [1, 4], endType: "untilDate", endDate: "2026-12-31" },
+    { type: "monthly", endType: "untilDate", endDate: "2027-01-15" },
+  ];
+  it.each(rules)("%o", (rule) => {
+    expect(toRecurrenceRule(toFormValue(rule))).toEqual(rule);
   });
 });

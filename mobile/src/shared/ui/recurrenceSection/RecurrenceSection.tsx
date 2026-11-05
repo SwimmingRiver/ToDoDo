@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import {
   WEEKDAY_LABELS,
+  DEFAULT_RECURRENCE_FORM_VALUE,
   WEEKDAY_REQUIRED_ERROR,
   getRecurrenceValidationError,
-  toDateKeyFromISO,
   type RecurrenceFormValue,
-  type RecurrenceRule,
 } from "@tododo/core";
+import { DateField } from "../dateField/DateField";
 import { colors } from "../../../theme/colors";
 import { MIN_TOUCH_TARGET, radius, spacing } from "../../../theme/spacing";
 
@@ -16,17 +16,9 @@ interface RecurrenceSectionProps {
   disabledReason?: "hasChildren" | "noStartAt";
   /** 반복 시작 앵커. 매월 반복의 '일(day)' 유도에도 사용 */
   startAt: string | null;
-  /** 있으면 반복 종료일(마지막 발생일) 역할 */
-  dueAt: string | null;
   /** null = 반복 OFF */
   value: RecurrenceFormValue | null;
   onChange: (value: RecurrenceFormValue | null) => void;
-  /**
-   * 이미 반복 중인 시리즈를 수정할 때의 기존 규칙(웹 RecurrenceFields와 동일). 이때 dueAt은
-   * 시리즈 종료일이 아니라 수정 중인 회차의 날짜라, 범위 안내는 기존 규칙의 종료 조건으로
-   * 보여주고 범위 에러는 띄우지 않는다(저장 시에도 종료 조건은 기존 규칙에서 유지된다).
-   */
-  existingRule?: RecurrenceRule | null;
 }
 
 const TYPE_OPTIONS: { value: RecurrenceFormValue["type"]; label: string }[] = [
@@ -35,35 +27,41 @@ const TYPE_OPTIONS: { value: RecurrenceFormValue["type"]; label: string }[] = [
   { value: "monthly", label: "매월" },
 ];
 
+const END_OPTIONS: { value: RecurrenceFormValue["endType"]; label: string }[] = [
+  { value: "indefinite", label: "없음" },
+  { value: "untilDate", label: "날짜 지정" },
+];
+
 /** 웹 recurrenceFields.tsx의 모바일 대응(A안): 스위치를 켜면 주기·요일·범위 안내가 펼쳐진다. */
 export const RecurrenceSection = ({
   disabled,
   disabledReason,
   startAt,
-  dueAt,
   value,
   onChange,
-  existingRule,
 }: RecurrenceSectionProps) => {
   const checked = value !== null;
   const weekdayError = value?.type === "weekly" && (value.weekdays?.length ?? 0) === 0;
-  const validationError = getRecurrenceValidationError(value, startAt, dueAt);
+  const validationError = getRecurrenceValidationError(value, startAt);
   const rangeError =
-    !existingRule && validationError && validationError !== WEEKDAY_REQUIRED_ERROR
-      ? validationError
-      : null;
+    validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
 
-  const rangeText = existingRule
-    ? existingRule.endType === "untilDate" && existingRule.endDate
-      ? `${existingRule.endDate}까지 반복됩니다`
-      : "무기한으로 반복됩니다"
-    : dueAt
-      ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
-      : "마감일시가 없으면 무기한으로 반복됩니다";
+  // 종료 조건은 폼 값에서 온다. 날짜 지정인데 날짜가 없으면 안내 대신 검증 오류가 보인다.
+  const rangeText =
+    value?.endType === "untilDate"
+      ? value.endDate
+        ? `${value.endDate}까지 반복됩니다`
+        : null
+      : "계속 반복됩니다";
+
+  const handleEndTypeChange = (endType: RecurrenceFormValue["endType"]) => {
+    if (!value || value.endType === endType) return;
+    onChange({ ...value, endType, endDate: null });
+  };
 
   const handleToggle = (next: boolean) => {
     if (disabled) return;
-    onChange(next ? { type: "daily" } : null);
+    onChange(next ? { ...DEFAULT_RECURRENCE_FORM_VALUE } : null);
   };
 
   const handleTypeChange = (type: RecurrenceFormValue["type"]) => {
@@ -182,10 +180,38 @@ export const RecurrenceSection = ({
           )}
 
           <View style={styles.group}>
-            <Text style={styles.groupLabel}>반복 범위</Text>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>{rangeText}</Text>
+            <Text style={styles.groupLabel}>반복 종료</Text>
+            <View style={styles.row} accessibilityRole="radiogroup">
+              {END_OPTIONS.map((option) => {
+                const selected = option.value === value.endType;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => handleEndTypeChange(option.value)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`반복 종료 ${option.label}`}
+                    style={[styles.chip, styles.typeChip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
+            {value.endType === "untilDate" && (
+              <DateField
+                label="반복 종료일"
+                value={value.endDate ?? null}
+                onChange={(endDate) => onChange({ ...value, endDate })}
+              />
+            )}
+            {rangeText && (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>{rangeText}</Text>
+              </View>
+            )}
             {rangeError && (
               <Text style={styles.errorText} accessibilityRole="alert">
                 {rangeError}

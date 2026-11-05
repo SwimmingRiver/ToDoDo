@@ -36,7 +36,10 @@ export const TodoFormScreen = () => {
   const submitInFlightRef = useRef(false);
   const { data: todos } = useTodos();
 
-  const dateValidationError = getTodoDateValidationError(startAt, dueAt);
+  // 반복을 켜 두는 동안 만료일시는 회차에 쓰이지 않으므로 숨기고 검증에서도 뺀다.
+  // 값은 지우지 않아 반복을 끄면 그대로 다시 보인다(웹 todoForm과 동일).
+  const hideDueAt = recurrenceValue !== null;
+  const dateValidationError = getTodoDateValidationError(startAt, hideDueAt ? null : dueAt);
 
   // 시작일시가 지워지면 반복은 의미가 없으므로 끈다 (웹 todoForm과 동일)
   useEffect(() => {
@@ -52,7 +55,7 @@ export const TodoFormScreen = () => {
       return;
     }
 
-    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt, dueAt);
+    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt);
     if (recurrenceError) {
       setError(recurrenceError);
       setShowMore(true);
@@ -71,7 +74,7 @@ export const TodoFormScreen = () => {
           startAt,
           dueAt,
           parentId: null,
-          recurrence: toRecurrenceRule(recurrenceValue, dueAt),
+          recurrence: toRecurrenceRule(recurrenceValue),
         });
         navigation.goBack();
         return;
@@ -134,14 +137,13 @@ export const TodoFormScreen = () => {
               <PriorityChips value={priority} onChange={setPriority} />
 
               <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
-              <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />
+              {!hideDueAt && <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />}
               {dateValidationError && <Text style={styles.fieldError}>{dateValidationError}</Text>}
               {!parentId && (
                 <RecurrenceSection
                   disabled={!startAt}
                   disabledReason="noStartAt"
                   startAt={startAt}
-                  dueAt={dueAt}
                   value={recurrenceValue}
                   onChange={setRecurrenceValue}
                 />

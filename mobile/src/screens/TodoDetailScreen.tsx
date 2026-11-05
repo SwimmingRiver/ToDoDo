@@ -7,7 +7,6 @@ import {
   getRecurrenceValidationError,
   toFormValue,
   toRecurrenceRule,
-  toRecurrenceRuleForEdit,
   type RecurrenceFormValue,
   type RecurringTodoInput,
   type Todo,
@@ -124,7 +123,10 @@ export const TodoDetailScreen = () => {
     );
   }
 
-  const dateValidationError = getTodoDateValidationError(startAt, dueAt);
+  // 새로 반복을 거는 동안(기존 시리즈가 아님) 만료일시는 반복 회차에 쓰이지 않으므로 숨기고
+  // 검증에서도 뺀다. 값은 지우지 않아 반복을 끄면 그대로 다시 보인다(웹 todoForm과 동일).
+  const hideDueAt = recurrenceValue !== null && !todo.recurrence;
+  const dateValidationError = getTodoDateValidationError(startAt, hideDueAt ? null : dueAt);
 
   const runSave = async (task: () => Promise<void>) => {
     if (saveInFlightRef.current) return;
@@ -154,13 +156,8 @@ export const TodoDetailScreen = () => {
       return;
     }
 
-    // 웹 todoDetail과 동일: 이미 반복 중인 시리즈를 수정할 때 dueAt은 시리즈 종료일이 아니라
-    // 이 회차의 날짜다. 그래서 범위 검증(dueAt < startAt)은 건너뛰고(회차 날짜 검증은 위에서
-    // 이미 했다), 종료 조건은 기존 규칙에서 그대로 가져온다. 비반복→반복 전환은 dueAt에서 유도한다.
-    const existingRule = todo.recurrence ?? null;
-    const recurrenceError = existingRule
-      ? getRecurrenceValidationError(recurrenceValue, null, null)
-      : getRecurrenceValidationError(recurrenceValue, startAt, dueAt);
+    // 웹 todoDetail과 동일: 반복 종료 조건은 dueAt이 아니라 폼 값(recurrenceValue)에서 온다.
+    const recurrenceError = getRecurrenceValidationError(recurrenceValue, startAt);
     if (recurrenceError) {
       setError(recurrenceError);
       return;
@@ -173,14 +170,12 @@ export const TodoDetailScreen = () => {
       priority,
       startAt,
       dueAt,
-      recurrence: existingRule
-        ? toRecurrenceRuleForEdit(recurrenceValue, existingRule)
-        : toRecurrenceRule(recurrenceValue, dueAt),
+      recurrence: toRecurrenceRule(recurrenceValue),
     };
 
     // 웹과 동일: 반복 시리즈였던 할 일의 저장(규칙 변경·끄기·일반 필드만 수정 모두)은
     // 시리즈 전체 수정 확인을 먼저 거친다.
-    if (existingRule) {
+    if (todo.recurrence != null) {
       Alert.alert(SERIES_EDIT_TITLE, SERIES_EDIT_MESSAGE, [
         { text: "취소", style: "cancel" },
         { text: "전체 적용", onPress: () => handleConfirmSeriesEdit(updated) },
@@ -379,16 +374,14 @@ export const TodoDetailScreen = () => {
           <PriorityChips value={priority} onChange={setPriority} />
 
           <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
-          <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />
+          {!hideDueAt && <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />}
           {isRoot && (
             <RecurrenceSection
               disabled={hasChildren || !startAt}
               disabledReason={hasChildren ? "hasChildren" : "noStartAt"}
               startAt={startAt}
-              dueAt={dueAt}
               value={recurrenceValue}
               onChange={setRecurrenceValue}
-              existingRule={todo.recurrence}
             />
           )}
           {error && <Text style={styles.fieldError}>{error}</Text>}

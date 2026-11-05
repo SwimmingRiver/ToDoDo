@@ -1,4 +1,5 @@
 import { buildRecurringInstanceId, buildRecurringOccurrenceDoc, generateRecurringDueDates, } from "./recurrence";
+import { isDateOnlyKey } from "./recurrenceForm";
 /**
  * done된 지 cutoffISO보다 오래된 루트 프로젝트와 그 자식에 archived를 세울 계획을 만든다.
  *
@@ -82,8 +83,6 @@ export const planOverdueRecurringSweep = (todos, todayStart, now) => {
         fields: { overdueArchived: true, updatedAt: now },
     }));
 };
-/** 반복 규칙의 endDate는 "YYYY-MM-DD"로 저장된다(toRecurrenceRule). */
-const isDateOnlyKey = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 /**
  * 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
  * 기존 인스턴스는 건드리지 않고 마지막 인스턴스 이후의 빈 구간만 채운다.

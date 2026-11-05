@@ -28,9 +28,10 @@ jest.mock("../../hooks/useCreateRecurringTodo", () => {
 jest.mock("../../shared/ui/dateTimeField/DateTimeField", () => {
   const { Pressable, Text } = require("react-native");
   return {
-    DateTimeField: ({ label, onChange }: { label: string; onChange: (v: string | null) => void }) => (
+    DateTimeField: ({ label, value, onChange }: { label: string; value?: string | null; onChange: (v: string | null) => void }) => (
       <>
         <Text>{label}</Text>
+        <Text>{`${label} 값: ${value ?? "없음"}`}</Text>
         <Pressable onPress={() => onChange("2026-11-10T01:00:00.000Z")}>
           <Text>{`${label} 설정`}</Text>
         </Pressable>
@@ -214,6 +215,50 @@ describe("TodoFormScreen", () => {
         }),
       );
       expect(mockMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("오늘 탭이 만료일시를 자정으로 채워도 반복을 켜 저장하면 날짜 검증 오류 없이 무기한으로 생성된다", async () => {
+      // 시작(11/10 10:00 KST)보다 앞선 마감(11/10 00:00 KST). 숨긴 값이라 검증하지 않는다.
+      mockRouteParams = { dueAt: "2026-11-09T15:00:00.000Z" };
+      mockCreateRecurring.mockResolvedValue([]);
+      const { TodoFormScreen } = await import("../TodoFormScreen");
+      await render(<TodoFormScreen />);
+      await fireEvent.changeText(screen.getByPlaceholderText("할 일 제목"), "반복 할 일");
+      await screen.findByDisplayValue("반복 할 일");
+      await fireEvent.press(screen.getByText("시작일시 설정"));
+      await toggleRecurrence();
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(screen.queryByText("시작일시는 마감일시보다 늦을 수 없습니다")).toBeNull();
+      expect(mockCreateRecurring).toHaveBeenCalledTimes(1);
+      expect(mockCreateRecurring).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrence: { type: "daily", endType: "indefinite", endDate: null } }),
+      );
+    });
+
+    it("반복을 켜면 만료일시 필드가 숨고, 끄면 프리필 값 그대로 다시 보인다", async () => {
+      mockRouteParams = { dueAt: "2026-11-09T15:00:00.000Z" };
+      const { TodoFormScreen } = await import("../TodoFormScreen");
+      await render(<TodoFormScreen />);
+      await fireEvent.press(screen.getByText("시작일시 설정"));
+      expect(screen.getByText("만료일시 값: 2026-11-09T15:00:00.000Z")).toBeTruthy();
+
+      await toggleRecurrence();
+      expect(screen.queryByText("만료일시")).toBeNull();
+
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", false);
+      expect(screen.getByText("만료일시")).toBeTruthy();
+      expect(screen.getByText("만료일시 값: 2026-11-09T15:00:00.000Z")).toBeTruthy();
+    });
+
+    it("날짜 지정을 고르고 종료일을 비운 채 저장하면 '종료일을 선택해주세요'로 막힌다", async () => {
+      await openAndSetStart();
+      await toggleRecurrence();
+      await fireEvent.press(screen.getByRole("radio", { name: "반복 종료 날짜 지정" }));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect((await screen.findAllByText("종료일을 선택해주세요")).length).toBeGreaterThan(0);
+      expect(mockCreateRecurring).not.toHaveBeenCalled();
     });
 
     it("반복을 켠 뒤 시작일시를 지우면 일반 createTodo 경로로 저장한다", async () => {
