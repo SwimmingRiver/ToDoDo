@@ -201,13 +201,62 @@ describe("planIndefiniteExtension", () => {
     expect(planIndefiniteExtension([filled], horizonEnd)).toEqual([]);
   });
 
-  it("untilDate 종료 시리즈는 대상이 아니다", () => {
+  // 생성 시 회차는 min(endDate, 호라이즌)까지만 만들어진다. 종료일이 호라이즌보다 멀면
+  // 이 연장이 이어 채우지 않는 한 시리즈가 호라이즌에서 조용히 멈춘다.
+  it("종료일이 호라이즌보다 먼 untilDate 시리즈는 호라이즌까지 이어 채운다", () => {
     const until = makeSeriesInstance({
+      id: "inst-1",
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
+    });
+
+    const [extension] = planIndefiniteExtension([until], horizonEnd);
+
+    expect(extension.recurrenceId).toBe("series-1");
+    const dateKeys = extension.dueDates.map(toDateKeyFromISO);
+    expect(dateKeys[0]).toBe("2026-07-11");
+    expect(dateKeys[dateKeys.length - 1]).toBe("2026-08-07");
+  });
+
+  it("untilDate 시리즈는 종료일을 넘는 회차를 만들지 않는다", () => {
+    const until = makeSeriesInstance({
+      id: "inst-1",
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-07-15" },
+    });
+
+    const [extension] = planIndefiniteExtension([until], horizonEnd);
+
+    expect(extension.dueDates.map(toDateKeyFromISO)).toEqual([
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+    ]);
+  });
+
+  it("마지막 회차가 이미 종료일에 닿은 untilDate 시리즈는 제외한다", () => {
+    const ended = makeSeriesInstance({
+      id: "inst-1",
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-07-10" },
+    });
+
+    expect(planIndefiniteExtension([ended], horizonEnd)).toEqual([]);
+  });
+
+  // 종료일을 해석할 수 없으면 generateRecurringDueDates가 호라이즌으로 대체해 무기한처럼
+  // 늘려 버린다. 끝이 있다고 저장된 시리즈를 무기한으로 키우지 않도록 건너뛴다.
+  it("종료일을 해석할 수 없는 untilDate 시리즈는 제외한다", () => {
+    const malformed = makeSeriesInstance({
       id: "inst-1",
       recurrence: { type: "daily", endType: "untilDate", endDate: "2026-12-31T00:00:00.000Z" },
     });
+    const missing = makeSeriesInstance({
+      id: "inst-2",
+      recurrenceId: "series-2",
+      recurrence: { type: "daily", endType: "untilDate", endDate: null },
+    });
 
-    expect(planIndefiniteExtension([until], horizonEnd)).toEqual([]);
+    expect(planIndefiniteExtension([malformed, missing], horizonEnd)).toEqual([]);
   });
 
   it("반복이 아닌 할 일은 대상이 아니다", () => {

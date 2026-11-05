@@ -82,9 +82,18 @@ export const planOverdueRecurringSweep = (todos, todayStart, now) => {
         fields: { overdueArchived: true, updatedAt: now },
     }));
 };
+/** 반복 규칙의 endDate는 "YYYY-MM-DD"로 저장된다(toRecurrenceRule). */
+const isDateOnlyKey = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 /**
- * 무기한(indefinite) 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
+ * 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
  * 기존 인스턴스는 건드리지 않고 마지막 인스턴스 이후의 빈 구간만 채운다.
+ *
+ * 무기한(indefinite)뿐 아니라 종료일(untilDate) 시리즈도 대상이다. 생성·수정 시 회차는
+ * min(endDate, 호라이즌)까지만 만들어지므로, 종료일이 호라이즌보다 멀면 여기서 이어 채우지
+ * 않는 한 시리즈가 호라이즌에서 조용히 멈춘다. 종료일 이후 회차는 generateRecurringDueDates가
+ * 만들지 않는다. endDate를 해석할 수 없는 untilDate 시리즈는 건너뛴다 — 그대로 두면
+ * generateRecurringDueDates가 호라이즌으로 대체해 무기한처럼 늘어난다.
+ * (함수 이름은 무기한 전용이던 시절의 것이다. 호출부가 web·mobile에 퍼져 있어 유지한다.)
  *
  * order를 여기서 매기지 않는 이유: 다음 order는 이 시리즈뿐 아니라 사용자의 **모든**
  * 루트 할 일에 걸친 최대값이라 이 함수가 보는 범위를 넘어선다. 계획이 비어있지 않을 때만
@@ -96,8 +105,9 @@ export const planIndefiniteExtension = (todos, horizonEnd) => {
     for (const todo of todos) {
         if (!todo.recurrenceId || !todo.recurrence)
             continue;
-        if (todo.recurrence.endType !== "indefinite")
+        if (todo.recurrence.endType === "untilDate" && !isDateOnlyKey(todo.recurrence.endDate)) {
             continue;
+        }
         if (!todo.dueAt)
             continue;
         const list = seriesByRecurrenceId.get(todo.recurrenceId) ?? [];
