@@ -19,7 +19,7 @@
 |---|---|
 | 반복 주기 | 매일 / 매주(요일 다중 선택) / 매월(같은 날짜) |
 | 기준 | `startAt` 기준 반복만 지원 (완료일 기준 없음) |
-| 반복 앵커/종료 | 시작일(startAt)이 반복 시작 앵커(필수). 마감일(dueAt)은 선택 — 있으면 그 날짜까지, 없으면 무기한 (2026-07-07 개정: 자세한 배경은 `docs/superpowers/specs/2026-07-07-recurring-anchor-field-redesign-design.md` 참고) |
+| 반복 앵커/종료 | 시작일(startAt)이 반복 시작 앵커(필수). 종료 조건은 폼의 「반복 종료: 없음/날짜 지정」(`endType`/`endDate`)으로 직접 지정하며 기본은 무기한. 만료일시(dueAt)는 종료 조건과 무관 (2026-07-07 개정 후 2026-11-05 재개정: 배경은 `docs/superpowers/specs/2026-07-07-recurring-anchor-field-redesign-design.md` 및 반복 종료 설정 스펙 참고. 이전에는 dueAt이 있으면 그 날짜까지 반복하는 것으로 유도했음) |
 | 수정 단위 | 항상 전체 시리즈 (이 인스턴스만 수정 불가) |
 | 자연어 입력 | 스코프 아웃 |
 | 하위 할 일 상호 배제 | 반복 ON ↔ 하위 할 일 기능 비활성 (양방향) |
@@ -63,9 +63,8 @@
 │  │ 반복 주기                        │  │
 │  │ [ 매일 ]  매주    매월           │  │  ← RecurrenceTypeTabs (세그먼트 탭)
 │  │                                  │  │
-│  │ 반복 범위                        │  │
-│  │ ℹ 마감일시가 없으면 무기한으로     │  │  ← dueAt 유무로 자동 유도, 읽기 전용
-│  │   반복됩니다                     │  │
+│  │ 반복 종료   [ 없음 ]  날짜 지정   │  │  ← 폼 값(endType), 기본 "없음"
+│  │ ℹ 계속 반복됩니다                │  │
 │  └────────────────────────────────┘  │
 ```
 
@@ -82,8 +81,8 @@
 │  │                                  │  │     ※ (월)(수)(금) = 선택됨 표기
 │  │  ⚠ 요일을 하나 이상 선택해주세요  │  │  ← 검증 에러 (0개 선택 시)
 │  │                                  │  │
-│  │ 반복 범위                        │  │
-│  │ ℹ 2026-09-30까지 반복됩니다      │  │  ← 마감일시(dueAt)로부터 자동 유도
+│  │ 반복 종료    없음  [ 날짜 지정 ]  │  │  ← 폼 값(endType/endDate)
+│  │ ℹ 2026-09-30까지 반복됩니다      │  │  ← 종료일 선택 시 안내
 │  └────────────────────────────────┘  │
 ```
 
@@ -255,7 +254,6 @@ interface RecurrenceFieldsProps {
   disabled: boolean;              // 하위 할 일 존재 또는 startAt 미입력 시 true
   disabledReason?: "hasChildren" | "noStartAt";
   startAt: string | null;         // 반복 시작 앵커. 매월 반복 시 '일(day)' 유도에도 사용
-  dueAt: string | null;           // 있으면 반복 종료일(마지막 발생일) 역할
   value: RecurrenceFormValue | null; // null = 반복 OFF
   onChange: (value: RecurrenceFormValue | null) => void;
 }
@@ -263,6 +261,8 @@ interface RecurrenceFieldsProps {
 interface RecurrenceFormValue {
   type: "daily" | "weekly" | "monthly";
   weekdays?: number[];            // 0=일 ~ 6=토, type==="weekly"일 때만 사용, 최소 1개
+  endType: "indefinite" | "untilDate"; // 반복 종료 조건 (기본 indefinite)
+  endDate: string | null;         // "YYYY-MM-DD"(로컬), untilDate일 때만 의미 있음
 }
 ```
 
@@ -561,4 +561,4 @@ collapseRecurringInstances가 이 인스턴스를 대표 후보에서 제외
 | `RecurrenceBadge` 배치 위치 | `shared/ui/recurrenceBadge/` | 3개 피처 교차 사용, CLAUDE.md의 shared 원칙과 일치 |
 | 반복 배지 배경색 | `#E8F5EF` | 캘린더 개편 스펙에서 이미 사용된 값과 통일 |
 | kanban 배지 표기 | 아이콘 + "반복" 텍스트(컴팩트 모드 아님) | `OverdueBadge`가 텍스트 포함 방식이라 시각적 일관성 우선 |
-| 매월 반복 day 유도 UI | 별도 날짜 선택 없이 `dueAt`의 day를 읽기 전용으로 안내 | PM 스코프("매월 같은 날짜")가 이미 dueAt 종속을 전제 |
+| 매월 반복 day 유도 UI | 별도 날짜 선택 없이 시작일(`startAt`)의 day를 읽기 전용으로 안내 | PM 스코프("매월 같은 날짜"), 반복 앵커는 startAt |
