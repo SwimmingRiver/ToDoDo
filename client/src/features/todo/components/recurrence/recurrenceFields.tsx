@@ -6,6 +6,7 @@ import { WEEKDAY_REQUIRED_ERROR } from "./weekdayConstants";
 import { getRecurrenceValidationError } from "./recurrenceValidation";
 import { DEFAULT_RECURRENCE_FORM_VALUE } from "./recurrenceTransform";
 import type { RecurrenceFormValue } from "./recurrenceFields.types";
+import { toDateKeyFromISO } from "@/shared/utils/date";
 import {
   RecurrenceSection,
   CheckboxLabel,
@@ -51,11 +52,18 @@ const RecurrenceFields = ({
   const rangeError =
     validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
 
-  // 종료 조건은 폼 값에서 온다(dueAt에서 유도하지 않는다).
+  // 종료 조건은 폼 값에서 온다(dueAt에서 유도하지 않는다). 날짜 지정인데 날짜가 없으면
+  // 안내 대신 검증 오류만 보인다(앱 RecurrenceSection과 같은 3분기).
   const rangeText =
-    value?.endType === "untilDate" && value.endDate
-      ? `${value.endDate}까지 반복됩니다`
+    value?.endType === "untilDate"
+      ? value.endDate
+        ? `${value.endDate}까지 반복됩니다`
+        : null
       : "계속 반복됩니다";
+
+  // 종료일 선택 하한 = 시작일시의 로컬 날짜(검증과 같은 기준, UTC 문자열 자르기 금지).
+  const startDateKey =
+    startAt && !Number.isNaN(new Date(startAt).getTime()) ? toDateKeyFromISO(startAt) : undefined;
 
   const handleToggle = () => {
     if (disabled) return;
@@ -174,13 +182,16 @@ const RecurrenceFields = ({
                     type="date"
                     aria-label="반복 종료일"
                     value={value.endDate ?? ""}
+                    min={startDateKey}
                     onChange={(e) => handleEndDateChange(e.target.value)}
                   />
                 )}
-                <InfoLine>
-                  <Info size={14} aria-hidden="true" />
-                  <span>{rangeText}</span>
-                </InfoLine>
+                {rangeText && (
+                  <InfoLine>
+                    <Info size={14} aria-hidden="true" />
+                    <span>{rangeText}</span>
+                  </InfoLine>
+                )}
                 {rangeError && <ErrorText role="alert">{rangeError}</ErrorText>}
               </FieldGroup>
             </>

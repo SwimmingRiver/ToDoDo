@@ -117,6 +117,19 @@ describe("RecurrenceFields 반복 종료 컨트롤", () => {
     expect(END_DATE_REQUIRED_ERROR).toBe("종료일을 선택해주세요");
   });
 
+  it("untilDate + 빈 날짜면 '계속 반복됩니다' 안내 없이 오류만 보인다", () => {
+    renderWith({ type: "daily", endType: "untilDate", endDate: null });
+    expect(screen.queryByText("계속 반복됩니다")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(END_DATE_REQUIRED_ERROR);
+  });
+
+  it("종료일 입력의 min은 시작일시의 로컬 날짜다", () => {
+    // 로컬 생성자로 만든 UTC Z 문자열 — 어느 TZ에서든 로컬 날짜는 7/10이다.
+    const startAt = new Date(2026, 6, 10, 0, 30).toISOString();
+    renderWith({ type: "daily", endType: "untilDate", endDate: null }, vi.fn(), startAt);
+    expect(screen.getByLabelText("반복 종료일")).toHaveAttribute("min", "2026-07-10");
+  });
+
   it("다시 '없음'을 누르면 indefinite + null로 돌아간다", () => {
     const onChange = renderWith({ type: "daily", endType: "untilDate", endDate: "2026-12-31" });
     fireEvent.click(screen.getByRole("tab", { name: "없음" }));
