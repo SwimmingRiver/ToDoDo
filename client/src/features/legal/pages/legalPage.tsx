@@ -2,13 +2,16 @@ import { useEffect } from "react";
 import { Link, useNavigationType } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import Footer from "@/layouts/footer/footer";
-import { LEGAL_CONFIG } from "../config";
+import { LEGAL_REVISIONS } from "../config";
 import { LEGAL_DOCUMENTS } from "../content";
 import type { LegalSlug } from "../types/legal.type";
 import { fillLegalVariables } from "../utils/fillLegalVariables";
+import { resolveLegalRevision } from "../utils/resolveLegalRevision";
 import {
   Article,
+  ChangeNotice,
   EffectiveDate,
+  History,
   Header,
   HomeLink,
   LogoMark,
@@ -20,14 +23,15 @@ interface LegalPageProps {
   slug: LegalSlug;
 }
 
-const fill = (text: string) => fillLegalVariables(text, LEGAL_CONFIG);
-
 /**
  * 로그인 없이 열리는 법적 문서 페이지. 앱 셸(App) 밖에서 렌더되므로 자체 헤더·푸터를 가진다.
  * 링크로 다른 문서에 가면 SPA라 스크롤이 유지되므로, 링크 이동(PUSH/REPLACE)일 때만 맨 위로 올린다.
  */
 const LegalPage = ({ slug }: LegalPageProps) => {
   const legalDocument = LEGAL_DOCUMENTS[slug];
+  // 렌더마다 오늘(서울) 기준으로 판을 고른다 — 시행일이 지나면 배포 없이 새 판이 보인다.
+  const { current, upcoming, history } = resolveLegalRevision(LEGAL_REVISIONS, new Date());
+  const fill = (text: string) => fillLegalVariables(text, current);
 
   const navigationType = useNavigationType();
 
@@ -48,6 +52,13 @@ const LegalPage = ({ slug }: LegalPageProps) => {
       <Article>
         <h1>{fill(legalDocument.title)}</h1>
         <EffectiveDate>시행일: {fill("{{effectiveDate}}")}</EffectiveDate>
+        {upcoming && (
+          // 약관 11조·방침 13조의 "시행 7일 전부터 서비스 화면에 알린다"를 이 공지로 지킨다.
+          <ChangeNotice role="note" aria-label="변경 예정 안내">
+            <strong>변경 예정 안내</strong> {upcoming.effectiveDate}부터 이 문서가 바뀝니다:{" "}
+            {upcoming.change}
+          </ChangeNotice>
+        )}
         {legalDocument.sections.map((section) => (
           <section key={section.heading}>
             <h2>{fill(section.heading)}</h2>
@@ -90,8 +101,20 @@ const LegalPage = ({ slug }: LegalPageProps) => {
             )}
           </section>
         ))}
+        {history.length > 0 && (
+          <History role="region" aria-label="변경 이력">
+            <h2>변경 이력</h2>
+            <ul>
+              {history.map(({ effectiveDate, change }) => (
+                <li key={effectiveDate}>
+                  {effectiveDate} 시행: {change}
+                </li>
+              ))}
+            </ul>
+          </History>
+        )}
       </Article>
-      <Footer />
+      <Footer showBusinessInfo />
     </PageContainer>
   );
 };
