@@ -119,34 +119,89 @@ const DayDetailList = styled.ul`
 `;
 
 const DayDetailItem = styled.li<{ $color: string; $overdue?: boolean }>`
-  padding: 12px 16px;
   border-left: 4px solid ${({ $color }) => $color};
   background-color: ${({ $overdue }) => ($overdue ? colors.danger.background : colors.surface.raised)};
   margin-bottom: 8px;
   border-radius: 0 8px 8px 0;
+  overflow: hidden;
 `;
 
-const DayDetailTitleRow = styled.div`
+/* li 전체를 덮는 버튼 — 모바일에서 격자의 6px 이벤트 바 대신 상세로 가는 탭 영역 */
+const DayDetailButton = styled.button<{ $overdue?: boolean }>`
+  position: relative; /* 안의 VisuallyHidden(absolute) 기준점 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+
+  /* 지난 항목은 눌림 상태에서도 붉은 계열을 유지해야 일반 항목과 구분된다 */
+  --day-detail-pressed-bg: ${({ $overdue }) =>
+    $overdue ? colors.danger.subtle : colors.background.secondary};
+
+  &:active {
+    background-color: var(--day-detail-pressed-bg);
+  }
+
+  /* 터치 기기는 탭 후 :hover가 남아 마지막 항목이 계속 강조되므로 실제 호버 기기에만 */
+  @media (hover: hover) {
+    &:hover {
+      background-color: var(--day-detail-pressed-bg);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${colors.brand.strong};
+    outline-offset: -2px;
+  }
+`;
+
+/* 누를 수 없는 행(구글 오버레이 이벤트) — 버튼 행과 같은 여백 */
+const DayDetailStatic = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+`;
+
+/* 아래 행 요소들은 <button> 안에 들어가므로 phrasing content(span)여야 유효한 HTML이다 —
+   블록 배치는 display로 준다 */
+const DayDetailBody = styled.span`
+  display: block;
+  flex: 1;
+  min-width: 0;
+`;
+
+const DayDetailTitleRow = styled.span`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 `;
 
-const DayDetailTitle = styled.p`
+const DayDetailTitle = styled.span`
+  display: block;
   margin: 0;
   font-size: 14px;
   font-weight: 500;
   color: ${colors.text.primary};
 `;
 
-const DayDetailDate = styled.p`
+const DayDetailDate = styled.span`
+  display: block;
   margin: 4px 0 0;
   font-size: 12px;
   color: ${colors.text.secondary};
 `;
 
-const DayDetailRecurrenceCaption = styled.p`
+const DayDetailRecurrenceCaption = styled.span`
+  display: block;
   margin: 2px 0 0;
   font-size: 11px;
   color: ${colors.brand.strong};
@@ -240,6 +295,9 @@ export {
   CalendarBody,
   DayDetailList,
   DayDetailItem,
+  DayDetailButton,
+  DayDetailBody,
+  DayDetailStatic,
   DayDetailTitleRow,
   DayDetailTitle,
   DayDetailDate,
