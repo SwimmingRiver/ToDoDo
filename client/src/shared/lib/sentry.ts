@@ -57,6 +57,7 @@ const scrubBreadcrumb = (crumb: Breadcrumb): Breadcrumb => ({
  * 허용 필드:
  * - message, exception(에러 메시지/스택트레이스): 코드 위치 파악에 필요한 정보이며 사용자 입력이 아니다.
  * - request.url(쿼리스트링 제거): 어떤 페이지에서 에러가 났는지 파악하기 위함.
+ * - request.headers["User-Agent"]: Sentry 서버가 browser/os를 파싱하는 원천. 나머지 헤더는 차단.
  * - contexts.browser / contexts.os: Sentry가 기본 수집하는 환경 정보, PII 아님.
  * - contexts.react(componentStack): React가 만들어내는 컴포넌트 트리 문자열로, 사용자 입력 아님.
  * - tags: 문자열/숫자/불리언 원시값만 존재하므로 통째로 허용(문자열 자유 입력 필드가 아님).
@@ -94,6 +95,15 @@ export const scrubEvent = (event: SentryErrorEvent): SentryErrorEvent => {
 
   if (event.request?.url) {
     scrubbed.request = { url: stripQueryString(event.request.url) };
+
+    // User-Agent만 헤더에서 옮겨 담는다. Sentry 서버는 이 헤더를 파싱해 browser/os 컨텍스트를
+    // 만들기 때문에, 헤더를 통째로 버리면 위의 contexts.browser/os 허용이 무의미해진다.
+    // Referer(쿼리스트링에 민감정보 가능)·Cookie 등 나머지 헤더는 계속 차단한다.
+    // 브라우저·OS 수집은 개인정보처리방침의 "오류 정보" 항목에 명시돼 있다.
+    const userAgent = event.request.headers?.["User-Agent"];
+    if (userAgent) {
+      scrubbed.request.headers = { "User-Agent": userAgent };
+    }
   }
 
   if (event.user?.id !== undefined) {
@@ -109,6 +119,30 @@ export const scrubEvent = (event: SentryErrorEvent): SentryErrorEvent => {
   return scrubbed;
 };
 
+const WEBVIEW_BRIDGE_GONE = /Java object is gone/;
+
+/**
+ * 안드로이드 인앱 브라우저(카카오톡·인스타그램 등 WebView) 브릿지 노이즈인지 판단한다.
+ *
+ * 인앱 브라우저가 주입한 스크립트가, 창이 닫혀 자바 브릿지 객체가 정리된 뒤 호출하면
+ * "Error invoking <메서드>: Java object is gone"이 난다(TODODO-CLIENT-9, 2026-11: 스택 <anonymous>).
+ *
+ * 메시지만으로 버리지 않고 "스택에 우리 번들 프레임이 없을 것"을 함께 보는 이유:
+ * 이 메시지는 WebView 자체가 내므로, 나중에 우리 앱이 WebView 브릿지를 쓰게 되면
+ * 우리 코드에서 나는 진짜 에러도 같은 메시지를 갖는다. 그 경우엔 스택에 우리 번들이 찍히므로 보고된다.
+ */
+export const isWebViewBridgeNoise = (event: SentryErrorEvent): boolean => {
+  const values = event.exception?.values ?? [];
+  const isBridgeError = values.some((v) => WEBVIEW_BRIDGE_GONE.test(v.value ?? ""));
+  if (!isBridgeError) return false;
+
+  const origin = window.location.origin;
+  const hasOwnFrame = values.some((v) =>
+    (v.stacktrace?.frames ?? []).some((frame) => frame.filename?.startsWith(origin)),
+  );
+  return !hasOwnFrame;
+};
+
 // main.tsx 최상단(다른 모든 초기화보다 먼저)에서 호출한다.
 export const initSentry = () => {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -121,6 +155,6 @@ export const initSentry = () => {
     environment: import.meta.env.MODE,
     // dsn을 로컬에 설정해두더라도 실제로는 프로덕션 빌드에서만 전송되도록 이중으로 방어한다.
     enabled: import.meta.env.PROD,
-    beforeSend: (event) => scrubEvent(event),
+    beforeSend: (event) => (isWebViewBridgeNoise(event) ? null : scrubEvent(event)),
   });
 };
