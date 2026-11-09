@@ -7,9 +7,9 @@ import {
   Title,
   Meta,
   Message,
-  VisuallyHidden,
   TextBlock,
 } from "./notificationHistoryList.styles";
+import { VisuallyHidden } from "@/shared";
 
 interface Props {
   items: ReminderHistoryItem[] | undefined;

@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { MemoryRouter, createMemoryRouter, RouterProvider } from 'react-router-dom'
 import Calendar from '../calendar'
+import { toDateKey } from '@/shared/utils/date'
 import { CalendarContainer } from '../calendar.styles'
 
 vi.mock('@/shared/lib/firebase', () => ({
@@ -64,11 +65,14 @@ vi.mock('@/features/todo', () => ({
   TodoForm: () => null,
 }))
 
+const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }))
+
 vi.mock('@/shared', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/shared')>()
   return {
     ...actual,
     useToast: () => mockToast,
+    useMediaQuery: () => mockViewport.isMobile,
   }
 })
 
@@ -119,6 +123,165 @@ describe('Calendar 하루 다건 "+N개" 표시', () => {
     expect(screen.getAllByText(/마감:/).length).toBeGreaterThan(0)
     // FullCalendar 기본 팝오버는 열리지 않아야 한다
     expect(document.querySelector('.fc-popover')).toBeNull()
+  })
+})
+
+// 모바일 너비에선 격자의 이벤트 바가 6px라 직접 누르기 어렵다 — 날짜 바텀시트의
+// 목록 항목이 상세로 가는 유일한 실용적 경로다.
+describe('Calendar 날짜 바텀시트 → 상세 이동', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+    // jsdom에는 ResizeObserver가 없다(단독 실행 시 다른 describe의 beforeAll에 기대지 않도록)
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+  })
+
+  afterEach(async () => {
+    vi.unstubAllGlobals()
+    // 단언이 실패해도 다음 테스트에 구글 이벤트가 새지 않도록 여기서 되돌린다
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    vi.mocked(useGoogleCalendarEvents).mockReturnValue({ data: [] } as never)
+  })
+
+  it('바텀시트의 할 일 항목을 누르면 해당 할 일 상세로 이동한다', async () => {
+    renderCalendar()
+    fireEvent.click(await screen.findByText(/\+\d+개/))
+
+    // 접근 이름에 제목뿐 아니라 상태·마감 정보도 남아 있어야 스크린리더가 항목을 구분한다
+    const item = await screen.findByRole('button', { name: /할 일 5번.*마감:.*상세 보기/ })
+    fireEvent.click(item)
+
+    expect(mockNavigate).toHaveBeenCalledWith('/todo/todo-5')
+  })
+
+  // 격자에 회색 바로 보이는 구글 일정이 시트에서 빠지면, 그 바를 눌렀을 때
+  // "할 일이 없습니다"가 뜬다. 읽기 전용으로만 보여주고 이동은 하지 않는다.
+  it('바텀시트에 그 날짜의 구글 일정이 읽기 전용으로 함께 표시된다', async () => {
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    const d = new Date()
+    const todayStr = toDateKey(d)
+    const tomorrowStr = toDateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1))
+    vi.mocked(useGoogleCalendarEvents).mockReturnValue({
+      data: [{ id: 'g-sheet', title: '시트 회의', start: todayStr, end: tomorrowStr }],
+    } as never)
+
+    renderCalendar()
+    fireEvent.click(await screen.findByText(/\+\d+개/))
+
+    const sheetRow = await screen.findByText('구글 캘린더 · 종일')
+    expect(sheetRow).toBeInTheDocument()
+    // 읽기 전용: 구글 행은 버튼이 아니다
+    expect(screen.queryByRole('button', { name: /시트 회의/ })).toBeNull()
+  })
+
+  it('전날 밤에 시작해 오늘로 넘어온 구글 일정은 시작 시각 대신 "전날부터 이어짐"으로 표시된다', async () => {
+    const { useGoogleCalendarEvents } = await import('@/features/calendarIntegration/hooks')
+    const d = new Date()
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 23, 30).toISOString()
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 1, 0).toISOString()
+    vi.mocked(useGoogleCalendarEvents).mockReturnValue({
+      data: [{ id: 'g-overnight', title: '밤샘 배포', start, end }],
+    } as never)
+
+    renderCalendar()
+    fireEvent.click(await screen.findByText(/\+\d+개/))
+
+    expect(await screen.findByText('구글 캘린더 · 전날부터 이어짐')).toBeInTheDocument()
+  })
+})
+
+// 모바일 격자의 이벤트 바는 제목이 안 보여 무엇을 누르는지 알 수 없다 — 바로
+// 상세로 보내지 말고 그 날짜 바텀시트를 띄워 목록에서 고르게 한다.
+describe('Calendar 모바일 이벤트 탭 → 날짜 바텀시트', () => {
+  const todayKey = () => toDateKey(new Date())
+
+  /** jsdom은 레이아웃이 없으므로 칸 사각형을 직접 지정한다 */
+  const fakeCell = (dateKey: string, rect: { left: number; right: number; top: number; bottom: number }) => {
+    const td = document.createElement('td')
+    td.className = 'fc-daygrid-day'
+    td.setAttribute('data-date', dateKey)
+    td.getBoundingClientRect = () => ({ ...rect, x: rect.left, y: rect.top, width: rect.right - rect.left, height: rect.bottom - rect.top, toJSON: () => ({}) })
+    return td
+  }
+
+  beforeEach(() => {
+    mockNavigate.mockClear()
+    // jsdom에는 ResizeObserver가 없다(단독 실행 시 다른 describe의 beforeAll에 기대지 않도록)
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+  })
+
+  afterEach(() => {
+    mockViewport.isMobile = false
+    vi.unstubAllGlobals()
+    // jsdom에는 없으므로 테스트에서 붙인 것만 지운다
+    delete (document as { elementsFromPoint?: unknown }).elementsFromPoint
+  })
+
+  it('모바일에서 이벤트를 누르면 상세 대신 그 날짜 바텀시트가 열린다', async () => {
+    mockViewport.isMobile = true
+    renderCalendar()
+    fireEvent.click(await screen.findByText('할 일 1번'))
+
+    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(
+      await screen.findByRole('button', { name: `${todayKey()} 날짜에 새 할 일 추가` }),
+    ).toBeInTheDocument()
+  })
+
+  it('모바일에서는 이벤트 시작일이 아니라 실제로 누른 칸의 날짜로 시트를 연다', async () => {
+    mockViewport.isMobile = true
+    renderCalendar()
+    const eventEl = await screen.findByText('할 일 1번')
+
+    // 월~목 바의 수요일 칸을 누른 상황. FC는 바를 시작 칸(월) 안에 그리므로 그 칸이
+    // 조상으로서 결과에 먼저 섞인다 — 좌표를 실제로 포함하는 칸(수)을 골라야 한다.
+    const startCell = fakeCell('2099-01-13', { left: 0, right: 50, top: 0, bottom: 50 })
+    const tappedCell = fakeCell('2099-01-15', { left: 100, right: 150, top: 0, bottom: 50 })
+    document.elementsFromPoint = () => [eventEl, startCell, tappedCell]
+
+    fireEvent.click(eventEl, { detail: 1, clientX: 120, clientY: 20 })
+
+    expect(
+      await screen.findByRole('button', { name: '2099-01-15 날짜에 새 할 일 추가' }),
+    ).toBeInTheDocument()
+    // 제목도 같은 날이어야 한다 — "yyyy-MM-dd"를 UTC로 해석하면 서쪽 타임존에서 14일로 밀린다
+    expect(screen.getByText('2099년 1월 15일')).toBeInTheDocument()
+  })
+
+  it('키보드로 누르면(좌표 0,0) 좌표 판정을 건너뛰고 이벤트가 놓인 칸의 날짜를 쓴다', async () => {
+    mockViewport.isMobile = true
+    renderCalendar()
+    const eventEl = await screen.findByText('할 일 1번')
+
+    // 화면 좌상단(0,0)에 다른 날짜 칸이 있어도 그 칸을 쓰면 안 된다
+    const cornerCell = fakeCell('2099-01-01', { left: 0, right: 50, top: 0, bottom: 50 })
+    document.elementsFromPoint = () => [cornerCell]
+
+    fireEvent.click(eventEl, { detail: 0, clientX: 0, clientY: 0 })
+
+    expect(
+      await screen.findByRole('button', { name: `${todayKey()} 날짜에 새 할 일 추가` }),
+    ).toBeInTheDocument()
+  })
+
+  it('데스크톱에서는 이벤트를 누르면 기존대로 상세로 이동한다', async () => {
+    renderCalendar()
+    fireEvent.click(await screen.findByText('할 일 1번'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/todo/todo-1')
   })
 })
 

@@ -13,6 +13,9 @@ import {
   CalendarBody,
   DayDetailList,
   DayDetailItem,
+  DayDetailButton,
+  DayDetailBody,
+  DayDetailStatic,
   DayDetailTitleRow,
   DayDetailTitle,
   DayDetailDate,
@@ -24,14 +27,14 @@ import {
   AddButton,
 } from "./calendar.styles";
 import { statusColors, type Status } from "../../../styles/statusColors";
-import { BottomSheet, EmptyState, Modal, RecurrenceBadge, useToast } from "@/shared";
-import { AlertCircle, Plus, Repeat, CalendarDays } from "lucide-react";
+import { BottomSheet, EmptyState, Modal, RecurrenceBadge, VisuallyHidden, useMediaQuery, useToast } from "@/shared";
+import { AlertCircle, Plus, Repeat, CalendarDays, ChevronRight } from "lucide-react";
 import styled, { keyframes } from "styled-components";
 import * as Sentry from "@sentry/react";
 import { colors } from "@/styles/colors";
-import { isOverdue, getDropDates } from "../utils/calendarUtils";
+import { isOverdue, getDropDates, isDateInGoogleEventRange } from "../utils/calendarUtils";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
-import { toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
+import { parseLocalDateOnly, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 import { isDateInTodoRange } from "@/shared/utils/dateRange";
 import CalendarConnectionButton from "@/features/calendarIntegration/components/calendarConnectionButton";
 import { useMarkCalendarConnected, useGoogleCalendarEvents } from "@/features/calendarIntegration/hooks";
@@ -41,6 +44,46 @@ const statusLabels: Record<Status, string> = {
   todo: "할 일",
   doing: "진행 중",
   done: "완료",
+};
+
+/**
+ * 이벤트를 탭한 지점 아래의 날짜 칸(yyyy-MM-dd)을 찾는다.
+ * 여러 날에 걸친 바는 시작일이 아니라 실제로 누른 칸이 사용자가 의도한 날짜다.
+ *
+ * - FC는 여러 날 바를 그 주 행에서 바가 시작하는 칸(td) 안에 그리므로, 그 시작 칸이
+ *   조상으로서 elementsFromPoint 결과에 섞일 수 있다. 그래서 "첫 번째로 걸린 칸"이
+ *   아니라 **탭 좌표를 실제 사각형으로 포함하는 칸**을 고른다.
+ * - 키보드(Enter/Space)로 누르면 좌표가 0,0이라(detail === 0) 좌표 판정을 건너뛰고,
+ *   이벤트 요소가 들어 있는 칸(그 주 행의 바 시작 칸)으로, 그것도 없으면 이벤트
+ *   시작일로 대신한다. FC event.start는 로컬 게터로 읽어야 하므로 toDateKey를 쓴다.
+ */
+const DAY_CELL = ".fc-daygrid-day[data-date]";
+const getTappedDateKey = (info: EventClickArg): string => {
+  const { clientX, clientY, detail } = info.jsEvent;
+  const isPointerTap = detail > 0;
+  const tappedCell =
+    isPointerTap && typeof document.elementsFromPoint === "function"
+      ? document.elementsFromPoint(clientX, clientY).find((el) => {
+          if (!el.matches(DAY_CELL)) return false;
+          const r = el.getBoundingClientRect();
+          return clientX >= r.left && clientX < r.right && clientY >= r.top && clientY < r.bottom;
+        })
+      : undefined;
+  const cell = tappedCell ?? info.el.closest(DAY_CELL);
+  const dateKey = cell?.getAttribute("data-date");
+  if (dateKey) return dateKey;
+  return toDateKey(info.event.start ?? new Date());
+};
+
+/**
+ * 구글 이벤트의 시트 캡션. 종일이면 "종일", 시간 이벤트는 그날 시작하면 로컬 시각,
+ * 전날부터 이어지는 날이면 "전날부터 이어짐" — 시작 시각을 그대로 쓰면 16일 시트에
+ * "오후 11:30"이 떠서 16일 밤 일정으로 오해된다.
+ */
+const formatGoogleEventTime = (start: string, dateKey: string): string => {
+  if (!start.includes("T")) return "종일";
+  if (toDateKeyFromISO(start) < dateKey) return "전날부터 이어짐";
+  return new Date(start).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
 };
 
 const Calendar = () => {
@@ -59,6 +102,9 @@ const Calendar = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const toast = useToast();
+  // 이벤트 바가 제목 없는 6px 막대로 줄어드는 기준(calendar.styles의 media.mobile)과
+  // 같아야 한다 — 제목이 보이는 너비에서까지 상세 이동을 막으면 안 된다.
+  const isNarrowGrid = useMediaQuery("mobile");
   const [searchParams, setSearchParams] = useSearchParams();
   const { markConnected } = useMarkCalendarConnected();
   // setSearchParams로 파라미터를 지워도 라우터 내비게이션이라 비동기다 —
@@ -106,6 +152,18 @@ const Calendar = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 읽기 전용으로 겹쳐 보여줄 구글 이벤트. ToDoDo가 이미 만든(googleEventId로
+  // 링크된) 이벤트는 같은 Todo가 두 번 보이지 않도록 뺀다. 격자와 날짜 바텀시트가
+  // 같은 목록을 써야 칸에 보이는 것과 시트 목록이 어긋나지 않는다.
+  const overlayGoogleEvents = useMemo(() => {
+    const syncedGoogleEventIds = new Set(
+      (todos ?? [])
+        .map((t) => t.googleEventId)
+        .filter((id): id is string => !!id),
+    );
+    return (googleEvents ?? []).filter((event) => !syncedGoogleEventIds.has(event.id));
+  }, [todos, googleEvents]);
+
   const events = useMemo(() => {
     const todoEvents = todos
       ?.filter((todo: Todo) => !!todo.startAt || !!todo.dueAt)
@@ -146,17 +204,7 @@ const Calendar = () => {
         };
       }) ?? [];
 
-    // ToDoDo가 이미 이 이벤트들을 만든 장본인이다 — 온디맨드 조회 결과에서
-    // 제외해 같은 Todo가 두 번 표시되는 걸 막는다.
-    const syncedGoogleEventIds = new Set(
-      (todos ?? [])
-        .map((t) => t.googleEventId)
-        .filter((id): id is string => !!id),
-    );
-
-    const googleOnlyEvents = (googleEvents ?? [])
-      .filter((event) => !syncedGoogleEventIds.has(event.id))
-      .map((event) => ({
+    const googleOnlyEvents = overlayGoogleEvents.map((event) => ({
         id: `google-${event.id}`,
         title: event.title,
         start: event.start,
@@ -172,7 +220,7 @@ const Calendar = () => {
       }));
 
     return [...todoEvents, ...googleOnlyEvents];
-  }, [todos, googleEvents]);
+  }, [todos, overlayGoogleEvents]);
 
   const renderEventContent = useCallback((arg: EventContentArg) => (
     <EventContentWrapper>
@@ -196,25 +244,44 @@ const Calendar = () => {
     return todos.filter((todo: Todo) => isDateInTodoRange(selectedDate, todo));
   }, [selectedDate, todos]);
 
-  const handleDateClick = useCallback((info: DateClickArg) => {
-    setSelectedDate(info.dateStr);
+  // 격자에는 회색 바로 보이는데 시트에서 빠지면 그 바를 눌렀을 때 "할 일이 없습니다"가
+  // 뜬다. 읽기 전용 표시만 하고 할 일로 가져오지는 않는다(양방향 연동은 하지 않기로 결정).
+  const selectedDateGoogleEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    return overlayGoogleEvents.filter((event) => isDateInGoogleEventRange(selectedDate, event));
+  }, [selectedDate, overlayGoogleEvents]);
+
+  // 날짜 바텀시트의 진입점은 셋(빈 칸 클릭, +N개, 좁은 화면의 이벤트 탭)이다 —
+  // 여는 방식을 한 곳에 둬야 진입점마다 동작이 갈라지지 않는다.
+  const openDaySheet = useCallback((dateKey: string) => {
+    setSelectedDate(dateKey);
     setIsBottomSheetOpen(true);
   }, []);
+
+  const handleDateClick = useCallback((info: DateClickArg) => {
+    openDaySheet(info.dateStr);
+  }, [openDaySheet]);
 
   const handleMoreLinkClick = useCallback((info: MoreLinkArg) => {
     // FC 마커 날짜는 UTC 필드에 달력 날짜를 담고 있으므로 UTC로 읽어야
     // 사용자 타임존과 무관하게 올바른 날짜가 된다
-    setSelectedDate(info.date.toISOString().slice(0, 10));
-    setIsBottomSheetOpen(true);
+    openDaySheet(info.date.toISOString().slice(0, 10));
     // void 반환 시 FC 기본 팝오버가, 뷰 이름 문자열 반환 시 뷰 전환(zoomTo)이
     // 일어난다. 둘 다 막는 공식 반환값이 없어 truthy 비문자열을 반환한다
     return true as unknown as string;
-  }, []);
+  }, [openDaySheet]);
 
   const handleEventClick = useCallback((info: EventClickArg) => {
+    // 모바일 격자의 이벤트 바는 제목이 보이지 않아 무엇을 누르는지 알 수 없다 —
+    // 상세로 바로 보내지 않고 그 날짜 바텀시트를 띄워 목록에서 고르게 한다.
+    // 구글 이벤트도 같은 칸을 누른 것이므로 동일하게 시트를 연다.
+    if (isNarrowGrid) {
+      openDaySheet(getTappedDateKey(info));
+      return;
+    }
     if (info.event.extendedProps.source === "google") return;
     navigate(`/todo/${info.event.id}`);
-  }, [navigate]);
+  }, [navigate, isNarrowGrid, openDaySheet]);
 
   const handleEventDrop = useCallback((info: EventDropArg) => {
     if (info.event.extendedProps.source === "google") {
@@ -363,13 +430,13 @@ const Calendar = () => {
       <BottomSheet
         isOpen={isBottomSheetOpen}
         onClose={() => setIsBottomSheetOpen(false)}
-        title={selectedDate ? new Date(selectedDate).toLocaleDateString("ko-KR", {
+        title={selectedDate ? parseLocalDateOnly(selectedDate).toLocaleDateString("ko-KR", {
           year: "numeric",
           month: "long",
           day: "numeric",
         }) : ""}
       >
-        {selectedDateTodos.length > 0 ? (
+        {selectedDateTodos.length > 0 || selectedDateGoogleEvents.length > 0 ? (
           <DayDetailList>
             {selectedDateTodos.map((todo: Todo) => (
               <DayDetailItem
@@ -377,20 +444,46 @@ const Calendar = () => {
                 $color={isOverdue(todo) ? colors.danger.main : (statusColors[todo.status as Status]?.main ?? statusColors.todo.main)}
                 $overdue={isOverdue(todo)}
               >
-                <DayDetailTitleRow>
-                  <DayDetailTitle>{todo.title}</DayDetailTitle>
-                  {todo.recurrenceId != null && <RecurrenceBadge />}
-                </DayDetailTitleRow>
-                <DayDetailDate>
-                  {statusLabels[todo.status as Status]}
-                  {todo.startAt && ` · 시작: ${formatDate(todo.startAt)}`}
-                  {todo.dueAt && ` · 마감: ${formatDate(todo.dueAt)}`}
-                </DayDetailDate>
-                {todo.recurrenceId != null && todo.recurrence && (
-                  <DayDetailRecurrenceCaption>
-                    {formatRecurrenceSummary(todo.recurrence, todo.dueAt)}
-                  </DayDetailRecurrenceCaption>
-                )}
+                {/* aria-label을 쓰면 상태·마감·반복 정보가 접근 이름에서 사라진다 —
+                    보이는 텍스트를 이름으로 두고 "상세 보기"만 숨김 텍스트로 덧붙인다. */}
+                <DayDetailButton
+                  type="button"
+                  $overdue={isOverdue(todo)}
+                  onClick={() => navigate(`/todo/${todo.id}`)}
+                >
+                  <DayDetailBody>
+                    <DayDetailTitleRow>
+                      <DayDetailTitle>{todo.title}</DayDetailTitle>
+                      {todo.recurrenceId != null && <RecurrenceBadge />}
+                    </DayDetailTitleRow>
+                    <DayDetailDate>
+                      {statusLabels[todo.status as Status]}
+                      {todo.startAt && ` · 시작: ${formatDate(todo.startAt)}`}
+                      {todo.dueAt && ` · 마감: ${formatDate(todo.dueAt)}`}
+                    </DayDetailDate>
+                    {todo.recurrenceId != null && todo.recurrence && (
+                      <DayDetailRecurrenceCaption>
+                        {formatRecurrenceSummary(todo.recurrence, todo.dueAt)}
+                      </DayDetailRecurrenceCaption>
+                    )}
+                    <VisuallyHidden> 상세 보기</VisuallyHidden>
+                  </DayDetailBody>
+                  <ChevronRight size={16} color={colors.text.secondary} aria-hidden="true" />
+                </DayDetailButton>
+              </DayDetailItem>
+            ))}
+            {/* 구글 이벤트는 읽기 전용 — 눌러도 이동하지 않으므로 버튼이 아닌 정적 행 */}
+            {selectedDateGoogleEvents.map((event) => (
+              <DayDetailItem key={`google-${event.id}`} $color={colors.text.secondary}>
+                <DayDetailStatic>
+                  <DayDetailBody>
+                    <DayDetailTitleRow>
+                      <DayDetailTitle>{event.title}</DayDetailTitle>
+                      <CalendarDays size={14} color={colors.text.secondary} aria-hidden="true" />
+                    </DayDetailTitleRow>
+                    <DayDetailDate>구글 캘린더 · {formatGoogleEventTime(event.start, selectedDate ?? "")}</DayDetailDate>
+                  </DayDetailBody>
+                </DayDetailStatic>
               </DayDetailItem>
             ))}
           </DayDetailList>
