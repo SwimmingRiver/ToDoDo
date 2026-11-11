@@ -230,7 +230,11 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
     await user.type(title, '바뀐 제목')
     fireEvent.submit(title.closest('form')!)
 
-    expect(await screen.findByText('반복 일정 전체 수정')).toBeInTheDocument()
+    expect(await screen.findByText('반복 일정 수정')).toBeInTheDocument()
+    // 시리즈 수정은 이 회차와 이후 회차에만 적용된다(core editRecurringSeries 계약과 같은 안내).
+    expect(
+      screen.getByText('이 변경은 이 일정과 이후 일정에 적용됩니다.', { exact: false }),
+    ).toHaveTextContent('이전 일정과 이미 완료됐거나 진행 중인 회차는 그대로 유지됩니다.')
     await user.click(screen.getByText('전체 적용'))
 
     expect(mockState.editRecurringSeries).toHaveBeenCalledTimes(1)
@@ -256,7 +260,7 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
     expect(payload.recurrence).toEqual({ type: 'daily', endType: 'untilDate', endDate: '2026-12-31' })
   })
 
-  it('수정 모드의 반복 범위 안내는 회차 dueAt이 아니라 기존 규칙을 보여준다', () => {
+  it('수정 모드의 반복 범위 안내는 회차 dueAt이 아니라 기존 규칙(폼 값)을 보여준다', () => {
     mockState.todo = makeTodo({
       startAt: occurrenceIso(1),
       dueAt: occurrenceIso(1),
@@ -265,10 +269,10 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
     })
     renderDetail()
 
-    expect(screen.getByText('무기한으로 반복됩니다')).toBeInTheDocument()
+    expect(screen.getByText('계속 반복됩니다')).toBeInTheDocument()
   })
 
-  it('비반복 할 일을 반복으로 전환하면 기존대로 dueAt에서 종료일을 유도한다', async () => {
+  it('비반복 할 일을 반복으로 전환하면 dueAt이 있어도 무기한으로 시작한다 (종료는 폼 값에서 온다)', async () => {
     const user = setupUser()
     const dueAt = occurrenceIso(5)
     mockState.todo = makeTodo({ startAt: occurrenceIso(1), dueAt })
@@ -279,8 +283,89 @@ describe('반복 회차 수정 시 시리즈 종료 조건', () => {
 
     await waitFor(() => expect(mockState.createRecurringTodo).toHaveBeenCalledTimes(1))
     const payload = mockState.createRecurringTodo.mock.calls[0][0] as Todo
-    const d = new Date(dueAt)
-    const expectedKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'untilDate', endDate: expectedKey })
+    expect(payload.recurrence).toEqual({ type: 'daily', endType: 'indefinite', endDate: null })
+  })
+})
+
+describe('반복 종료 컨트롤과 마감일시 숨김', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 6, 10, 8, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const iso = (day: number) => new Date(2026, 6, day, 9, 0, 0).toISOString()
+  const dueAtInput = () => document.querySelector('input[name="dueAt"]')
+
+  it('새로 반복을 켜면 마감일시 입력이 사라지고 끄면 다시 보인다', async () => {
+    const user = setupUser()
+    mockState.todo = makeTodo({ startAt: iso(11), dueAt: iso(20) })
+    renderDetail()
+    expect(dueAtInput()).not.toBeNull()
+
+    await user.click(screen.getByLabelText('이 할 일을 반복합니다'))
+    expect(dueAtInput()).toBeNull()
+
+    await user.click(screen.getByLabelText('이 할 일을 반복합니다'))
+    expect(dueAtInput()).not.toBeNull()
+  })
+
+  it('기존 시리즈는 날짜 지정과 종료일이 선택돼 있고 마감일시가 계속 보이며, 종료일 변경이 payload에 반영된다', async () => {
+    const user = setupUser()
+    mockState.todo = makeTodo({
+      startAt: iso(11),
+      dueAt: iso(11),
+      recurrence: { type: 'daily', endType: 'untilDate', endDate: '2026-12-31' },
+      recurrenceId: 'series-1',
+    })
+    renderDetail()
+
+    expect(screen.getByRole('tab', { name: '날짜 지정' })).toHaveAttribute('aria-selected', 'true')
+    expect((screen.getByLabelText('반복 종료일') as HTMLInputElement).value).toBe('2026-12-31')
+    expect(dueAtInput()).not.toBeNull()
+
+    fireEvent.submit(screen.getByPlaceholderText('할 일 제목').closest('form')!)
+    await user.click(await screen.findByText('전체 적용'))
+    const payload = mockState.editRecurringSeries.mock.calls[0][0] as Todo
+    expect(payload.recurrence).toMatchObject({ endType: 'untilDate', endDate: '2026-12-31' })
+  })
+
+  it('종료일을 바꾸면 payload에 반영된다', async () => {
+    const user = setupUser()
+    mockState.todo = makeTodo({
+      startAt: iso(11),
+      dueAt: iso(11),
+      recurrence: { type: 'daily', endType: 'untilDate', endDate: '2026-12-31' },
+      recurrenceId: 'series-1',
+    })
+    renderDetail()
+    fireEvent.change(screen.getByLabelText('반복 종료일'), { target: { value: '2027-01-31' } })
+    fireEvent.submit(screen.getByPlaceholderText('할 일 제목').closest('form')!)
+    await user.click(await screen.findByText('전체 적용'))
+    const payload = mockState.editRecurringSeries.mock.calls[0][0] as Todo
+    expect(payload.recurrence).toMatchObject({ endType: 'untilDate', endDate: '2027-01-31' })
+  })
+
+  it('endDate가 ISO 형식인 옛 시리즈는 빈 날짜로 열리고 저장하면 막힌다', async () => {
+    mockState.todo = makeTodo({
+      startAt: iso(11),
+      dueAt: iso(11),
+      recurrence: {
+        type: 'daily',
+        endType: 'untilDate',
+        endDate: '2026-12-31T00:00:00.000Z',
+      } as Todo['recurrence'],
+      recurrenceId: 'series-1',
+    })
+    renderDetail()
+    expect((screen.getByLabelText('반복 종료일') as HTMLInputElement).value).toBe('')
+
+    fireEvent.submit(screen.getByPlaceholderText('할 일 제목').closest('form')!)
+    expect(await screen.findByText('입력 확인')).toBeInTheDocument()
+    expect(screen.queryByText('전체 적용')).not.toBeInTheDocument()
+    expect(mockState.editRecurringSeries).not.toHaveBeenCalled()
   })
 })

@@ -1,12 +1,12 @@
 import { useId } from "react";
 import { Info } from "lucide-react";
-import { toDateKeyFromISO } from "@/shared/utils/date";
 import RecurrenceTypeTabs from "./recurrenceTypeTabs";
 import WeekdayPicker from "./weekdayPicker";
 import { WEEKDAY_REQUIRED_ERROR } from "./weekdayConstants";
 import { getRecurrenceValidationError } from "./recurrenceValidation";
+import { DEFAULT_RECURRENCE_FORM_VALUE } from "./recurrenceTransform";
 import type { RecurrenceFormValue } from "./recurrenceFields.types";
-import type { RecurrenceRule } from "../../types";
+import { toDateKeyFromISO } from "@/shared/utils/date";
 import {
   RecurrenceSection,
   CheckboxLabel,
@@ -19,53 +19,55 @@ import {
   InfoLine,
   MonthlySubCaption,
   ErrorText,
+  TabList,
+  TabButton,
+  EndDateInput,
 } from "./recurrence.styles";
+
+const END_TYPES: { type: RecurrenceFormValue["endType"]; label: string }[] = [
+  { type: "indefinite", label: "없음" },
+  { type: "untilDate", label: "날짜 지정" },
+];
 
 interface RecurrenceFieldsProps {
   disabled: boolean; // 하위 할 일 존재 또는 startAt 미입력 시 true
   disabledReason?: "hasChildren" | "noStartAt";
   startAt: string | null; // 반복 시작 앵커. 매월 반복 시 '일(day)' 유도에도 사용
-  dueAt: string | null; // 있으면 반복 종료일(마지막 발생일) 역할
   value: RecurrenceFormValue | null; // null = 반복 OFF
   onChange: (value: RecurrenceFormValue | null) => void;
-  /**
-   * 이미 반복 중인 시리즈를 수정할 때의 기존 규칙. 이때 dueAt은 시리즈 종료일이 아니라
-   * 수정 중인 회차의 날짜라, 범위 안내는 기존 규칙의 종료 조건으로 보여주고 범위 에러는
-   * 띄우지 않는다(저장 시에도 종료 조건은 기존 규칙에서 유지된다).
-   */
-  existingRule?: RecurrenceRule | null;
 }
 
 const RecurrenceFields = ({
   disabled,
   disabledReason,
   startAt,
-  dueAt,
   value,
   onChange,
-  existingRule,
 }: RecurrenceFieldsProps) => {
   const hintId = useId();
   const checked = value !== null;
 
   const weekdayError = value?.type === "weekly" && (value.weekdays?.length ?? 0) === 0;
-  const validationError = getRecurrenceValidationError(value, startAt, dueAt);
+  const validationError = getRecurrenceValidationError(value, startAt);
   const rangeError =
-    !existingRule && validationError && validationError !== WEEKDAY_REQUIRED_ERROR
-      ? validationError
-      : null;
+    validationError && validationError !== WEEKDAY_REQUIRED_ERROR ? validationError : null;
 
-  const rangeText = existingRule
-    ? existingRule.endType === "untilDate" && existingRule.endDate
-      ? `${existingRule.endDate}까지 반복됩니다`
-      : "무기한으로 반복됩니다"
-    : dueAt
-      ? `${toDateKeyFromISO(dueAt)}까지 반복됩니다`
-      : "마감일시가 없으면 무기한으로 반복됩니다";
+  // 종료 조건은 폼 값에서 온다(dueAt에서 유도하지 않는다). 날짜 지정인데 날짜가 없으면
+  // 안내 대신 검증 오류만 보인다(앱 RecurrenceSection과 같은 3분기).
+  const rangeText =
+    value?.endType === "untilDate"
+      ? value.endDate
+        ? `${value.endDate}까지 반복됩니다`
+        : null
+      : "계속 반복됩니다";
+
+  // 종료일 선택 하한 = 시작일시의 로컬 날짜(검증과 같은 기준, UTC 문자열 자르기 금지).
+  const startDateKey =
+    startAt && !Number.isNaN(new Date(startAt).getTime()) ? toDateKeyFromISO(startAt) : undefined;
 
   const handleToggle = () => {
     if (disabled) return;
-    onChange(checked ? null : { type: "daily" });
+    onChange(checked ? null : { ...DEFAULT_RECURRENCE_FORM_VALUE });
   };
 
   const handleTypeChange = (type: RecurrenceFormValue["type"]) => {
@@ -75,6 +77,17 @@ const RecurrenceFields = ({
       type,
       weekdays: type === "weekly" ? value.weekdays ?? [] : undefined,
     });
+  };
+
+  const handleEndTypeChange = (endType: RecurrenceFormValue["endType"]) => {
+    if (!value || value.endType === endType) return;
+    // 「날짜 지정」의 초기 날짜는 빈 칸(추측 값을 넣지 않는다). 「없음」으로 돌아가면 날짜를 비운다.
+    onChange({ ...value, endType, endDate: null });
+  };
+
+  const handleEndDateChange = (endDate: string) => {
+    if (!value) return;
+    onChange({ ...value, endDate: endDate || null });
   };
 
   const handleWeekdayToggle = (day: number) => {
@@ -148,11 +161,37 @@ const RecurrenceFields = ({
               )}
 
               <FieldGroup>
-                <FieldLabel>반복 범위</FieldLabel>
-                <InfoLine>
-                  <Info size={14} aria-hidden="true" />
-                  <span>{rangeText}</span>
-                </InfoLine>
+                <FieldLabel>반복 종료</FieldLabel>
+                <TabList role="tablist" aria-label="반복 종료">
+                  {END_TYPES.map(({ type, label }) => (
+                    <TabButton
+                      key={type}
+                      type="button"
+                      role="tab"
+                      aria-selected={value.endType === type}
+                      aria-controls="recurrence-detail-panel"
+                      $active={value.endType === type}
+                      onClick={() => handleEndTypeChange(type)}
+                    >
+                      {label}
+                    </TabButton>
+                  ))}
+                </TabList>
+                {value.endType === "untilDate" && (
+                  <EndDateInput
+                    type="date"
+                    aria-label="반복 종료일"
+                    value={value.endDate ?? ""}
+                    min={startDateKey}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
+                  />
+                )}
+                {rangeText && (
+                  <InfoLine>
+                    <Info size={14} aria-hidden="true" />
+                    <span>{rangeText}</span>
+                  </InfoLine>
+                )}
                 {rangeError && <ErrorText role="alert">{rangeError}</ErrorText>}
               </FieldGroup>
             </>

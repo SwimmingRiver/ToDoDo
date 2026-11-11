@@ -1,5 +1,6 @@
 import { isTodoOverdue } from "@/shared/utils/due";
 import type { Todo } from "@/features/todo/types/todo.type";
+import { parseLocalDateOnly, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 
 /**
  * todo가 기한 초과인지 판단합니다.
@@ -53,4 +54,35 @@ export function getDropDates(
   }
 
   return { newDueAt, newStartAt };
+}
+
+/**
+ * 구글 오버레이 이벤트가 dateKey("yyyy-MM-dd") 날짜에 걸쳐 있는지 판정한다.
+ * calendar-proxy Worker는 종일 이벤트를 "yyyy-MM-dd"(end 배타), 시간 이벤트를
+ * 오프셋 포함 ISO로 준다. 격자(FC)가 그리는 칸과 바텀시트 목록이 어긋나지 않도록
+ * 같은 규칙 — end 배타, 로컬 날짜 기준 — 을 따른다.
+ */
+export function isDateInGoogleEventRange(
+  dateKey: string,
+  event: { start: string; end: string },
+): boolean {
+  if (!event.start) return false;
+  const startKey = toDateKeyFromISO(event.start);
+
+  let endKey = startKey;
+  if (event.end) {
+    // end가 배타적이므로 1ms(시간) 또는 하루(종일)를 빼서 마지막 포함 날짜를 구한다 —
+    // 자정에 끝나는 이벤트가 다음 날까지 잡히지 않게 하기 위함
+    const lastIncluded = event.end.includes("T")
+      ? new Date(new Date(event.end).getTime() - 1)
+      : (() => {
+          const d = parseLocalDateOnly(event.end);
+          d.setDate(d.getDate() - 1);
+          return d;
+        })();
+    endKey = toDateKey(lastIncluded);
+    if (endKey < startKey) endKey = startKey;
+  }
+
+  return startKey <= dateKey && dateKey <= endKey;
 }

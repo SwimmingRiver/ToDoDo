@@ -1,5 +1,10 @@
 import type { RecurrenceRule, Todo } from "../types/todo";
-import { buildRecurringInstanceId, generateRecurringDueDates } from "./recurrence";
+import {
+  buildRecurringInstanceId,
+  buildRecurringOccurrenceDoc,
+  generateRecurringDueDates,
+} from "./recurrence";
+import { isDateOnlyKey } from "./recurrenceForm";
 
 /** 기존 문서의 일부 필드를 갱신하는 계획 항목. */
 export type TodoFieldUpdate = { id: string; fields: Partial<Omit<Todo, "id">> };
@@ -110,8 +115,15 @@ export type SeriesExtension = {
 };
 
 /**
- * 무기한(indefinite) 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
+ * 반복 시리즈들을 호라이즌까지 이어서 채울 계획을 만든다.
  * 기존 인스턴스는 건드리지 않고 마지막 인스턴스 이후의 빈 구간만 채운다.
+ *
+ * 무기한(indefinite)뿐 아니라 종료일(untilDate) 시리즈도 대상이다. 생성·수정 시 회차는
+ * min(endDate, 호라이즌)까지만 만들어지므로, 종료일이 호라이즌보다 멀면 여기서 이어 채우지
+ * 않는 한 시리즈가 호라이즌에서 조용히 멈춘다. 종료일 이후 회차는 generateRecurringDueDates가
+ * 만들지 않는다. endDate를 해석할 수 없는 untilDate 시리즈는 건너뛴다 — 그대로 두면
+ * generateRecurringDueDates가 호라이즌으로 대체해 무기한처럼 늘어난다.
+ * (함수 이름은 무기한 전용이던 시절의 것이다. 호출부가 web·mobile에 퍼져 있어 유지한다.)
  *
  * order를 여기서 매기지 않는 이유: 다음 order는 이 시리즈뿐 아니라 사용자의 **모든**
  * 루트 할 일에 걸친 최대값이라 이 함수가 보는 범위를 넘어선다. 계획이 비어있지 않을 때만
@@ -125,7 +137,9 @@ export const planIndefiniteExtension = (
   const seriesByRecurrenceId = new Map<string, Todo[]>();
   for (const todo of todos) {
     if (!todo.recurrenceId || !todo.recurrence) continue;
-    if (todo.recurrence.endType !== "indefinite") continue;
+    if (todo.recurrence.endType === "untilDate" && !isDateOnlyKey(todo.recurrence.endDate)) {
+      continue;
+    }
     if (!todo.dueAt) continue;
     const list = seriesByRecurrenceId.get(todo.recurrenceId) ?? [];
     list.push(todo);
@@ -180,21 +194,15 @@ export const buildExtensionCreates = (
     for (const dueAt of dueDates) {
       creates.push({
         id: buildRecurringInstanceId(recurrenceId, dueAt),
-        doc: {
-          ...template,
+        // template은 시리즈의 마지막 회차다. 동기화돼 있으면 googleEventId를, 오래 방치됐으면
+        // archived/overdueArchived를 갖고 있을 수 있어 공용 빌더로 회차별 필드를 정리한다.
+        doc: buildRecurringOccurrenceDoc(template, {
           userId,
-          // template(마지막 인스턴스 필드 승계)에 담긴 startAt은 그 인스턴스 자신의
-          // 발생일 기준 값이라 새로 만드는 인스턴스에는 맞지 않으므로 매번 덮어쓴다.
-          startAt: dueAt,
-          dueAt,
-          status: "todo",
-          doneAt: null,
-          parentId: null,
           recurrenceId,
-          createdAt: now,
-          updatedAt: now,
+          dueAt,
+          now,
           order: nextOrder,
-        },
+        }),
       });
       nextOrder += 1;
     }

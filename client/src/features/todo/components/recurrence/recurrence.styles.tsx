@@ -115,6 +115,24 @@ export const TabButton = styled.button<{ $active: boolean }>`
   }
 `;
 
+export const EndDateInput = styled.input`
+  width: 100%;
+  max-width: 200px;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: ${colors.text.primary};
+  background: transparent;
+  border: 1px solid ${colors.border.secondary};
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: ${colors.brand.strong};
+  }
+`;
+
 // WeekdayPicker 전용 — weekStrip.styles.tsx의 DayCell 패턴을 축소 재정의(today 피처 비종속).
 export const WeekdayGroup = styled.div`
   display: flex;

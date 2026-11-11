@@ -17,6 +17,7 @@ import { AccountScreen } from "../screens/AccountScreen";
 import { IconButton } from "../shared/ui/iconButton/IconButton";
 import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList } from "./types";
 import { colors } from "../theme/colors";
+import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -69,7 +70,8 @@ const CalendarTabStack = () => (
   </CalendarStack.Navigator>
 );
 
-const MainTabs = () => (
+const MainTabs = () => {
+  return (
   <Tab.Navigator
     screenOptions={{
       headerShown: false,
@@ -93,10 +95,13 @@ const MainTabs = () => (
       options={{ tabBarIcon: ({ color, size }) => <CalendarDays color={color} size={size} /> }}
     />
   </Tab.Navigator>
-);
+  );
+};
 
 export const RootNavigator = () => {
   const { user, loading } = useAuthState();
+  // MainTabs는 로그인 중에만 마운트되므로, 로그아웃(uid -> null)을 보려면 항상 마운트된 여기서 호출해야 한다.
+  useStartupMaintenance(user?.uid ?? null);
 
   if (loading) {
     return (

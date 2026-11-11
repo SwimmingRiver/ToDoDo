@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { getDropDates } from "../calendarUtils";
+import { getDropDates, isDateInGoogleEventRange } from "../calendarUtils";
 
 // 캘린더 드래그 저장 회귀 테스트.
 // dueAt/startAt은 UTC Z 문자열로 저장하는 것이 규칙(todoForm이 toISOString 사용)인데,
@@ -101,5 +101,49 @@ describe("getDropDates (America/New_York, UTC-5/-4)", () => {
 
     // EDT 2026-07-15 00:00 = UTC 2026-07-15 04:00
     expect(newDueAt).toBe("2026-07-15T04:00:00.000Z");
+  });
+});
+
+// 날짜 바텀시트에 구글 오버레이 이벤트를 함께 보여줄 때의 날짜 포함 판정.
+// 워커는 종일 이벤트를 "yyyy-MM-dd"(end 배타), 시간 이벤트를 오프셋 포함 ISO로 준다.
+// 시간 이벤트 픽스처는 로컬 Date에서 만들어 실행 타임존과 무관하게 같은 의미가 되게 한다.
+describe("isDateInGoogleEventRange", () => {
+  const localIso = (y: number, m: number, d: number, h = 0, min = 0) =>
+    new Date(y, m - 1, d, h, min).toISOString();
+
+  it("종일 하루 이벤트는 그날만 포함한다(end는 배타적)", () => {
+    const event = { start: "2026-11-15", end: "2026-11-16" };
+    expect(isDateInGoogleEventRange("2026-11-15", event)).toBe(true);
+    expect(isDateInGoogleEventRange("2026-11-16", event)).toBe(false);
+    expect(isDateInGoogleEventRange("2026-11-14", event)).toBe(false);
+  });
+
+  it("여러 날 종일 이벤트는 중간 날짜와 마지막 날을 포함한다", () => {
+    const event = { start: "2026-11-28", end: "2026-12-02" };
+    expect(isDateInGoogleEventRange("2026-11-30", event)).toBe(true);
+    expect(isDateInGoogleEventRange("2026-12-01", event)).toBe(true);
+    expect(isDateInGoogleEventRange("2026-12-02", event)).toBe(false);
+  });
+
+  it("시간 이벤트는 로컬 날짜 기준으로 판정한다", () => {
+    const event = { start: localIso(2026, 11, 15, 23, 30), end: localIso(2026, 11, 16, 0, 30) };
+    expect(isDateInGoogleEventRange("2026-11-15", event)).toBe(true);
+    expect(isDateInGoogleEventRange("2026-11-16", event)).toBe(true);
+  });
+
+  it("자정에 끝나는 시간 이벤트는 다음 날을 포함하지 않는다", () => {
+    const event = { start: localIso(2026, 11, 15, 22), end: localIso(2026, 11, 16, 0) };
+    expect(isDateInGoogleEventRange("2026-11-15", event)).toBe(true);
+    expect(isDateInGoogleEventRange("2026-11-16", event)).toBe(false);
+  });
+
+  it("start가 비어 있으면 어느 날짜에도 속하지 않는다", () => {
+    expect(isDateInGoogleEventRange("2026-11-15", { start: "", end: "" })).toBe(false);
+  });
+
+  it("end가 비어 있으면 시작일 하루로 본다", () => {
+    const event = { start: "2026-11-15", end: "" };
+    expect(isDateInGoogleEventRange("2026-11-15", event)).toBe(true);
+    expect(isDateInGoogleEventRange("2026-11-16", event)).toBe(false);
   });
 });

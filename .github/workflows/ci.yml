@@ -24,6 +24,7 @@ jobs:
       aiProxy: ${{ steps.filter.outputs.aiProxy }}
       reminderProxy: ${{ steps.filter.outputs.reminderProxy }}
       billingProxy: ${{ steps.filter.outputs.billingProxy }}
+      mobile: ${{ steps.filter.outputs.mobile }}
 
     steps:
       - name: Checkout
@@ -60,6 +61,13 @@ jobs:
             billingProxy:
               - 'billing-proxy/**'
               - 'packages/worker-auth/**'
+            # 앱은 packages/core(dist)를 file: 의존성으로 직접 쓴다 — core만 바뀐 PR도
+            # 앱 타입·테스트를 다시 돌려야 core 변경이 앱을 깨뜨리는 걸 병합 전에 잡는다.
+            mobile:
+              - 'mobile/**'
+              - 'packages/core/**'
+              # mobile job의 실행 환경(Node 버전 등)을 바꾸면 job을 다시 돌려 검증한다
+              - '.github/workflows/ci.yml'
 
   client:
     name: Client
@@ -253,6 +261,45 @@ jobs:
       # dist와 다르면 여기서 막는다.
       - name: Check dist is up to date
         run: git diff --exit-code -- dist
+
+  mobile:
+    name: Mobile
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # react-native 0.86은 Node ^20.19.4 || ^22.13.0 이상을 요구한다(다른 job의 '20'은 마이너 하한을 보장하지 않음).
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-mobile-npm
+        with:
+          path: mobile/node_modules
+          key: ${{ runner.os }}-mobile-node-modules-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-mobile-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-mobile-npm.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Type Check
+        run: npx tsc --noEmit
+
+      # jest.config.js가 TZ=Asia/Seoul을 고정하므로 CI(UTC)에서도 로컬과 같은 기준으로 돈다.
+      - name: Unit Test
+        run: npx jest --ci
 
   worker-auth:
     name: Worker Auth

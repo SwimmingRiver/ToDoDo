@@ -201,13 +201,69 @@ describe("planIndefiniteExtension", () => {
     expect(planIndefiniteExtension([filled], horizonEnd)).toEqual([]);
   });
 
-  it("untilDate 종료 시리즈는 대상이 아니다", () => {
+  // 아래 untilDate 테스트는 로컬 날짜 키를 단언하므로 마지막 회차도 로컬 시각으로 만든다.
+  // UTC 리터럴(2026-07-10T00:00Z)은 뉴욕에서 로컬 7/9라 날짜가 하루 밀린다.
+  const localJul10 = new Date(2026, 6, 10, 9, 0).toISOString();
+
+  // 생성 시 회차는 min(endDate, 호라이즌)까지만 만들어진다. 종료일이 호라이즌보다 멀면
+  // 이 연장이 이어 채우지 않는 한 시리즈가 호라이즌에서 조용히 멈춘다.
+  it("종료일이 호라이즌보다 먼 untilDate 시리즈는 호라이즌까지 이어 채운다", () => {
     const until = makeSeriesInstance({
+      id: "inst-1",
+      dueAt: localJul10,
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-12-31" },
+    });
+
+    const [extension] = planIndefiniteExtension([until], horizonEnd);
+
+    expect(extension.recurrenceId).toBe("series-1");
+    const dateKeys = extension.dueDates.map(toDateKeyFromISO);
+    expect(dateKeys[0]).toBe("2026-07-11");
+    expect(dateKeys[dateKeys.length - 1]).toBe("2026-08-07");
+  });
+
+  it("untilDate 시리즈는 종료일을 넘는 회차를 만들지 않는다", () => {
+    const until = makeSeriesInstance({
+      id: "inst-1",
+      dueAt: localJul10,
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-07-15" },
+    });
+
+    const [extension] = planIndefiniteExtension([until], horizonEnd);
+
+    expect(extension.dueDates.map(toDateKeyFromISO)).toEqual([
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+    ]);
+  });
+
+  it("마지막 회차가 이미 종료일에 닿은 untilDate 시리즈는 제외한다", () => {
+    const ended = makeSeriesInstance({
+      id: "inst-1",
+      dueAt: localJul10,
+      recurrence: { type: "daily", endType: "untilDate", endDate: "2026-07-10" },
+    });
+
+    expect(planIndefiniteExtension([ended], horizonEnd)).toEqual([]);
+  });
+
+  // 종료일을 해석할 수 없으면 generateRecurringDueDates가 호라이즌으로 대체해 무기한처럼
+  // 늘려 버린다. 끝이 있다고 저장된 시리즈를 무기한으로 키우지 않도록 건너뛴다.
+  it("종료일을 해석할 수 없는 untilDate 시리즈는 제외한다", () => {
+    const malformed = makeSeriesInstance({
       id: "inst-1",
       recurrence: { type: "daily", endType: "untilDate", endDate: "2026-12-31T00:00:00.000Z" },
     });
+    const missing = makeSeriesInstance({
+      id: "inst-2",
+      recurrenceId: "series-2",
+      recurrence: { type: "daily", endType: "untilDate", endDate: null },
+    });
 
-    expect(planIndefiniteExtension([until], horizonEnd)).toEqual([]);
+    expect(planIndefiniteExtension([malformed, missing], horizonEnd)).toEqual([]);
   });
 
   it("반복이 아닌 할 일은 대상이 아니다", () => {
@@ -269,6 +325,44 @@ describe("buildExtensionCreates", () => {
     expect(create.doc.status).toBe("todo");
     expect(create.doc.doneAt).toBeNull();
     expect(create.doc.parentId).toBeNull();
+  });
+
+  // 템플릿은 시리즈의 마지막 회차다. 그 회차가 구글 캘린더에 동기화돼 있으면 googleEventId를
+  // 갖는데, 새 회차가 이를 물려받으면 동기화 시 전부 같은 이벤트를 PATCH해 하나로 뭉친다.
+  it("마지막 회차의 googleEventId를 새 회차에 복사하지 않는다", () => {
+    const [create] = buildExtensionCreates(
+      [
+        {
+          recurrenceId: "series-1",
+          template: makeTodo({ id: "x", googleEventId: "gev-latest" }) as Omit<Todo, "id">,
+          dueDates: ["2026-07-11T00:00:00.000Z"],
+        },
+      ],
+      0,
+      "test-user-id",
+      NOW,
+    );
+
+    expect(create.doc).not.toHaveProperty("googleEventId");
+  });
+
+  // fetchAllUserTodos는 archived 문서도 포함하므로 마지막 회차가 숨김·보관 상태일 수 있다.
+  it("마지막 회차가 숨김(overdueArchived)·보관(archived) 상태여도 새 회차는 둘 다 false로 만든다", () => {
+    const [create] = buildExtensionCreates(
+      [
+        {
+          recurrenceId: "series-1",
+          template: makeTodo({ id: "x", overdueArchived: true, archived: true }) as Omit<Todo, "id">,
+          dueDates: ["2026-07-11T00:00:00.000Z"],
+        },
+      ],
+      0,
+      "test-user-id",
+      NOW,
+    );
+
+    expect(create.doc.overdueArchived).toBe(false);
+    expect(create.doc.archived).toBe(false);
   });
 
   it("여러 시리즈에 걸쳐 order가 계속 증가한다", () => {

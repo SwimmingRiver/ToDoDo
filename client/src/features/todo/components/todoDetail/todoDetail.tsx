@@ -30,7 +30,6 @@ import { getTodoDateValidationError } from "../../utils/todoDateValidation";
 import {
   toFormValue,
   toRecurrenceRule,
-  toRecurrenceRuleForEdit,
 } from "../recurrence/recurrenceTransform";
 import type { RecurrenceFormValue } from "../recurrence/recurrenceFields.types";
 import ChildTodoCard from "../childTodoCard";
@@ -130,7 +129,6 @@ const TodoDetailView = ({ id }: { id: string }) => {
   });
 
   const startAtWatch = watch("startAt");
-  const dueAtWatch = watch("dueAt");
   const descriptionWatch = watch("description");
 
   const { setRef: setDescriptionRef } = useAutoGrowTextArea(descriptionWatch);
@@ -223,6 +221,10 @@ const TodoDetailView = ({ id }: { id: string }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startAtWatch]);
 
+  // 새 시리즈(원래 반복이 아니던 할 일)에서는 반복이 켜진 동안 마감일시를 숨긴다.
+  // RHF 기본값(shouldUnregister: false)이라 숨겨도 값은 보존된다.
+  const hideDueAt = recurrenceValue !== null && !todo?.recurrence;
+
   const recurrenceDisabled = hasChildren || !startAtWatch;
   const recurrenceDisabledReason: "hasChildren" | "noStartAt" | undefined = hasChildren
     ? "hasChildren"
@@ -300,31 +302,25 @@ const TodoDetailView = ({ id }: { id: string }) => {
     if (!todo) return;
     if (updateTodo.isPending || createRecurringTodo.isPending || deleteTodo.isPending) return;
 
+    // 새 시리즈에서는 마감일시를 숨기므로(값은 보존) 검증에서도 제외한다.
     const dateValidationError = getTodoDateValidationError(
       data.startAt ?? null,
-      data.dueAt ?? null,
+      hideDueAt ? null : (data.dueAt ?? null),
     );
     if (dateValidationError) {
       toast.error("입력 확인", dateValidationError);
       return;
     }
 
-    // 이미 반복 중인 시리즈를 수정할 때 dueAt은 시리즈 종료일이 아니라 이 회차의 날짜다.
-    // 그래서 범위 검증(dueAt < startAt)은 건너뛰고(회차 날짜 검증은 위에서 이미 했다),
-    // 종료 조건은 기존 규칙에서 그대로 가져온다. 비반복→반복 전환은 기존대로 dueAt에서 유도한다.
-    const existingRule = todo.recurrence ?? null;
-    const validationError = existingRule
-      ? getRecurrenceValidationError(recurrenceValue, null, null)
-      : getRecurrenceValidationError(recurrenceValue, startAtWatch ?? null, dueAtWatch ?? null);
+    // 반복 종료 조건은 dueAt이 아니라 폼 값(recurrenceValue)에서 온다.
+    const validationError = getRecurrenceValidationError(recurrenceValue, startAtWatch ?? null);
     if (validationError) {
       toast.error("입력 확인", validationError);
       return;
     }
 
     const dueAtIso = data.dueAt ? new Date(data.dueAt).toISOString() : null;
-    const newRecurrence = existingRule
-      ? toRecurrenceRuleForEdit(recurrenceValue, existingRule)
-      : toRecurrenceRule(recurrenceValue, dueAtIso);
+    const newRecurrence = toRecurrenceRule(recurrenceValue);
     const updatedFields = {
       ...todo,
       ...data,
@@ -516,10 +512,12 @@ const TodoDetailView = ({ id }: { id: string }) => {
               <Input type="datetime-local" {...register("startAt")} />
             </FormGroup>
 
-            <FormGroup>
-              <Label>마감일시</Label>
-              <Input type="datetime-local" {...register("dueAt")} />
-            </FormGroup>
+            {!hideDueAt && (
+              <FormGroup>
+                <Label>마감일시</Label>
+                <Input type="datetime-local" {...register("dueAt")} />
+              </FormGroup>
+            )}
 
             {!todo.parentId && (
               <FormGroup>
@@ -527,10 +525,8 @@ const TodoDetailView = ({ id }: { id: string }) => {
                   disabled={recurrenceDisabled}
                   disabledReason={recurrenceDisabledReason}
                   startAt={startAtWatch ?? null}
-                  dueAt={dueAtWatch ?? null}
                   value={recurrenceValue}
                   onChange={setRecurrenceValue}
-                  existingRule={todo.recurrence}
                 />
               </FormGroup>
             )}
@@ -637,9 +633,9 @@ const TodoDetailView = ({ id }: { id: string }) => {
 
       <ConfirmModal
         isOpen={isSeriesConfirmOpen}
-        title="반복 일정 전체 수정"
+        title="반복 일정 수정"
         message={
-          "이 변경은 앞으로의 일정과 지금 수정 중인 일정에 적용됩니다.\n\n그 외 이미 완료됐거나 진행 중/지난 다른 회차는 그대로 유지됩니다."
+          "이 변경은 이 일정과 이후 일정에 적용됩니다.\n\n이전 일정과 이미 완료됐거나 진행 중인 회차는 그대로 유지됩니다."
         }
         confirmText="전체 적용"
         cancelText="취소"

@@ -19,7 +19,7 @@
 |---|---|
 | 반복 주기 | 매일 / 매주(요일 다중 선택) / 매월(같은 날짜) |
 | 기준 | `startAt` 기준 반복만 지원 (완료일 기준 없음) |
-| 반복 앵커/종료 | 시작일(startAt)이 반복 시작 앵커(필수). 마감일(dueAt)은 선택 — 있으면 그 날짜까지, 없으면 무기한 (2026-07-07 개정: 자세한 배경은 `docs/superpowers/specs/2026-07-07-recurring-anchor-field-redesign-design.md` 참고) |
+| 반복 앵커/종료 | 시작일(startAt)이 반복 시작 앵커(필수). 종료 조건은 폼의 「반복 종료: 없음/날짜 지정」(`endType`/`endDate`)으로 직접 지정하며 기본은 무기한. 만료일시(dueAt)는 종료 조건과 무관 (2026-07-07 개정 후 2026-11-05 재개정: 배경은 `docs/superpowers/specs/2026-07-07-recurring-anchor-field-redesign-design.md` 및 반복 종료 설정 스펙 참고. 이전에는 dueAt이 있으면 그 날짜까지 반복하는 것으로 유도했음) |
 | 수정 단위 | 항상 전체 시리즈 (이 인스턴스만 수정 불가) |
 | 자연어 입력 | 스코프 아웃 |
 | 하위 할 일 상호 배제 | 반복 ON ↔ 하위 할 일 기능 비활성 (양방향) |
@@ -63,9 +63,8 @@
 │  │ 반복 주기                        │  │
 │  │ [ 매일 ]  매주    매월           │  │  ← RecurrenceTypeTabs (세그먼트 탭)
 │  │                                  │  │
-│  │ 반복 범위                        │  │
-│  │ ℹ 마감일시가 없으면 무기한으로     │  │  ← dueAt 유무로 자동 유도, 읽기 전용
-│  │   반복됩니다                     │  │
+│  │ 반복 종료   [ 없음 ]  날짜 지정   │  │  ← 폼 값(endType), 기본 "없음"
+│  │ ℹ 계속 반복됩니다                │  │
 │  └────────────────────────────────┘  │
 ```
 
@@ -82,8 +81,8 @@
 │  │                                  │  │     ※ (월)(수)(금) = 선택됨 표기
 │  │  ⚠ 요일을 하나 이상 선택해주세요  │  │  ← 검증 에러 (0개 선택 시)
 │  │                                  │  │
-│  │ 반복 범위                        │  │
-│  │ ℹ 2026-09-30까지 반복됩니다      │  │  ← 마감일시(dueAt)로부터 자동 유도
+│  │ 반복 종료    없음  [ 날짜 지정 ]  │  │  ← 폼 값(endType/endDate)
+│  │ ℹ 2026-09-30까지 반복됩니다      │  │  ← 종료일 선택 시 안내
 │  └────────────────────────────────┘  │
 ```
 
@@ -98,9 +97,8 @@
 │  │ ℹ 매월 10일에 반복됩니다           │  │  ← 시작일시의 '일(day)'에서 자동 유도, 읽기 전용 안내
 │  │   (시작일시 기준)                 │  │
 │  │                                  │  │
-│  │ 반복 범위                        │  │
-│  │ ℹ 마감일시가 없으면 무기한으로     │  │
-│  │   반복됩니다                     │  │
+│  │ 반복 종료   [ 없음 ]  날짜 지정   │  │  ← 폼 값(endType), 기본 "없음"
+│  │ ℹ 계속 반복됩니다                │  │
 │  └────────────────────────────────┘  │
 ```
 
@@ -133,17 +131,19 @@
 ```
 ┌──────────────────────────────────────┐
 │                                        │
-│  반복 일정 전체 수정                    │
+│  반복 일정 수정                         │
 │  ──────────────────────────────────  │
-│  이 변경은 앞으로의 일정에만            │
+│  이 변경은 이 일정과 이후 일정에        │
 │  적용됩니다.                           │
 │                                        │
-│  진행 중이거나 완료된 일정, 이미 지난   │
-│  미완료 일정은 그대로 유지됩니다.       │
+│  이전 일정과 이미 완료됐거나 진행 중인  │
+│  회차는 그대로 유지됩니다.              │
 │                                        │
 │                     [ 취소 ] [ 전체 적용 ] │
 └──────────────────────────────────────┘
 ```
+
+> 시리즈 수정은 "이 회차와 이후 회차"에만 적용되며 앞선 회차는 건드리지 않는다. 반복을 끄면 수정 중인 회차는 일반 할 일로 남는다.
 
 ### 1-3. kanban 반복 배지
 
@@ -201,7 +201,7 @@
 | 반복 요일 선택 chip (선택됨) | `colors.brand.primary` `#0F6E56` | `weekStrip.styles.tsx`의 `DayCell $isSelected` 배경과 동일 패턴 재사용 |
 | 반복 요일 선택 chip (미선택) | `transparent` + 텍스트 `colors.text.tertiary` | `weekStrip.styles.tsx`의 `DayLabel` 비선택 스타일과 동일 |
 | 반복 주기 탭 (활성) | `colors.brand.secondary` `#1D9E75` (하단 보더 2px) | `kanbanBoard.styles.tsx`의 `MobileTabButton $active` 패턴 재사용 |
-| 검증 에러 텍스트 | `colors.danger.text` `#C53A39` | 요일 미선택, 마감일 유효성 에러 |
+| 검증 에러 텍스트 | `colors.danger.text` `#C53A39` | 요일 미선택, 종료일 유효성 에러 |
 | 비활성(disabled) 텍스트/보더 | `colors.text.tertiary` `#9AA0A6` | 반복 토글 비활성 시 |
 | 비활성 안내 문구 아이콘 | `colors.text.tertiary` | `lucide-react`의 `Info` 아이콘, 14px |
 | 확인 모달 | `shared/ui/confirmModal` 기존 스타일 그대로 | 별도 색상 변경 없음 |
@@ -253,7 +253,6 @@ interface RecurrenceFieldsProps {
   disabled: boolean;              // 하위 할 일 존재 또는 startAt 미입력 시 true
   disabledReason?: "hasChildren" | "noStartAt";
   startAt: string | null;         // 반복 시작 앵커. 매월 반복 시 '일(day)' 유도에도 사용
-  dueAt: string | null;           // 있으면 반복 종료일(마지막 발생일) 역할
   value: RecurrenceFormValue | null; // null = 반복 OFF
   onChange: (value: RecurrenceFormValue | null) => void;
 }
@@ -261,11 +260,13 @@ interface RecurrenceFieldsProps {
 interface RecurrenceFormValue {
   type: "daily" | "weekly" | "monthly";
   weekdays?: number[];            // 0=일 ~ 6=토, type==="weekly"일 때만 사용, 최소 1개
+  endType: "indefinite" | "untilDate"; // 반복 종료 조건 (기본 indefinite)
+  endDate: string | null;         // "YYYY-MM-DD"(로컬), untilDate일 때만 의미 있음
 }
 ```
 
 - `RecurrenceFields`는 `todoForm.tsx`의 `DetailContent` 내부, 시작일시·마감일시 입력 아래에 위치 (반복 활성화 여부는 마감일시가 아니라 시작일시 입력 여부로 결정된다 — 4-2절 참고).
-- 내부적으로 체크박스(반복 on/off) + `RecurrenceTypeTabs` + `WeekdayPicker`(조건부) + 읽기 전용 반복 범위 요약(마감일 유무로 자동 유도)을 조합한 복합 컴포넌트.
+- 내부적으로 체크박스(반복 on/off) + `RecurrenceTypeTabs` + `WeekdayPicker`(조건부) + 「반복 종료」 컨트롤(없음/날짜 지정, `endType`/`endDate`; 날짜 지정 시 날짜 입력, 요약 줄은 "계속 반복됩니다" / "YYYY-MM-DD까지 반복됩니다")을 조합한 복합 컴포넌트.
 - `todoDetail.tsx`(할 일 상세 편집 패널)에도 동일하게 통합 필요 — 현재 `todoDetail.tsx`는 `todoForm.tsx`와 별도 구현(중복 코드)이므로, `RecurrenceFields`를 공용 컴포넌트로 분리해 두 곳에서 import.
 
 #### `RecurrenceTypeTabs` (신규)
@@ -407,7 +408,7 @@ kanban에 노출된 각 반복 인스턴스 카드
   → RecurrenceBadge 항상 표시 (아이콘 + "반복" 텍스트)
   ↓
 사용자가 배지를 보고 "이 카드는 반복 시리즈의 일부"임을 인지
-  → 카드 클릭 시 이동하는 상세 화면(todoDetail)에서 전체 시리즈 정보(반복 주기, 반복 범위) 확인 가능해야 함 (todoDetail에도 RecurrenceFields 표시 — 읽기/수정 겸용)
+  → 카드 클릭 시 이동하는 상세 화면(todoDetail)에서 전체 시리즈 정보(반복 주기, 반복 종료) 확인 가능해야 함 (todoDetail에도 RecurrenceFields 표시 — 읽기/수정 겸용)
 ```
 
 ### 4-6. 캘린더 시각 표현
@@ -464,11 +465,11 @@ collapseRecurringInstances가 이 인스턴스를 대표 후보에서 제외
 | 상태 | 표현 |
 |---|---|
 | 기본 (반복 OFF, 입력 가능) | 체크박스 unchecked, 하위 필드 미노출 |
-| 반복 ON | 하위 필드(주기 탭, 요일/월 정보, 반복 범위 요약) 노출, `DetailSection`과 동일한 grid-template-rows 트랜지션(0.3s) 적용 권장 — 기존 `더보기` 아코디언과 시각적 일관성 |
+| 반복 ON | 하위 필드(주기 탭, 요일/월 정보, 반복 종료 컨트롤·요약) 노출, `DetailSection`과 동일한 grid-template-rows 트랜지션(0.3s) 적용 권장 — 기존 `더보기` 아코디언과 시각적 일관성 |
 | 비활성 - 시작일시 없음 | 체크박스 disabled, opacity 0.5, `Info` 아이콘 + 안내 문구 |
 | 비활성 - 하위 할 일 존재 | 체크박스 disabled, opacity 0.5, `Info` 아이콘 + 안내 문구 |
 | 요일 미선택 에러 (매주) | `WeekdayPicker` 하단 `colors.danger.text` 에러 텍스트, 폼 제출 차단 |
-| 마감일 유효성 에러 | "마감일은 시작일과 같거나 이후여야 합니다" 에러 텍스트, 폼 제출 차단 |
+| 종료일 유효성 에러 | "종료일을 선택해주세요"(날짜 지정인데 빈 값) / "종료일은 시작일과 같거나 이후여야 합니다" 에러 텍스트, 폼 제출 차단 |
 | 제출 중 | 기존 `useUpdateTodo`/`useCreateTodo` mutation의 loading 상태 — 별도 스피너 없이 기존 패턴(제출 버튼 비활성화 등) 유지, 신규 로딩 UI 불필요 |
 
 ### 5-2. 시리즈 전체 수정 확인 모달
@@ -559,4 +560,4 @@ collapseRecurringInstances가 이 인스턴스를 대표 후보에서 제외
 | `RecurrenceBadge` 배치 위치 | `shared/ui/recurrenceBadge/` | 3개 피처 교차 사용, CLAUDE.md의 shared 원칙과 일치 |
 | 반복 배지 배경색 | `#E8F5EF` | 캘린더 개편 스펙에서 이미 사용된 값과 통일 |
 | kanban 배지 표기 | 아이콘 + "반복" 텍스트(컴팩트 모드 아님) | `OverdueBadge`가 텍스트 포함 방식이라 시각적 일관성 우선 |
-| 매월 반복 day 유도 UI | 별도 날짜 선택 없이 `dueAt`의 day를 읽기 전용으로 안내 | PM 스코프("매월 같은 날짜")가 이미 dueAt 종속을 전제 |
+| 매월 반복 day 유도 UI | 별도 날짜 선택 없이 시작일(`startAt`)의 day를 읽기 전용으로 안내 | PM 스코프("매월 같은 날짜"), 반복 앵커는 startAt |
