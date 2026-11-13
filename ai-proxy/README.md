@@ -9,7 +9,7 @@ main push 한 번으로 ai-proxy 배포와 client Hosting 빌드가 같이 돈�
 클라이언트가 잘못된(또는 빈) Worker URL로 빌드된다.
 
 1. KV 생성: `npx wrangler kv namespace create AI_USAGE` → 출력된 id를 `wrangler.toml`의 `REPLACE_WITH_AI_USAGE_KV_ID` 자리에 넣고 커밋.
-2. Anthropic Console에서 API 키 발급. 월 사용 한도(spend limit) 설정은 **필수**다 — 실패한 호출(거부/max_tokens/잘못된 출력)은 사용량 카운터에 잡히지 않으므로, 이 한도가 없으면 반복 실패 유발로 비용이 무제한 늘 수 있다.
+2. Anthropic Console에서 API 키 발급. 월 사용 한도(spend limit) 설정은 **필수**다 — 계정당 비용은 `DAILY_ATTEMPT_LIMIT`·`AI_RATE_LIMIT`가 막지만, 계정을 여러 개 쓰는 경우나 설정 실수에 대비한 최후 방어선이다.
 3. 시크릿 등록(사용자 본인 터미널에서, Claude Code 셸은 비대화형이라 불가): `npx wrangler secret put ANTHROPIC_API_KEY`.
 4. Worker URL을 확정한다. `https://tododo-ai-proxy.<account-subdomain>.workers.dev` 형태로 예측 가능하고, 확실히 하려면 `npx wrangler deploy`로 로컬에서 한 번 수동 배포해 출력을 확인한다. 이 URL을 GitHub Secret `VITE_AI_PROXY_URL`과 `client/.env`에 등록한다.
 
@@ -17,11 +17,13 @@ main push 한 번으로 ai-proxy 배포와 client Hosting 빌드가 같이 돈�
 
 - `AI_MODEL`: 기본 `claude-haiku-4-5`
 - `DAILY_LIMIT`: 사용자당 하루 성공 횟수 한도(서울 기준 날짜), 기본 `20`
+- `DAILY_ATTEMPT_LIMIT`: 사용자당 하루 시도 상한(Claude까지 간 요청, 실패 포함, 서울 기준 날짜), 기본 `40`
+- `AI_RATE_LIMIT`(`[[ratelimits]]` 바인딩): 같은 사용자 10초에 3회. 바인딩이 없거나 장애면 통과시킨다
 - `[placement] region = "aws:us-east-1"`: 지우지 말 것. 한국 요청이 Cloudflare 홍콩(HKG)으로 들어가면 Anthropic이 미지원 지역으로 보고 `403 forbidden "Request not allowed"`를 돌려준다(클라이언트에는 `AI_UNAVAILABLE`). 미국 리전 실행으로 고정해 피한다. `region` 키는 wrangler 4부터 지원한다.
 
 ## 알고 감수한 한계
 
 - KV 카운터는 게이트 체크 이후 쓰기 직전에 최신값을 다시 읽어 쓰지만, KV get/put 자체가 원자적이지 않아 재조회~쓰기 사이 수 ms 창에서 완전히 동시에 끝나는 요청은 하루 한도를 소폭 넘길 수 있다. 결제 도입 시 Durable Object 전환을 다시 검토한다.
-- 실패한 호출(거부/max_tokens/잘못된 출력 → 502)은 사용량 카운터에 잡히지 않는다. 프리미엄 사용자가 실패를 반복 유발하면 호출당 최대 약 4k 출력 토큰을 한도 없이 소모시킬 수 있다. 프리미엄을 수동으로만 부여하는 지금은 감수하지만, 결제로 프리미엄을 공개 판매하기 전에는 반드시 닫아야 한다(예: 별도의 느슨한 시도 횟수 상한). 그 전까지는 위 배포 준비의 Anthropic Console 월 사용 한도가 최후 방어선이다.
+- 실패한 호출(502·503)은 성공 카운터(`DAILY_LIMIT`)에는 잡히지 않지만, Claude 호출 직전에 올리는 시도 카운터(`DAILY_ATTEMPT_LIMIT`, 기본 40)에는 잡힌다. 그래서 실패를 반복 유발해도 계정당 하루 비용은 최대 약 40회 × 4k 출력 토큰으로 막힌다. 시도 카운터도 위 KV 비원자성 한계를 가진다. 탈퇴 후 재가입으로 체험을 다시 받거나 계정을 여러 개 쓰는 경우는 막지 않으므로 Anthropic Console 월 사용 한도가 최후 방어선이다.
 - `premiumUntil` 커스텀 클레임은 ID 토큰이 갱신될 때까지 최대 1시간 늦게 반영된다.
 - 기존 할 일이나 연동된 구글 캘린더 일정을 보지 않으므로 이미 바쁜 날을 피해서 계획을 짜지 못한다(의도한 범위 결정). 사용자가 미리보기에서 날짜를 직접 조정한다.

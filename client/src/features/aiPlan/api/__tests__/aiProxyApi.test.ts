@@ -31,6 +31,9 @@ describe("requestPlan", () => {
     [400, "INVALID_INPUT"],
     [503, "AI_UNAVAILABLE"],
     [401, "UNAUTHORIZED"],
+    [400, "NOT_A_GOAL"],
+    [429, "TOO_FREQUENT"],
+    [429, "ATTEMPT_LIMIT"],
   ])("%i %s는 같은 code의 AiPlanError", async (status, code) => {
     vi.mocked(authorizedFetch).mockResolvedValueOnce(jsonRes({ error: code }, status));
     const error = await requestPlan(input).catch((e) => e);
@@ -52,6 +55,9 @@ describe("isExpectedAiPlanError", () => {
     expect(isExpectedAiPlanError(new AiPlanError("PREMIUM_REQUIRED", 403))).toBe(true);
     expect(isExpectedAiPlanError(new AiPlanError("DAILY_LIMIT", 429))).toBe(true);
     expect(isExpectedAiPlanError(new AiPlanError("PLAN_INVALID", 502))).toBe(true);
+    expect(isExpectedAiPlanError(new AiPlanError("NOT_A_GOAL", 400))).toBe(true);
+    expect(isExpectedAiPlanError(new AiPlanError("TOO_FREQUENT", 429))).toBe(true);
+    expect(isExpectedAiPlanError(new AiPlanError("ATTEMPT_LIMIT", 429))).toBe(true);
     expect(isExpectedAiPlanError(new AiPlanError("AI_UNAVAILABLE", 503))).toBe(false);
     expect(isExpectedAiPlanError(new AiPlanError("INVALID_INPUT", 400))).toBe(false);
     expect(isExpectedAiPlanError(new TypeError("Failed to fetch"))).toBe(false);

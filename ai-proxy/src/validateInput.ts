@@ -38,3 +38,10 @@ export const parsePlanRequest = (body: unknown): PlanRequest | null => {
 
   return { goal: trimmedGoal, dueDate: normalizedDue, today };
 };
+
+/**
+ * 글자(유니코드 문자)가 하나도 없는 입력 — 숫자·이모지·문장부호·공백만 — 은 목표로 볼 수 없어
+ * Claude에 보내지 않는다. 한글 자모("ㅋㅋㅋ")는 글자라 통과시킨다: 같은 글자 반복·무관한 문장은
+ * 정상 입력과 판별이 애매해 걸러내지 않고, 비용은 하루 시도 상한이 막는다.
+ */
+export const isNotAGoal = (goal: string): boolean => !/\p{L}/u.test(goal.trim());

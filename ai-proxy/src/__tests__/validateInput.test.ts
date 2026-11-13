@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidDateKey, parsePlanRequest } from "../validateInput";
+import { isNotAGoal, isValidDateKey, parsePlanRequest } from "../validateInput";
 
 describe("isValidDateKey", () => {
   it("실재하는 YYYY-MM-DD만 통과한다", () => {
@@ -43,5 +43,18 @@ describe("parsePlanRequest", () => {
     expect(parsePlanRequest({ ...base, today: "09/25/2026" })).toBeNull();
     expect(parsePlanRequest(null)).toBeNull();
     expect(parsePlanRequest("goal")).toBeNull();
+  });
+});
+
+describe("isNotAGoal", () => {
+  it.each(["123", "🎉🎉", "!!!", "???  ...", " １２３ ", "👨‍👩‍👧", "12/25 🎄"])(
+    "글자가 하나도 없는 %j는 목표가 아니다",
+    (goal) => {
+      expect(isNotAGoal(goal)).toBe(true);
+    },
+  );
+
+  it.each(["ㅋㅋㅋ", "토익 800", "운동 🏃", "勉強", "a"])("글자가 있는 %j는 통과한다", (goal) => {
+    expect(isNotAGoal(goal)).toBe(false);
   });
 });

@@ -9,6 +9,15 @@ export const aiPlanErrorMessage = (error: unknown): { title: string; message: st
     if (error.code === "PLAN_INVALID") {
       return { title: "계획을 만들지 못했어요", message: "목표를 조금 더 구체적으로 적어주세요" };
     }
+    if (error.code === "NOT_A_GOAL") {
+      return { title: "목표를 글로 적어 주세요", message: "이루고 싶은 일을 문장으로 적어 주세요" };
+    }
+    if (error.code === "TOO_FREQUENT") {
+      return { title: "잠시 후 다시 시도해 주세요", message: "요청이 너무 잦아요. 잠시 후 다시 눌러 주세요" };
+    }
+    if (error.code === "ATTEMPT_LIMIT") {
+      return { title: "오늘 시도 횟수를 다 썼어요", message: "내일 다시 시도해 주세요" };
+    }
     if (error.code === "INVALID_INPUT") {
       return { title: "입력을 확인해 주세요", message: "목표는 1~200자, 마감일은 오늘 이후여야 해요" };
     }
