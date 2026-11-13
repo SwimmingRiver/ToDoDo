@@ -57,8 +57,8 @@ export const BUSINESS_INFO = {
   tradeName: "투도도(TODODO)",
   representative: "강수영",
   registrationNumber: "266-61-00839",
-  /** 통신판매업 신고번호. 신고 전이면 비워 둔다 — 결제를 켜기 전에 채울 것. */
-  mailOrderNumber: "",
+  /** 통신판매업 신고번호(김해시, 2026-11 신고 수리). 등록증 표기 그대로. */
+  mailOrderNumber: "제2026-경남김해-1588호",
   address: "경상남도 김해시 경원로73번길 1, 6층 602-가8호(내동)",
   phone: "010-2054-1294",
 } as const;
