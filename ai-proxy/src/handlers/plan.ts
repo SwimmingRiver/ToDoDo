@@ -28,8 +28,10 @@ const isTooFrequent = async (env: Env, uid: string): Promise<boolean> => {
 };
 
 /**
- * 인증 → 프리미엄 → 입력 → 글자 없는 입력 거절 → 성공 한도 → 시도 상한 → 연타 제한
- * → 시도 +1 → 생성 → 사후 검증 → 성공 +1.
+ * 인증 → 프리미엄 → 입력 → 규칙 거절(글자 없음·자모만) → 성공 한도 → 시도 상한 → 연타 제한
+ * → 시도 +1 → 생성 → 모델 거절(isGoal false → NOT_A_GOAL) → 사후 검증 → 성공 +1.
+ * 모델 거절은 Claude를 불렀으므로 시도에는 들어가지만 성공 횟수는 차감하지 않는다 — 오판으로
+ * 거절된 정상 사용자가 손해 보지 않게 하고, 장난 반복은 시도 상한이 막는다(11-14 결정).
  * 성공 카운트(usage)는 성공했을 때만 올린다 — 실패로 사용자의 하루 20회가 차감되면 안 된다.
  * 대신 실패(거부/max_tokens/잘못된 출력 502, Anthropic 장애 503)를 반복 유발해 토큰을
  * 무한히 쓰는 것은 Claude 호출 직전에 올리는 시도 카운터(DAILY_ATTEMPT_LIMIT)가 막고,
@@ -92,6 +94,8 @@ export const handlePlan = async (request: Request, env: Env): Promise<Response> 
     }
     throw error;
   }
+
+  if (!rawPlan.isGoal) return errorResponse("NOT_A_GOAL", 400);
 
   const plan = sanitizePlan(rawPlan, planRequest);
   if (!plan) return errorResponse("PLAN_INVALID", 502);
