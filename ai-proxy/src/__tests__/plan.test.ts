@@ -172,6 +172,15 @@ describe("handlePlan", () => {
       expect(store.get(KEY)).toBe("1");
     });
 
+    it("모델 거절은 오판 감시용으로 로그를 남기되 목표 문장은 남기지 않는다", async () => {
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.mocked(generatePlan).mockResolvedValueOnce({ isGoal: false, title: "", dueDate: null, items: [] });
+      await handlePlan(request(), makeEnv(new Map()));
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("isGoal false"));
+      expect(JSON.stringify(log.mock.calls)).not.toContain(body.goal);
+      log.mockRestore();
+    });
+
     it("isGoal:false인데 items가 차 있어도 계획을 내보내지 않는다", async () => {
       vi.mocked(generatePlan).mockResolvedValueOnce({ ...rawPlan, isGoal: false });
       const res = await handlePlan(request(), makeEnv(new Map()));

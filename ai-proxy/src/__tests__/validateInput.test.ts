@@ -58,14 +58,14 @@ describe("isNotAGoal", () => {
     expect(isNotAGoal(goal)).toBe(false);
   });
 
-  it.each(["ㅋㅋㅋ", "ㅎㅎ", "ㅠㅠ 123", "ㅋ", "ㅁㄴㅇㄹ!!", "\u1100\u1161"])(
+  it.each(["ㅋㅋㅋ", "ㅎㅎ", "ㅠㅠ 123", "ㅋ", "ㅁㄴㅇㄹ!!", "\u110F\u110F", "\uFFA1\uFFA1\uFFA1", "\uA960\uD7B0"])(
     "자모만 있는 %j는 목표가 아니다",
     (goal) => {
       expect(isNotAGoal(goal)).toBe(true);
     },
   );
 
-  it.each(["ㅋㅋ 토익 공부", "ㅎㅇ 운동", "asdf", "토익 800"])(
+  it.each(["ㅋㅋ 토익 공부", "ㅎㅇ 운동", "asdf", "토익 800", "토익 공부".normalize("NFD"), "\u1100\u1161"])(
     "완성 글자나 다른 문자가 있는 %j는 통과한다",
     (goal) => {
       expect(isNotAGoal(goal)).toBe(false);

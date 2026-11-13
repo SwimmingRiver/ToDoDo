@@ -39,8 +39,11 @@ export const parsePlanRequest = (body: unknown): PlanRequest | null => {
   return { goal: trimmedGoal, dueDate: normalizedDue, today };
 };
 
-/** 한글 자모: 호환 자모(ㄱ~ㅣ, U+3131–U+318E)와 첫가끝 자모(U+1100–U+11FF). */
-const HANGUL_JAMO = /[\u3131-\u318E\u1100-\u11FF]/u;
+/**
+ * 한글 자모: 호환(U+3131–U+318E), 첫가끝(U+1100–U+11FF), 확장 A(U+A960–U+A97F)·B(U+D7B0–U+D7FF),
+ * 반각(U+FFA0–U+FFDC).
+ */
+const HANGUL_JAMO = /[\u3131-\u318E\u1100-\u11FF\uA960-\uA97F\uD7B0-\uD7FF\uFFA0-\uFFDC]/u;
 
 /**
  * Claude에 보내기 전에 규칙으로 거르는 입력.
@@ -50,6 +53,8 @@ const HANGUL_JAMO = /[\u3131-\u318E\u1100-\u11FF]/u;
  * 그 밖의 무관한 입력("날씨 어때", "asdf")은 모델이 isGoal로 판단한다(11-14 결정, #174의 "자모 통과"를 뒤집음).
  */
 export const isNotAGoal = (goal: string): boolean => {
-  const letters = goal.trim().match(/\p{L}/gu) ?? [];
+  // NFC 먼저: macOS 파일명 등에서 붙여 넣은 NFD 한글("토익"이 초성·중성 낱자로 분해된 형태)은
+  // 첫가끝 자모로만 이뤄져 정상 목표가 자모 입력으로 오판된다. 합쳐질 수 없는 낱자만 남게 한다.
+  const letters = goal.normalize("NFC").trim().match(/\p{L}/gu) ?? [];
   return letters.every((ch) => HANGUL_JAMO.test(ch));
 };

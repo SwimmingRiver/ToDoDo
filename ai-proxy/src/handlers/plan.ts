@@ -95,7 +95,11 @@ export const handlePlan = async (request: Request, env: Env): Promise<Response> 
     throw error;
   }
 
-  if (!rawPlan.isGoal) return errorResponse("NOT_A_GOAL", 400);
+  if (!rawPlan.isGoal) {
+    // 오판 감시용(클라이언트는 NOT_A_GOAL을 Sentry로 보내지 않는다). 목표 문장은 개인 내용이라 남기지 않는다.
+    console.log(`plan rejected: isGoal false (goal length ${planRequest.goal.length})`);
+    return errorResponse("NOT_A_GOAL", 400);
+  }
 
   const plan = sanitizePlan(rawPlan, planRequest);
   if (!plan) return errorResponse("PLAN_INVALID", 502);
