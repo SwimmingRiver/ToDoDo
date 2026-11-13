@@ -23,6 +23,21 @@ describe("aiPlanErrorMessage", () => {
     });
   });
 
+  it("비용 가드 코드별 문구", () => {
+    expect(aiPlanErrorMessage(new AiPlanError("NOT_A_GOAL", 400))).toEqual({
+      title: "목표를 글로 적어 주세요",
+      message: "이루고 싶은 일을 문장으로 적어 주세요",
+    });
+    expect(aiPlanErrorMessage(new AiPlanError("TOO_FREQUENT", 429))).toEqual({
+      title: "잠시 후 다시 시도해 주세요",
+      message: "요청이 너무 잦아요. 잠시 후 다시 눌러 주세요",
+    });
+    expect(aiPlanErrorMessage(new AiPlanError("ATTEMPT_LIMIT", 429))).toEqual({
+      title: "오늘 시도 횟수를 다 썼어요",
+      message: "내일 다시 시도해 주세요",
+    });
+  });
+
   it("그 밖의 실패는 재시도 안내", () => {
     const fallback = { title: "잠시 후 다시 시도해 주세요", message: "AI 응답을 받지 못했어요" };
     expect(aiPlanErrorMessage(new AiPlanError("AI_UNAVAILABLE", 503))).toEqual(fallback);

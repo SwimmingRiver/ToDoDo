@@ -15,13 +15,26 @@ const seoulFormatter = new Intl.DateTimeFormat("en-CA", {
  */
 export const seoulDateKey = (now: Date): string => seoulFormatter.format(now);
 
-const usageKey = (uid: string, now: Date): string => `usage:${uid}:${seoulDateKey(now)}`;
+/** usage = 성공한 계획 수(하루 한도·클라이언트 표시용), attempts = Claude까지 간 시도 수(실패 포함). */
+type CounterKind = "usage" | "attempts";
 
-export const getUsage = async (kv: KVNamespace, uid: string, now: Date): Promise<number> => {
-  const raw = await kv.get(usageKey(uid, now));
+const counterKey = (kind: CounterKind, uid: string, now: Date): string =>
+  `${kind}:${uid}:${seoulDateKey(now)}`;
+
+const readCounter = async (kv: KVNamespace, key: string): Promise<number> => {
+  const raw = await kv.get(key);
   const parsed = raw === null ? 0 : Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
+
+const bumpCounter = async (kv: KVNamespace, key: string): Promise<number> => {
+  const next = (await readCounter(kv, key)) + 1;
+  await kv.put(key, String(next), { expirationTtl: USAGE_TTL_SECONDS });
+  return next;
+};
+
+export const getUsage = (kv: KVNamespace, uid: string, now: Date): Promise<number> =>
+  readCounter(kv, counterKey("usage", uid, now));
 
 /**
  * 쓰기 직전에 최신값을 다시 읽어 latest+1을 쓴다(게이트 체크 때 읽은 값을 그대로
@@ -31,9 +44,12 @@ export const getUsage = async (kv: KVNamespace, uid: string, now: Date): Promise
  * 있다. 목적이 남용 방지(정확한 과금 아님)라 감수한다. 결제(프리미엄 조각 3)
  * 도입 시 Durable Object 전환을 다시 검토한다.
  */
-export const incrementUsage = async (kv: KVNamespace, uid: string, now: Date): Promise<number> => {
-  const current = await getUsage(kv, uid, now);
-  const next = current + 1;
-  await kv.put(usageKey(uid, now), String(next), { expirationTtl: USAGE_TTL_SECONDS });
-  return next;
-};
+export const incrementUsage = (kv: KVNamespace, uid: string, now: Date): Promise<number> =>
+  bumpCounter(kv, counterKey("usage", uid, now));
+
+/** 시도 카운터도 같은 재조회~쓰기 방식이라 위 비원자성 한계를 그대로 가진다. */
+export const getAttempts = (kv: KVNamespace, uid: string, now: Date): Promise<number> =>
+  readCounter(kv, counterKey("attempts", uid, now));
+
+export const incrementAttempts = (kv: KVNamespace, uid: string, now: Date): Promise<number> =>
+  bumpCounter(kv, counterKey("attempts", uid, now));

@@ -4,7 +4,10 @@ export type ErrorCode =
   | "INVALID_INPUT"
   | "DAILY_LIMIT"
   | "PLAN_INVALID"
-  | "AI_UNAVAILABLE";
+  | "AI_UNAVAILABLE"
+  | "NOT_A_GOAL"
+  | "TOO_FREQUENT"
+  | "ATTEMPT_LIMIT";
 
 export const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
