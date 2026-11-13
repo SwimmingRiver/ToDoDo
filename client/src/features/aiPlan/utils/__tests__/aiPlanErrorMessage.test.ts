@@ -25,8 +25,8 @@ describe("aiPlanErrorMessage", () => {
 
   it("비용 가드 코드별 문구", () => {
     expect(aiPlanErrorMessage(new AiPlanError("NOT_A_GOAL", 400))).toEqual({
-      title: "목표를 글로 적어 주세요",
-      message: "이루고 싶은 일을 문장으로 적어 주세요",
+      title: "이루고 싶은 목표를 적어 주세요",
+      message: "예: 다음 달까지 토익 800점 받기",
     });
     expect(aiPlanErrorMessage(new AiPlanError("TOO_FREQUENT", 429))).toEqual({
       title: "잠시 후 다시 시도해 주세요",
