@@ -227,5 +227,34 @@ describe("handlePlan", () => {
       expect(blocked.status).toBe(429);
       expect(await blocked.json()).toEqual({ error: "ATTEMPT_LIMIT" });
     });
+
+    it("시도 카운터 쓰기가 실패하면(같은 키 초당 1회 제한) AI를 부르지 않고 429 TOO_FREQUENT", async () => {
+      const env = makeEnv();
+      vi.mocked(env.AI_USAGE.put).mockRejectedValueOnce(new Error("KV PUT failed: 429 Too Many Requests"));
+      const res = await handlePlan(request(), env);
+      expect(res.status).toBe(429);
+      expect(await res.json()).toEqual({ error: "TOO_FREQUENT" });
+      expect(generatePlan).not.toHaveBeenCalled();
+    });
+
+    it("성공 한도에 걸린 요청은 연타 제한 슬롯을 쓰지 않는다", async () => {
+      const env = makeEnv(new Map([[KEY, "3"]]));
+      const res = await handlePlan(request(), env);
+      expect(await res.json()).toMatchObject({ error: "DAILY_LIMIT" });
+      expect(vi.mocked(env.AI_RATE_LIMIT!.limit)).not.toHaveBeenCalled();
+    });
+
+    it("시도 상한에 걸린 요청은 연타 제한 슬롯을 쓰지 않는다", async () => {
+      const env = makeEnv(new Map([[ATTEMPT_KEY, "5"]]));
+      const res = await handlePlan(request(), env);
+      expect(await res.json()).toEqual({ error: "ATTEMPT_LIMIT" });
+      expect(vi.mocked(env.AI_RATE_LIMIT!.limit)).not.toHaveBeenCalled();
+    });
+
+    it("연타 제한에 걸리면 시도를 올리지 않는다", async () => {
+      const store = new Map<string, string>();
+      await handlePlan(request(), makeEnv(store, { AI_RATE_LIMIT: makeRateLimit(false) as unknown as RateLimit }));
+      expect(store.has(ATTEMPT_KEY)).toBe(false);
+    });
   });
 });

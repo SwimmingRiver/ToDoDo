@@ -30,7 +30,7 @@ describe("aiPlanErrorMessage", () => {
     });
     expect(aiPlanErrorMessage(new AiPlanError("TOO_FREQUENT", 429))).toEqual({
       title: "잠시 후 다시 시도해 주세요",
-      message: "요청이 너무 잦아요. 10초 뒤에 다시 눌러 주세요",
+      message: "요청이 너무 잦아요. 잠시 후 다시 눌러 주세요",
     });
     expect(aiPlanErrorMessage(new AiPlanError("ATTEMPT_LIMIT", 429))).toEqual({
       title: "오늘 시도 횟수를 다 썼어요",

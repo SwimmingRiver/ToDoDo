@@ -39,13 +39,13 @@
 ```
 인증(401) → 프리미엄(403) → 입력 검증(400 INVALID_INPUT)
 → 규칙 필터(400 NOT_A_GOAL)
-→ 연타 제한(429 TOO_FREQUENT)
 → 성공 20회 한도(429 DAILY_LIMIT)
-→ 시도 상한(429 ATTEMPT_LIMIT) → 시도 카운트 +1
+→ 시도 상한(429 ATTEMPT_LIMIT)
+→ 연타 제한(429 TOO_FREQUENT) → 시도 카운트 +1(쓰기 실패 시 429 TOO_FREQUENT)
 → Claude 호출 → 사후 검증 → 성공 카운트 +1
 ```
 
-연타 제한을 하루 한도들보다 앞에 두어, 한도를 넘긴 상태에서 몰아치는 요청도 KV 읽기 전에 끊는다.
+**[11-13 리뷰 반영]** 처음에는 연타 제한을 하루 한도보다 앞에 뒀다. 그런데 그러면 한도를 다 쓴 사용자가 몇 번 누르면 "오늘 다 썼어요" 대신 TOO_FREQUENT를 보게 된다. 그래서 연타 제한을 하루 한도 뒤, 시도 +1 바로 앞으로 옮겨 Claude까지 갈 요청만 슬롯을 쓰게 했다. KV 읽기 비용은 작아서 감수한다. 시도 카운터 쓰기가 실패하면 Claude를 부르지 않고 TOO_FREQUENT로 돌려준다. KV는 같은 키에 초당 1회 쓰기 제한이 있어 1초 안에 두 요청이 오면 실패할 수 있는데, 이때 통과시키면 세지 못한 호출로 상한이 우회된다.
 
 ### 1. 규칙 필터
 
@@ -75,7 +75,7 @@
 - `client/src/features/aiPlan/api/aiProxyApi.ts`: `AiPlanErrorCode`와 `KNOWN_CODES`에 `NOT_A_GOAL`, `TOO_FREQUENT`, `ATTEMPT_LIMIT`를 추가한다. 셋 다 정상 흐름이므로 `EXPECTED_CODES`에 넣어 Sentry로 보내지 않는다.
 - `client/src/features/aiPlan/utils/aiPlanErrorMessage.ts` 문구 *(초안, 빌더가 다듬어도 됨)*:
   - `NOT_A_GOAL`: "목표를 글로 적어 주세요" / "이루고 싶은 일을 문장으로 적어 주세요"
-  - `TOO_FREQUENT`: "잠시 후 다시 시도해 주세요" / "요청이 너무 잦아요. 10초 뒤에 다시 눌러 주세요"
+  - `TOO_FREQUENT`: "잠시 후 다시 시도해 주세요" / "요청이 너무 잦아요. 잠시 후 다시 눌러 주세요"(숫자는 wrangler.toml 설정과 어긋날 수 있어 빼기로 함)
   - `ATTEMPT_LIMIT`: "오늘 시도 횟수를 다 썼어요" / "내일 다시 시도해 주세요"
 - 클라이언트에서 미리 필터하는 기능은 넣지 않는다. 서버가 기준이다.
 

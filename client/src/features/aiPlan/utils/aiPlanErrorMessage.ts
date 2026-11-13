@@ -13,7 +13,7 @@ export const aiPlanErrorMessage = (error: unknown): { title: string; message: st
       return { title: "목표를 글로 적어 주세요", message: "이루고 싶은 일을 문장으로 적어 주세요" };
     }
     if (error.code === "TOO_FREQUENT") {
-      return { title: "잠시 후 다시 시도해 주세요", message: "요청이 너무 잦아요. 10초 뒤에 다시 눌러 주세요" };
+      return { title: "잠시 후 다시 시도해 주세요", message: "요청이 너무 잦아요. 잠시 후 다시 눌러 주세요" };
     }
     if (error.code === "ATTEMPT_LIMIT") {
       return { title: "오늘 시도 횟수를 다 썼어요", message: "내일 다시 시도해 주세요" };
