@@ -160,6 +160,16 @@ describe("handlePlan", () => {
       expect(vi.mocked(env.AI_USAGE.put)).not.toHaveBeenCalled();
     });
 
+    it("자모만 있는 goal(ㅋㅋ)도 400 NOT_A_GOAL — 연타 제한·KV·AI 모두 건드리지 않는다", async () => {
+      const env = makeEnv();
+      const res = await handlePlan(request({ ...body, goal: "ㅋㅋ" }), env);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "NOT_A_GOAL" });
+      expect(generatePlan).not.toHaveBeenCalled();
+      expect(vi.mocked(env.AI_RATE_LIMIT!.limit)).not.toHaveBeenCalled();
+      expect(vi.mocked(env.AI_USAGE.put)).not.toHaveBeenCalled();
+    });
+
     it("연타 제한에 걸리면 429 TOO_FREQUENT, uid를 키로 묻고 AI 미호출", async () => {
       const env = makeEnv(new Map(), { AI_RATE_LIMIT: makeRateLimit(false) as unknown as RateLimit });
       const res = await handlePlan(request(), env);
