@@ -40,6 +40,9 @@ export type AiPlanErrorCode =
   | "DAILY_LIMIT"
   | "PLAN_INVALID"
   | "AI_UNAVAILABLE"
+  | "NOT_A_GOAL"
+  | "TOO_FREQUENT"
+  | "ATTEMPT_LIMIT"
   | "UNKNOWN";
 
 const KNOWN_CODES = new Set<AiPlanErrorCode>([
@@ -49,6 +52,9 @@ const KNOWN_CODES = new Set<AiPlanErrorCode>([
   "DAILY_LIMIT",
   "PLAN_INVALID",
   "AI_UNAVAILABLE",
+  "NOT_A_GOAL",
+  "TOO_FREQUENT",
+  "ATTEMPT_LIMIT",
 ]);
 
 export class AiPlanError extends Error {
@@ -63,8 +69,15 @@ export class AiPlanError extends Error {
   }
 }
 
-/** 정상 흐름에서 생기는 실패(권한 없음·한도·AI 결과 불량). Sentry에 보내지 않는다. */
-const EXPECTED_CODES = new Set<AiPlanErrorCode>(["PREMIUM_REQUIRED", "DAILY_LIMIT", "PLAN_INVALID"]);
+/** 정상 흐름에서 생기는 실패(권한 없음·한도·AI 결과 불량·비용 가드). Sentry에 보내지 않는다. */
+const EXPECTED_CODES = new Set<AiPlanErrorCode>([
+  "PREMIUM_REQUIRED",
+  "DAILY_LIMIT",
+  "PLAN_INVALID",
+  "NOT_A_GOAL",
+  "TOO_FREQUENT",
+  "ATTEMPT_LIMIT",
+]);
 
 export const isExpectedAiPlanError = (error: unknown): boolean =>
   error instanceof AiPlanError && EXPECTED_CODES.has(error.code);
