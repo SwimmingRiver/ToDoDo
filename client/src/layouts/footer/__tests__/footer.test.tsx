@@ -47,4 +47,11 @@ describe("Footer", () => {
       expect(info).toHaveTextContent(text);
     }
   });
+
+  it("통신판매업 신고번호를 표시하고 '신고 준비 중'은 사라진다", () => {
+    renderFooter({ showBusinessInfo: true });
+    const info = screen.getByRole("region", { name: "사업자정보" });
+    expect(info).toHaveTextContent("제2026-경남김해-1588호");
+    expect(info).not.toHaveTextContent("신고 준비 중");
+  });
 });
