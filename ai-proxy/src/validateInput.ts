@@ -40,8 +40,21 @@ export const parsePlanRequest = (body: unknown): PlanRequest | null => {
 };
 
 /**
- * 글자(유니코드 문자)가 하나도 없는 입력 — 숫자·이모지·문장부호·공백만 — 은 목표로 볼 수 없어
- * Claude에 보내지 않는다. 한글 자모("ㅋㅋㅋ")는 글자라 통과시킨다: 같은 글자 반복·무관한 문장은
- * 정상 입력과 판별이 애매해 걸러내지 않고, 비용은 하루 시도 상한이 막는다.
+ * 한글 자모: 호환(U+3131–U+318E), 첫가끝(U+1100–U+11FF), 확장 A(U+A960–U+A97F)·B(U+D7B0–U+D7FF),
+ * 반각(U+FFA0–U+FFDC).
  */
-export const isNotAGoal = (goal: string): boolean => !/\p{L}/u.test(goal.trim());
+const HANGUL_JAMO = /[\u3131-\u318E\u1100-\u11FF\uA960-\uA97F\uD7B0-\uD7FF\uFFA0-\uFFDC]/u;
+
+/**
+ * Claude에 보내기 전에 규칙으로 거르는 입력.
+ * - 글자(유니코드 문자)가 하나도 없음: 숫자·이모지·문장부호·공백만.
+ * - 글자가 모두 한글 자모: "ㅋㅋ", "ㅠㅠ 123". 자모만으로 된 목표는 사실상 없어 오판 위험이 낮다.
+ *   완성 글자가 하나라도 섞이면("ㅋㅋ 토익 공부") 통과시킨다.
+ * 그 밖의 무관한 입력("날씨 어때", "asdf")은 모델이 isGoal로 판단한다(11-14 결정, #174의 "자모 통과"를 뒤집음).
+ */
+export const isNotAGoal = (goal: string): boolean => {
+  // NFC 먼저: macOS 파일명 등에서 붙여 넣은 NFD 한글("토익"이 초성·중성 낱자로 분해된 형태)은
+  // 첫가끝 자모로만 이뤄져 정상 목표가 자모 입력으로 오판된다. 합쳐질 수 없는 낱자만 남게 한다.
+  const letters = goal.normalize("NFC").trim().match(/\p{L}/gu) ?? [];
+  return letters.every((ch) => HANGUL_JAMO.test(ch));
+};

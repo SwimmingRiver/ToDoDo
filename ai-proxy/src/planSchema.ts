@@ -6,6 +6,9 @@ import { z } from "zod";
  * minLength/maxItems 같은 제약은 API가 지원하지 않으므로 sanitizePlan에서 검사한다.
  */
 export const PlanSchema = z.object({
+  // 첫 필드: structured outputs는 정의 순서대로 생성하므로 계획을 쓰기 전에 "목표인가"를 먼저 판단하게 한다.
+  // false면 핸들러가 계획을 버리고 NOT_A_GOAL을 돌려준다. 클라이언트 응답(Plan)에는 넣지 않는다.
+  isGoal: z.boolean(),
   title: z.string(),
   dueDate: z.string().nullable(),
   items: z.array(
