@@ -15,7 +15,7 @@ const ok = () => new Response("ok", { status: 200 });
  */
 export const handleWebhook = async (
   request: Request,
-  env: Pick<Env, "PADDLE_WEBHOOK_SECRET" | "BILLING_UID_SECRET" | "BILLING_ALLOWED_UIDS">,
+  env: Pick<Env, "PADDLE_WEBHOOK_SECRET" | "BILLING_UID_SECRET" | "BILLING_ALLOWED_UIDS" | "PADDLE_PRICE_ID">,
   deps: CommitDeps,
   now: Date,
 ): Promise<Response> => {
@@ -46,7 +46,7 @@ export const handleWebhook = async (
     return ok();
   }
 
-  const { uid, uidSig, event } = parsed;
+  const { uid, uidSig, priceIds, event } = parsed;
   // Paddle 서명은 "Paddle이 보냈다"만 보장한다. custom_data는 결제창을 연 쪽이 넣을 수 있으므로
   // /checkout이 붙인 서버 서명이 맞는 uid만 반영한다.
   if (!(await verifyUidSignature(uid, uidSig, env.BILLING_UID_SECRET))) {
@@ -56,6 +56,12 @@ export const handleWebhook = async (
   // 샌드박스 기간 이중 방어: 서명이 맞아도 허용 목록 밖이면 반영하지 않는다.
   if (!isBillingAllowed(uid, env.BILLING_ALLOWED_UIDS)) {
     console.error("Paddle 웹훅 uid가 결제 허용 목록 밖:", uid, event.subscriptionId);
+    return ok();
+  }
+  // uid_sig는 uid만으로 정해져 결제마다 같다. 공개 클라이언트 토큰으로 Paddle.js 결제창을 직접 열면
+  // 자기 uid_sig를 넣고 카탈로그의 다른(더 싼) 가격을 고를 수 있으므로, 우리가 파는 가격만 반영한다.
+  if (!priceIds.includes(env.PADDLE_PRICE_ID)) {
+    console.error("Paddle 웹훅 구독 가격이 PADDLE_PRICE_ID가 아님 — 반영하지 않음:", uid, event.subscriptionId, priceIds);
     return ok();
   }
   // 체험은 우리 서버(/trial)가 주고 Paddle 가격에는 체험 기간이 없다. trialing이 오면 Paddle 설정이
@@ -69,7 +75,7 @@ export const handleWebhook = async (
       if (isStaleEvent(existing, event)) return { skip: "STALE" as const };
       if (isForeignCancel(existing, event, now)) {
         console.warn(
-          "이중 구독 의심 — 다른 구독의 해지 이벤트를 무시함(Paddle 대시보드에서 환불 확인):",
+          "이중 구독 의심 — 다른 구독의 해지·일시정지·결제 실패 이벤트를 무시함(Paddle 대시보드에서 환불 확인):",
           uid,
           existing.subscriptionId,
           event.subscriptionId,

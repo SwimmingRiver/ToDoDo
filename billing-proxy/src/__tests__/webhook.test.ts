@@ -7,7 +7,14 @@ import { signForTest } from "./helpers/signForTest";
 
 const SECRET = "whsec";
 const UID_SECRET = "uid-secret";
-const ENV = { PADDLE_WEBHOOK_SECRET: SECRET, BILLING_UID_SECRET: UID_SECRET, BILLING_ALLOWED_UIDS: "u1,u2" };
+const PRICE = "pri_premium_monthly";
+const ENV = {
+  PADDLE_WEBHOOK_SECRET: SECRET,
+  BILLING_UID_SECRET: UID_SECRET,
+  BILLING_ALLOWED_UIDS: "u1,u2",
+  PADDLE_PRICE_ID: PRICE,
+};
+const ITEMS = [{ status: "active", quantity: 1, price: { id: PRICE } }];
 let SIG_U1 = "";
 let SIG_STRANGER = "";
 const NOW = new Date("2026-10-10T00:00:05.000Z");
@@ -25,6 +32,7 @@ const body = (overrides: Record<string, unknown> = {}) =>
       custom_data: { uid: "u1", uid_sig: SIG_U1 },
       current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" },
       scheduled_change: null,
+      items: ITEMS,
     },
     ...overrides,
   });
@@ -53,6 +61,7 @@ const withCustomData = (customData: unknown) =>
       custom_data: customData,
       current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" },
       scheduled_change: null,
+      items: ITEMS,
     },
   });
 
@@ -68,6 +77,45 @@ describe("handleWebhook", () => {
     const res = await handleWebhook(await request(body(), "ts=1;h1=00"), ENV, d, NOW);
     expect(res.status).toBe(401);
     expect(d.claims.setPremiumUntil).not.toHaveBeenCalled();
+  });
+
+  it("구독 가격이 PADDLE_PRICE_ID가 아니면 반영하지 않고 200(카탈로그의 다른 가격으로 직접 연 결제)", async () => {
+    const d = deps();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const raw = body({
+      data: {
+        id: "sub_1",
+        status: "active",
+        customer_id: "ctm_1",
+        custom_data: { uid: "u1", uid_sig: SIG_U1 },
+        current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" },
+        scheduled_change: null,
+        items: [{ status: "active", quantity: 1, price: { id: "pri_cheaper" } }],
+      },
+    });
+    const res = await handleWebhook(await request(raw), ENV, d, NOW);
+    expect(res.status).toBe(200);
+    expect(d.store.write).not.toHaveBeenCalled();
+    expect(d.claims.setPremiumUntil).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("가격"), "u1", "sub_1", ["pri_cheaper"]);
+  });
+
+  it("items가 없으면 가격을 확인할 수 없으니 반영하지 않는다", async () => {
+    const d = deps();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const raw = body({
+      data: {
+        id: "sub_1",
+        status: "active",
+        customer_id: "ctm_1",
+        custom_data: { uid: "u1", uid_sig: SIG_U1 },
+        current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" },
+        scheduled_change: null,
+      },
+    });
+    const res = await handleWebhook(await request(raw), ENV, d, NOW);
+    expect(res.status).toBe(200);
+    expect(d.store.write).not.toHaveBeenCalled();
   });
 
   it("active 구독이면 클레임과 문서를 반영하고 200", async () => {
@@ -171,7 +219,7 @@ describe("handleWebhook", () => {
     });
     const raw = body({
       event_type: "subscription.canceled",
-      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null },
+      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null, items: ITEMS },
     });
     const res = await handleWebhook(await request(raw), ENV, d, NOW);
     expect(res.status).toBe(200);
@@ -190,7 +238,7 @@ describe("handleWebhook", () => {
     });
     const raw = body({
       event_type: "subscription.canceled",
-      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null },
+      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null, items: ITEMS },
     });
     const res = await handleWebhook(await request(raw), ENV, d, NOW);
     expect(res.status).toBe(200);
@@ -201,7 +249,7 @@ describe("handleWebhook", () => {
     const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
     const d = deps();
     const raw = body({
-      data: { id: "sub_1", status: "trialing", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" }, scheduled_change: null },
+      data: { id: "sub_1", status: "trialing", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: { ends_at: "2026-11-10T00:00:00.000Z" }, scheduled_change: null, items: ITEMS },
     });
     const res = await handleWebhook(await request(raw), ENV, d, NOW);
     expect(res.status).toBe(200);

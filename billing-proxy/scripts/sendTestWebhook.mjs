@@ -15,6 +15,7 @@
  *   forged-sig       uid_sig 위조 → 반영되지 않아야 함
  *   trialing         Paddle 체험 상태(쓰지 않는 상태) → 경고 후 active처럼 반영
  * 다른 구독의 해지를 흉내 내려면: canceled --sub sub_other
+ * 구독 가격은 wrangler.toml의 PADDLE_PRICE_ID를 쓴다(웹훅이 이 가격만 반영). 다른 가격을 흉내 내려면: --price pri_other
  */
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -27,6 +28,12 @@ const option = (name, fallback) => {
 const [uid, scenario] = args;
 const subscriptionId = option("--sub", "sub_test_1");
 const url = option("--url", "http://localhost:8787");
+const configuredPriceId = /^PADDLE_PRICE_ID\s*=\s*"([^"]+)"/m.exec(readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8"))?.[1];
+const priceId = option("--price", configuredPriceId);
+if (!priceId) {
+  console.error("wrangler.toml에서 PADDLE_PRICE_ID를 찾지 못했습니다 — --price로 지정하세요");
+  process.exit(1);
+}
 
 const SCENARIOS = ["active", "cancel-scheduled", "past-due", "canceled", "forged-sig", "trialing"];
 if (!uid || !SCENARIOS.includes(scenario)) {
@@ -63,6 +70,7 @@ const body = JSON.stringify({
     custom_data: { uid, uid_sig: scenario === "forged-sig" ? "0".repeat(64) : hmacHex(uidSecret, uid) },
     current_billing_period: scenario === "canceled" ? null : { starts_at: now.toISOString(), ends_at: periodEnd },
     scheduled_change: scenario === "cancel-scheduled" ? { action: "cancel", effective_at: periodEnd, resumes_at: null } : null,
+    items: [{ status: "active", quantity: 1, price: { id: priceId } }],
   },
 });
 

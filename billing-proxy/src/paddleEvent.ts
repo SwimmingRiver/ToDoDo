@@ -6,7 +6,14 @@ const STATUSES = new Set(["active", "trialing", "past_due", "paused", "canceled"
 export type ParsedWebhook =
   | { kind: "ignored" }
   | { kind: "invalid"; reason: string }
-  | { kind: "subscription"; uid: string | null; uidSig: string | null; event: PaddleSubscriptionEvent };
+  | {
+      kind: "subscription";
+      uid: string | null;
+      uidSig: string | null;
+      /** 구독 항목(data.items[].price.id)의 가격 id. 형식이 다른 항목은 건너뛴다. */
+      priceIds: string[];
+      event: PaddleSubscriptionEvent;
+    };
 
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null;
@@ -33,6 +40,9 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
   const period = isObject(data.current_billing_period) ? data.current_billing_period : null;
   const scheduled = isObject(data.scheduled_change) ? data.scheduled_change : null;
   const customData = isObject(data.custom_data) ? data.custom_data : null;
+  const priceIds = (Array.isArray(data.items) ? data.items : [])
+    .map((item) => (isObject(item) && isObject(item.price) ? str(item.price.id) : null))
+    .filter((id): id is string => id !== null);
 
   const currentPeriodEndsAt = str(period?.ends_at);
   const scheduledCancelAt = scheduled?.action === "cancel" ? str(scheduled.effective_at) : null;
@@ -44,6 +54,7 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
     kind: "subscription",
     uid: str(customData?.uid),
     uidSig: str(customData?.uid_sig),
+    priceIds,
     event: {
       eventId,
       occurredAt,

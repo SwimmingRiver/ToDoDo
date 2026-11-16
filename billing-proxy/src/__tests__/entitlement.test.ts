@@ -140,9 +140,16 @@ describe("isForeignCancel", () => {
     expect(isForeignCancel(live, event({ status: "canceled", subscriptionId: "sub_old" }), NOW)).toBe(false);
   });
 
-  it("해지·일시정지가 아닌 상태는 다른 구독이어도 반영한다", () => {
+  it("살아 있는 다른 구독이 있는데 past_due가 오면 true(추적 대상이 바뀌면 그 구독의 해지가 살아 있는 권한을 지운다)", () => {
+    expect(isForeignCancel(live, event({ status: "past_due" }), NOW)).toBe(true);
+  });
+
+  it("같은 구독의 past_due는 정상 반영한다", () => {
+    expect(isForeignCancel(live, event({ status: "past_due", subscriptionId: "sub_old" }), NOW)).toBe(false);
+  });
+
+  it("active는 다른 구독이어도 반영한다(새로 결제한 구독)", () => {
     expect(isForeignCancel(live, event({ status: "active" }), NOW)).toBe(false);
-    expect(isForeignCancel(live, event({ status: "past_due" }), NOW)).toBe(false);
   });
 
   it("기존 문서가 이미 만료됐거나 Paddle 구독이 아니면 false", () => {
