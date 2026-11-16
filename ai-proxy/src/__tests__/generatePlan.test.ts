@@ -9,7 +9,7 @@ const env = {
   ANTHROPIC_API_KEY: "test-key",
 } as Env;
 const req = { goal: "이사 준비", dueDate: "2026-10-31", today: "2026-09-25" };
-const parsed = { title: "이사 준비", dueDate: "2026-10-31", items: [] };
+const parsed = { isGoal: true, title: "이사 준비", dueDate: "2026-10-31", items: [] };
 
 const makeClient = (impl: () => Promise<unknown>) => {
   const parse = vi.fn(impl);

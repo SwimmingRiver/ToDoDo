@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { renderHook, act } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import Toast from '../toast'
+import Modal from '../../modal/modal'
+import ConfirmModal from '../../confirmModal/confirmModal'
+import BottomSheet from '../../bottomSheet/bottomSheet'
 import { ToastProvider } from '../toastContext'
 import { useToast } from '../useToast'
 import type { ToastData } from '../toast'
@@ -126,5 +129,35 @@ describe('useToast 훅', () => {
     })
 
     expect(screen.getByText('오류 발생')).toBeInTheDocument()
+  })
+})
+
+describe('Toast 스태킹', () => {
+  // 모달이 열린 채로 뜨는 토스트(AI 플랜 오류, 저장 실패 등)가 모달 배경(scrim) 아래에 깔리면
+  // 흐리게 보이거나 모바일 바텀시트에 가려진다. 토스트는 모든 오버레이보다 위에 있어야 한다.
+  // 요소가 실제로 놓이는 층 = 조상들 중 가장 높은 z-index
+  const layerOf = (el: Element | null): number => {
+    let max = 0
+    for (let cur = el; cur; cur = cur.parentElement) {
+      max = Math.max(max, Number(getComputedStyle(cur).zIndex) || 0)
+    }
+    return max
+  }
+
+  it('모달·확인 모달·바텀시트가 열려 있어도 토스트가 가장 위에 있어야 한다', () => {
+    render(
+      <>
+        <Modal isOpen setIsOpen={vi.fn()}>본문</Modal>
+        <ConfirmModal isOpen title="확인" message="정말요?" onConfirm={vi.fn()} onCancel={vi.fn()} />
+        <BottomSheet isOpen onClose={vi.fn()} title="시트" />
+        <Toast toasts={[{ id: 't', type: 'error', title: '오류 토스트', duration: 3000 }]} onClose={vi.fn()} />
+      </>,
+    )
+
+    const toastLayer = layerOf(screen.getByText('오류 토스트'))
+    const overlayLayers = [screen.getByText('본문'), screen.getByText('정말요?'), screen.getByText('시트')].map(layerOf)
+
+    expect(Math.max(...overlayLayers)).toBeGreaterThan(0)
+    for (const layer of overlayLayers) expect(toastLayer).toBeGreaterThan(layer)
   })
 })

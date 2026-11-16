@@ -38,7 +38,8 @@ const ToastContainer = styled.div`
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 9999;
+  /* 모달·확인 모달·바텀시트(10000)보다 위. 모달이 열린 채로 뜨는 토스트가 scrim 아래에 깔리지 않게 한다. */
+  z-index: 10001;
   display: flex;
   flex-direction: column;
   gap: 12px;

@@ -10,7 +10,7 @@ export const aiPlanErrorMessage = (error: unknown): { title: string; message: st
       return { title: "계획을 만들지 못했어요", message: "목표를 조금 더 구체적으로 적어주세요" };
     }
     if (error.code === "NOT_A_GOAL") {
-      return { title: "목표를 글로 적어 주세요", message: "이루고 싶은 일을 문장으로 적어 주세요" };
+      return { title: "이루고 싶은 목표를 적어 주세요", message: "예: 다음 달까지 토익 800점 받기" };
     }
     if (error.code === "TOO_FREQUENT") {
       return { title: "잠시 후 다시 시도해 주세요", message: "요청이 너무 잦아요. 잠시 후 다시 눌러 주세요" };

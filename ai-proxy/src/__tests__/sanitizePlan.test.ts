@@ -7,6 +7,7 @@ const req: PlanRequest = { goal: "이사 준비", dueDate: "2026-10-31", today: 
 const item = (title: string, dueDate: string | null = "2026-10-03") =>
   ({ title, dueDate, priority: "medium" }) as const;
 const raw = (overrides: Partial<RawPlan> = {}): RawPlan => ({
+  isGoal: true,
   title: "이사 준비",
   dueDate: "2026-10-31",
   items: [item("견적 받기")],

@@ -41,11 +41,13 @@ const request = (payload: unknown = body, token = "valid") =>
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: typeof payload === "string" ? payload : JSON.stringify(payload),
   });
-const rawPlan = {
+const expectedPlan = {
   title: "이사 준비",
   dueDate: "2026-10-31",
   items: [{ title: "견적 받기", dueDate: "2026-10-03", priority: "high" as const }],
 };
+/** 모델 원본 출력. isGoal은 서버 안에서만 쓰고 응답 plan에는 들어가지 않는다. */
+const rawPlan = { isGoal: true, ...expectedPlan };
 const KEY = "usage:user-1:2026-09-25";
 const ATTEMPT_KEY = "attempts:user-1:2026-09-25";
 
@@ -84,7 +86,7 @@ describe("handlePlan", () => {
     const store = new Map([[KEY, "1"]]);
     const res = await handlePlan(request(), makeEnv(store));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ plan: rawPlan, usage: { used: 2, limit: 3 } });
+    expect(await res.json()).toEqual({ plan: expectedPlan, usage: { used: 2, limit: 3 } });
     expect(store.get(KEY)).toBe("2");
   });
 
@@ -98,7 +100,7 @@ describe("handlePlan", () => {
     });
     const res = await handlePlan(request(), makeEnv(store));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ plan: rawPlan, usage: { used: 6, limit: 3 } });
+    expect(await res.json()).toEqual({ plan: expectedPlan, usage: { used: 6, limit: 3 } });
     expect(store.get(KEY)).toBe("6");
   });
 
@@ -160,6 +162,48 @@ describe("handlePlan", () => {
       expect(vi.mocked(env.AI_USAGE.put)).not.toHaveBeenCalled();
     });
 
+    it("모델이 목표 아님(isGoal:false)으로 판단하면 400 NOT_A_GOAL, 시도 +1, 성공 불변", async () => {
+      vi.mocked(generatePlan).mockResolvedValueOnce({ isGoal: false, title: "", dueDate: null, items: [] });
+      const store = new Map([[KEY, "1"]]);
+      const res = await handlePlan(request(), makeEnv(store));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "NOT_A_GOAL" });
+      expect(store.get(ATTEMPT_KEY)).toBe("1");
+      expect(store.get(KEY)).toBe("1");
+    });
+
+    it("모델 거절은 오판 감시용으로 로그를 남기되 목표 문장은 남기지 않는다", async () => {
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.mocked(generatePlan).mockResolvedValueOnce({ isGoal: false, title: "", dueDate: null, items: [] });
+      await handlePlan(request(), makeEnv(new Map()));
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("isGoal false"));
+      expect(JSON.stringify(log.mock.calls)).not.toContain(body.goal);
+      log.mockRestore();
+    });
+
+    it("isGoal:false인데 items가 차 있어도 계획을 내보내지 않는다", async () => {
+      vi.mocked(generatePlan).mockResolvedValueOnce({ ...rawPlan, isGoal: false });
+      const res = await handlePlan(request(), makeEnv(new Map()));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "NOT_A_GOAL" });
+    });
+
+    it("성공 응답 plan에는 isGoal이 없다", async () => {
+      const res = await handlePlan(request(), makeEnv(new Map()));
+      const json = (await res.json()) as { plan: Record<string, unknown> };
+      expect(json.plan).not.toHaveProperty("isGoal");
+    });
+
+    it("자모만 있는 goal(ㅋㅋ)도 400 NOT_A_GOAL — 연타 제한·KV·AI 모두 건드리지 않는다", async () => {
+      const env = makeEnv();
+      const res = await handlePlan(request({ ...body, goal: "ㅋㅋ" }), env);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "NOT_A_GOAL" });
+      expect(generatePlan).not.toHaveBeenCalled();
+      expect(vi.mocked(env.AI_RATE_LIMIT!.limit)).not.toHaveBeenCalled();
+      expect(vi.mocked(env.AI_USAGE.put)).not.toHaveBeenCalled();
+    });
+
     it("연타 제한에 걸리면 429 TOO_FREQUENT, uid를 키로 묻고 AI 미호출", async () => {
       const env = makeEnv(new Map(), { AI_RATE_LIMIT: makeRateLimit(false) as unknown as RateLimit });
       const res = await handlePlan(request(), env);
@@ -192,7 +236,7 @@ describe("handlePlan", () => {
     it("성공하면 시도 +1, 응답 usage는 성공 카운트 그대로", async () => {
       const store = new Map([[KEY, "1"]]);
       const res = await handlePlan(request(), makeEnv(store));
-      expect(await res.json()).toEqual({ plan: rawPlan, usage: { used: 2, limit: 3 } });
+      expect(await res.json()).toEqual({ plan: expectedPlan, usage: { used: 2, limit: 3 } });
       expect(store.get(ATTEMPT_KEY)).toBe("1");
     });
 
