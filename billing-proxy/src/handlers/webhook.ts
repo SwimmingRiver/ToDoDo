@@ -58,12 +58,6 @@ export const handleWebhook = async (
     console.error("Paddle 웹훅 uid가 결제 허용 목록 밖:", uid, event.subscriptionId);
     return ok();
   }
-  // uid_sig는 uid만으로 정해져 결제마다 같다. 공개 클라이언트 토큰으로 Paddle.js 결제창을 직접 열면
-  // 자기 uid_sig를 넣고 카탈로그의 다른(더 싼) 가격을 고를 수 있으므로, 우리가 파는 가격만 반영한다.
-  if (!priceIds.includes(env.PADDLE_PRICE_ID)) {
-    console.error("Paddle 웹훅 구독 가격이 PADDLE_PRICE_ID가 아님 — 반영하지 않음:", uid, event.subscriptionId, priceIds);
-    return ok();
-  }
   // 체험은 우리 서버(/trial)가 주고 Paddle 가격에는 체험 기간이 없다. trialing이 오면 Paddle 설정이
   // 바뀐 것이니 알아챌 수 있게 경고만 남기고, 처리는 active와 같다.
   if (event.status === "trialing") {
@@ -71,7 +65,7 @@ export const handleWebhook = async (
   }
 
   try {
-    await commitEntitlement(deps, uid, (existing) => {
+    const outcome = await commitEntitlement(deps, uid, (existing) => {
       if (isStaleEvent(existing, event)) return { skip: "STALE" as const };
       if (isForeignCancel(existing, event, now)) {
         console.warn(
@@ -82,8 +76,21 @@ export const handleWebhook = async (
         );
         return { skip: "FOREIGN_SUBSCRIPTION" as const };
       }
+      // uid_sig는 uid만으로 정해져 결제마다 같다. 공개 클라이언트 토큰으로 Paddle.js 결제창을 직접 열면
+      // 자기 uid_sig를 넣고 카탈로그의 다른(더 싼) 가격을 고를 수 있으므로, 새로 들어오는 구독은 우리가
+      // 파는 가격일 때만 받는다. 이미 추적 중인 구독은 들어올 때 확인을 거쳤으니 가격을 다시 보지 않는다 —
+      // 가격을 바꾼 뒤에도 기존 가입자의 갱신이 반영되고, 해지는 가격과 무관하게 권한을 회수한다.
+      if (existing.subscriptionId !== event.subscriptionId && !priceIds.includes(env.PADDLE_PRICE_ID)) {
+        return { skip: "PRICE_MISMATCH" as const };
+      }
       return { write: applySubscriptionEvent(existing, event, now) };
     });
+    if (outcome.kind === "skipped" && outcome.reason === "PRICE_MISMATCH") {
+      // 500으로 재전송을 받는다. 위조라면 Paddle 재시도가 끝날 때까지 로그만 쌓이지만, PADDLE_PRICE_ID 설정
+      // 실수(live 전환 때 미교체 등)라면 200은 결제한 사용자의 이벤트를 영구히 버린다 — 고치면 재전송으로 복구된다.
+      console.error("Paddle 웹훅 구독 가격이 PADDLE_PRICE_ID가 아님 — 반영하지 않음:", uid, event.subscriptionId, priceIds);
+      return new Response("Unexpected price", { status: 500 });
+    }
   } catch (error) {
     if (error instanceof UserNotFoundError) {
       console.error("Paddle 웹훅 대상 사용자가 없음:", uid, event.subscriptionId);
