@@ -10,7 +10,7 @@ export type ParsedWebhook =
       kind: "subscription";
       uid: string | null;
       uidSig: string | null;
-      /** 구독 항목(data.items[].price.id)의 가격 id. 형식이 다른 항목은 건너뛴다. */
+      /** 구독 항목(data.items[].price.id)의 가격 id. inactive 항목과 형식이 다른 항목은 건너뛴다. */
       priceIds: string[];
       event: PaddleSubscriptionEvent;
     };
@@ -41,7 +41,8 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
   const scheduled = isObject(data.scheduled_change) ? data.scheduled_change : null;
   const customData = isObject(data.custom_data) ? data.custom_data : null;
   const priceIds = (Array.isArray(data.items) ? data.items : [])
-    .map((item) => (isObject(item) && isObject(item.price) ? str(item.price.id) : null))
+    // inactive 항목은 청구되지 않으므로 "우리 가격으로 결제했다"의 근거가 되지 않는다.
+    .map((item) => (isObject(item) && item.status !== "inactive" && isObject(item.price) ? str(item.price.id) : null))
     .filter((id): id is string => id !== null);
 
   const currentPeriodEndsAt = str(period?.ends_at);

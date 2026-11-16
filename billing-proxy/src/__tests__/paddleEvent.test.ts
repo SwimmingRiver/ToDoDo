@@ -46,6 +46,20 @@ describe("parseWebhook", () => {
     }
   });
 
+  it("비활성(청구되지 않는) 항목의 가격은 빼고, 상태가 없거나 다른 상태면 포함한다", () => {
+    const parsed = parseWebhook(
+      payload({}, {
+        items: [
+          { status: "inactive", price: { id: "pri_inactive" } },
+          { status: "active", price: { id: "pri_active" } },
+          { status: "trialing", price: { id: "pri_trialing" } },
+          { price: { id: "pri_no_status" } },
+        ],
+      }),
+    );
+    expect(parsed.kind === "subscription" && parsed.priceIds).toEqual(["pri_active", "pri_trialing", "pri_no_status"]);
+  });
+
   it("예약 해지는 scheduledCancelAt으로, 일시정지 예약은 무시한다", () => {
     const cancel = parseWebhook(payload({}, { scheduled_change: { action: "cancel", effective_at: "2026-11-10T00:00:00Z" } }));
     expect(cancel.kind === "subscription" && cancel.event.scheduledCancelAt).toBe("2026-11-10T00:00:00Z");
