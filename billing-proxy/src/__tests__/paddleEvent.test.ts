@@ -12,6 +12,7 @@ const payload = (overrides: Record<string, unknown> = {}, data: Record<string, u
     custom_data: { uid: "u1", uid_sig: "sig_1" },
     current_billing_period: { starts_at: "2026-10-10T00:00:00Z", ends_at: "2026-11-10T00:00:00Z" },
     scheduled_change: null,
+    items: [{ status: "active", quantity: 1, price: { id: "pri_1" } }],
     ...data,
   },
   ...overrides,
@@ -23,6 +24,7 @@ describe("parseWebhook", () => {
       kind: "subscription",
       uid: "u1",
       uidSig: "sig_1",
+      priceIds: ["pri_1"],
       event: {
         eventId: "evt_1",
         occurredAt: "2026-10-10T00:00:00.000000Z",
@@ -33,6 +35,29 @@ describe("parseWebhook", () => {
         scheduledCancelAt: null,
       },
     });
+  });
+
+  it("items의 가격 id를 모두 모으고, items가 없거나 형식이 다르면 빈 목록", () => {
+    const two = parseWebhook(payload({}, { items: [{ price: { id: "pri_1" } }, { price: { id: "pri_2" } }] }));
+    expect(two.kind === "subscription" && two.priceIds).toEqual(["pri_1", "pri_2"]);
+    for (const items of [undefined, null, "x", [{ price: null }, { price: { id: 3 } }, null]]) {
+      const parsed = parseWebhook(payload({}, { items }));
+      expect(parsed.kind === "subscription" && parsed.priceIds).toEqual([]);
+    }
+  });
+
+  it("비활성(청구되지 않는) 항목의 가격은 빼고, 상태가 없거나 다른 상태면 포함한다", () => {
+    const parsed = parseWebhook(
+      payload({}, {
+        items: [
+          { status: "inactive", price: { id: "pri_inactive" } },
+          { status: "active", price: { id: "pri_active" } },
+          { status: "trialing", price: { id: "pri_trialing" } },
+          { price: { id: "pri_no_status" } },
+        ],
+      }),
+    );
+    expect(parsed.kind === "subscription" && parsed.priceIds).toEqual(["pri_active", "pri_trialing", "pri_no_status"]);
   });
 
   it("예약 해지는 scheduledCancelAt으로, 일시정지 예약은 무시한다", () => {

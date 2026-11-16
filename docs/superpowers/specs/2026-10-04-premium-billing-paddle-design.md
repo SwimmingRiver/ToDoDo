@@ -230,7 +230,7 @@
 
 ## 실결제 전환 시 (이번 스코프 밖, 체크리스트로만 기록)
 
-Paddle 운영 계정 승인(도메인 심사: 공개 요금제·이용약관·환불 정책 페이지 필요) → `PADDLE_API_BASE`·키·가격 id·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS=*` → `VITE_BILLING_ENABLED=true` 운영 빌드 → CI deploy job `VITE_PADDLE_ENV=production`. 전환 전 코드 보강: 웹훅의 `price_id` 확인, 다른 구독의 `past_due` 처리 결정(`billing-proxy/README.md` 참고). 정산 계좌·사업자 요건은 그 시점에 Paddle 문서로 확인.
+Paddle 운영 계정 승인(도메인 심사: 공개 요금제·이용약관·환불 정책 페이지 필요) → `PADDLE_API_BASE`·키·가격 id·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS=*` → `VITE_BILLING_ENABLED=true` 운영 빌드 → CI deploy job `VITE_PADDLE_ENV=production`. 전환 전 코드 보강(웹훅의 가격 id 확인, 다른 구독의 `past_due` 무시)은 2026-11 완료 — 가격 id를 live 값으로 함께 바꾸지 않으면 live 웹훅이 전부 버려진다(`billing-proxy/README.md` 참고). 정산 계좌·사업자 요건은 그 시점에 Paddle 문서로 확인.
 
 ## 스코프 밖
 

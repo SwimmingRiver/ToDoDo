@@ -83,14 +83,16 @@ export const isStaleEvent = (existing: EntitlementDoc, event: PaddleSubscription
 
 /**
  * 이중 구독(두 탭에서 각각 결제 등)일 때 한쪽 해지가 살아 있는 다른 구독의 권한을 지우지 않게 한다.
- * 문서는 구독 하나만 추적하므로, 지금 추적 중인 구독이 유효한 동안 다른 구독의 해지·일시정지는 무시한다.
+ * 문서는 구독 하나만 추적하므로, 지금 추적 중인 구독이 유효한 동안 다른 구독의 해지·일시정지·결제 실패는 무시한다.
+ * past_due도 포함하는 이유: 반영하면 추적 대상이 그 구독으로 바뀌고, 이어서 오는 그 구독의 해지가
+ * 더는 "다른 구독"이 아니게 되어 살아 있는 구독의 권한까지 회수된다.
  */
 export const isForeignCancel = (existing: EntitlementDoc, event: PaddleSubscriptionEvent, now: Date): boolean =>
   existing.source === "paddle" &&
   existing.subscriptionId !== null &&
   existing.subscriptionId !== event.subscriptionId &&
   isPremiumAt(existing, now) &&
-  (event.status === "canceled" || event.status === "paused");
+  (event.status === "canceled" || event.status === "paused" || event.status === "past_due");
 
 export const applySubscriptionEvent = (
   existing: EntitlementDoc,
