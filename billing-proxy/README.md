@@ -37,11 +37,15 @@ Paddle 없이 로컬에서: `.dev.vars`에 결제용 서비스 계정 JSON(`GOOG
 
 Paddle 웹훅은 localhost에 닿지 않는다. `npx wrangler versions upload`로 만든 프리뷰 URL을 샌드박스 Notification 대상으로 임시 등록하고, 클라이언트는 `VITE_BILLING_PROXY_URL`을 그 URL로 덮어써 테스트한다. `past_due`·즉시 해지는 Paddle 대시보드의 웹훅 시뮬레이터로 보낸다.
 
+**실결제 전환 후(wrangler.toml이 live 값)**: 로컬 `wrangler dev`는 `.dev.vars`에 `PADDLE_API_BASE="https://sandbox-api.paddle.com"`, `PADDLE_PRICE_ID="pri_01m4cvyj30dk394r30q3dy8frq"`(샌드박스 가격)와 샌드박스 API 키를 넣어 덮어쓴다 — 빠뜨리면 로컬이 live API를 부른다. 운영 Worker의 시크릿은 live 값이라 `versions upload` 프리뷰로 샌드박스 실결제를 다시 하려면 `--var`로 두 값을 덮어쓰는 것만으로는 부족하다(키·웹훅 secret도 샌드박스여야 함) — 전환 후 확인은 live에서 별도 계정으로 한다(1회용 100% 할인 코드, 또는 실결제 후 대시보드에서 환불·해지).
+
 샌드박스 결제 테스트는 운영자 계정(2099년까지 수동 부여)이 아니라 **별도 테스트 계정**으로 한다(허용 목록에 그 uid를 임시로 추가). 운영자 계정으로 결제하면 수동 부여가 구독 기간으로 덮어써진다 — 이미 했다면 `npm run grant:entitlement`(루트)를 다시 실행한다. 테스트가 끝나면 **그 테스트 구독을 먼저 해지하고 나서** 허용 목록에서 uid를 뺀다 — 웹훅도 허용 목록을 확인하므로, 순서를 바꾸면 해지 웹훅이 버려져 테스트 계정이 마지막 `premiumUntil`(+3일)까지 프리미엄으로 남는다.
 
 ## 실결제 전환
 
-Paddle 운영 계정 승인 → `PADDLE_API_BASE=https://api.paddle.com`, 운영 키·가격 id·웹훅 secret·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS="*"` → 클라이언트 `VITE_BILLING_ENABLED=true` → `.github/workflows/ci.yml` deploy job의 `VITE_PADDLE_ENV: sandbox`를 `production`으로.
+Paddle 운영 계정 승인 → `PADDLE_API_BASE=https://api.paddle.com`, 운영 키·가격 id·웹훅 secret·클라이언트 토큰 교체 → `BILLING_ALLOWED_UIDS="*"` → 클라이언트 `VITE_BILLING_ENABLED=true` → `.github/workflows/ci.yml` deploy job의 `VITE_PADDLE_ENV: sandbox`를 `production`으로. (코드·설정 쪽은 전환 PR에서 반영 — live 가격 `pri_01m7mjk5660b9xxvvb5ken0d6d`)
+
+**전환 순서**(시크릿과 코드가 어긋난 시간을 최소화): ① live 계정 인증 `completed`·도메인 승인 확인 → ② Worker 시크릿 `PADDLE_API_KEY`·`PADDLE_WEBHOOK_SECRET`를 live 값으로 교체(이때는 허용 목록 계정만 영향) → ③ GitHub Secrets `VITE_PADDLE_CLIENT_TOKEN`을 `live_…`로 교체 → ④ 전환 PR develop 병합 → 릴리스 PR main 병합(CI가 Worker·클라이언트 배포) → ⑤ 별도 계정으로 live 실결제 확인(1회용 100% 할인 코드 또는 실결제 후 환불), `wrangler tail`에 `PADDLE_PRICE_ID가 아님`이 없는지 확인. `BILLING_UID_SECRET`은 바꾸지 않는다.
 
 **함정 — 가격 id는 반드시 live 값으로 함께 바꾼다.** 웹훅은 새로 들어오는 구독(문서가 추적 중이 아닌 구독)의 항목(`items[].price.id`)에 `PADDLE_PRICE_ID`가 없으면 반영하지 않고 `500`을 돌려준다. 샌드박스 가격 id를 그대로 두면 live 결제가 전부 이 경로로 빠진다 — 전환 직후 로그에 `구독 가격이 PADDLE_PRICE_ID가 아님`이 보이면 즉시 가격 id를 고쳐 재배포한다. `500`이라 Paddle 재전송이 남아 있는 동안 고치면 놓친 결제가 자동으로 반영된다.
 
