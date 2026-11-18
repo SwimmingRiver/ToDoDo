@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react-native";
+import { render, screen, fireEvent, act } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { Todo } from "@tododo/core";
 import { TodayTodoItem } from "../TodayTodoItem";
@@ -100,7 +100,7 @@ describe("TodayTodoItem", () => {
       <TodayTodoItem todo={dueSoon} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
     );
     expect(screen.getByRole("checkbox")).toHaveStyle({ borderColor: urgencyColors.soon.main });
-    expect(screen.getByText("D-2")).toBeTruthy();
+    expect(screen.getByText("D-2 · 18:00")).toBeTruthy();
     expect(screen.getByTestId("due-badge-t1")).toHaveStyle({ backgroundColor: urgencyColors.soon.background });
   });
 
@@ -132,5 +132,31 @@ describe("TodayTodoItem", () => {
       <TodayTodoItem todo={baseTodo} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} isLast />,
     );
     expect(screen.getByTestId("today-item-t1")).toHaveStyle({ borderBottomWidth: 0 });
+  });
+
+  describe("마감 시각·남은 시간 표시", () => {
+    const render1 = (dueAt: string) =>
+      render(
+        <TodayTodoItem todo={{ ...baseTodo, dueAt }} selectedDate="2026-06-15" onToggleDone={jest.fn()} onPress={jest.fn()} />,
+      );
+
+    it("오늘 마감이면 남은 시간을 보여 준다", async () => {
+      await render1(new Date(2026, 5, 15, 18).toISOString());
+      expect(screen.getByText("6시간 남음")).toBeTruthy();
+    });
+
+    it("4일 이상 남으면 24시간제 시각만 보여 준다", async () => {
+      await render1(new Date(2026, 5, 21, 9, 5).toISOString());
+      expect(screen.getByText("09:05")).toBeTruthy();
+    });
+
+    it("화면을 켜 둔 채 마감 시각이 지나면 남음이 지남으로 바뀐다", async () => {
+      await render1(new Date(2026, 5, 15, 12, 0, 30).toISOString());
+      expect(screen.getByText("1분 남음")).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(60_000);
+      });
+      expect(screen.getByText("1분 지남")).toBeTruthy();
+    });
   });
 });
