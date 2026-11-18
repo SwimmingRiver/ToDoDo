@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import TodayTodoItem from '../todayTodoItem'
 import type { Todo } from '@/features/todo/types/todo.type'
@@ -71,5 +71,38 @@ describe('TodayTodoItem 컴포넌트', () => {
     expect(screen.getByText('기한 초과 할 일')).toBeInTheDocument()
     expect(screen.getByText('2일 초과')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: '기한 초과 할 일 완료 처리' })).toBeInTheDocument()
+  })
+
+  describe('마감 시각·남은 시간 표시', () => {
+    beforeEach(() => {
+      vi.setSystemTime(new Date(2026, 5, 15, 12, 0))
+    })
+
+    const dueAt = (d: number, h: number, mi = 0, s = 0) =>
+      new Date(2026, 5, d, h, mi, s).toISOString()
+
+    it('오늘 마감이면 남은 시간을 보여 준다', () => {
+      renderWithRouter(<TodayTodoItem todo={makeTodo({ dueAt: dueAt(15, 15) })} onToggleDone={vi.fn()} />)
+      expect(screen.getByText('3시간 남음')).toBeInTheDocument()
+    })
+
+    it('내일 마감이면 D-1에 시각을 붙인다', () => {
+      renderWithRouter(<TodayTodoItem todo={makeTodo({ dueAt: dueAt(16, 14, 30) })} onToggleDone={vi.fn()} />)
+      expect(screen.getByText('D-1 · 14:30')).toBeInTheDocument()
+    })
+
+    it('4일 이상 남으면 24시간제 시각만 보여 준다', () => {
+      renderWithRouter(<TodayTodoItem todo={makeTodo({ dueAt: dueAt(21, 9, 5) })} onToggleDone={vi.fn()} />)
+      expect(screen.getByText('09:05')).toBeInTheDocument()
+    })
+
+    it('화면을 켜 둔 채 마감 시각이 지나면 남음이 지남으로 바뀐다', () => {
+      renderWithRouter(<TodayTodoItem todo={makeTodo({ dueAt: dueAt(15, 12, 0, 30) })} onToggleDone={vi.fn()} />)
+      expect(screen.getByText('1분 남음')).toBeInTheDocument()
+      act(() => {
+        vi.advanceTimersByTime(60_000)
+      })
+      expect(screen.getByText('1분 지남')).toBeInTheDocument()
+    })
   })
 })

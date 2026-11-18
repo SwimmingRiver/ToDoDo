@@ -122,12 +122,14 @@ const Description = styled.span`
 
 const TimeLabel = styled.span`
   flex-shrink: 0;
+  white-space: nowrap;
   font-size: 12px;
   color: ${colors.text.secondary};
 `;
 
 const OverdueBadge = styled.span`
   flex-shrink: 0;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 7px;
@@ -138,6 +140,7 @@ const OverdueBadge = styled.span`
 
 const DueSoonBadge = styled.span`
   flex-shrink: 0;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 7px;

@@ -3,3 +3,4 @@ export { default as useResize } from "./useResize";
 export { default as useMediaQuery } from "./useMediaQuery";
 export { default as useAutoGrowTextArea } from "./useAutoGrowTextArea";
 export { default as useElementWidth } from "./useElementWidth";
+export { default as useMinuteNow } from "./useMinuteNow";
