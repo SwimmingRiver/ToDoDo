@@ -3,6 +3,7 @@ import { handleRequest, type BillingDeps } from "../router";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
 import type { AppleRecord, PaddleRecord } from "@tododo/core/dist/entitlement/index.js";
 import type { Env } from "../env";
+import { deriveAccountToken } from "../accountToken";
 import { asStored } from "./helpers/storedDoc";
 
 vi.mock("@tododo/worker-auth", async (importOriginal) => ({
@@ -22,6 +23,7 @@ const ENV: Env = {
   PADDLE_WEBHOOK_SECRET: "whsec",
   GOOGLE_SERVICE_ACCOUNT: "{}",
   BILLING_UID_SECRET: "uid-secret",
+  IAP_ACCOUNT_TOKEN_SECRET: "iap-secret",
 };
 
 const PADDLE_IDS = { customerId: "ctm_1", subscriptionId: "sub_1" };
@@ -64,6 +66,7 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
     cancelSubscriptionImmediately: vi.fn(async () => undefined),
   },
   accountData: { deleteUserData: vi.fn(async () => undefined) },
+  storeLinks: { get: vi.fn(async () => ({ link: null, updateTime: null })), put: vi.fn(async () => "ok" as const) },
 });
 
 const post = (path: string, body?: unknown) =>
@@ -104,6 +107,17 @@ describe("router", () => {
     }
     expect(deps.paddle.createCheckoutTransaction).not.toHaveBeenCalled();
     expect(deps.claims.setPremiumUntil).not.toHaveBeenCalled();
+  });
+
+  it("POST /iap/account-token requires auth and returns token", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
+    expect((await call(post("/iap/account-token"), makeDeps())).status).toBe(401);
+
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+    const res = await call(post("/iap/account-token"), makeDeps());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { appAccountToken: string };
+    expect(body.appAccountToken).toBe(await deriveAccountToken("u1", "iap-secret"));
   });
 
   it("/checkout은 본문의 uid를 무시하고 토큰 uid로 거래를 만든다", async () => {

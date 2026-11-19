@@ -14,4 +14,6 @@ export interface Env {
   BILLING_UID_SECRET: string;
   /** 결제 전용 서비스 계정 JSON 전체(문자열). Firestore 쓰기 + Auth 커스텀 클레임 설정. */
   GOOGLE_SERVICE_ACCOUNT: string;
+  /** appAccountToken(uid 기반 UUID)을 만드는 HMAC 키. 바꾸면 이미 발급된 토큰과 달라지므로 고정해 둔다. */
+  IAP_ACCOUNT_TOKEN_SECRET: string;
 }

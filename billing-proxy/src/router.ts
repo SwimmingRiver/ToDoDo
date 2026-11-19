@@ -5,22 +5,26 @@ import type { ClaimsClient } from "./claims";
 import type { CommitDeps } from "./commit";
 import type { Env } from "./env";
 import { handleCheckout, handlePortal, handleTrial } from "./handlers/account";
+import { handleAccountToken } from "./handlers/accountToken";
 import { handleDeleteAccount } from "./handlers/deleteAccount";
 import { handleWebhook } from "./handlers/webhook";
 import type { PaddleClient } from "./paddle";
+import type { StoreLinkStore } from "./storeLinks";
 
 export interface BillingDeps extends CommitDeps {
   claims: Pick<ClaimsClient, "setPremiumUntil" | "deleteUser">;
   paddle: Pick<PaddleClient, "createCheckoutTransaction" | "createPortalUrl" | "cancelSubscriptionImmediately">;
   accountData: Pick<AccountDataStore, "deleteUserData">;
+  storeLinks: Pick<StoreLinkStore, "get" | "put">;
 }
 
-type AccountRoute = (uid: string, deps: BillingDeps, now: Date) => Promise<Response>;
+type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env) => Promise<Response>;
 
 const ACCOUNT_ROUTES = new Map<string, AccountRoute>([
   ["/checkout", handleCheckout],
   ["/trial", handleTrial],
   ["/portal", (uid, deps) => handlePortal(uid, deps)],
+  ["/iap/account-token", (uid, _deps, _now, env) => handleAccountToken(uid, env)],
 ]);
 
 const withCors = (response: Response, origin: string | null, env: Env): Response => {
@@ -78,7 +82,7 @@ export const handleRequest = async (
     if (!isBillingAllowed(uid, env.BILLING_ALLOWED_UIDS)) {
       return withCors(json({ error: "NOT_ALLOWED" }, 403), origin, env);
     }
-    return withCors(await route(uid, getDeps(), now), origin, env);
+    return withCors(await route(uid, getDeps(), now, env), origin, env);
   } catch (error) {
     console.error(`처리되지 않은 예외 (${url.pathname}):`, error);
     return withCors(new Response("Internal Server Error", { status: 500 }), origin, env);

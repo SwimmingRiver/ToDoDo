@@ -5,6 +5,7 @@ import type { Env } from "./env";
 import { GoogleTokenProvider, parseServiceAccount } from "./googleAuth";
 import { PaddleClient } from "./paddle";
 import { handleRequest, type BillingDeps } from "./router";
+import { StoreLinkStore } from "./storeLinks";
 
 // 같은 isolate 안에서는 Google 액세스 토큰 캐시를 재사용한다.
 let cached: { env: Env; deps: BillingDeps } | null = null;
@@ -18,6 +19,7 @@ const getDeps = (env: Env): BillingDeps => {
     claims: new ClaimsClient(env.FIREBASE_PROJECT_ID, getToken),
     paddle: new PaddleClient(env.PADDLE_API_BASE, env.PADDLE_API_KEY, env.PADDLE_PRICE_ID, env.BILLING_UID_SECRET),
     accountData: new AccountDataStore(env.FIREBASE_PROJECT_ID, getToken),
+    storeLinks: new StoreLinkStore(env.FIREBASE_PROJECT_ID, getToken),
   };
   cached = { env, deps };
   return deps;
