@@ -11,6 +11,8 @@
 | `POST /account/delete` | Firebase ID 토큰 | 회원 탈퇴(허용 목록과 무관) |
 | `POST /iap/account-token` | Firebase ID 토큰 | 앱이 구매 때 붙일 `appAccountToken` |
 | `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
+| `POST /iap/google/verify` | Firebase ID 토큰 | 본문 `{ purchaseToken, productId }`(`productId`는 `premium_monthly`만) → Play Developer API `subscriptionsv2`로 현재 상태 조회 → 구매 토큰을 계정에 연결(교체 토큰이면 `linkedPurchaseToken`의 연결이 같은 계정이어야 함) → `sources.google` 반영 → 미승인이면 acknowledge → `{ premiumUntil }`. 결제 대기면 승인 없이 `{ premiumUntil, pending: true }`. 실패 `400 INVALID_PURCHASE`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT`, 승인 실패 `500`(반영은 같은 값이라 앱이 재시도하면 승인까지 이어짐) |
+| `POST /webhooks/google` | Pub/Sub 푸시 OIDC 토큰 | Play RTDN. 알림 본문 상태는 믿지 않고 `purchaseToken`으로 매번 다시 조회해 반영(환불 `voidedPurchaseNotification`도 같음). 연결된 계정에만 반영(교체 토큰은 이전 토큰의 계정을 따라가 새로 연결, 둘 다 없으면 200 무시), 승인은 하지 않음(verify 몫). OIDC 불일치 401, 형식 오류·다른 앱·테스트 알림 200, 일시 오류 500(Pub/Sub 재전송) |
 | `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 알림은 신호로만 쓰고 상태는 매번 App Store Server API로 다시 조회한다(알림의 거래는 지난 갱신분일 수 있음). 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송) |
 
 ## 배포 준비 (사용자 작업 — 비밀값은 본인 터미널에서)
@@ -43,6 +45,24 @@
    npx wrangler secret put APPLE_KEY_ID
    npx wrangler secret put APPLE_PRIVATE_KEY < ~/AuthKey_XXXXXXXXXX.p8
    ```
+
+## 인앱결제(Google Play) 설정 (사용자 작업 — 비밀값은 본인 터미널에서)
+
+스펙: `docs/superpowers/specs/2026-11-18-mobile-iap-design.md`. 패키지명은 `wrangler.toml`의 `GOOGLE_PLAY_PACKAGE_NAME`(`com.swimmingriver.tododo`)이다. 상품 `premium_monthly`, 기본 요금제 `monthly`, 체험 offer `free-trial-7d`.
+
+1. **Play 전용 서비스 계정**(결제용 `GOOGLE_SERVICE_ACCOUNT`와 별도 — Firestore·Auth 권한을 주지 않는다): GCP에서 서비스 계정을 만들고 JSON 키를 내려받는다. 그 GCP 프로젝트에서 **Google Play Android Developer API**를 사용 설정한다. Play Console > 사용자 및 권한에서 그 서비스 계정 이메일을 초대하고, 앱 권한으로 **재무 데이터 보기**와 **주문 및 구독 관리**를 준다(구독 조회 `subscriptionsv2.get`·승인 `acknowledge`에 필요). 권한 반영에 시간이 걸릴 수 있어 처음 몇 시간은 `401/403`이 날 수 있다.
+2. **Pub/Sub 토픽**: 같은 GCP 프로젝트에 토픽(예: `play-rtdn`)을 만들고, 토픽 권한에 `google-play-developer-notifications@system.gserviceaccount.com`을 **Pub/Sub 게시자**로 추가한다.
+3. **푸시 구독**: 그 토픽에 구독을 만들고 전송 유형 **푸시**, 엔드포인트 `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/google`(자체 도메인이면 그 주소). **인증 사용**을 켜고 토큰을 서명할 서비스 계정(푸시 전용으로 하나 만든다)과 **audience**(엔드포인트 URL을 그대로 쓰면 된다)를 정한다 — 이 두 값이 아래 `GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL`·`GOOGLE_PUBSUB_AUDIENCE`다. 프로젝트의 Pub/Sub 서비스 에이전트(`service-<프로젝트번호>@gcp-sa-pubsub.iam.gserviceaccount.com`)에 그 서비스 계정에 대한 **서비스 계정 토큰 생성자** 역할이 있어야 한다.
+4. **RTDN 연결**: Play Console > 앱 > 수익 창출 설정 > 실시간 개발자 알림에 토픽 이름(`projects/<프로젝트>/topics/play-rtdn`)을 넣고 **테스트 알림 보내기**로 `testNotification`이 200으로 끝나는지 `wrangler tail`로 확인한다.
+5. **시크릿 등록** (`cd billing-proxy`). audience·이메일은 비밀은 아니지만 계정 고유 값이라 저장소에 두지 않는다:
+   ```bash
+   npx wrangler secret put GOOGLE_PLAY_SERVICE_ACCOUNT < ~/play-service-account.json
+   npx wrangler secret put GOOGLE_PUBSUB_AUDIENCE
+   npx wrangler secret put GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL
+   ```
+   `IAP_ACCOUNT_TOKEN_SECRET`은 Apple과 같은 값을 쓴다(앱이 `obfuscatedAccountId`에 넣는 값도 이 키로 만든다).
+
+승인(acknowledge)은 앱의 `/iap/google/verify`만 한다 — 승인하지 않은 구매는 3일 뒤 Google이 자동 환불하므로, 앱이 verify를 끝내지 못한 구매는 환불된다(검증 실패가 이어지는 구매가 돈만 받고 남지 않게).
 
 ### 릴리스(develop→main) 전제
 

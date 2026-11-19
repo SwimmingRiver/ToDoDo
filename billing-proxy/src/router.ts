@@ -8,8 +8,10 @@ import { handleCheckout, handlePortal, handleTrial } from "./handlers/account";
 import { handleAccountToken } from "./handlers/accountToken";
 import { handleDeleteAccount } from "./handlers/deleteAccount";
 import { handleAppleVerify, handleAppleWebhook } from "./handlers/iapApple";
+import { handleGoogleVerify, handleGoogleWebhook } from "./handlers/iapGoogle";
 import { handleWebhook } from "./handlers/webhook";
 import type { AppleServerApi } from "./apple/serverApi";
+import type { PlayApi } from "./google/playApi";
 import type { PaddleClient } from "./paddle";
 import type { StoreLinkStore } from "./storeLinks";
 
@@ -20,6 +22,8 @@ export interface BillingDeps extends CommitDeps {
   storeLinks: Pick<StoreLinkStore, "get" | "put">;
   apple: Pick<AppleServerApi, "getSubscriptionSnapshot">;
   verifyAppleJws: (jws: string) => Promise<unknown>;
+  play: Pick<PlayApi, "getSubscription" | "acknowledge">;
+  verifyPubSub: (authHeader: string | null) => Promise<boolean>;
 }
 
 type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env, request: Request) => Promise<Response>;
@@ -30,6 +34,7 @@ const ACCOUNT_ROUTES = new Map<string, AccountRoute>([
   ["/portal", (uid, deps) => handlePortal(uid, deps)],
   ["/iap/account-token", (uid, _deps, _now, env) => handleAccountToken(uid, env)],
   ["/iap/apple/verify", handleAppleVerify],
+  ["/iap/google/verify", handleGoogleVerify],
 ]);
 
 const withCors = (response: Response, origin: string | null, env: Env): Response => {
@@ -73,6 +78,10 @@ export const handleRequest = async (
     // Firebase 인증 대신 Apple 서명 체인으로 출처를 확인한다(App Store 서버가 보냄).
     if (url.pathname === "/webhooks/apple" && request.method === "POST") {
       return await handleAppleWebhook(request, env, getDeps(), now);
+    }
+    // Pub/Sub 푸시가 붙이는 OIDC 토큰으로 출처를 확인한다(Play RTDN).
+    if (url.pathname === "/webhooks/google" && request.method === "POST") {
+      return await handleGoogleWebhook(request, env, getDeps(), now);
     }
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), origin, env);
 

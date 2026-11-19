@@ -80,6 +80,11 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   verifyAppleJws: vi.fn(async (_jws: string): Promise<unknown> => {
     throw new AppleJwsError("JWS 형식이 아님");
   }),
+  play: {
+    getSubscription: vi.fn(async (_token: string) => null),
+    acknowledge: vi.fn(async (_productId: string, _token: string) => undefined),
+  },
+  verifyPubSub: vi.fn(async (_authHeader: string | null) => false),
 });
 
 const post = (path: string, body?: unknown) =>
@@ -266,6 +271,44 @@ describe("router", () => {
     expect(res.status).toBe(401);
     expect(verifyFirebaseIdToken).not.toHaveBeenCalled();
     expect(deps.verifyAppleJws).toHaveBeenCalledWith("a.b.c");
+  });
+
+  it("not allowed uid → 403 on /iap/google/verify", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    const deps = makeDeps();
+    const res = await call(post("/iap/google/verify", { purchaseToken: "t", productId: "premium_monthly" }), deps);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "NOT_ALLOWED" });
+    expect(deps.play.getSubscription).not.toHaveBeenCalled();
+  });
+
+  it("POST /iap/google/verify는 인증을 요구하고 본문을 핸들러로 넘긴다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValueOnce(new Error("bad"));
+    const body = { purchaseToken: "t", productId: "premium_monthly" };
+    expect((await call(post("/iap/google/verify", body), makeDeps())).status).toBe(401);
+
+    const deps = makeDeps();
+    const res = await call(post("/iap/google/verify", body), deps);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "INVALID_PURCHASE" });
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://tododo-83576.web.app");
+    expect(deps.play.getSubscription).toHaveBeenCalledWith("t");
+  });
+
+  it("POST /webhooks/google은 Firebase 인증·허용 목록 없이 Pub/Sub OIDC 검증으로 간다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
+    const deps = makeDeps();
+    const res = await call(
+      new Request("https://billing.example/webhooks/google", {
+        method: "POST",
+        headers: { Authorization: "Bearer oidc" },
+        body: JSON.stringify({ message: { data: "", messageId: "m" } }),
+      }),
+      deps,
+    );
+    expect(res.status).toBe(401);
+    expect(verifyFirebaseIdToken).not.toHaveBeenCalled();
+    expect(deps.verifyPubSub).toHaveBeenCalledWith("Bearer oidc");
   });
 
   it("모르는 경로는 404", async () => {
