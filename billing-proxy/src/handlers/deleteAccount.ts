@@ -1,6 +1,5 @@
 import type { AccountDataStore } from "../accountDataStore";
 import type { ClaimsClient } from "../claims";
-import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import type { EntitlementStore } from "../entitlementStore";
 import type { PlayApi } from "../google/playApi";
 import type { PaddleClient } from "../paddle";
@@ -36,10 +35,12 @@ export const handleDeleteAccount = async (uid: string, deps: AccountDeletionDeps
       return json({ error: "PADDLE_CANCEL_FAILED" }, 502);
     }
   }
-  // Google은 자동 갱신 중일 때만 부른다 — 그 밖이면 Play를 건드리지 않아 Play 시크릿이 없어도 탈퇴가 된다.
-  // 화면의 "함께 해지돼요" 안내와 같은 기준(isAutoRenewingStore)이다.
+  // Google은 기록이 있고 해지 완료(canceled)가 아니면 부른다. 저장된 autoRenew를 믿지 않는 이유: "자동 갱신 다시 켬"
+  // 알림이 유실됐으면 문서는 꺼짐인데 Play는 계속 청구한다. 이미 꺼졌거나 만료면 already_inactive로 흡수된다.
+  // 기록이 없거나 canceled면 Play를 건드리지 않아 Play 시크릿이 없어도 탈퇴가 된다.
+  // 화면 안내("함께 해지돼요")는 여전히 isAutoRenewingStore 기준이다 — 안내와 호출 기준이 일부러 다르다.
   const google = doc.sources.google;
-  if (google && isAutoRenewingStore(doc, "google")) {
+  if (google && google.status !== "canceled") {
     try {
       await deps.google.cancelSubscription(google.purchaseToken);
     } catch (error) {

@@ -158,11 +158,20 @@ describe("handleDeleteAccount", () => {
     expect(deps.calls).toEqual(["google", "data", "auth"]);
   });
 
-  it.each([
-    ["autoRenew false", { ...GOOGLE, autoRenew: false, cancelAt: "2026-12-01T00:00:00.000Z" }],
-    ["status canceled", { ...GOOGLE, status: "canceled" as const }],
-  ])("deleteAccount: google %s → no cancel call", async (_label, google) => {
-    const deps = makeDeps(googleDoc(google));
+  it("deleteAccount: google autoRenew false but status active → still cancels (lost re-enable RTDN), already_inactive continues", async () => {
+    // 저장된 autoRenew=false를 믿지 않는다 — "자동 갱신 다시 켬" 알림이 유실됐으면 Play는 계속 청구한다.
+    const deps = makeDeps(googleDoc({ ...GOOGLE, autoRenew: false, cancelAt: "2026-12-01T00:00:00.000Z" }));
+    deps.google.cancelSubscription.mockImplementationOnce(async () => {
+      deps.calls.push("google");
+      return "already_inactive";
+    });
+    expect((await handleDeleteAccount("u1", deps)).status).toBe(204);
+    expect(deps.google.cancelSubscription).toHaveBeenCalledWith("gpa-token");
+    expect(deps.calls).toEqual(["google", "data", "auth"]);
+  });
+
+  it("deleteAccount: google status canceled → no cancel call", async () => {
+    const deps = makeDeps(googleDoc({ ...GOOGLE, status: "canceled" }));
     expect((await handleDeleteAccount("u1", deps)).status).toBe(204);
     expect(deps.google.cancelSubscription).not.toHaveBeenCalled();
     expect(deps.calls).toEqual(["data", "auth"]);
