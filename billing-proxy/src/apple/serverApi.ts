@@ -4,6 +4,8 @@
  */
 import type { AppleRenewalInfo, AppleSnapshot, AppleTransaction } from "./decide";
 
+export type StoreEnvironment = AppleTransaction["environment"];
+
 const PROD_BASE = "https://api.storekit.itunes.apple.com";
 const SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com";
 /** Apple은 토큰 수명 60분 이하만 받는다. 만료 직전 경계를 피하려 발급은 50분 단위로 갱신하고 exp는 55분으로 둔다. */
@@ -116,6 +118,20 @@ export class AppleServerApi {
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`App Store Server API 오류: ${res.status}`);
     return res.json();
+  }
+
+  /**
+   * 환불 요청(CONSUMPTION_REQUEST)에 이용 정보·환불 선호를 회신한다. 알림이 온 환경으로만 보낸다(폴백 없음).
+   * 2xx가 아니면 던진다 — 호출부가 로그만 남기고 알림은 200으로 받는다.
+   */
+  async sendConsumptionInfo(transactionId: string, environment: StoreEnvironment, body: unknown): Promise<void> {
+    const base = environment === "Sandbox" ? SANDBOX_BASE : PROD_BASE;
+    const res = await this.fetchFn(`${base}/inApps/v2/transactions/consumption/${encodeURIComponent(transactionId)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${await this.token()}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`App Store Server API 환불 회신 오류: ${res.status}`);
   }
 
   async getSubscriptionSnapshot(transactionId: string): Promise<AppleSnapshot | null> {

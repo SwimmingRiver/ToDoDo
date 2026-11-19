@@ -1,8 +1,9 @@
 import { deriveAccountToken } from "../accountToken";
 import type { AppleSnapshot, AppleTransaction } from "../apple/decide";
 import { applyAppleSnapshot } from "../apple/decide";
+import { buildConsumptionBody, decideRefundPreference } from "../apple/consumption";
 import { AppleJwsError } from "../apple/jws";
-import { parseTransaction, type AppleServerApi } from "../apple/serverApi";
+import { parseTransaction, type AppleServerApi, type StoreEnvironment } from "../apple/serverApi";
 import { UserNotFoundError } from "../claims";
 import { commitEntitlement, type CommitDeps } from "../commit";
 import type { Env } from "../env";
@@ -10,7 +11,7 @@ import { decideLink, type StoreLinkStore } from "../storeLinks";
 
 export interface AppleIapDeps extends CommitDeps {
   storeLinks: Pick<StoreLinkStore, "get" | "put">;
-  apple: Pick<AppleServerApi, "getSubscriptionSnapshot">;
+  apple: Pick<AppleServerApi, "getSubscriptionSnapshot" | "sendConsumptionInfo">;
   /** Apple 루트로 서명 체인을 검증하고 페이로드를 돌려준다. 실패는 AppleJwsError. */
   verifyAppleJws: (jws: string) => Promise<unknown>;
 }
@@ -124,6 +125,7 @@ interface AppleNotification {
   signedDate: number;
   data?: {
     bundleId?: unknown;
+    environment?: unknown;
     signedTransactionInfo?: unknown;
   };
 }
@@ -138,6 +140,39 @@ const parseNotification = (value: unknown): AppleNotification | null => {
 };
 
 /**
+ * 환불 요청 접수(CONSUMPTION_REQUEST)에 환불 선호를 회신한다(스펙 4절·11절). 권한은 바꾸지 않는다 —
+ * 실제로 환불되면 뒤이어 오는 REFUND 알림이 회수한다. 선호는 이 거래의 결제일(갱신이면 갱신일)만으로 정하므로
+ * 계정 연결 여부와 무관하다(탈퇴한 계정의 환불 요청도 같은 기준).
+ * 회신은 참고 정보라 실패해도 던지지 않는다 — 500으로 재전송을 받아도 상태가 바뀔 일이 없고 재시도만 쌓인다.
+ */
+const replyConsumption = async (
+  env: Pick<Env, "APPLE_CONSUMPTION_REPLY_ENABLED">,
+  deps: AppleIapDeps,
+  notification: AppleNotification,
+  tx: AppleTransaction,
+  now: Date,
+): Promise<void> => {
+  const environment = notification.data?.environment;
+  if (environment !== "Production" && environment !== "Sandbox") {
+    console.error("Apple 환불 요청 알림 environment 형식 오류 — 회신 안 함:", notification.notificationUUID);
+    return;
+  }
+  const pref = decideRefundPreference(tx.purchaseDate, now.getTime());
+  // Apple은 고객 동의(customerConsented=true) 없이는 회신하지 말라고 한다. 개인정보처리방침에
+  // "환불 요청 시 Apple에 이용 정보 제공"을 고지하기 전까지는 보내지 않고 기록만 남긴다.
+  if (env.APPLE_CONSUMPTION_REPLY_ENABLED !== "true") {
+    console.log("Apple 환불 회신 비활성(동의 고지 전) — 회신 생략:", tx.transactionId, pref);
+    return;
+  }
+  try {
+    await deps.apple.sendConsumptionInfo(tx.transactionId, environment satisfies StoreEnvironment, buildConsumptionBody(pref));
+    console.log("Apple 환불 회신 완료:", tx.transactionId, pref);
+  } catch (error) {
+    console.error("Apple 환불 회신 실패(알림은 200으로 받음):", tx.transactionId, notification.notificationUUID, error);
+  }
+};
+
+/**
  * App Store Server Notifications v2. 200은 "다시 보내지 마"다 — 서명은 맞지만 우리가 처리할 수 없는 것
  * (연결 없음, 다른 앱, 형식 오류, 탈퇴한 사용자)은 로그만 남기고 200, 서명 불일치는 401,
  * 일시 오류(Firestore·Auth·App Store Server API)는 던져 500으로 Apple 재전송을 받는다.
@@ -149,7 +184,7 @@ const parseNotification = (value: unknown): AppleNotification | null => {
  */
 export const handleAppleWebhook = async (
   request: Request,
-  env: Pick<Env, "APPLE_BUNDLE_ID">,
+  env: Pick<Env, "APPLE_BUNDLE_ID" | "APPLE_CONSUMPTION_REPLY_ENABLED">,
   deps: AppleIapDeps,
   now: Date,
 ): Promise<Response> => {
@@ -165,7 +200,7 @@ export const handleAppleWebhook = async (
       return ok();
     }
     const data = notification.data;
-    // TEST·CONSUMPTION_REQUEST 등 구독 거래가 없는 알림은 반영할 것이 없다.
+    // TEST 등 구독 거래가 없는 알림은 반영할 것이 없다.
     if (!data || typeof data.signedTransactionInfo !== "string") return ok();
     if (data.bundleId !== env.APPLE_BUNDLE_ID) {
       console.error("Apple 알림 bundleId가 이 앱이 아님 — 무시:", data.bundleId, notification.notificationUUID);
@@ -185,6 +220,11 @@ export const handleAppleWebhook = async (
 
   if (tx.bundleId !== env.APPLE_BUNDLE_ID) {
     console.error("Apple 알림 거래 bundleId가 이 앱이 아님 — 무시:", tx.bundleId, notification.notificationUUID);
+    return ok();
+  }
+
+  if (notification.notificationType === "CONSUMPTION_REQUEST") {
+    await replyConsumption(env, deps, notification, tx, now);
     return ok();
   }
 

@@ -14,6 +14,7 @@ import { makeAppleTestChain, signTestJws, NOW, type TestChain } from "./helpers/
 
 const BUNDLE = "com.swimmingriver.tododo";
 const ENV = { APPLE_BUNDLE_ID: BUNDLE, IAP_ACCOUNT_TOKEN_SECRET: "iap-secret" };
+const REPLY_ENV = { ...ENV, APPLE_CONSUMPTION_REPLY_ENABLED: "true" };
 const ROUTER_ENV = { ...ENV, APPLE_BUNDLE_ID: BUNDLE, FIREBASE_PROJECT_ID: "p", CLIENT_APP_URL: "https://x" } as unknown as Env;
 const DAY = 24 * 60 * 60 * 1000;
 const EXPIRES = NOW.getTime() + 30 * DAY;
@@ -67,7 +68,10 @@ const deps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT, link: StoreLink | nu
       })),
       put: vi.fn(async (_store: "apple" | "google", _id: string, _link: StoreLink, _updateTime: string | null) => "ok" as "ok" | "conflict"),
     },
-    apple: { getSubscriptionSnapshot: vi.fn(async (_id: string): Promise<AppleSnapshot | null> => snapshot()) },
+    apple: {
+      getSubscriptionSnapshot: vi.fn(async (_id: string): Promise<AppleSnapshot | null> => snapshot()),
+      sendConsumptionInfo: vi.fn(async (_id: string, _env: "Production" | "Sandbox", _body: unknown): Promise<void> => undefined),
+    },
     verifyAppleJws: (jws: string) => verifyAppleJws<unknown>(jws, { trustedRootsDer: [chain.rootDer], now: NOW }),
   };
   return d satisfies AppleIapDeps;
@@ -466,14 +470,111 @@ describe("handleAppleWebhook", () => {
     expect(d.claims.setPremiumUntil).not.toHaveBeenCalled();
   });
 
-  it("거래 정보가 없는 알림(예: CONSUMPTION_REQUEST 형식)도 200 no write", async () => {
+  it("거래 정보가 없는 알림은 200 no write(CONSUMPTION_REQUEST여도 회신하지 않음)", async () => {
     const d = deps(EMPTY_ENTITLEMENT, linkU1);
     const payload = await notification(
       { notificationType: "CONSUMPTION_REQUEST" },
       { signedTransactionInfo: undefined, signedRenewalInfo: undefined },
     );
-    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), REPLY_ENV, d, NOW)).status).toBe(200);
     expect(d.store.write).not.toHaveBeenCalled();
+    expect(d.apple.sendConsumptionInfo).not.toHaveBeenCalled();
+  });
+
+  describe("CONSUMPTION_REQUEST", () => {
+    const consumption = (tx: AppleTransaction = transaction(), data: Record<string, unknown> = {}) =>
+      notification({ notificationType: "CONSUMPTION_REQUEST", notificationUUID: "uuid-c" }, data, tx);
+
+    it("webhook CONSUMPTION_REQUEST → sendConsumptionInfo called with transactionId from signedTransactionInfo and notification environment", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      const payload = await consumption(transaction({ transactionId: "tx_9", purchaseDate: NOW.getTime() - DAY }), {
+        environment: "Sandbox",
+      });
+      expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), REPLY_ENV, d, NOW)).status).toBe(200);
+      expect(d.apple.sendConsumptionInfo).toHaveBeenCalledTimes(1);
+      const [id, env, body] = d.apple.sendConsumptionInfo.mock.calls[0];
+      expect(id).toBe("tx_9");
+      expect(env).toBe("Sandbox");
+      expect(body).toMatchObject({ customerConsented: true, refundPreference: "GRANT_FULL" });
+    });
+
+    it("구매 14일 초과면 거절 희망(DECLINE)으로 회신", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      const payload = await consumption(transaction({ purchaseDate: NOW.getTime() - 14 * DAY - 1 }));
+      await handleAppleWebhook(webhookRequest({ signedPayload: payload }), REPLY_ENV, d, NOW);
+      const [, env, body] = d.apple.sendConsumptionInfo.mock.calls[0];
+      expect(env).toBe("Production");
+      expect(body).toMatchObject({ refundPreference: "DECLINE" });
+    });
+
+    it("webhook CONSUMPTION_REQUEST → entitlement not written", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      await handleAppleWebhook(webhookRequest({ signedPayload: await consumption() }), REPLY_ENV, d, NOW);
+      expect(d.store.write).not.toHaveBeenCalled();
+      expect(d.claims.setPremiumUntil).not.toHaveBeenCalled();
+      expect(d.storeLinks.put).not.toHaveBeenCalled();
+      expect(d.apple.getSubscriptionSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("webhook CONSUMPTION_REQUEST, sendConsumptionInfo throws → still 200 with error log", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      d.apple.sendConsumptionInfo.mockRejectedValue(new Error("App Store Server API 오류: 500"));
+      const res = await handleAppleWebhook(webhookRequest({ signedPayload: await consumption() }), REPLY_ENV, d, NOW);
+      expect(res.status).toBe(200);
+      expect(console.error).toHaveBeenCalled();
+      expect(d.store.write).not.toHaveBeenCalled();
+    });
+
+    it("webhook CONSUMPTION_REQUEST for unlinked transaction → still replies", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, null);
+      const res = await handleAppleWebhook(webhookRequest({ signedPayload: await consumption() }), REPLY_ENV, d, NOW);
+      expect(res.status).toBe(200);
+      expect(d.apple.sendConsumptionInfo).toHaveBeenCalledTimes(1);
+    });
+
+    it("회신 플래그가 꺼져 있으면(동의 고지 전) 호출하지 않고 로그만 남긴다", async () => {
+      for (const env of [ENV, { ...ENV, APPLE_CONSUMPTION_REPLY_ENABLED: "false" }]) {
+        const d = deps(EMPTY_ENTITLEMENT, linkU1);
+        const res = await handleAppleWebhook(webhookRequest({ signedPayload: await consumption() }), env, d, NOW);
+        expect(res.status).toBe(200);
+        expect(d.apple.sendConsumptionInfo).not.toHaveBeenCalled();
+        expect(d.store.write).not.toHaveBeenCalled();
+      }
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining("환불 회신 비활성(동의 고지 전)"), expect.anything(), expect.anything());
+    });
+
+    it("bundleId가 다르면 회신하지 않는다", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      const payload = await consumption(transaction({ bundleId: "com.other.app" }));
+      expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), REPLY_ENV, d, NOW)).status).toBe(200);
+      expect(d.apple.sendConsumptionInfo).not.toHaveBeenCalled();
+    });
+
+    it("알림 environment가 형식 밖이면 회신하지 않고 200", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      const payload = await consumption(transaction(), { environment: "Xcode" });
+      expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), REPLY_ENV, d, NOW)).status).toBe(200);
+      expect(d.apple.sendConsumptionInfo).not.toHaveBeenCalled();
+      expect(console.error).toHaveBeenCalled();
+    });
+
+    it("REFUND after CONSUMPTION_REQUEST still revokes sources.apple", async () => {
+      const d = deps(EMPTY_ENTITLEMENT, linkU1);
+      await handleAppleWebhook(webhookRequest({ signedPayload: await consumption() }), REPLY_ENV, d, NOW);
+      expect(d.store.write).not.toHaveBeenCalled();
+      d.apple.getSubscriptionSnapshot.mockResolvedValue(
+        snapshot({ status: 5, transaction: transaction({ revocationDate: NOW.getTime() - 1000 }) }),
+      );
+      const refund = await notification(
+        { notificationType: "REFUND", notificationUUID: "uuid-r" },
+        {},
+        transaction({ revocationDate: NOW.getTime() - 1000 }),
+      );
+      expect((await handleAppleWebhook(webhookRequest({ signedPayload: refund }), REPLY_ENV, d, NOW)).status).toBe(200);
+      const apple = d.store.write.mock.calls[0][1].sources.apple;
+      expect(apple?.status).toBe("canceled");
+      expect(apple?.premiumUntil).toBe(NOW.toISOString());
+    });
   });
 
   it("bad signature → 401", async () => {

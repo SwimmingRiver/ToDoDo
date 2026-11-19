@@ -20,7 +20,7 @@ export interface BillingDeps extends CommitDeps {
   paddle: Pick<PaddleClient, "createCheckoutTransaction" | "createPortalUrl" | "cancelSubscriptionImmediately">;
   accountData: Pick<AccountDataStore, "deleteUserData">;
   storeLinks: Pick<StoreLinkStore, "get" | "put">;
-  apple: Pick<AppleServerApi, "getSubscriptionSnapshot">;
+  apple: Pick<AppleServerApi, "getSubscriptionSnapshot" | "sendConsumptionInfo">;
   verifyAppleJws: (jws: string) => Promise<unknown>;
   play: Pick<PlayApi, "getSubscription" | "acknowledge">;
   /** 탈퇴 시 Google 구독 해지. play와 같은 인스턴스다 — Play 토큰은 처음 호출할 때 만들어진다. */

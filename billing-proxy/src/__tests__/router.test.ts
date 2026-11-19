@@ -76,7 +76,7 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   },
   accountData: { deleteUserData: vi.fn(async () => undefined) },
   storeLinks: { get: vi.fn(async () => ({ link: null, updateTime: null })), put: vi.fn(async () => "ok" as const) },
-  apple: { getSubscriptionSnapshot: vi.fn(async () => null) },
+  apple: { getSubscriptionSnapshot: vi.fn(async () => null), sendConsumptionInfo: vi.fn(async () => undefined) },
   verifyAppleJws: vi.fn(async (_jws: string): Promise<unknown> => {
     throw new AppleJwsError("JWS 형식이 아님");
   }),

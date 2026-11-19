@@ -22,6 +22,11 @@ export interface Env {
   APPLE_ISSUER_ID: string;
   APPLE_KEY_ID: string;
   APPLE_PRIVATE_KEY: string;
+  /**
+   * "true"일 때만 CONSUMPTION_REQUEST(환불 요청)에 이용 정보·환불 선호를 회신한다. Apple은 고객 동의 없이는
+   * 회신하지 말라고 하므로, 개인정보처리방침에 고지하기 전까지는 "false"로 두고 로그만 남긴다.
+   */
+  APPLE_CONSUMPTION_REPLY_ENABLED?: string;
   /** Play Developer API용. 패키지명과, 기존 계정과 분리한 Play 전용 서비스 계정 JSON 전체. */
   GOOGLE_PLAY_PACKAGE_NAME: string;
   GOOGLE_PLAY_SERVICE_ACCOUNT: string;

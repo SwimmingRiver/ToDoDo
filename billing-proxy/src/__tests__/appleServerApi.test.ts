@@ -144,4 +144,28 @@ describe("AppleServerApi", () => {
     const { api } = await setup([ok(body([e]))]);
     expect((await api.getSubscriptionSnapshot("101"))?.renewal).toBeNull();
   });
+
+  it("sendConsumptionInfo PUTs to production or sandbox base by environment with bearer JWT", async () => {
+    const accepted = () => new Response(null, { status: 202 });
+    const { api, fetchFn } = await setup([accepted(), accepted()]);
+    const payload = { customerConsented: true, deliveryStatus: "DELIVERED", sampleContentProvided: true, refundPreference: "DECLINE" };
+    await api.sendConsumptionInfo("101", "Production", payload);
+    await api.sendConsumptionInfo("102", "Sandbox", payload);
+    const [prodUrl, prodInit] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const [sandboxUrl, sandboxInit] = fetchFn.mock.calls[1] as unknown as [string, RequestInit];
+    expect(prodUrl).toBe("https://api.storekit.itunes.apple.com/inApps/v2/transactions/consumption/101");
+    expect(sandboxUrl).toBe("https://api.storekit-sandbox.itunes.apple.com/inApps/v2/transactions/consumption/102");
+    for (const init of [prodInit, sandboxInit]) {
+      expect(init.method).toBe("PUT");
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toMatch(/^Bearer [\w-]+\.[\w-]+\.[\w-]+$/);
+      expect(headers["Content-Type"]).toBe("application/json");
+      expect(JSON.parse(init.body as string)).toEqual(payload);
+    }
+  });
+
+  it("sendConsumptionInfo throws on non-2xx", async () => {
+    const { api } = await setup([new Response("{}", { status: 400 })]);
+    await expect(api.sendConsumptionInfo("101", "Production", {})).rejects.toThrow("400");
+  });
 });

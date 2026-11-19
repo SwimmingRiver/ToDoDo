@@ -58,7 +58,11 @@ export const buildDeps = (env: Env): BillingDeps => {
     paddle: new PaddleClient(env.PADDLE_API_BASE, env.PADDLE_API_KEY, env.PADDLE_PRICE_ID, env.BILLING_UID_SECRET),
     accountData: new AccountDataStore(env.FIREBASE_PROJECT_ID, getToken),
     storeLinks: new StoreLinkStore(env.FIREBASE_PROJECT_ID, getToken),
-    apple: { getSubscriptionSnapshot: async (transactionId) => getApple().getSubscriptionSnapshot(transactionId) },
+    apple: {
+      getSubscriptionSnapshot: async (transactionId) => getApple().getSubscriptionSnapshot(transactionId),
+      sendConsumptionInfo: async (transactionId, environment, body) =>
+        getApple().sendConsumptionInfo(transactionId, environment, body),
+    },
     verifyAppleJws: verify,
     play,
     google: play,
