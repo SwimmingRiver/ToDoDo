@@ -39,10 +39,13 @@ describe("parseWebhook", () => {
     });
   });
 
-  it("paddleEvent parses started_at — 없으면 null, 해석 불가면 invalid", () => {
+  it("paddleEvent parses started_at — 없거나 해석 불가면 null(이벤트는 반영)", () => {
     const missing = parseWebhook(payload({}, { started_at: null }));
     expect(missing.kind === "subscription" && missing.event.startedAt).toBeNull();
-    expect(parseWebhook(payload({}, { started_at: "not-a-date" })).kind).toBe("invalid");
+    // started_at은 이중 구독 판정용 부가 정보다 — 이 값 하나 때문에 권한 이벤트 전체를 버리지 않는다.
+    const garbled = parseWebhook(payload({}, { started_at: "not-a-date" }));
+    expect(garbled.kind).toBe("subscription");
+    expect(garbled.kind === "subscription" && garbled.event.startedAt).toBeNull();
   });
 
   it("items의 가격 id를 모두 모으고, items가 없거나 형식이 다르면 빈 목록", () => {
