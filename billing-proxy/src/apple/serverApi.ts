@@ -55,7 +55,7 @@ export const parseTransaction = (value: unknown): AppleTransaction => {
   return value as unknown as AppleTransaction;
 };
 
-export const parseRenewal = (value: unknown): AppleRenewalInfo => {
+const parseRenewal = (value: unknown): AppleRenewalInfo => {
   if (!isRecord(value)) throw new Error("Apple 갱신 정보 페이로드 형식 오류");
   if (value.autoRenewStatus !== 0 && value.autoRenewStatus !== 1) {
     throw new Error("Apple 갱신 정보 페이로드 형식 오류: autoRenewStatus");

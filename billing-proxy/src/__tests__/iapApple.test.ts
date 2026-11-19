@@ -8,10 +8,13 @@ import { UserNotFoundError } from "../claims";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
 import type { StoreLink } from "../storeLinks";
 import { asStored } from "./helpers/storedDoc";
+import { handleRequest, type BillingDeps } from "../router";
+import type { Env } from "../env";
 import { makeAppleTestChain, signTestJws, NOW, type TestChain } from "./helpers/appleTestChain";
 
 const BUNDLE = "com.swimmingriver.tododo";
 const ENV = { APPLE_BUNDLE_ID: BUNDLE, IAP_ACCOUNT_TOKEN_SECRET: "iap-secret" };
+const ROUTER_ENV = { ...ENV, APPLE_BUNDLE_ID: BUNDLE, FIREBASE_PROJECT_ID: "p", CLIENT_APP_URL: "https://x" } as unknown as Env;
 const DAY = 24 * 60 * 60 * 1000;
 const EXPIRES = NOW.getTime() + 30 * DAY;
 
@@ -200,6 +203,15 @@ describe("handleAppleVerify", () => {
     expect(d.store.write).not.toHaveBeenCalled();
   });
 
+  it("조회한 구독의 원거래 id가 요청 거래와 다르면 400 INVALID_TRANSACTION", async () => {
+    const d = deps();
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ transaction: transaction({ originalTransactionId: "otx_9" }) }));
+    const res = await handleAppleVerify("u1", d, NOW, ENV, verifyRequest({ jws: await signTestJws(transaction(), chain) }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "INVALID_TRANSACTION" });
+    expect(d.store.write).not.toHaveBeenCalled();
+  });
+
   it("linked to other uid → 409, nothing written", async () => {
     const d = deps(EMPTY_ENTITLEMENT, { ...linkU1, uid: "u2" });
     const res = await handleAppleVerify("u1", d, NOW, ENV, verifyRequest({ jws: await signTestJws(transaction(), chain) }));
@@ -332,19 +344,108 @@ describe("handleAppleWebhook", () => {
     expect(apple?.lastSignedDate).toBe(new Date(NOW.getTime() - 1000).toISOString());
     expect(apple?.premiumUntil).toBe(new Date(EXPIRES + 3 * DAY).toISOString());
     expect(apple?.environment).toBe("Production");
-    // 웹훅은 알림에 담긴 서명된 상태를 쓴다(API 호출 없음).
-    expect(d.apple.getSubscriptionSnapshot).not.toHaveBeenCalled();
+    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1");
+  });
+
+  it("webhook uses API snapshot and keeps notificationUUID/signedDate", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    // 알림 거래는 만료가 짧지만 API의 현재 상태는 더 긴 기간이다 — 상태는 API를 따른다.
+    const later = EXPIRES + 30 * DAY;
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(
+      snapshot({ transaction: transaction({ transactionId: "tx_3", expiresDate: later }), notificationUUID: null, signedDate: null }),
+    );
+    const payload = await notification({ notificationUUID: "uuid-api", signedDate: NOW.getTime() - 5000 });
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    const apple = d.store.write.mock.calls[0][1].sources.apple;
+    expect(apple?.premiumUntil).toBe(new Date(later + 3 * DAY).toISOString());
+    expect(apple?.lastNotificationUUID).toBe("uuid-api");
+    expect(apple?.lastSignedDate).toBe(new Date(NOW.getTime() - 5000).toISOString());
+  });
+
+  it("REFUND of an older renewal while current period paid keeps premium", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    const oldTx = transaction({ transactionId: "tx_1", expiresDate: NOW.getTime() - 5 * DAY, revocationDate: NOW.getTime() - DAY });
+    const payload = await notification({ notificationType: "REFUND" }, {}, oldTx);
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    const apple = d.store.write.mock.calls[0][1].sources.apple;
+    expect(apple?.status).toBe("active");
+    expect(apple?.premiumUntil).toBe(new Date(EXPIRES + 3 * DAY).toISOString());
+  });
+
+  it("REFUND of the current transaction revokes", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(
+      snapshot({ status: 5, transaction: transaction({ revocationDate: NOW.getTime() - 1000 }) }),
+    );
+    const payload = await notification({ notificationType: "REFUND" }, {}, transaction({ revocationDate: NOW.getTime() - 1000 }));
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    const apple = d.store.write.mock.calls[0][1].sources.apple;
+    expect(apple?.status).toBe("canceled");
+    expect(apple?.premiumUntil).toBe(NOW.toISOString());
+  });
+
+  it("REFUND_DECLINED on old tx does not shorten premium", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    const oldTx = transaction({ transactionId: "tx_1", expiresDate: NOW.getTime() - 5 * DAY });
+    const payload = await notification({ notificationType: "REFUND_DECLINED" }, {}, oldTx);
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    expect(d.store.write.mock.calls[0][1].sources.apple?.premiumUntil).toBe(new Date(EXPIRES + 3 * DAY).toISOString());
+  });
+
+  it("snapshot null → 200 no write", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(null);
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: await notification() }), ENV, d, NOW)).status).toBe(200);
+    expect(d.claims.setPremiumUntil).not.toHaveBeenCalled();
+    expect(d.store.write).not.toHaveBeenCalled();
+  });
+
+  it("조회한 구독의 원거래 id가 다르면 200 no write", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ transaction: transaction({ originalTransactionId: "otx_9" }) }));
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: await notification() }), ENV, d, NOW)).status).toBe(200);
+    expect(d.store.write).not.toHaveBeenCalled();
+  });
+
+  it("API error → 500", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    d.apple.getSubscriptionSnapshot.mockRejectedValue(new Error("App Store Server API 오류: 503"));
+    const req = webhookRequest({ signedPayload: await notification() });
+    await expect(handleAppleWebhook(req.clone(), ENV, d, NOW)).rejects.toThrow("503");
+    const res = await handleRequest(req, ROUTER_ENV, () => d as unknown as BillingDeps, NOW);
+    expect(res.status).toBe(500);
+    expect(d.store.write).not.toHaveBeenCalled();
+  });
+
+  it("거래 bundleId만 다르면(data.bundleId는 일치) 200 no write", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    const payload = await notification({}, {}, transaction({ bundleId: "com.other.app" }));
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    expect(d.storeLinks.get).not.toHaveBeenCalled();
+    expect(d.store.write).not.toHaveBeenCalled();
+  });
+
+  it("거래의 appAccountToken이 다른 계정 것이어도 연결된 uid에 반영한다", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, { ...linkU1, uid: "u-linked" });
+    const foreign = await deriveAccountToken("u-someone-else", ENV.IAP_ACCOUNT_TOKEN_SECRET);
+    const payload = await notification({}, {}, transaction({ appAccountToken: foreign }));
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
+    expect(d.store.get).toHaveBeenCalledWith("u-linked");
+    expect(d.store.write.mock.calls[0][0]).toBe("u-linked");
+    expect(d.claims.setPremiumUntil.mock.calls[0][0]).toBe("u-linked");
   });
 
   it("Sandbox 알림도 반영하고 환경을 기록한다", async () => {
     const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ transaction: transaction({ environment: "Sandbox" }) }));
     const payload = await notification({}, { environment: "Sandbox" }, transaction({ environment: "Sandbox" }));
     expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
     expect(d.store.write.mock.calls[0][1].sources.apple?.environment).toBe("Sandbox");
   });
 
-  it("갱신 정보가 자동 갱신 끔이면 만료 시각 그대로(유예 없음)", async () => {
+  it("조회한 갱신 정보가 자동 갱신 끔이면 만료 시각 그대로(유예 없음)", async () => {
     const d = deps(EMPTY_ENTITLEMENT, linkU1);
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ renewal: { autoRenewStatus: 0 } }));
     const payload = await notification(
       { notificationType: "DID_CHANGE_RENEWAL_STATUS", subtype: "AUTO_RENEW_DISABLED" },
       { signedRenewalInfo: await signTestJws({ autoRenewStatus: 0 }, chain) },
@@ -432,8 +533,8 @@ describe("handleAppleWebhook", () => {
     const d = deps(EMPTY_ENTITLEMENT, linkU1);
     const payload = await notification({ notificationUUID: 5 });
     expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
-    const badStatus = await notification({}, { status: 9 });
-    expect((await handleAppleWebhook(webhookRequest({ signedPayload: badStatus }), ENV, d, NOW)).status).toBe(200);
+    const badTx = await notification({}, { signedTransactionInfo: await signTestJws({ originalTransactionId: "otx_1" }, chain) });
+    expect((await handleAppleWebhook(webhookRequest({ signedPayload: badTx }), ENV, d, NOW)).status).toBe(200);
     expect(console.error).toHaveBeenCalledTimes(2);
     expect(d.store.write).not.toHaveBeenCalled();
   });

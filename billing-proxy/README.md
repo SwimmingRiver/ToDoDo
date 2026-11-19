@@ -11,7 +11,7 @@
 | `POST /account/delete` | Firebase ID 토큰 | 회원 탈퇴(허용 목록과 무관) |
 | `POST /iap/account-token` | Firebase ID 토큰 | 앱이 구매 때 붙일 `appAccountToken` |
 | `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
-| `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송) |
+| `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 알림은 신호로만 쓰고 상태는 매번 App Store Server API로 다시 조회한다(알림의 거래는 지난 갱신분일 수 있음). 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송) |
 
 ## 배포 준비 (사용자 작업 — 비밀값은 본인 터미널에서)
 

@@ -1,8 +1,8 @@
 import { deriveAccountToken } from "../accountToken";
-import type { AppleRenewalInfo, AppleSnapshot, AppleTransaction } from "../apple/decide";
+import type { AppleSnapshot, AppleTransaction } from "../apple/decide";
 import { applyAppleSnapshot } from "../apple/decide";
 import { AppleJwsError } from "../apple/jws";
-import { parseRenewal, parseTransaction, type AppleServerApi } from "../apple/serverApi";
+import { parseTransaction, type AppleServerApi } from "../apple/serverApi";
 import { UserNotFoundError } from "../claims";
 import { commitEntitlement, type CommitDeps } from "../commit";
 import type { Env } from "../env";
@@ -104,7 +104,10 @@ export const handleAppleVerify = async (
 
   // R4: 거래 id가 아니라 원거래 id로 조회해 구독 단위의 최신 상태를 받는다.
   const snap = await deps.apple.getSubscriptionSnapshot(tx.originalTransactionId);
+  // 연결은 남겨 둔다 — 같은 uid의 연결이라 해가 없고, 다음 verify가 그대로 재연결한다.
   if (!snap) return invalid();
+  // 조회 결과가 요청한 구독이 아니면 추측해서 반영하지 않는다.
+  if (snap.transaction.originalTransactionId !== tx.originalTransactionId) return invalid();
 
   const outcome = await commitEntitlement(deps, uid, (existing) => applyAppleSnapshot(existing, snap, now));
   if (outcome.kind === "written") return json({ premiumUntil: outcome.doc.premiumUntil });
@@ -114,8 +117,6 @@ export const handleAppleVerify = async (
   return json({ premiumUntil: doc.premiumUntil });
 };
 
-const APPLE_STATUSES = new Set([1, 2, 3, 4, 5]);
-
 interface AppleNotification {
   notificationType: string;
   subtype?: string;
@@ -123,10 +124,7 @@ interface AppleNotification {
   signedDate: number;
   data?: {
     bundleId?: unknown;
-    environment?: unknown;
-    status?: unknown;
     signedTransactionInfo?: unknown;
-    signedRenewalInfo?: unknown;
   };
 }
 
@@ -142,8 +140,12 @@ const parseNotification = (value: unknown): AppleNotification | null => {
 /**
  * App Store Server Notifications v2. 200은 "다시 보내지 마"다 — 서명은 맞지만 우리가 처리할 수 없는 것
  * (연결 없음, 다른 앱, 형식 오류, 탈퇴한 사용자)은 로그만 남기고 200, 서명 불일치는 401,
- * 일시 오류(Firestore·Auth)는 던져 500으로 Apple 재전송을 받는다.
- * 상태는 알림에 담긴 서명된 거래·갱신 정보·status로 만든다(API 호출 없음). Sandbox도 반영하고 환경을 기록한다.
+ * 일시 오류(Firestore·Auth·App Store Server API)는 던져 500으로 Apple 재전송을 받는다.
+ *
+ * 알림은 "무엇이 바뀌었는지"를 알리는 신호로만 쓰고, 상태는 매번 App Store Server API로 다시 조회한다.
+ * 알림의 거래는 구독의 현재 거래가 아닐 수 있다 — 지난달 갱신분 REFUND를 그대로 반영하면 지금 기간을
+ * 결제한 사용자가 잠기고, lastSignedDate가 앞서 나가 스스로 바로잡히지도 않는다(R5).
+ * 중복·역순 판정은 알림의 notificationUUID·signedDate로 한다. Sandbox도 반영하고 환경을 기록한다.
  */
 export const handleAppleWebhook = async (
   request: Request,
@@ -155,9 +157,7 @@ export const handleAppleWebhook = async (
   const signedPayload = isRecord(body) ? body.signedPayload : undefined;
 
   let notification: AppleNotification | null;
-  let tx: AppleTransaction | null = null;
-  let renewal: AppleRenewalInfo | null = null;
-  let status: AppleSnapshot["status"];
+  let tx: AppleTransaction;
   try {
     notification = parseNotification(await deps.verifyAppleJws(typeof signedPayload === "string" ? signedPayload : ""));
     if (!notification) {
@@ -171,19 +171,11 @@ export const handleAppleWebhook = async (
       console.error("Apple 알림 bundleId가 이 앱이 아님 — 무시:", data.bundleId, notification.notificationUUID);
       return ok();
     }
-    if (!APPLE_STATUSES.has(data.status as number)) {
-      console.error("Apple 알림 status 형식 오류:", notification.notificationType, notification.notificationUUID);
-      return ok();
-    }
-    status = data.status as AppleSnapshot["status"];
     const txPayload = await deps.verifyAppleJws(data.signedTransactionInfo);
-    const renewalPayload =
-      typeof data.signedRenewalInfo === "string" ? await deps.verifyAppleJws(data.signedRenewalInfo) : null;
     try {
       tx = parseTransaction(txPayload);
-      renewal = renewalPayload === null ? null : parseRenewal(renewalPayload);
     } catch (error) {
-      console.error("Apple 알림 거래·갱신 정보 형식 오류:", notification.notificationUUID, error);
+      console.error("Apple 알림 거래 정보 형식 오류:", notification.notificationUUID, error);
       return ok();
     }
   } catch (error) {
@@ -203,10 +195,17 @@ export const handleAppleWebhook = async (
     return ok();
   }
 
+  const current = await deps.apple.getSubscriptionSnapshot(tx.originalTransactionId);
+  if (!current) {
+    console.error("Apple 알림: 구독 조회 결과 없음 — 무시:", notification.notificationType, tx.originalTransactionId);
+    return ok();
+  }
+  if (current.transaction.originalTransactionId !== tx.originalTransactionId) {
+    console.error("Apple 알림: 조회한 구독이 알림의 원거래와 다름 — 무시:", tx.originalTransactionId, notification.notificationUUID);
+    return ok();
+  }
   const snap: AppleSnapshot = {
-    status,
-    transaction: tx,
-    renewal,
+    ...current,
     notificationUUID: notification.notificationUUID,
     signedDate: notification.signedDate,
   };
