@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { Alert, type AlertButton } from "react-native";
+import { Alert, Platform, type AlertButton } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 jest.mock("../../auth/useAuthState", () => ({
@@ -117,10 +117,11 @@ describe("AccountScreen", () => {
   });
 
   describe("회원 탈퇴", () => {
-    const DELETE_MESSAGE =
-      "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.\n\n구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
+    // 구독이 없으면 기본 문구만 나온다. Paddle 안내는 살아 있는 Paddle 기록이 있을 때만(웹 accountDeletionDialog와 같은 기준).
+    const DELETE_MESSAGE = "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.";
+    const PADDLE_NOTICE = "구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
 
-    it("누르면 구독 안내가 담긴 확인 창을 띄우고, 확인하면 탈퇴 후 로그아웃한다", async () => {
+    it("누르면 확인 창을 띄우고, 확인하면 탈퇴 후 로그아웃한다 — 구독이 없으면 기본 문구만", async () => {
       await renderScreen();
 
       await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
@@ -220,6 +221,82 @@ describe("AccountScreen", () => {
         expect.any(Array),
       );
       expect(buttonLabels()).toEqual(["취소", "구독 관리", "탈퇴하기"]);
+    });
+
+    const paddleRecord = (status: "active" | "canceled") => ({
+      status, premiumUntil: "2099-01-01T00:00:00.000Z", cancelAt: null, currentPeriodEnd: "2099-01-01T00:00:00.000Z",
+      autoRenew: true, startedAt: null, updatedAt: "2026-11-01T00:00:00.000Z", subscriptionId: "sub_1", customerId: "ctm_1",
+      lastWebhookEventId: null, lastEventOccurredAt: null,
+    });
+
+    it("Paddle 구독이 살아 있으면 즉시 해지·환불 안내를 덧붙인다", async () => {
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "paddle", premiumUntil: "2099-01-01T00:00:00.000Z",
+        sources: { paddle: paddleRecord("active") },
+      };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenLastCalledWith("회원 탈퇴", `${DELETE_MESSAGE}\n\n${PADDLE_NOTICE}`, expect.any(Array));
+    });
+
+    it("Paddle 기록이 canceled면 Paddle 안내를 띄우지 않는다", async () => {
+      mockEntitlement = { ...EMPTY_ENTITLEMENT, sources: { paddle: paddleRecord("canceled") } };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenLastCalledWith("회원 탈퇴", DELETE_MESSAGE, expect.any(Array));
+    });
+
+    it("Apple 구독만 있으면 Paddle의 '구독이 즉시 해지되고' 안내를 띄우지 않는다", async () => {
+      const future = new Date(Date.now() + 30 * 864e5).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: future,
+        sources: { apple: appleRecord(future) },
+      };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      const message = alertSpy.mock.calls[alertSpy.mock.calls.length - 1][1];
+      expect(message).not.toContain("구독이 즉시 해지되고");
+    });
+
+    it("Android에서는 Apple 구독이어도 구독 관리 버튼을 내지 않는다(Play 화면이 열리므로)", async () => {
+      const future = new Date(Date.now() + 30 * 864e5).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: future,
+        sources: { apple: appleRecord(future) },
+      };
+      const restore = jest.replaceProperty(Platform, "OS", "android");
+      try {
+        await renderScreen();
+        await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+        // 경고 문구는 그대로 — 다른 기기(iPhone)에서 해지해야 한다는 사실은 같다.
+        expect(alertSpy).toHaveBeenLastCalledWith(
+          "회원 탈퇴",
+          `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.`,
+          expect.any(Array),
+        );
+        expect(buttonLabels()).toEqual(["취소", "탈퇴하기"]);
+      } finally {
+        restore.restore();
+      }
+    });
+
+    it("iOS에서는 Apple 구독이면 구독 관리 버튼을 낸다", async () => {
+      const future = new Date(Date.now() + 30 * 864e5).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: future,
+        sources: { apple: appleRecord(future) },
+      };
+      const restore = jest.replaceProperty(Platform, "OS", "ios");
+      try {
+        await renderScreen();
+        await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+        expect(buttonLabels()).toEqual(["취소", "구독 관리", "탈퇴하기"]);
+      } finally {
+        restore.restore();
+      }
     });
 
     it("취소하면 아무것도 하지 않는다", async () => {
