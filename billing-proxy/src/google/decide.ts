@@ -89,15 +89,19 @@ export const applyGoogleSubscription = (
     if (ev.eventTime !== null && previous.lastEventTime !== null && Date.parse(ev.eventTime) <= Date.parse(previous.lastEventTime)) {
       return { skip: "STALE" };
     }
-    // 기록은 구독 하나만 추적한다. 유효하고 계속 갱신 중인 다른 구독이 있으면 덮어 권한을 지우지 않는다.
-    // 단 linkedPurchaseToken이 기존 토큰이면 업그레이드·재구독이므로 교체한다. 기존 기록이 해지 예약됐거나
-    // 자동 갱신이 꺼졌으면 새 토큰은 정당한 후속 구독이다(해지 예약 뒤 새로 구독) — 이것도 교체한다.
-    const valid = previous.premiumUntil !== null && Date.parse(previous.premiumUntil) > now.getTime() && previous.status !== "canceled";
-    const renewing = previous.autoRenew === true && previous.cancelAt === null;
-    if (previous.purchaseToken !== ev.purchaseToken && valid && renewing && sub.linkedPurchaseToken !== previous.purchaseToken) {
-      return { skip: "OTHER_SUBSCRIPTION" };
-    }
   }
+
+  // 기록은 구독 하나만 추적한다. 같은 토큰도, linkedPurchaseToken으로 이어진 교체(업그레이드·재구독)도 아닌
+  // 다른 토큰이 유효한 기록을 덮으려 하면 남은 유료 기간을 지울 수 있다.
+  const foreign =
+    previous !== undefined &&
+    previous.purchaseToken !== ev.purchaseToken &&
+    sub.linkedPurchaseToken !== previous.purchaseToken &&
+    previous.premiumUntil !== null &&
+    Date.parse(previous.premiumUntil) > now.getTime() &&
+    previous.status !== "canceled";
+  // 계속 갱신 중인 기록은 다른 토큰이 덮지 않는다(이중 구독).
+  if (foreign && previous.autoRenew === true && previous.cancelAt === null) return { skip: "OTHER_SUBSCRIPTION" };
 
   const nowIso = now.toISOString();
   const item = pickLineItem(sub);
@@ -105,6 +109,14 @@ export const applyGoogleSubscription = (
   const continues = previous !== undefined && (previous.purchaseToken === ev.purchaseToken || sub.linkedPurchaseToken === previous.purchaseToken);
   const fields = decideState(sub, item, continues ? (previous?.premiumUntil ?? null) : null, nowIso);
   const canceled = fields.status === "canceled";
+
+  // 해지 예약·자동 갱신 꺼진 기록은 새 구독(해지 예약 뒤 재구독)이 이어받을 수 있다 — 단 새 구독이 실제로
+  // 권한을 주고 기존 기록보다 늦게 끝날 때만. 끝난 옛 토큰·자동 환불된 이중 구독 토큰의 알림이나 재검증이
+  // 남은 기간을 지우지 않게 한다.
+  if (foreign) {
+    const grantsLonger = !canceled && fields.premiumUntil !== null && Date.parse(fields.premiumUntil) > Date.parse(previous.premiumUntil!);
+    if (!grantsLonger) return { skip: "OTHER_SUBSCRIPTION" };
+  }
 
   const record: GoogleRecord = {
     ...fields,
