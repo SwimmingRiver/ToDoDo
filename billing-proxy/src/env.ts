@@ -14,6 +14,7 @@ export interface Env {
   BILLING_UID_SECRET: string;
   /** 결제 전용 서비스 계정 JSON 전체(문자열). Firestore 쓰기 + Auth 커스텀 클레임 설정. */
   GOOGLE_SERVICE_ACCOUNT: string;
+  // 아래 스토어(Apple·Google) 시크릿은 스토어 계정 준비 전까지 비어 있을 수 있다 — deps.ts가 처음 쓸 때 읽어 스토어 경로만 실패시킨다.
   /** appAccountToken(uid 기반 UUID)을 만드는 HMAC 키. 바꾸면 이미 발급된 토큰과 달라지므로 고정해 둔다. */
   IAP_ACCOUNT_TOKEN_SECRET: string;
   /** App Store Server API 호출용. APPLE_PRIVATE_KEY는 .p8 파일 내용(PKCS#8 PEM) 전체. */

@@ -68,6 +68,7 @@
 
 - `PADDLE_PRICE_ID` placeholder 교체 완료 + 샌드박스 실측(Task 11) 완료 **후에만** 릴리스 PR을 연다. main CI의 `billing-proxy` job은 placeholder면 실패하는데, `deploy` job(rules·클라이언트)은 이 job을 기다리지 않아 rules·클라이언트만 먼저 나가 버린다.
 - 릴리스 직후 운영자 계정에 `npm run grant:entitlement`(루트)를 다시 실행한다.
+- Apple/Google 스토어 시크릿은 스토어 계정 준비 전까지 비워도 된다(스토어 경로만 실패). `IAP_ACCOUNT_TOKEN_SECRET`·`APPLE_*`·`GOOGLE_PLAY_SERVICE_ACCOUNT`·`GOOGLE_PUBSUB_*`가 없으면 `/iap/*`·`/webhooks/apple`·`/webhooks/google`만 500이고, Paddle 웹훅·`/checkout`·`/portal`·`/trial`·`/account/delete`는 그대로 동작한다.
 
 ## 로컬·프리뷰 테스트
 
