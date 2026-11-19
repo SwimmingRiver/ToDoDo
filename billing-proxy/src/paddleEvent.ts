@@ -47,7 +47,8 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
 
   const currentPeriodEndsAt = str(period?.ends_at);
   const scheduledCancelAt = scheduled?.action === "cancel" ? str(scheduled.effective_at) : null;
-  for (const value of [currentPeriodEndsAt, scheduledCancelAt]) {
+  const startedAt = str(data.started_at);
+  for (const value of [currentPeriodEndsAt, scheduledCancelAt, startedAt]) {
     if (value !== null && Number.isNaN(Date.parse(value))) return { kind: "invalid", reason: `시각 해석 불가(${value})` };
   }
 
@@ -64,6 +65,7 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
       subscriptionId,
       currentPeriodEndsAt,
       scheduledCancelAt,
+      startedAt,
     },
   };
 };

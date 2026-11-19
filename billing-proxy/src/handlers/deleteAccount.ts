@@ -21,11 +21,14 @@ const json = (body: unknown, status: number): Response =>
  */
 export const handleDeleteAccount = async (uid: string, deps: AccountDeletionDeps): Promise<Response> => {
   const { doc } = await deps.store.get(uid);
-  if (doc.source === "paddle" && doc.subscriptionId && doc.status !== "canceled") {
+  // 대표 출처와 무관하게 Paddle 기록으로 본다 — Apple이 대표여도 Paddle 구독이 살아 있으면 청구가 계속된다.
+  // 스토어(apple·google) 구독은 서버가 해지할 수 없어 화면에서 경고만 한다.
+  const paddle = doc.sources.paddle;
+  if (paddle && paddle.subscriptionId && paddle.status !== "canceled") {
     try {
-      await deps.paddle.cancelSubscriptionImmediately(doc.subscriptionId);
+      await deps.paddle.cancelSubscriptionImmediately(paddle.subscriptionId);
     } catch (error) {
-      console.error("탈퇴 중 Paddle 구독 해지 실패:", uid, doc.subscriptionId, error);
+      console.error("탈퇴 중 Paddle 구독 해지 실패:", uid, paddle.subscriptionId, error);
       return json({ error: "PADDLE_CANCEL_FAILED" }, 502);
     }
   }

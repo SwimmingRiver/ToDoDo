@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleRequest, type BillingDeps } from "../router";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
+import type { AppleRecord, PaddleRecord } from "@tododo/core/dist/entitlement/index.js";
 import type { Env } from "../env";
+import { asStored } from "./helpers/storedDoc";
 
 vi.mock("@tododo/worker-auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tododo/worker-auth")>()),
@@ -22,8 +24,39 @@ const ENV: Env = {
   BILLING_UID_SECRET: "uid-secret",
 };
 
+const PADDLE_IDS = { customerId: "ctm_1", subscriptionId: "sub_1" };
+const paddleRecord = (overrides: Partial<PaddleRecord> = {}): PaddleRecord => ({
+  status: "active",
+  premiumUntil: null,
+  cancelAt: null,
+  currentPeriodEnd: null,
+  autoRenew: true,
+  startedAt: null,
+  updatedAt: "",
+  customerId: "ctm_1",
+  subscriptionId: "sub_1",
+  lastWebhookEventId: null,
+  lastEventOccurredAt: null,
+  ...overrides,
+});
+const APPLE: AppleRecord = {
+  status: "active",
+  premiumUntil: "2026-12-01T00:00:00.000Z",
+  cancelAt: null,
+  currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+  autoRenew: true,
+  startedAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "",
+  originalTransactionId: "otx_1",
+  productId: "premium_monthly",
+  environment: "Production",
+  appAccountToken: null,
+  lastNotificationUUID: null,
+  lastSignedDate: null,
+};
+
 const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
-  store: { get: vi.fn(async () => ({ doc: existing, updateTime: null })), write: vi.fn(async () => "ok" as const) },
+  store: { get: vi.fn(async () => ({ doc: asStored(existing), updateTime: null })), write: vi.fn(async () => "ok" as const) },
   claims: { setPremiumUntil: vi.fn(async () => undefined), deleteUser: vi.fn(async () => undefined) },
   paddle: {
     createCheckoutTransaction: vi.fn(async () => "txn_1"),
@@ -74,7 +107,7 @@ describe("router", () => {
   });
 
   it("/checkout은 본문의 uid를 무시하고 토큰 uid로 거래를 만든다", async () => {
-    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, customerId: "ctm_1" });
+    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, source: "paddle", status: "canceled", customerId: "ctm_1", subscriptionId: "sub_1", premiumUntil: "2026-10-01T00:00:00.000Z" });
     const res = await call(post("/checkout", { uid: "victim" }), deps);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ transactionId: "txn_1" });
@@ -82,15 +115,45 @@ describe("router", () => {
   });
 
   it("/checkout은 살아 있는 Paddle 구독이 있으면 409 ALREADY_SUBSCRIBED", async () => {
-    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, source: "paddle", status: "active", premiumUntil: "2026-11-13T00:00:00.000Z" });
+    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, ...PADDLE_IDS, source: "paddle", status: "active", premiumUntil: "2026-11-13T00:00:00.000Z" });
     const res = await call(post("/checkout"), deps);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "ALREADY_SUBSCRIBED" });
   });
 
   it("/checkout은 해지돼 기간이 끝난 사용자에게는 다시 허용한다", async () => {
-    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, source: "paddle", status: "canceled", premiumUntil: "2026-10-01T00:00:00.000Z" });
+    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, ...PADDLE_IDS, source: "paddle", status: "canceled", premiumUntil: "2026-10-01T00:00:00.000Z" });
     expect((await call(post("/checkout"), deps)).status).toBe(200);
+  });
+
+  it("handleCheckout returns ALREADY_SUBSCRIBED from sources.paddle even if representative is apple", async () => {
+    const paddle = paddleRecord({ premiumUntil: "2026-11-13T00:00:00.000Z" });
+    const deps = makeDeps({
+      ...EMPTY_ENTITLEMENT,
+      plan: "premium",
+      status: "active",
+      source: "apple",
+      premiumUntil: "2026-12-01T00:00:00.000Z",
+      sources: { paddle, apple: APPLE },
+    });
+    const res = await call(post("/checkout"), deps);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "ALREADY_SUBSCRIBED" });
+    expect(deps.paddle.createCheckoutTransaction).not.toHaveBeenCalled();
+  });
+
+  it("handleCheckout uses sources.paddle.customerId", async () => {
+    // 최상위 customerId가 비어 있어도 Paddle 기록의 고객으로 결제를 묶어 고객이 둘로 갈라지지 않게 한다.
+    const paddle = paddleRecord({ status: "canceled", premiumUntil: "2026-10-01T00:00:00.000Z", customerId: "ctm_paddle" });
+    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, customerId: null, sources: { paddle } });
+    expect((await call(post("/checkout"), deps)).status).toBe(200);
+    expect(deps.paddle.createCheckoutTransaction).toHaveBeenCalledWith("u1", "ctm_paddle");
+  });
+
+  it("/checkout은 Apple로만 프리미엄이면 막지 않는다(이중 구독 경고는 화면 몫)", async () => {
+    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: "2026-12-01T00:00:00.000Z", sources: { apple: APPLE } });
+    expect((await call(post("/checkout"), deps)).status).toBe(200);
+    expect(deps.paddle.createCheckoutTransaction).toHaveBeenCalledWith("u1", null);
   });
 
   it("/trial 성공은 200 + premiumUntil", async () => {

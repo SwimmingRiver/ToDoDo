@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleDeleteAccount } from "../handlers/deleteAccount";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
+import { asStored } from "./helpers/storedDoc";
+import type { AppleRecord } from "@tododo/core/dist/entitlement/index.js";
 
 const PADDLE_ACTIVE: EntitlementDoc = {
   ...EMPTY_ENTITLEMENT,
@@ -12,11 +14,27 @@ const PADDLE_ACTIVE: EntitlementDoc = {
   premiumUntil: "2026-11-10T00:00:00.000Z",
 };
 
+const APPLE: AppleRecord = {
+  status: "active",
+  premiumUntil: "2026-12-01T00:00:00.000Z",
+  cancelAt: null,
+  currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+  autoRenew: true,
+  startedAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "",
+  originalTransactionId: "otx_1",
+  productId: "premium_monthly",
+  environment: "Production",
+  appAccountToken: null,
+  lastNotificationUUID: null,
+  lastSignedDate: null,
+};
+
 const makeDeps = (doc: EntitlementDoc) => {
   const calls: string[] = [];
   return {
     calls,
-    store: { get: vi.fn(async () => ({ doc, updateTime: "t" })) },
+    store: { get: vi.fn(async () => ({ doc: asStored(doc), updateTime: "t" })) },
     paddle: { cancelSubscriptionImmediately: vi.fn(async () => void calls.push("cancel")) },
     accountData: { deleteUserData: vi.fn(async () => void calls.push("data")) },
     claims: { deleteUser: vi.fn(async () => void calls.push("auth")) },
@@ -55,6 +73,27 @@ describe("handleDeleteAccount", () => {
     expect(res.status).toBe(204);
     expect(deps.paddle.cancelSubscriptionImmediately).not.toHaveBeenCalled();
     expect(deps.calls).toEqual(["data", "auth"]);
+  });
+
+  it("deleteAccount cancels sources.paddle subscription when not canceled — 대표 출처가 apple이어도 해지한다", async () => {
+    const paddle = asStored(PADDLE_ACTIVE).sources.paddle!;
+    const deps = makeDeps({
+      ...EMPTY_ENTITLEMENT,
+      plan: "premium",
+      status: "active",
+      source: "apple",
+      premiumUntil: "2026-12-01T00:00:00.000Z",
+      sources: { paddle, apple: APPLE },
+    });
+    await handleDeleteAccount("u1", deps);
+    expect(deps.paddle.cancelSubscriptionImmediately).toHaveBeenCalledWith("sub_1");
+    expect(deps.calls).toEqual(["cancel", "data", "auth"]);
+  });
+
+  it("deleteAccount skips Paddle when only apple — 스토어 구독은 서버가 해지할 수 없다", async () => {
+    const deps = makeDeps({ ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: "2026-12-01T00:00:00.000Z", sources: { apple: APPLE } });
+    expect((await handleDeleteAccount("u1", deps)).status).toBe(204);
+    expect(deps.paddle.cancelSubscriptionImmediately).not.toHaveBeenCalled();
   });
 
   it("Paddle 해지가 실패하면 아무것도 지우지 않고 502 PADDLE_CANCEL_FAILED", async () => {
