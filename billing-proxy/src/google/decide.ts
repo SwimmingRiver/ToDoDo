@@ -85,6 +85,7 @@ export const applyGoogleSubscription = (
   const previous = existing.sources.google;
   if (previous) {
     if (ev.messageId !== null && previous.lastMessageId === ev.messageId) return { skip: "DUPLICATE_MESSAGE" };
+    // Pub/Sub 이벤트 시각은 구독 체인(linked 토큰 포함) 안에서 단조 증가하므로 토큰이 달라도 비교한다.
     if (ev.eventTime !== null && previous.lastEventTime !== null && Date.parse(ev.eventTime) <= Date.parse(previous.lastEventTime)) {
       return { skip: "STALE" };
     }
@@ -98,14 +99,16 @@ export const applyGoogleSubscription = (
 
   const nowIso = now.toISOString();
   const item = pickLineItem(sub);
-  const sameToken = previous?.purchaseToken === ev.purchaseToken;
-  const fields = decideState(sub, item, sameToken ? (previous?.premiumUntil ?? null) : null, nowIso);
+  // 같은 토큰이거나 linkedPurchaseToken으로 이어진 교체 토큰이면 기존 기록의 기간을 이어받는다.
+  const continues = previous !== undefined && (previous.purchaseToken === ev.purchaseToken || sub.linkedPurchaseToken === previous.purchaseToken);
+  const fields = decideState(sub, item, continues ? (previous?.premiumUntil ?? null) : null, nowIso);
   const canceled = fields.status === "canceled";
 
   const record: GoogleRecord = {
     ...fields,
     currentPeriodEnd: item?.expiryTime ?? null,
-    autoRenew: canceled ? false : item?.autoRenewEnabled === true && sub.subscriptionState === "SUBSCRIPTION_STATE_ACTIVE",
+    // 유예·보류 중에도 Google은 결제를 재시도하므로 갱신 중으로 본다(탈퇴 경고·중복 감지가 놓치지 않게). 해지·종료만 false.
+    autoRenew: canceled || sub.subscriptionState === "SUBSCRIPTION_STATE_CANCELED" ? false : item?.autoRenewEnabled === true,
     startedAt: sub.startTime,
     updatedAt: nowIso,
     purchaseToken: ev.purchaseToken,

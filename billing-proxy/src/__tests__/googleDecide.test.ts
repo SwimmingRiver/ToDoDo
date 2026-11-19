@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { EMPTY_ENTITLEMENT, RENEWAL_GRACE_MS, type EntitlementDoc } from "../entitlement";
 import { applyGoogleSubscription, type GoogleEvent } from "../google/decide";
 import type { PlaySubscription, PlaySubscriptionLineItem } from "../google/playApi";
+import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
 import { asStored } from "./helpers/storedDoc";
 
 const NOW = new Date("2026-10-10T00:00:00.000Z");
@@ -172,6 +173,29 @@ describe("applyGoogleSubscription", () => {
     expect(out.sources.google?.currentPeriodEnd).toBe(iso(EXPIRY));
     const fb = written(applyGoogleSubscription(doc(), sub({ lineItems: [other] }), ev(), NOW));
     expect(fb.sources.google?.currentPeriodEnd).toBe(iso(EXPIRY + 5 * DAY));
+  });
+
+  it("IN_GRACE_PERIOD keeps autoRenew from line item (true)", () => {
+    const out = written(applyGoogleSubscription(doc(), state("IN_GRACE_PERIOD"), ev(), NOW));
+    expect(out.sources.google).toMatchObject({ autoRenew: true, cancelAt: null });
+    expect(hasAutoRenewingStoreSubscription(out, NOW)).toBe("google");
+  });
+
+  it("ON_HOLD keeps autoRenew from line item", () => {
+    const g = written(applyGoogleSubscription(doc(), state("ON_HOLD"), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({ autoRenew: true, cancelAt: null });
+  });
+
+  it("ACTIVE with autoRenewEnabled false → cancelAt = expiry, premiumUntil = expiry, autoRenew false", () => {
+    const g = written(applyGoogleSubscription(doc(), sub({ lineItems: [item({ autoRenewEnabled: false })] }), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({ autoRenew: false, cancelAt: iso(EXPIRY), premiumUntil: iso(EXPIRY) });
+  });
+
+  it("grace on linked replacement token keeps the longer existing premiumUntil", () => {
+    const later = iso(EXPIRY + 10 * DAY);
+    const d = doc({ sources: { google: google({ purchaseToken: "old", premiumUntil: later }) } });
+    const g = written(applyGoogleSubscription(d, state("IN_GRACE_PERIOD", { linkedPurchaseToken: "old" }), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({ purchaseToken: "tok_1", premiumUntil: later });
   });
 
   it("aggregates into top-level fields", () => {
