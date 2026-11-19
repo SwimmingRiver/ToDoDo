@@ -1,6 +1,6 @@
 # 모바일 인앱결제(IAP)와 구독 출처 통합 설계
 
-작성일: 2026-11-18 · 관련: `2026-10-04-premium-billing-paddle-design.md`(웹 Paddle), `2026-10-09-account-deletion-design.md`(탈퇴)
+작성일: 2026-11-18 · 개정: 2026-11-19(환불·탈퇴 통일 기준 11절 추가, 7절 Google 자동 해지) · 관련: `2026-10-04-premium-billing-paddle-design.md`(웹 Paddle), `2026-10-09-account-deletion-design.md`(탈퇴)
 
 ## 왜 하는가
 
@@ -38,7 +38,8 @@ Apple 가이드라인 3.1.1/3.1.3(b)에 따라, 웹에서 산 구독을 앱에�
 - 미국 외부 결제 링크 허용(앱에서 웹 결제 안내) 활용
 - 가족 공유(Family Sharing): 상품에서 끈다
 - 이메일 발송: 안내는 앱·웹 화면 배너로만 한다
-- **약관·환불 정책 개정 (보류, 사용자 검토 중 11-18)**: 지금 문구는 앱 구독과 맞지 않는다(`refund.ts` "14일 전액 환불, Paddle로 처리", `terms.ts` 21행 "탈퇴하면 구독 즉시 해지"). 앱 결제 환불은 스토어가 하고, 스토어 구독은 탈퇴로 해지되지 않는다. 개정 여부·범위·시점은 사용자가 따로 정한다. **스토어 제출 전에는 다시 확인해야 하는 항목**이다. 이 프로젝트는 개정을 전제로 하지 않는다.
+- 환불 남용 제한(계정당 환불 횟수 제한·남용 거절 문구): 별도 할 일 `refund-policy-abuse`, 미결정. 11절의 통일 기준은 이것을 전제로 하지 않는다.
+- ~~약관·환불 정책 개정 (보류)~~ → **11-19 사용자 결정으로 범위에 들어왔다. 11절 참고.**
 
 ## 실패로 보는 것 (anti-goals)
 
@@ -58,6 +59,8 @@ Apple 가이드라인 3.1.1/3.1.3(b)에 따라, 웹에서 산 구독을 앱에�
 | 이중 구독 | 막을 수 있는 건 막고, 그래도 생기면 **나중에 시작한 결제를 해지하라고 안내** |
 | 플랫폼 | iPhone 전용(iPad 정식 지원 안 함, 기존 결정) + Android |
 | 출시 | 프리미엄 기능 셋이 모두 들어간 상태로 첫 출시 |
+| 환불·해지 기준 (11-19) | **결제 경로와 무관하게 규칙 하나**: 결제일 14일 이내 전액 환불, 해지 후 결제 기간까지 이용, 체험 계정당 1회. 예외는 Apple이 막는 두 가지(환불 처리 주체, 탈퇴 시 자동 해지)뿐이다(11절) |
+| 탈퇴 시 스토어 구독 (11-19) | Google은 서버가 자동 해지, Apple은 경고 + 구독 관리 열기(7절) |
 
 ## 설계
 
@@ -160,6 +163,7 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
 
 - 앱 결제 실패 유예는 스토어의 유예 기간 기능(Apple Billing Grace Period, Google 유예 기간)을 켜고 그 기간을 따른다. 웹 Paddle의 "past_due 동안 유지"와 같은 생각이다.
 - 환불은 **그 출처만** 회수한다. 다른 출처가 유효하면 합친 `premiumUntil`은 그대로다.
+- **Apple `CONSUMPTION_REQUEST`** (환불 요청 접수 알림): `/webhooks/apple`이 받으면 App Store Server API의 Send Consumption Information으로 회신한다. 회신의 환불 선호(`refundPreference` 계열 필드)는 11절 기준을 따른다. 해당 거래 구매일로부터 **14일 이내면 승인 희망, 지나면 거절 희망**. 상태(`SourceRecord`)는 바꾸지 않는다. 실제 환불이 되면 뒤이어 오는 REFUND 알림이 회수한다. 회신은 Apple이 정한 기한(알림 후 12시간) 안에 해야 하고, 실패해도 알림은 200으로 받는다(회신은 참고 정보일 뿐이고, 재전송으로 상태가 꼬일 일이 없다).
 
 ### 5. 체험: 웹·앱 합쳐 계정당 한 번
 
@@ -187,9 +191,19 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
 
 ### 7. 탈퇴
 
-- 앱·웹 탈퇴 화면은 `sources.apple` 또는 `sources.google`이 **자동 갱신 중**이면, 탈퇴 전에 경고를 보여준다: "App Store(Google Play) 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요." 앱에서는 스토어 구독 관리 화면 열기 버튼을 함께 둔다.
-- 경고는 막는 게 아니라 안내다. 확인 후 탈퇴는 계속 진행할 수 있다.
-- 서버 `/account/delete`: Paddle 즉시 해지는 지금처럼 한다. 그 사용자의 `storeLinks` 문서도 지운다(Firestore 데이터 삭제 단계에 포함). 탈퇴 뒤 오는 스토어 알림은 연결 문서가 없으므로 무시된다.
+결제 경로별로 할 수 있는 일이 다르다. Apple은 개발자가 사용자 구독을 해지하는 API를 주지 않고, 구독이 Apple ID에 묶여 있다. Google은 `purchases.subscriptionsv2.cancel`로 서버에서 해지할 수 있다.
+
+| 출처 | 탈퇴 시 서버 | 탈퇴 화면 |
+|---|---|---|
+| paddle | 즉시 해지(지금 그대로) | 지금 문구 그대로 |
+| google | **`subscriptionsv2.cancel`로 자동 갱신 해지** | "Google Play 구독은 탈퇴하면 함께 해지돼요" 안내 |
+| apple | 해지 불가 | **경고 + 구독 관리 열기 버튼**(Apple 5.1.1(v) 계정 삭제 가이드가 요구) |
+
+- **Apple 경고**: `sources.apple`이 자동 갱신 중이면 탈퇴 전에 "App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요."를 보여준다. 앱에서는 구독 관리 화면 열기(iOS `showManageSubscriptions`) 버튼을 함께 둔다. 웹에서는 문구만 보여준다. 경고는 막는 게 아니라 안내다. 확인 후 탈퇴는 계속 진행할 수 있다.
+- **Google 자동 해지**: `/account/delete`가 Paddle 해지와 같은 자리에서, `sources.google`이 자동 갱신 중이면 그 `purchaseToken`으로 `subscriptionsv2.cancel`을 부른다. `revoke`(환불+즉시 종료)가 아니라 `cancel`(갱신 중지)이다. 계정이 사라지므로 남은 기간은 어차피 못 쓰고, 환불 여부는 11절 기준을 따로 따른다.
+  - 실패 처리는 Paddle과 같다: 해지가 실패하면 `502 GOOGLE_CANCEL_FAILED`로 탈퇴를 멈춘다(fail-closed). 토큰이 담긴 `storeLinks`·`entitlements`를 지운 뒤에는 다시 해지할 방법이 없기 때문이다. 이미 해지·만료된 구독이라는 응답은 성공으로 본다(구체 오류 코드는 빌더 확인).
+  - 호출 순서: Paddle 해지 → Google 해지 → 데이터 삭제. 토큰을 지우기 **전에** 해지한다.
+- 서버 `/account/delete`는 그 사용자의 `storeLinks` 문서도 지운다(Firestore 데이터 삭제 단계에 포함). 탈퇴 뒤 오는 스토어 알림은 연결 문서가 없으므로 무시된다.
 
 ### 8. 앱 클라이언트
 
@@ -217,6 +231,31 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
 - `premiumView`: 대표 출처가 apple/google이면 "스토어에서 구독 중" 보기(체크아웃·포털 버튼 없음, 관리 안내 문구). 체험 가능 여부는 계정 `trialUsedAt` 그대로.
 - 이중 구독 배너, 탈퇴 경고(7절).
 
+### 11. 환불·해지 통일 기준과 약관 개정 (11-19 사용자 결정)
+
+**원칙: 웹·Google Play·App Store 어디서 결제했든 사용자가 보는 규칙은 하나다.** 지금 웹 정책의 숫자와 조건은 그대로 두고, Apple이 구조적으로 막는 부분만 예외로 적는다. 다른 할 일 앱(Todoist·TickTick)도 같은 구조다(웹·Google은 자체 기간, Apple은 "Apple에 신청").
+
+| 항목 | 웹 (Paddle) | Google Play | App Store |
+|---|---|---|---|
+| 결제일 14일 이내 전액 환불 | 우리가 처리 | 우리가 처리(Play Console 또는 API) | Apple이 결정. 우리는 `CONSUMPTION_REQUEST` 회신으로 같은 기준을 전달(4절) |
+| 14일 이후 | 환불 없음 | 환불 없음 | Apple 판단 |
+| 해지 후 결제 기간까지 이용 | ✅ | ✅ | ✅ |
+| 체험 계정당 1회 | ✅ | ✅ | ✅ (5절) |
+| 신청하는 곳 | 운영자 이메일 / Paddle 영수증 링크 | **운영자 이메일**(웹과 같은 창구). 결제 직후 Google Play 구매 내역에서 직접 요청하는 것도 가능 | **Apple**(reportaproblem.apple.com) |
+| 탈퇴하면 자동 해지 | ✅ | ✅ (7절) | ❌ 직접 해지 안내 |
+
+- **Google 환불 운영 절차**: 운영자가 Play Console에서 환불할 때 **권한 회수(revoke)를 함께** 한다. 그래야 구독이 바로 끝나고 RTDN(`SUBSCRIPTION_REVOKED`)으로 `sources.google`이 회수된다. 환불만 하면 기간 끝까지 살아 있을 수 있다. 실제 동작은 테스트 트랙에서 실측한다. 웹 Paddle 환불이 지금 수동인 것과 같은 수준이며, 환불 자동화는 하지 않는다.
+- **문서 개정 범위** (`client/src/features/legal/content/`)
+  - `refund.ts`: 위 표대로 결제 경로별로 쓴다. 기간 규칙은 공통 문장 하나로 쓰고, "App Store 결제는 Apple이 환불을 결정하며 reportaproblem.apple.com에서 요청" 예외와 Google 주문번호(GPA.)로 요청하는 방법을 추가한다. 처리 절에 "다른 경로로 결제한 구독이 남아 있으면 그 구독으로 계속 이용" 추가.
+  - `terms.ts` 제2조(탈퇴): "웹·Google Play 구독은 탈퇴하면 해지되고, App Store 구독은 탈퇴와 별개로 Apple에서 직접 해지해야 한다"로 고친다.
+  - `terms.ts` 제4조(결제와 판매 주체): 앱 안 결제는 Apple 또는 Google이 처리하고 그 스토어 약관이 함께 적용된다고 추가한다.
+  - `terms.ts` 제5조(구독과 갱신): 앱 결제 구독은 각 스토어의 구독 관리에서 해지한다고 추가한다.
+  - `terms.ts` 제6조(체험): 앱에서는 스토어의 무료 체험으로 제공되고 웹·앱을 합쳐 계정당 한 번이라고 추가한다.
+  - 웹 `accountDeletionDialog` `SUBSCRIPTION_NOTICE`, 앱 `DELETE_MESSAGE`: 7절 출처별 문구와 맞춘다.
+  - `pricingSection.tsx`의 "결제 후 14일 이내 전액 환불" 문구는 웹 결제 화면이라 그대로 둔다.
+- **반영 시점**: 개정 문서는 앱 IAP 출시와 **같은 릴리스**에 낸다. 먼저 내면 아직 없는 결제 경로를 설명하게 된다. 기존 사용자에게 불리한 변경이 아니라 새 결제 경로를 설명하는 추가다. 개정판 번호(`LEGAL_REVISIONS` 3판)·공지 여부는 출시 전에 사용자가 정한다. `trial-reuse-after-deletion`의 방침 개정과 묶을 수 있다.
+- **법률 확인**: 전자상거래법 청약철회 문구와의 정합성은 최종 문구 확정 전에 사용자가 확인한다.
+
 ## 선행 조건 (사용자 몫)
 
 - [ ] Apple Developer Program 가입 → 유료 앱 계약·세금·은행 정보 → **소규모 사업자 프로그램 신청**
@@ -224,6 +263,7 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
 - [ ] Google Play Console 가입($25) → 판매자 계정·결제 프로필 → 구독 상품·기본 요금제·7일 체험 offer, 유예 기간 켜기
 - [ ] Google Cloud: Pub/Sub 토픽 + billing-proxy로 푸시하는 구독(OIDC 인증), Play Console에 서비스 계정 권한(재무 데이터 보기·주문/구독 관리)
 - [ ] 시크릿 등록은 사용자의 진짜 터미널에서 `wrangler secret put`
+- [ ] 출시 전: 11절 개정 문구의 법률 확인, 개정판 번호·공지 여부 결정
 
 계정이 없어도 **서버 로직·데이터 모델·웹 변경·앱 화면은 먼저 구현**할 수 있다. 실제 결제 검증(샌드박스 구매, 실제 알림 수신)은 계정이 생긴 뒤에 한다.
 
@@ -232,8 +272,10 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
 - **단위**: `aggregate`(출처 조합별 최댓값·대표 출처·duplicate), 출처별 결정 함수(4절 표 전 행), 이주(sources 없는 문서), Paddle 기존 테스트 전부 그대로 통과, 체험 계정당 한 번(웹→앱, 앱→웹 순서 둘 다)
 - **서명 검증**: Apple JWS 체인(정상·체인 불일치·만료), Pub/Sub OIDC(정상·audience 불일치), `appAccountToken`/`obfuscatedAccountId` 불일치 시 거절
 - **연결**: 다른 uid에 연결된 구독 → 409, Google `linkedPurchaseToken` 이어붙이기, 탈퇴 후 알림 무시
+- **탈퇴**: Google 자동 갱신 중 → `subscriptionsv2.cancel` 호출 후 삭제, cancel 실패 → 502이고 데이터 남음, 이미 해지·만료 → cancel 생략, Paddle·Google 둘 다 있으면 둘 다 해지, Apple만 있으면 서버 해지 호출 없음
+- **환불 회신**: `CONSUMPTION_REQUEST` 구매 14일 이내 → 승인 희망, 14일 초과 → 거절 희망, 회신 실패해도 200, 상태 불변
 - **커밋 순서**: 클레임 먼저, 문서 충돌 재시도, 웹훅 500 → 재전송 수렴(기존 패턴)
-- **실측(계정 생긴 뒤)**: Apple 샌드박스(가속 갱신 주기)로 구매→갱신→해지 예약→만료→환불, Google 테스트 트랙 동일, 웹 구독 + 앱 구독 동시(이중 구독 배너), 구매 직후 토큰 갱신으로 바로 프리미엄
+- **실측(계정 생긴 뒤)**: Apple 샌드박스(가속 갱신 주기)로 구매→갱신→해지 예약→만료→환불, Google 테스트 트랙 동일, 웹 구독 + 앱 구독 동시(이중 구독 배너), 구매 직후 토큰 갱신으로 바로 프리미엄, Google 구독 보유 계정 탈퇴 → Play에서 해지 확인, Play Console 환불+권한 회수 → 프리미엄 회수 확인, Apple 샌드박스 환불 요청 → `CONSUMPTION_REQUEST` 수신·회신 확인
 
 ## 빌더에게 맡기는 것
 
@@ -246,3 +288,5 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
 - 이중 구독 "나중 시작" 판정에 필요한 출처별 시작 시각 필드(`startedAt` 등) 추가
 - `handleCheckout`의 기존 `ALREADY_SUBSCRIBED` 판정을 `sources.paddle` 기준으로 옮기기
 - 탈퇴 시 `storeLinks` 삭제는 `uid` 필드 쿼리로
+- Consumption Information 회신의 정확한 필드명·값(환불 선호 필드, 동의 여부 필드 등)은 구현 시점 Apple 문서로 확인. 우리가 가진 정보로 채울 수 없는 필드는 "모름/해당 없음" 값으로
+- `subscriptionsv2.cancel`의 요청 본문(취소 유형)과 "이미 해지됨" 응답 판별. Google 서비스 계정에 구독 관리 권한 필요(선행 조건의 Play Console 권한에 포함)
