@@ -18,11 +18,15 @@ export const toClaimSeconds = (premiumUntil: string | null): number =>
 const isRenewingAndValid = (record: SourceRecord, now: Date): boolean =>
   record.autoRenew && record.cancelAt === null && record.status !== "canceled" && isPremiumAt(record, now);
 
-/** 자동 갱신 중인 스토어 구독(apple → google 순). 계정 삭제 전 경고에 쓴다. */
-export const hasAutoRenewingStoreSubscription = (doc: EntitlementDoc, now: Date): "apple" | "google" | null => {
+/**
+ * 자동 갱신 중인 스토어 구독(apple → google 순). 계정 삭제 전 경고·스토어 관리 화면에 쓴다.
+ * 유효 기간은 보지 않는다 — Apple 결제 재시도·Google 보류는 premiumUntil이 지금이어도 스토어가
+ * 계속 청구를 시도하므로, 이때 탈퇴하면 나중에 청구된다. 이중 구독 판정(detectDuplicate)은 그대로 유효 기간을 본다.
+ */
+export const hasAutoRenewingStoreSubscription = (doc: EntitlementDoc, _now: Date): "apple" | "google" | null => {
   for (const key of ["apple", "google"] as const) {
     const record = doc.sources[key];
-    if (record && isRenewingAndValid(record, now)) return key;
+    if (record && record.autoRenew && record.cancelAt === null && record.status !== "canceled") return key;
   }
   return null;
 };

@@ -181,6 +181,39 @@ describe("PremiumSection", () => {
     expect(mockManage).toHaveBeenCalled();
   });
 
+  it("스토어 결제 재시도(프리미엄 아님) → 구매 권유 대신 결제 수단 확인 + 관리", async () => {
+    const nowIso = "2026-11-19T00:00:00.000Z";
+    mockDoc = {
+      ...EMPTY_ENTITLEMENT,
+      status: "past_due",
+      source: "apple",
+      premiumUntil: nowIso,
+      sources: {
+        apple: {
+          status: "past_due",
+          premiumUntil: nowIso,
+          cancelAt: null,
+          currentPeriodEnd: nowIso,
+          autoRenew: true,
+          startedAt: "2026-10-01T00:00:00.000Z",
+          updatedAt: nowIso,
+          originalTransactionId: "otx_1",
+          productId: "premium_monthly",
+          environment: "Production",
+          appAccountToken: null,
+          lastNotificationUUID: null,
+          lastSignedDate: null,
+        },
+      },
+    };
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.getByText(/결제 수단을 확인해 주세요/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /시작하기/ })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "구독 관리" }));
+    expect(mockManage).toHaveBeenCalled();
+  });
+
   it("duplicate later apple on ios → banner with manage", async () => {
     mockDoc = mk({ source: "paddle", duplicate: { laterSource: "apple", detectedAt: "2026-11-19T00:00:00.000Z" } });
     await render(<PremiumSection />);

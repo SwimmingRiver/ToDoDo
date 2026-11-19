@@ -64,7 +64,10 @@ const decideState = (
     case "SUBSCRIPTION_STATE_ON_HOLD":
       requireExpiry(item, state);
       return { status: "past_due", premiumUntil: nowIso, cancelAt: null };
+    // 일시중지는 정해진 날 자동으로 재개되어 다시 청구된다 — 끝난 구독(canceled)이 아니라 이용만 멈춘 상태로 둔다.
+    // 그래야 autoRenew가 남아 탈퇴 경고·스토어 관리 화면이 놓치지 않는다.
     case "SUBSCRIPTION_STATE_PAUSED":
+      return { status: "past_due", premiumUntil: nowIso, cancelAt: null };
     case "SUBSCRIPTION_STATE_EXPIRED":
     case "SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED":
       return { status: "canceled", premiumUntil: nowIso, cancelAt: null };

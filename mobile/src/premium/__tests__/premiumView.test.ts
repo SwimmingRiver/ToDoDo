@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
+import { EMPTY_ENTITLEMENT, type EntitlementDoc, type SourceRecord } from "@tododo/core/dist/entitlement/index.js";
 import { duplicateNotice, getMobilePremiumView } from "../premiumView";
 
 const NOW = Date.parse("2026-11-19T00:00:00Z");
@@ -34,6 +34,34 @@ describe("getMobilePremiumView", () => {
   it("past_due → pastDue with store", () => {
     expect(getMobilePremiumView(storeDoc("apple", { status: "past_due" }), NOW, false)).toEqual({ kind: "pastDue", store: "apple" });
     expect(getMobilePremiumView(storeDoc("apple", { status: "past_due", source: "paddle" }), NOW, false)).toEqual({ kind: "pastDue", store: null });
+  });
+});
+
+describe("getMobilePremiumView — 스토어 결제 재시도·보류(유효 기간 없음)", () => {
+  // Apple status 3·Google ON_HOLD: premiumUntil=지금이라 프리미엄이 아니지만 스토어는 계속 청구를 시도한다.
+  const retryRecord = (over: Partial<SourceRecord> = {}): SourceRecord => ({
+    status: "past_due",
+    premiumUntil: new Date(NOW).toISOString(),
+    cancelAt: null,
+    currentPeriodEnd: new Date(NOW).toISOString(),
+    autoRenew: true,
+    startedAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-11-19T00:00:00.000Z",
+    ...over,
+  });
+  const retryDoc = (key: "apple" | "google", over: Partial<SourceRecord> = {}) =>
+    doc({
+      status: "past_due",
+      source: key,
+      premiumUntil: new Date(NOW).toISOString(),
+      sources: { [key]: retryRecord(over) } as EntitlementDoc["sources"],
+    });
+  it("자동 갱신 중인 스토어 past_due → 구매 권유가 아니라 pastDue(그 스토어)", () => {
+    expect(getMobilePremiumView(retryDoc("apple"), NOW, true)).toEqual({ kind: "pastDue", store: "apple" });
+    expect(getMobilePremiumView(retryDoc("google"), NOW, true)).toEqual({ kind: "pastDue", store: "google" });
+  });
+  it("자동 갱신이 꺼졌으면 offer", () => {
+    expect(getMobilePremiumView(retryDoc("apple", { autoRenew: false }), NOW, false).kind).toBe("offer");
   });
 });
 

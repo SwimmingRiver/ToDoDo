@@ -114,7 +114,18 @@ describe("applyGoogleSubscription", () => {
     expect(g).toMatchObject({ status: "past_due", premiumUntil: NOW.toISOString() });
   });
 
-  it.each(["PAUSED", "EXPIRED", "PENDING_PURCHASE_CANCELED"])("%s → canceled, now, autoRenew false", (s) => {
+  it("ON_HOLD·PAUSED는 스토어가 다시 청구하므로 autoRenew를 라인 아이템대로 두고 탈퇴 경고 대상이다", () => {
+    for (const s of ["ON_HOLD", "PAUSED"]) {
+      const out = written(applyGoogleSubscription(doc(), state(s), ev(), NOW));
+      expect(out.sources.google).toMatchObject({ status: "past_due", premiumUntil: NOW.toISOString(), autoRenew: true, cancelAt: null });
+      expect(out.plan).toBe("free");
+      expect(hasAutoRenewingStoreSubscription(out, NOW)).toBe("google");
+    }
+    const off = written(applyGoogleSubscription(doc(), state("PAUSED", { lineItems: [item({ autoRenewEnabled: false })] }), ev(), NOW));
+    expect(off.sources.google?.autoRenew).toBe(false);
+  });
+
+  it.each(["EXPIRED", "PENDING_PURCHASE_CANCELED"])("%s → canceled, now, autoRenew false", (s) => {
     const g = written(applyGoogleSubscription(doc(), state(s), ev(), NOW)).sources.google;
     expect(g).toMatchObject({ status: "canceled", premiumUntil: NOW.toISOString(), autoRenew: false });
   });

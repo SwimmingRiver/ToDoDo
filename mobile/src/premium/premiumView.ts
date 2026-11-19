@@ -10,6 +10,11 @@ export type MobilePremiumView =
   | { kind: "trialing"; until: string | null }
   | { kind: "pastDue"; store: Store | null };
 
+const isRetryingStore = (doc: EntitlementDoc, key: Store): boolean => {
+  const record = doc.sources[key];
+  return record !== undefined && record.status === "past_due" && record.autoRenew && record.cancelAt === null;
+};
+
 /**
  * 앱 프리미엄 화면의 모양을 고른다. 대표 출처가 스토어면 앱에서 관리·해지할 수 있고,
  * paddle·manual은 보여주기만 한다(앱 안에서 웹 결제를 언급·연결하지 않는다 — Apple 3.1.1/3.1.3).
@@ -21,6 +26,10 @@ export const getMobilePremiumView = (
   trialEligible: boolean,
 ): MobilePremiumView => {
   if (!doc || !isPremiumAt(doc, new Date(nowMs))) {
+    // 스토어 결제 재시도·보류(Apple status 3·Google ON_HOLD/PAUSED)는 premiumUntil이 지금이라 프리미엄이 아니지만
+    // 스토어가 계속 청구를 시도한다. 새 구매를 권하지 않고 결제 수단 확인 + 스토어 관리를 보여준다(스펙 8절).
+    const retrying = doc ? (["apple", "google"] as const).find((key) => isRetryingStore(doc, key)) : undefined;
+    if (retrying) return { kind: "pastDue", store: retrying };
     return { kind: "offer", withTrial: doc?.trialUsedAt == null && trialEligible };
   }
   const store: Store | null = doc.source === "apple" || doc.source === "google" ? doc.source : null;

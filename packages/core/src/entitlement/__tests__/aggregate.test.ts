@@ -200,8 +200,21 @@ describe("hasAutoRenewingStoreSubscription", () => {
     expect(hasAutoRenewingStoreSubscription(doc({ google: google() }), NOW)).toBe("google");
     expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ autoRenew: false }), google: google() }), NOW)).toBe("google");
     expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ cancelAt: FUTURE }) }), NOW)).toBeNull();
-    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ premiumUntil: PAST }) }), NOW)).toBeNull();
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ status: "canceled", premiumUntil: PAST }) }), NOW)).toBeNull();
     expect(hasAutoRenewingStoreSubscription(doc({ paddle: paddle() }), NOW)).toBeNull();
+  });
+
+  it("결제 재시도·보류(유효 기간 없음)여도 스토어가 계속 청구하면 경고 대상이다", () => {
+    // Apple 결제 재시도(status 3)·Google ON_HOLD는 premiumUntil=지금이지만 스토어는 계속 청구를 시도한다.
+    const retry = { status: "past_due" as const, premiumUntil: NOW.toISOString(), autoRenew: true };
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple(retry) }), NOW)).toBe("apple");
+    expect(hasAutoRenewingStoreSubscription(doc({ google: google({ ...retry, premiumUntil: null }) }), NOW)).toBe("google");
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ ...retry, autoRenew: false }) }), NOW)).toBeNull();
+  });
+
+  it("이중 구독 판정은 그대로 유효 기간이 있어야 한다", () => {
+    const retry = { status: "past_due" as const, premiumUntil: NOW.toISOString(), autoRenew: true };
+    expect(aggregate(doc({ apple: apple(retry), paddle: paddle() }), NOW).duplicate).toBeNull();
   });
 });
 

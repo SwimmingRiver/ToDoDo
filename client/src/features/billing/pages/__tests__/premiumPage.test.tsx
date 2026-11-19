@@ -115,6 +115,26 @@ describe("PremiumPage", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("Google 보류(프리미엄 아님): 결제 수단 확인 안내만, 구독하기·결제 수단 변경 버튼 없음", () => {
+    const nowIso = NOW.toISOString();
+    const google = {
+      ...rec,
+      status: "past_due" as const,
+      premiumUntil: nowIso,
+      purchaseToken: "tok_1",
+      productId: "premium_monthly",
+      basePlanId: "monthly",
+      environment: "Production" as const,
+      obfuscatedAccountId: null,
+      lastMessageId: null,
+      lastEventTime: null,
+    };
+    set({ status: "past_due", source: "google", premiumUntil: nowIso, sources: { google } });
+    render(<PremiumPage />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Google Play에서 결제 수단을 확인해 주세요");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("대표 출처 google: Google Play 문구", () => {
     set({ status: "active", source: "google", premiumUntil: "2026-11-13T00:00:00.000Z" });
     render(<PremiumPage />);

@@ -154,6 +154,26 @@ describe("AccountScreen", () => {
       expect(mockDeleteAccount).not.toHaveBeenCalled();
     });
 
+    it("Apple 결제 재시도(premiumUntil=지금, past_due, 자동 갱신)여도 경고를 덧붙인다", async () => {
+      // 이용은 멈췄지만 App Store가 계속 청구를 시도한다 — 여기서 탈퇴하면 나중에 청구된다.
+      const nowIso = new Date(Date.now()).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "free", status: "past_due", source: "apple", premiumUntil: nowIso,
+        sources: { apple: { status: "past_due", premiumUntil: nowIso, cancelAt: null, currentPeriodEnd: nowIso, autoRenew: true,
+          startedAt: null, updatedAt: nowIso, originalTransactionId: "1", productId: "premium_monthly", environment: "Production",
+          appAccountToken: null, lastNotificationUUID: null, lastSignedDate: null } },
+      };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      // spyOn이 이전 테스트의 호출 기록을 이어받으므로 마지막 호출로 본다.
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        "회원 탈퇴",
+        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`,
+        expect.any(Array),
+      );
+    });
+
     it("Google Play 구독이면 Google Play 경고를 덧붙인다", async () => {
       const future = new Date(Date.now() + 30 * 864e5).toISOString();
       mockEntitlement = {

@@ -1,3 +1,4 @@
+import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
 import { describe, it, expect } from "vitest";
 import { EMPTY_ENTITLEMENT, RENEWAL_GRACE_MS, type EntitlementDoc } from "../entitlement";
 import { applyAppleSnapshot, type AppleSnapshot, type AppleTransaction } from "../apple/decide";
@@ -131,6 +132,14 @@ describe("applyAppleSnapshot", () => {
   it("status 3 billing retry → past_due, premiumUntil = now", () => {
     const result = written(applyAppleSnapshot(doc(), snap({ status: 3 }), NOW));
     expect(result.sources.apple).toMatchObject({ status: "past_due", premiumUntil: NOW.toISOString() });
+  });
+
+  it("status 3 billing retry keeps autoRenew from renewal info (탈퇴 경고 대상)", () => {
+    const on = written(applyAppleSnapshot(doc(), snap({ status: 3, renewal: { autoRenewStatus: 1 } }), NOW));
+    expect(on.sources.apple?.autoRenew).toBe(true);
+    expect(hasAutoRenewingStoreSubscription(on, NOW)).toBe("apple");
+    const off = written(applyAppleSnapshot(doc(), snap({ status: 3, renewal: { autoRenewStatus: 0 } }), NOW));
+    expect(off.sources.apple?.autoRenew).toBe(false);
   });
 
   it.each([2, 5] as const)("status %i → canceled, premiumUntil = now", (status) => {

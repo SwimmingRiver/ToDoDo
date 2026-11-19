@@ -93,6 +93,14 @@ describe("AccountDeletionDialog", () => {
     expect(screen.getByText(/구독이 즉시 해지되고/)).toBeInTheDocument();
   });
 
+  it("결제 재시도·보류(premiumUntil=지금, past_due, 자동 갱신)여도 스토어 경고를 덧붙인다", async () => {
+    // 이용은 멈췄지만 스토어가 계속 청구를 시도한다 — 여기서 탈퇴하면 나중에 청구된다.
+    const nowIso = new Date().toISOString();
+    entitlement = { sources: { apple: { ...apple, status: "past_due", premiumUntil: nowIso } } };
+    await renderDialog();
+    expect(screen.getByText(/App Store 구독은 탈퇴해도 자동으로 해지되지 않아요\./)).toBeInTheDocument();
+  });
+
   it("해지 예약된 스토어 구독이면 경고가 없다", async () => {
     entitlement = { sources: { apple: { ...apple, cancelAt: "2099-01-01T00:00:00.000Z", autoRenew: false } } };
     await renderDialog();
