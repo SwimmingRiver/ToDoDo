@@ -24,6 +24,10 @@ const ENV: Env = {
   GOOGLE_SERVICE_ACCOUNT: "{}",
   BILLING_UID_SECRET: "uid-secret",
   IAP_ACCOUNT_TOKEN_SECRET: "iap-secret",
+  APPLE_BUNDLE_ID: "com.swimmingriver.tododo",
+  APPLE_ISSUER_ID: "test-issuer",
+  APPLE_KEY_ID: "test-key",
+  APPLE_PRIVATE_KEY: "test-pem",
 };
 
 const PADDLE_IDS = { customerId: "ctm_1", subscriptionId: "sub_1" };

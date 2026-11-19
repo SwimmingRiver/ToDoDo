@@ -16,4 +16,9 @@ export interface Env {
   GOOGLE_SERVICE_ACCOUNT: string;
   /** appAccountToken(uid 기반 UUID)을 만드는 HMAC 키. 바꾸면 이미 발급된 토큰과 달라지므로 고정해 둔다. */
   IAP_ACCOUNT_TOKEN_SECRET: string;
+  /** App Store Server API 호출용. APPLE_PRIVATE_KEY는 .p8 파일 내용(PKCS#8 PEM) 전체. */
+  APPLE_BUNDLE_ID: string;
+  APPLE_ISSUER_ID: string;
+  APPLE_KEY_ID: string;
+  APPLE_PRIVATE_KEY: string;
 }
