@@ -1,8 +1,8 @@
-import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
 import { describe, it, expect } from "vitest";
 import { EMPTY_ENTITLEMENT, RENEWAL_GRACE_MS, type EntitlementDoc } from "../entitlement";
 import { applyAppleSnapshot, type AppleSnapshot, type AppleTransaction } from "../apple/decide";
 import { asStored } from "./helpers/storedDoc";
+import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
 
 const NOW = new Date("2026-10-10T00:00:00.000Z");
 const DAY = 86_400_000;
@@ -88,6 +88,13 @@ describe("applyAppleSnapshot", () => {
     );
     expect(result.sources.apple?.status).toBe("trialing");
     expect(result.trialUsedAt).toBe(used);
+  });
+
+  it("처음 본 체험 거래가 이미 만료(status 2)여도 trialUsedAt을 기록한다", () => {
+    const lapsed = snap({ status: 2, transaction: tx({ offerType: 1, offerDiscountType: "FREE_TRIAL" }) });
+    const result = written(applyAppleSnapshot(doc(), lapsed, NOW));
+    expect(result.sources.apple?.status).toBe("canceled");
+    expect(result.trialUsedAt).toBe(NOW.toISOString());
   });
 
   it("non-trial purchase does not touch trialUsedAt", () => {
@@ -211,6 +218,36 @@ describe("applyAppleSnapshot", () => {
     expect(
       applyAppleSnapshot(existing, snap({ transaction: tx({ originalTransactionId: "otx_2" }) }), NOW),
     ).toEqual({ skip: "OTHER_SUBSCRIPTION" });
+  });
+
+  it("해지 예약·자동 갱신 꺼진 유효 기록은 더 오래 권한을 주는 다른 구독(재구독)이 이어받는다", () => {
+    const until = iso(EXPIRES);
+    const longer = snap({ transaction: tx({ originalTransactionId: "otx_2", expiresDate: EXPIRES + 30 * DAY }) });
+    for (const previous of [
+      appleRecord({ autoRenew: false, cancelAt: until, premiumUntil: until }),
+      appleRecord({ autoRenew: false, premiumUntil: until }),
+    ]) {
+      const result = written(applyAppleSnapshot(doc({ sources: { apple: previous } }), longer, NOW));
+      expect(result.sources.apple?.originalTransactionId).toBe("otx_2");
+    }
+  });
+
+  it("해지 예약 유효 기록 + 다른 구독이 권한을 더 길게 주지 않으면(만료·환불·더 짧음) OTHER_SUBSCRIPTION", () => {
+    const until = iso(EXPIRES);
+    const existing = doc({ sources: { apple: appleRecord({ autoRenew: false, cancelAt: until, premiumUntil: until }) } });
+    const other = (o: Partial<AppleSnapshot>, t: Partial<AppleTransaction> = {}) =>
+      snap({ ...o, transaction: tx({ originalTransactionId: "otx_2", ...t }) });
+    expect(applyAppleSnapshot(existing, other({ status: 2 }), NOW)).toEqual({ skip: "OTHER_SUBSCRIPTION" });
+    expect(applyAppleSnapshot(existing, other({}, { revocationDate: NOW.getTime() }), NOW)).toEqual({ skip: "OTHER_SUBSCRIPTION" });
+    // 자동 갱신 끈 더 짧은 구독: premiumUntil = 만료 시각(유예 없음) < 기존
+    expect(
+      applyAppleSnapshot(existing, other({ renewal: { autoRenewStatus: 0 } }, { expiresDate: EXPIRES - DAY }), NOW),
+    ).toEqual({ skip: "OTHER_SUBSCRIPTION" });
+  });
+
+  it("갱신 중인 유효 기록은 더 긴 다른 구독이어도 OTHER_SUBSCRIPTION(이중 구독)", () => {
+    const longer = snap({ transaction: tx({ originalTransactionId: "otx_2", expiresDate: EXPIRES + 30 * DAY }) });
+    expect(applyAppleSnapshot(doc({ sources: { apple: appleRecord() } }), longer, NOW)).toEqual({ skip: "OTHER_SUBSCRIPTION" });
   });
 
   it("different originalTransactionId replaces an expired or canceled apple record", () => {

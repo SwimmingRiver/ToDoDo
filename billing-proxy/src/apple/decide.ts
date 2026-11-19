@@ -114,17 +114,32 @@ export const applyAppleSnapshot = (existing: EntitlementDoc, snap: AppleSnapshot
     ) {
       return { skip: "STALE" };
     }
-    // 기록은 구독 하나만 추적한다. 유효한 다른 구독이 있으면 그 기록을 덮어 권한을 지우지 않는다.
-    const valid = previous.premiumUntil !== null && Date.parse(previous.premiumUntil) > now.getTime() && previous.status !== "canceled";
-    if (previous.originalTransactionId !== snap.transaction.originalTransactionId && valid) {
-      return { skip: "OTHER_SUBSCRIPTION" };
-    }
   }
 
+  // 기록은 구독 하나만 추적한다. 유효한 다른 구독(originalTransactionId가 다름)이 기록을 덮으면 남은 기간을 지울 수 있다.
+  const foreign =
+    previous !== undefined &&
+    previous.originalTransactionId !== snap.transaction.originalTransactionId &&
+    previous.premiumUntil !== null &&
+    Date.parse(previous.premiumUntil) > now.getTime() &&
+    previous.status !== "canceled";
+  // 계속 갱신 중인 기록은 다른 구독이 덮지 않는다(이중 구독).
+  if (foreign && previous.autoRenew && previous.cancelAt === null) return { skip: "OTHER_SUBSCRIPTION" };
+
   const nowIso = now.toISOString();
-  const record = nextAppleRecord(previous, snap, now);
-  // 체험 구매는 trialUsedAt이 이미 있어도 막지 않고 반영한다(스토어가 이미 결제 정보를 받았다). 비어 있을 때만 채운다.
-  const trialUsedAt = record.status === "trialing" && existing.trialUsedAt === null ? nowIso : existing.trialUsedAt;
+  const record = nextAppleRecord(foreign ? undefined : previous, snap, now);
+  // 해지 예약·자동 갱신 꺼진 기록은 새 구독(해지 예약 뒤 재구독)이 이어받을 수 있다 — 단 새 구독이 실제로 권한을
+  // 주고 기존 기록보다 늦게 끝날 때만(Google과 같은 규칙). 끝난·환불된 다른 구독의 알림이 남은 기간을 지우지 않게 한다.
+  if (foreign) {
+    const grantsLonger =
+      record.status !== "canceled" &&
+      record.premiumUntil !== null &&
+      Date.parse(record.premiumUntil) > Date.parse(previous.premiumUntil!);
+    if (!grantsLonger) return { skip: "OTHER_SUBSCRIPTION" };
+  }
+  // 무료 체험 거래는 결과 상태(만료·환불 포함)와 무관하게 체험을 쓴 것으로 센다 — 처음 본 거래가 이미 끝난
+  // 체험이어도 마찬가지다. 이미 있으면 보존한다(체험 구매는 trialUsedAt이 있어도 막지 않고 반영한다).
+  const trialUsedAt = existing.trialUsedAt === null && isFreeTrial(snap.transaction) ? nowIso : existing.trialUsedAt;
   return {
     write: aggregate({ ...existing, sources: { ...existing.sources, apple: record }, trialUsedAt, updatedAt: nowIso }, now),
   };
