@@ -79,10 +79,25 @@ describe("verifyPubSubPushToken", () => {
     expect(await verify("Bearer !!.@@.##", f)).toBe(false);
     expect(f).not.toHaveBeenCalled();
   });
-  it("unknown kid refetches once then returns false", async () => {
+  it("unknown kid with empty cache fetches once then returns false", async () => {
     const f = vi.fn().mockResolvedValue([{ ...jwk, kid: "other" }]);
     expect(await verify(`Bearer ${await sign(goodClaims())}`, f)).toBe(false);
-    expect(f).toHaveBeenCalledTimes(2);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+  it("kid miss within 60s of a refetch does not refetch again", async () => {
+    const f = vi.fn().mockResolvedValue([{ ...jwk, kid: "other" }]);
+    const token = `Bearer ${await sign(goodClaims())}`;
+    expect(await verify(token, f)).toBe(false);
+    expect(await verify(token, f)).toBe(false);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+  it("kid miss after 60s refetches (key rotation)", async () => {
+    await verify(`Bearer ${await sign(goodClaims())}`, vi.fn().mockResolvedValue([{ ...jwk, kid: "old" }]));
+    const f = vi.fn().mockResolvedValue([jwk]);
+    const later = new Date(NOW.getTime() + 61_000);
+    const ok = await verifyPubSubPushToken(`Bearer ${await sign(goodClaims())}`, { audience: AUD, email: EMAIL, now: later, fetchJwks: f });
+    expect(ok).toBe(true);
+    expect(f).toHaveBeenCalledTimes(1);
   });
   it("JWKS fetch failure throws", async () => {
     const f = vi.fn().mockRejectedValue(new Error("down"));

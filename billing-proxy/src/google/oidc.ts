@@ -1,5 +1,7 @@
 const JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1시간
+/** kid 미스로 인한 강제 재조회 최소 간격 — 가짜 kid 연타로 구글 쪽을 두드리지 않게. */
+const MISS_REFETCH_INTERVAL_MS = 60_000;
 const ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
 
 type Jwk = JsonWebKey & { kid?: string };
@@ -39,7 +41,7 @@ const decodePart = (part: string): Record<string, unknown> | null => {
   }
 };
 
-/** 키를 못 찾으면(로테이션 가능) 캐시가 신선해도 한 번 더 받아 본다. JWKS 조회 실패는 throw. */
+/** 키를 못 찾으면(로테이션 가능) 마지막 조회로부터 60초가 지났을 때만 다시 받는다. JWKS 조회 실패는 throw. */
 const findJwk = async (kid: string, fetchJwks: () => Promise<JsonWebKey[]>, nowMs: number): Promise<Jwk | null> => {
   const refresh = async () => {
     cache = { keys: (await fetchJwks()) as Jwk[], fetchedAt: nowMs };
@@ -47,7 +49,9 @@ const findJwk = async (kid: string, fetchJwks: () => Promise<JsonWebKey[]>, nowM
   };
   const fresh = cache !== null && nowMs - cache.fetchedAt < JWKS_CACHE_TTL_MS;
   let match = (fresh ? cache!.keys : await refresh()).find((k) => k.kid === kid);
-  if (!match) match = (await refresh()).find((k) => k.kid === kid);
+  if (!match && nowMs - cache!.fetchedAt >= MISS_REFETCH_INTERVAL_MS) {
+    match = (await refresh()).find((k) => k.kid === kid);
+  }
   return match ?? null;
 };
 

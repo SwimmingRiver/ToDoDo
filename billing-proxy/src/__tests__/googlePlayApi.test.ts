@@ -95,8 +95,34 @@ describe("PlayApi", () => {
     await expect(new PlayApi(PKG, async () => "t", fetchFn as unknown as typeof fetch).getSubscription("t")).rejects.toThrow();
   });
 
-  it("필수 필드가 없으면 명확한 에러", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(jsonRes({ subscriptionState: "X" }));
+  it("pending subscription without expiryTime parses", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      jsonRes({
+        subscriptionState: "SUBSCRIPTION_STATE_PENDING",
+        acknowledgementState: "ACKNOWLEDGEMENT_STATE_PENDING",
+        lineItems: [{ productId: "premium_monthly" }],
+      }),
+    );
+    const sub = await new PlayApi(PKG, async () => "t", fetchFn as unknown as typeof fetch).getSubscription("t");
+    expect(sub!.lineItems).toEqual([
+      { productId: "premium_monthly", expiryTime: null, autoRenewEnabled: false, basePlanId: null, offerId: null, inFreeTrial: false },
+    ]);
+  });
+
+  it("pending purchase canceled with empty lineItems parses", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      jsonRes({ subscriptionState: "SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED", acknowledgementState: "ACKNOWLEDGEMENT_STATE_PENDING" }),
+    );
+    const sub = await new PlayApi(PKG, async () => "t", fetchFn as unknown as typeof fetch).getSubscription("t");
+    expect(sub!.lineItems).toEqual([]);
+  });
+
+  it.each([
+    ["subscriptionState", { acknowledgementState: "A", lineItems: [] }],
+    ["acknowledgementState", { subscriptionState: "S", lineItems: [] }],
+    ["productId", { subscriptionState: "S", acknowledgementState: "A", lineItems: [{ expiryTime: "2026-12-01T00:00:00Z" }] }],
+  ])("필수 필드(%s)가 없으면 명확한 에러", async (_name, body) => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonRes(body));
     await expect(new PlayApi(PKG, async () => "t", fetchFn as unknown as typeof fetch).getSubscription("t")).rejects.toThrow(/Play/);
   });
 

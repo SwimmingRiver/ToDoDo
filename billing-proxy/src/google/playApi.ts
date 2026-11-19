@@ -1,12 +1,14 @@
 export interface PlaySubscriptionLineItem {
   productId: string;
-  expiryTime: string;
+  /** PENDING 등 아직 기간이 시작되지 않은 상태에서는 Google이 생략한다. */
+  expiryTime: string | null;
   autoRenewEnabled: boolean;
   basePlanId: string | null;
   offerId: string | null;
   inFreeTrial: boolean;
 }
 
+/** lineItems는 PENDING_PURCHASE_CANCELED 등에서 비어 있을 수 있다. */
 export interface PlaySubscription {
   subscriptionState: string;
   startTime: string | null;
@@ -32,17 +34,16 @@ const requireStr = (obj: Json, key: string): string => {
 // 응답 모양이 바뀌면 조용히 틀린 권한을 주기보다 바로 실패해서 알림이 재시도되게 한다.
 const parseSubscription = (raw: unknown): PlaySubscription => {
   if (!isObj(raw)) throw new Error("Play 응답이 객체가 아닙니다");
-  if (!Array.isArray(raw.lineItems) || raw.lineItems.length === 0) {
-    throw new Error("Play 응답에 lineItems가 없습니다");
-  }
-  const lineItems = raw.lineItems.map((item): PlaySubscriptionLineItem => {
+  const rawItems = raw.lineItems === undefined ? [] : raw.lineItems;
+  if (!Array.isArray(rawItems)) throw new Error("Play 응답 lineItems가 배열이 아닙니다");
+  const lineItems = rawItems.map((item): PlaySubscriptionLineItem => {
     if (!isObj(item)) throw new Error("Play 응답 lineItems 항목이 객체가 아닙니다");
     const plan = isObj(item.autoRenewingPlan) ? item.autoRenewingPlan : null;
     const offer = isObj(item.offerDetails) ? item.offerDetails : null;
     const phase = isObj(item.offerPhase) ? item.offerPhase : null;
     return {
       productId: requireStr(item, "productId"),
-      expiryTime: requireStr(item, "expiryTime"),
+      expiryTime: optStr(item.expiryTime),
       autoRenewEnabled: plan?.autoRenewEnabled === true,
       basePlanId: optStr(offer?.basePlanId),
       offerId: optStr(offer?.offerId),
