@@ -17,6 +17,7 @@ import { AccountScreen } from "../screens/AccountScreen";
 import { IconButton } from "../shared/ui/iconButton/IconButton";
 import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList } from "./types";
 import { colors } from "../theme/colors";
+import { useEntitlementSync } from "../premium";
 import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
@@ -98,6 +99,12 @@ const MainTabs = () => {
   );
 };
 
+// 로그인 상태에서만 구독해야 해서, 조건부 렌더 가능한 컴포넌트로 감싼다.
+const EntitlementSync = () => {
+  useEntitlementSync();
+  return null;
+};
+
 export const RootNavigator = () => {
   const { user, loading } = useAuthState();
   // MainTabs는 로그인 중에만 마운트되므로, 로그아웃(uid -> null)을 보려면 항상 마운트된 여기서 호출해야 한다.
@@ -111,5 +118,12 @@ export const RootNavigator = () => {
     );
   }
 
-  return <NavigationContainer>{user ? <MainTabs /> : <LoginScreen />}</NavigationContainer>;
+  return <NavigationContainer>{user ? (
+        <>
+          <EntitlementSync />
+          <MainTabs />
+        </>
+      ) : (
+        <LoginScreen />
+      )}</NavigationContainer>;
 };

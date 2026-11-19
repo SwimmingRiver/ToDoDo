@@ -9,6 +9,7 @@ jest.mock("../../maintenance/maintenanceSchedule", () => ({
   readLastSuccess: jest.fn(),
   writeLastSuccess: jest.fn(),
 }));
+jest.mock("../../premium", () => ({ useEntitlementSync: jest.fn() }));
 jest.mock("../../auth/useAuthState", () => ({ useAuthState: jest.fn() }));
 jest.mock("@react-navigation/native", () => ({ NavigationContainer: ({ children }: { children: unknown }) => children }));
 jest.mock("@react-navigation/bottom-tabs", () => ({
