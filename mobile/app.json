@@ -12,6 +12,7 @@
       "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
+      "package": "com.swimmingriver.tododo",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -34,7 +35,8 @@
             "enableSceneSupport": true
           }
         }
-      ]
+      ],
+      "expo-iap"
     ],
     "extra": {
       "eas": {

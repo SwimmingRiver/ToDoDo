@@ -4,6 +4,7 @@ import {
   createNativeStackNavigator,
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
+import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { Sun, ListTodo, CalendarDays, UserRound } from "lucide-react-native";
 import { useAuthState } from "../auth/useAuthState";
@@ -19,6 +20,7 @@ import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamLis
 import { colors } from "../theme/colors";
 import { useEntitlementSync } from "../premium";
 import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
+import { resumePendingPurchases } from "../premium/iap/resumePending";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -105,6 +107,15 @@ const EntitlementSync = () => {
   return null;
 };
 
+// 지난 실행에서 끝내지 못한 스토어 거래(검증 실패·앱 종료)를 로그인 직후 한 번 다시 검증한다.
+// 서버 검증에 ID 토큰이 필요해 로그인 분기 안에서 마운트한다. resumePendingPurchases는 던지지 않는다.
+const PendingPurchaseResume = () => {
+  useEffect(() => {
+    void resumePendingPurchases();
+  }, []);
+  return null;
+};
+
 export const RootNavigator = () => {
   const { user, loading } = useAuthState();
   // MainTabs는 로그인 중에만 마운트되므로, 로그아웃(uid -> null)을 보려면 항상 마운트된 여기서 호출해야 한다.
@@ -121,6 +132,7 @@ export const RootNavigator = () => {
   return <NavigationContainer>{user ? (
         <>
           <EntitlementSync />
+          <PendingPurchaseResume />
           <MainTabs />
         </>
       ) : (
