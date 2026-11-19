@@ -6,14 +6,14 @@ import { auth } from "@/shared/lib/firebase";
 import { useAuth } from "@/features/auth/context/useAuth";
 import { useEntitlement } from "@/features/entitlement";
 import { clearSnapshot } from "@/features/calendarIntegration/hooks/syncSnapshot";
-import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
+import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { deleteAccount, type AccountDeletionStep } from "../api/deleteAccount";
 
 const BASE_MESSAGE = "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.";
 const SUBSCRIPTION_NOTICE = "구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
-const STORE_LABEL = { apple: "App Store", google: "Google Play" } as const;
-const storeNotice = (store: keyof typeof STORE_LABEL) =>
-  `${STORE_LABEL[store]} 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`;
+// Apple은 서버가 해지할 수 없어 경고하고, Google은 서버가 탈퇴 때 함께 해지하므로 안내만 한다(스펙 7절).
+const APPLE_WARNING = "App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.";
+const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
 const FAILURE_MESSAGE = "일부만 처리되었습니다. 다시 시도해 주세요.";
 const STEP_LABEL: Record<AccountDeletionStep, string> = {
   calendar: "구글 캘린더 연동 해제 중…",
@@ -38,8 +38,9 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
 
   const paddleRecord = entitlement?.sources.paddle;
   const hasSubscription = !!paddleRecord && paddleRecord.status !== "canceled";
-  // 스토어 구독은 서버가 해지할 수 없다. 자동 갱신 중이면 먼저 해지하도록 안내만 한다(탈퇴는 막지 않는다).
-  const autoRenewingStore = entitlement ? hasAutoRenewingStoreSubscription(entitlement, new Date()) : null;
+  // 스토어별로 따로 본다 — 둘 다 자동 갱신 중이면 경고와 안내가 함께 나온다. 경고는 안내일 뿐 탈퇴를 막지 않는다.
+  const appleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "apple");
+  const googleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "google");
   const isPending = status === "pending";
 
   // 진행 중 탭을 닫으면 일부 단계만 처리된 채 남는다. 브라우저 기본 확인 창으로 한 번 막는다.
@@ -79,7 +80,8 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
   const message = [
     BASE_MESSAGE,
     hasSubscription && SUBSCRIPTION_NOTICE,
-    autoRenewingStore && storeNotice(autoRenewingStore),
+    appleRenewing && APPLE_WARNING,
+    googleRenewing && GOOGLE_NOTICE,
     status === "failed" && FAILURE_MESSAGE,
   ]
     .filter(Boolean)

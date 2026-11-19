@@ -83,14 +83,29 @@ describe("AccountDeletionDialog", () => {
   it("자동 갱신 중인 apple 구독이면 App Store 경고를 덧붙인다", async () => {
     entitlement = { sources: { apple } };
     await renderDialog();
-    expect(screen.getByText(/App Store 구독은 탈퇴해도 자동으로 해지되지 않아요\. 먼저 구독을 해지해 주세요\./)).toBeInTheDocument();
+    expect(screen.getByText(/App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요\. 먼저 구독을 해지해 주세요\./)).toBeInTheDocument();
+    expect(screen.queryByText(/함께 해지돼요/)).not.toBeInTheDocument();
   });
 
-  it("google이면 Google Play 경고, paddle과 함께면 둘 다 보인다", async () => {
+  it("deletion dialog: auto-renewing google → \"함께 해지돼요\" notice, no \"해지되지 않아요\" warning", async () => {
     entitlement = { sources: { paddle, google } };
     await renderDialog();
-    expect(screen.getByText(/Google Play 구독은 탈퇴해도 자동으로 해지되지 않아요\./)).toBeInTheDocument();
+    expect(screen.getByText(/Google Play 구독은 탈퇴하면 함께 해지돼요/)).toBeInTheDocument();
+    expect(screen.queryByText(/해지되지 않/)).not.toBeInTheDocument();
     expect(screen.getByText(/구독이 즉시 해지되고/)).toBeInTheDocument();
+  });
+
+  it("apple과 google이 둘 다 자동 갱신 중이면 Apple 경고와 Google 안내를 함께 보인다", async () => {
+    entitlement = { sources: { apple, google } };
+    await renderDialog();
+    expect(screen.getByText(/App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요\. 먼저 구독을 해지해 주세요\./)).toBeInTheDocument();
+    expect(screen.getByText(/Google Play 구독은 탈퇴하면 함께 해지돼요/)).toBeInTheDocument();
+  });
+
+  it("해지 예약된 google 구독이면 함께 해지 안내도 없다", async () => {
+    entitlement = { sources: { google: { ...google, cancelAt: "2099-01-01T00:00:00.000Z", autoRenew: false } } };
+    await renderDialog();
+    expect(screen.queryByText(/함께 해지돼요/)).not.toBeInTheDocument();
   });
 
   it("결제 재시도·보류(premiumUntil=지금, past_due, 자동 갱신)여도 스토어 경고를 덧붙인다", async () => {
@@ -98,13 +113,13 @@ describe("AccountDeletionDialog", () => {
     const nowIso = new Date().toISOString();
     entitlement = { sources: { apple: { ...apple, status: "past_due", premiumUntil: nowIso } } };
     await renderDialog();
-    expect(screen.getByText(/App Store 구독은 탈퇴해도 자동으로 해지되지 않아요\./)).toBeInTheDocument();
+    expect(screen.getByText(/App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요\. 먼저 구독을 해지해 주세요\./)).toBeInTheDocument();
   });
 
   it("해지 예약된 스토어 구독이면 경고가 없다", async () => {
     entitlement = { sources: { apple: { ...apple, cancelAt: "2099-01-01T00:00:00.000Z", autoRenew: false } } };
     await renderDialog();
-    expect(screen.queryByText(/자동으로 해지되지 않아요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/해지되지 않고/)).not.toBeInTheDocument();
   });
 
   it("탈퇴하기를 누르면 삭제 → 스냅샷 정리 → 로그아웃 → 캐시 비움 → 홈 이동 + 토스트", async () => {

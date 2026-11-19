@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
 import { deleteAccount } from "../account/deleteAccount";
-import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
+import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { PremiumSection } from "../premium/PremiumSection";
 import { useEntitlement } from "../premium/useEntitlement";
 import { purchaseClient } from "../premium/iap/purchaseClient";
@@ -13,12 +13,13 @@ import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
 
-// 구독 출처와 무관하게 공통 해지 안내를 항상 보여준다. 자동 갱신 중인 스토어 구독이 있으면 아래 경고를 덧붙인다.
+// 구독 출처와 무관하게 공통 해지 안내를 항상 보여준다. 자동 갱신 중인 스토어 구독이 있으면 아래 문구를 덧붙인다.
 const DELETE_MESSAGE =
   "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.\n\n구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
 
-const storeWarning = (store: "apple" | "google") =>
-  `${store === "apple" ? "App Store" : "Google Play"} 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`;
+// Apple은 서버가 해지할 수 없어 경고하고 구독 관리로 보낸다. Google은 서버가 탈퇴 때 함께 해지하므로 안내만 한다(스펙 7절).
+const APPLE_WARNING = "App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.";
+const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
 
 export const AccountScreen = () => {
   const { user } = useAuthState();
@@ -64,11 +65,15 @@ export const AccountScreen = () => {
   };
 
   const handleDeletePress = () => {
-    const store = entitlement ? hasAutoRenewingStoreSubscription(entitlement, new Date()) : null;
-    const message = store ? `${DELETE_MESSAGE}\n\n${storeWarning(store)}` : DELETE_MESSAGE;
+    // 스토어별로 따로 본다 — 둘 다 자동 갱신 중이면 경고와 안내가 함께 나온다.
+    const appleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "apple");
+    const googleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "google");
+    const message = [DELETE_MESSAGE, appleRenewing && APPLE_WARNING, googleRenewing && GOOGLE_NOTICE]
+      .filter(Boolean)
+      .join("\n\n");
     Alert.alert("회원 탈퇴", message, [
       { text: "취소", style: "cancel" },
-      ...(store ? [{ text: "구독 관리", onPress: () => void purchaseClient.openManageSubscriptions() }] : []),
+      ...(appleRenewing ? [{ text: "구독 관리", onPress: () => void purchaseClient.openManageSubscriptions() }] : []),
       { text: "탈퇴하기", style: "destructive", onPress: runDeleteAccount },
     ]);
   };

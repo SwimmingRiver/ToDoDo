@@ -146,7 +146,7 @@ describe("AccountScreen", () => {
       await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
       expect(alertSpy).toHaveBeenCalledWith(
         "회원 탈퇴",
-        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`,
+        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.`,
         expect.any(Array),
       );
       await pressAlertButton(alertSpy, "구독 관리");
@@ -169,27 +169,57 @@ describe("AccountScreen", () => {
       // spyOn이 이전 테스트의 호출 기록을 이어받으므로 마지막 호출로 본다.
       expect(alertSpy).toHaveBeenLastCalledWith(
         "회원 탈퇴",
-        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`,
+        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.`,
         expect.any(Array),
       );
     });
 
-    it("Google Play 구독이면 Google Play 경고를 덧붙인다", async () => {
+    const googleRecord = (at: string) => ({
+      status: "active" as const, premiumUntil: at, cancelAt: null, currentPeriodEnd: at, autoRenew: true,
+      startedAt: null, updatedAt: at, purchaseToken: "t", productId: "premium_monthly", basePlanId: "monthly",
+      environment: "Production" as const, obfuscatedAccountId: null, lastMessageId: null, lastEventTime: null,
+    });
+    const appleRecord = (at: string) => ({
+      status: "active" as const, premiumUntil: at, cancelAt: null, currentPeriodEnd: at, autoRenew: true,
+      startedAt: null, updatedAt: at, originalTransactionId: "1", productId: "premium_monthly", environment: "Production" as const,
+      appAccountToken: null, lastNotificationUUID: null, lastSignedDate: null,
+    });
+    const buttonLabels = () =>
+      (alertSpy.mock.calls[alertSpy.mock.calls.length - 1][2] as AlertButton[]).map((button) => button.text);
+
+    it('deletion dialog: auto-renewing google → "함께 해지돼요" notice, no "해지되지 않아요" warning', async () => {
       const future = new Date(Date.now() + 30 * 864e5).toISOString();
       mockEntitlement = {
         ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "google", premiumUntil: future,
-        sources: { google: { status: "active", premiumUntil: future, cancelAt: null, currentPeriodEnd: future, autoRenew: true,
-          startedAt: null, updatedAt: future, purchaseToken: "t", productId: "premium_monthly", basePlanId: "monthly",
-          environment: "Production", obfuscatedAccountId: null, lastMessageId: null, lastEventTime: null } },
+        sources: { google: googleRecord(future) },
       };
       await renderScreen();
 
       await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
-      expect(alertSpy).toHaveBeenCalledWith(
+      expect(alertSpy).toHaveBeenLastCalledWith(
         "회원 탈퇴",
-        `${DELETE_MESSAGE}\n\nGoogle Play 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`,
+        `${DELETE_MESSAGE}\n\nGoogle Play 구독은 탈퇴하면 함께 해지돼요.`,
         expect.any(Array),
       );
+      // 서버가 해지하므로 스토어 관리로 보낼 이유가 없다 — 구독 관리 버튼은 Apple일 때만.
+      expect(buttonLabels()).toEqual(["취소", "탈퇴하기"]);
+    });
+
+    it("apple과 google이 둘 다 자동 갱신 중이면 Apple 경고와 Google 안내를 함께 보이고 구독 관리 버튼을 낸다", async () => {
+      const future = new Date(Date.now() + 30 * 864e5).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: future,
+        sources: { apple: appleRecord(future), google: googleRecord(future) },
+      };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        "회원 탈퇴",
+        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.\n\nGoogle Play 구독은 탈퇴하면 함께 해지돼요.`,
+        expect.any(Array),
+      );
+      expect(buttonLabels()).toEqual(["취소", "구독 관리", "탈퇴하기"]);
     });
 
     it("취소하면 아무것도 하지 않는다", async () => {
