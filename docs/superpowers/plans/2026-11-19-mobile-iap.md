@@ -22,7 +22,8 @@
   - Google: 상품 `premium_monthly`, 기본 요금제 `monthly`, 체험 offer `free-trial-7d`.
 - 번들 id·패키지명: `com.swimmingriver.tododo`(iOS·Android 같음).
 - **앱 안에는 웹 결제를 언급하거나 링크하는 문구를 넣지 않는다**(Apple 3.1.1/3.1.3). Paddle 출처를 앱에서 표시할 때는 "다른 기기나 웹에서 관리할 수 있어요" 수준까지만 쓰고 링크는 넣지 않는다.
-- 약관·환불 정책(`client/src/features/legal/**`)은 건드리지 않는다(사용자 보류). 기존 탈퇴 안내 문구(웹 `SUBSCRIPTION_NOTICE`, 앱 `DELETE_MESSAGE`)도 그대로 두고, 스토어 경고만 **덧붙인다**.
+- 약관·환불 정책(`client/src/features/legal/**`)은 **Task 19에서만** 고친다(스펙 11절, 11-19 사용자 결정). Task 1~18은 법률 문서를 건드리지 않고, 기존 탈퇴 안내 문구(웹 `SUBSCRIPTION_NOTICE`, 앱 `DELETE_MESSAGE`)에 스토어 경고를 **덧붙이기만** 한다. 문구 정리는 Task 19가 한다.
+- 환불·해지 기준은 결제 경로와 무관하게 하나다: **결제일 14일 이내 전액 환불**, 해지 후 결제 기간까지 이용, 체험 계정당 1회. 예외는 Apple 두 가지(환불은 Apple이 결정, 탈퇴로 자동 해지 불가)뿐이다(스펙 11절).
 - 시크릿은 코드·커밋·로그에 넣지 않는다. `wrangler secret put`은 사용자가 자기 터미널에서 실행한다.
 - 구현 서브에이전트: **git hooks 우회 금지**(`--no-verify` 등 쓰지 않음). 커밋 전 해당 패키지 테스트·타입체크를 돌린다.
 - `packages/core`를 바꾸면 `npm run build`로 `dist`를 갱신해서 같이 커밋한다(CI가 dist 차이를 막는다).
@@ -36,6 +37,7 @@
 3. **스토어 알림이 앱의 verify 요청보다 먼저 옴(연결 문서 없음)** → 200으로 받고 아무것도 쓰지 않는다. 이어서 verify가 오면 최신 상태로 반영된다. 테스트: Task 9 `webhook before link is a no-op`, Task 12 같은 이름.
 4. **TestFlight·심사관 구매(Sandbox 거래)를 운영 서버로 verify** → Production API가 "거래 없음"을 돌려주면 Sandbox API로 다시 조회해서 반영한다. 출처 기록에 `environment: "Sandbox"`가 남는다. 테스트: Task 8 `falls back to sandbox on 404`.
 5. **Android 구매 직후 verify가 네트워크 오류로 실패** → 앱이 거래를 finish하지 않는다. 다음 실행 때 같은 토큰으로 다시 verify하면 같은 결과가 나오고(멱등), acknowledge는 아직 안 된 경우에만 한 번 한다. 테스트: Task 12 `re-verify same token is idempotent`, Task 15 `unfinished purchase is re-verified on start`.
+6. **Google 구독이 자동 갱신 중인 계정의 탈퇴에서 Play API 해지가 실패** → 아무것도 지우지 않고 502. 토큰(`sources.google.purchaseToken`)을 지운 뒤에는 다시 해지할 방법이 없어, 계정만 사라지고 청구가 계속된다. 테스트: Task 17 `google cancel failure → 502, nothing deleted`.
 
 ---
 
@@ -56,6 +58,9 @@
 | `mobile/src/premium/{entitlementApi,useEntitlement,useEntitlementSync,useIsPremium}.ts` | 앱 구독 상태 읽기 |
 | `mobile/src/premium/iap/{purchaseClient,verifyApi,usePurchase,resumePending}.ts` | 앱 구매·복원·미처리 거래 재검증 |
 | `mobile/src/premium/PremiumSection.tsx`, `mobile/src/screens/AccountScreen.tsx` | 앱 화면 |
+| `billing-proxy/src/handlers/deleteAccount.ts`, `billing-proxy/src/google/playApi.ts` | 탈퇴 시 Google 구독 해지(Task 17) |
+| `billing-proxy/src/apple/consumption.ts`, `billing-proxy/src/apple/serverApi.ts` | Apple 환불 요청 회신(Task 18) |
+| `client/src/features/legal/**` | 약관·환불·개인정보 문서 개정(Task 19) |
 
 ---
 
@@ -637,9 +642,122 @@ git commit -m "feat(core): 구독 출처별 기록과 합치기 규칙(entitleme
 
 ---
 
+> **Task 17~19 (11-19 추가)**: 스펙 개정(`f7ff604`, 7절·4절·11절)에서 나왔다. Task 1~16이 이미 진행 중인 브랜치에 이어서 붙인다. 17·18은 billing-proxy만, 19는 웹·앱 문구만 고치므로 서로 독립이다. 19는 반드시 16 다음이다(같은 탈퇴 문구를 고친다).
+
+### Task 17: 탈퇴 시 Google 구독 자동 해지
+
+**왜:** Google은 개발자가 서버에서 구독 자동 갱신을 끌 수 있다(`purchases.subscriptionsv2.cancel`). 웹 Paddle처럼 탈퇴하면 같이 해지해서 "탈퇴했는데 매달 결제"를 막는다. Apple은 이런 API가 없어서 Task 13·16의 경고가 그대로 유일한 수단이다(스펙 7절).
+
+**Files:**
+- Modify: `billing-proxy/src/google/playApi.ts`(`cancelSubscription` 추가)
+- Modify: `billing-proxy/src/handlers/deleteAccount.ts`(`AccountDeletionDeps.google`, Google 해지 단계), `billing-proxy/src/index.ts`(deps 연결)
+- Test: `billing-proxy/src/__tests__/googlePlayApi.test.ts`, `deleteAccount.test.ts`
+
+**Interfaces:**
+- Consumes: Task 10 `PlayApi`, Task 1 `GoogleRecord`(`purchaseToken`, `autoRenew`, `status`)
+- Produces:
+  ```ts
+  // PlayApi
+  cancelSubscription(purchaseToken: string): Promise<"canceled" | "already_inactive">; // 그 밖의 실패는 throw
+  // AccountDeletionDeps
+  google: Pick<PlayApi, "cancelSubscription">;
+  ```
+  - 탈퇴 실패 응답: `502 { error: "GOOGLE_CANCEL_FAILED" }` (기존 `PADDLE_CANCEL_FAILED`와 같은 모양)
+
+- [ ] **Step 1: 실패하는 테스트**
+  - `cancelSubscription POSTs v3 applications/{pkg}/purchases/subscriptionsv2/tokens/{token}:cancel with developer cancellation type` (토큰은 URL 인코딩)
+  - `cancelSubscription returns already_inactive for already-canceled/expired response`, `throws on 5xx and on 401/403`
+  - `deleteAccount: auto-renewing google → cancel then delete data then delete auth` (호출 순서 검증)
+  - `deleteAccount: google cancel failure → 502 GOOGLE_CANCEL_FAILED, nothing deleted`
+  - `deleteAccount: google already_inactive → continues deletion`
+  - `deleteAccount: google autoRenew false or status canceled → no cancel call`
+  - `deleteAccount: paddle and google both live → paddle cancel, google cancel, then delete` / `paddle cancel failure → google not called`
+  - `deleteAccount: only apple → no server cancel call` (기존 테스트 유지)
+- [ ] **Step 2: 실패 확인** — Run: `cd billing-proxy && npx vitest run` / Expected: 새 테스트 FAIL
+- [ ] **Step 3: 구현** — 순서: Paddle 해지 → Google 해지 → `deleteUserData` → `deleteUser`. **토큰이 든 문서를 지우기 전에 해지한다.** 요청 본문의 취소 유형 필드 이름과 값, "이미 해지됨"을 뜻하는 오류 응답(상태 코드와 reason)은 **구현 시점의 Play Developer API 문서로 확인**해서 `playApi.ts` 안에서만 다룬다(스펙 "빌더에게 맡기는 것"). `revoke`는 쓰지 않는다(환불+즉시 종료라 의도와 다르다). 해당 함수 주석의 "스토어(apple·google) 구독은 서버가 해지할 수 없어" 문장은 "Apple 구독은"으로 고친다.
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run && npm run typecheck && npx wrangler deploy --dry-run --outdir "$(mktemp -d)"` / Expected: 전부 PASS
+- [ ] **Step 5: 웹·앱 탈퇴 경고 정리** — Task 13·16의 경고 조건을 **Apple 자동 갱신 중일 때만**으로 좁힌다(Google은 서버가 해지하므로 "해지되지 않아요" 경고가 틀린 말이 된다). Google 자동 갱신 중이면 경고 대신 "Google Play 구독은 탈퇴하면 함께 해지돼요"를 덧붙인다. 테스트: `deletion dialog: auto-renewing google → "함께 해지돼요" notice, no "해지되지 않아요" warning`(웹·앱 각각). Run: `cd client && VITE_FIREBASE_API_KEY= npx vitest run src/features/account && cd ../mobile && npx jest src/screens`
+- [ ] **Step 6: 커밋** — `git commit -m "feat(billing-proxy): 탈퇴 시 Google Play 구독 자동 해지"` (Step 5는 별도 커밋 `fix(client,mobile): 탈퇴 경고는 Apple 구독에만`)
+
+---
+
+### Task 18: Apple 환불 요청(`CONSUMPTION_REQUEST`)에 14일 기준 회신
+
+**왜:** App Store 결제 환불은 Apple이 결정한다. 대신 환불 요청이 들어오면 Apple이 알림을 보내고, 개발자가 이용 정보와 **환불 선호**를 회신할 수 있다. 여기에 우리 기준(구매 14일 이내 승인 희망, 지나면 거절 희망)을 담아 Apple 판단을 웹·Google과 같은 기준에 가깝게 맞춘다(스펙 4절·11절). 현재 `handleAppleWebhook`은 이 알림을 "반영할 것 없음"으로 무시한다.
+
+**Files:**
+- Create: `billing-proxy/src/apple/consumption.ts`(순수 결정 함수)
+- Modify: `billing-proxy/src/apple/serverApi.ts`(`sendConsumptionInfo`), `billing-proxy/src/handlers/iapApple.ts`(`CONSUMPTION_REQUEST` 분기)
+- Test: `billing-proxy/src/__tests__/appleConsumption.test.ts`, `appleServerApi.test.ts`, `iapApple.test.ts`
+
+**Interfaces:**
+- Consumes: Task 6 `verifyAppleJws`, Task 8 `AppleServerApi`(JWT 서명·환경별 base URL 재사용), Task 9 웹훅 파싱
+- Produces:
+  ```ts
+  // consumption.ts
+  const REFUND_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+  type RefundPreference = "grant" | "decline";
+  decideRefundPreference(purchaseDateMs: number, nowMs: number): RefundPreference; // 경계: 정확히 14일 = grant
+  buildConsumptionBody(pref: RefundPreference, ctx: { appAccountToken: string | null }): unknown; // 필드는 Step 3에서 확정
+  // AppleServerApi
+  sendConsumptionInfo(transactionId: string, environment: StoreEnvironment, body: unknown): Promise<void>; // 실패는 throw
+  ```
+
+- [ ] **Step 1: 실패하는 테스트**
+  - `decideRefundPreference: 13d23h → grant, exactly 14d → grant, 14d+1ms → decline` (시스템 시간 mock, 절대 날짜 하드코딩 금지)
+  - `webhook CONSUMPTION_REQUEST → sendConsumptionInfo called with transactionId from signedTransactionInfo and notification environment`
+  - `webhook CONSUMPTION_REQUEST → entitlement not written` (상태 불변)
+  - `webhook CONSUMPTION_REQUEST, sendConsumptionInfo throws → still 200 with error log`
+  - `webhook CONSUMPTION_REQUEST for unlinked transaction → still replies` (판단이 구매일만으로 정해지므로 연결 여부와 무관. 탈퇴한 계정의 환불 요청도 같은 기준)
+  - `sendConsumptionInfo PUTs to production or sandbox base by environment with bearer JWT`
+  - `REFUND after CONSUMPTION_REQUEST still revokes sources.apple` (기존 동작 회귀 방지)
+- [ ] **Step 2: 실패 확인** — Run: `cd billing-proxy && npx vitest run` / Expected: FAIL
+- [ ] **Step 3: 구현** — **엔드포인트 버전(v1/v2)과 본문 필드 이름·값(환불 선호, 고객 동의, 전달 상태 등)은 구현 시점의 App Store Server API "Send Consumption Information" 문서로 확인**한다. 우리가 모르는 값(이용 시간, 계정 나이 등)은 문서가 허용하는 "모름/선언 안 함" 값으로 채운다. 구매일은 알림의 `signedTransactionInfo.purchaseDate`(이 거래의 결제일, 갱신 결제면 갱신일)다. **고객 동의 필드가 필수이고 `true`여야만 보낼 수 있다면**, Task 19에서 개인정보처리방침에 "환불 요청 시 Apple에 이용 정보 제공"을 고지하기 전까지는 회신하지 않고 로그만 남긴다(플래그 `APPLE_CONSUMPTION_REPLY_ENABLED` var, 기본 `"false"`). 회신 기한(알림 후 12시간)은 웹훅 안에서 바로 보내므로 따로 관리하지 않는다.
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run && npm run typecheck && npx wrangler deploy --dry-run --outdir "$(mktemp -d)"` / Expected: 전부 PASS
+- [ ] **Step 5: 커밋** — `git commit -m "feat(billing-proxy): Apple 환불 요청에 14일 기준으로 환불 선호 회신"`
+
+---
+
+### Task 19: 약관·환불·개인정보 문서 개정과 탈퇴 문구 정리
+
+**왜:** 지금 문서는 웹 Paddle 결제만 설명한다(`refund.ts` "Paddle로 처리", `terms.ts` 제2조 "탈퇴하면 구독 즉시 해지"). 앱 결제가 생기면 틀린 문장이 되고, 스토어 심사에서도 약관 링크(Task 16)가 이 문서를 연다. 스펙 11절의 통일 기준으로 고친다. 개인정보처리방침도 새로 받는 스토어 식별자(`originalTransactionId`, `purchaseToken`)와 처리 주체(Apple·Google)를 아직 적지 않았다.
+
+**반영 시점:** 이 태스크의 커밋은 **앱 IAP 출시와 같은 릴리스**로 나간다. 먼저 운영에 나가면 아직 없는 결제 경로를 설명하게 된다. 사용자가 개정판 번호·시행일·공지 여부를 정하기 전에는 **Step 0에서 멈춘다.**
+
+**Files:**
+- Modify: `client/src/features/legal/content/{refund,terms,privacy}.ts`, `client/src/features/legal/config.ts`(`LEGAL_REVISIONS` 새 판)
+- Modify: `client/src/features/account/components/accountDeletionDialog.tsx`(`SUBSCRIPTION_NOTICE`), `mobile/src/screens/AccountScreen.tsx`(`DELETE_MESSAGE`)
+- Test: `client/src/features/legal/content/__tests__/content.test.ts`, `client/src/features/legal/pages/__tests__/*`, `accountDeletionDialog.test.tsx`, `mobile/src/screens/__tests__/AccountScreen.test.tsx`
+
+- [ ] **Step 0: 사용자 확인 (구현 전 필수)**
+  - 새 판의 시행일과 변경 요약(`change`). 약관 11조·방침 13조에 따라 시행 7일 전에 배포돼야 한다.
+  - **판 구조**: `config.ts` 주석대로 지금 구조는 판마다 설정값만 다르고 본문은 하나다. 본문이 바뀌는 이번 개정은 (a) 판별 본문을 두도록 구조를 바꾸거나 (b) 시행일 공지만 먼저 배포하고 본문은 시행일에 교체하는 방식 중 하나가 필요하다. 어느 쪽인지 사용자에게 묻는다.
+  - 최종 문구의 법률 확인(전자상거래법 청약철회) 완료 여부.
+  - `trial-reuse-after-deletion`(탈퇴 후 재가입 체험 재지급)의 방침 개정을 이번 판에 묶을지.
+- [ ] **Step 1: 실패하는 테스트**
+  - `refund: states 14-day full refund once for all payment channels` (공통 문장 1개)
+  - `refund: App Store exception mentions Apple decides and reportaproblem.apple.com`
+  - `refund: Google Play request via contact email with order number (GPA.)`
+  - `refund: processing says refund goes through the channel that charged (Paddle, Google, Apple) and other live subscriptions keep premium`
+  - `terms 제2조: web·Google Play subscriptions end on deletion; App Store must be canceled at Apple`
+  - `terms 제4조: in-app purchases processed by Apple or Google with their terms`
+  - `terms 제5조: app subscriptions canceled in store subscription settings`
+  - `terms 제6조: in-app trial via store free trial, once per account across web and app`
+  - `privacy: lists App Store / Google Play subscription identifiers and Apple·Google as payment processors` (+ Task 18 Step 3에서 동의가 필요하다고 확인됐으면 `consumption info shared with Apple on refund request`)
+  - `deletion notice (web·app) wording matches 스펙 7절 per source` (Task 17 Step 5 문구와 같은 문자열)
+  - 기존 `pricingSection` "결제 후 14일 이내 전액 환불" 테스트는 그대로 통과(웹 결제 화면이라 바꾸지 않는다)
+- [ ] **Step 2: 실패 확인** — Run: `cd client && VITE_FIREBASE_API_KEY= npx vitest run src/features/legal src/features/account` / Expected: FAIL
+- [ ] **Step 3: 구현** — 스펙 11절 "문서 개정 범위" 그대로. 앱 안에서 보이는 문서이므로 **웹 결제로 유도하는 문장을 넣지 않는다**(Global Constraints). 환불 정책의 웹 결제 절은 결제 경로 설명으로만 쓴다. Step 0에서 정한 판 구조·시행일로 `LEGAL_REVISIONS`에 새 판을 추가한다.
+- [ ] **Step 4: 통과 확인** — Run: `VITE_FIREBASE_API_KEY= npx vitest run && TZ=America/New_York VITE_FIREBASE_API_KEY= npx vitest run && npx tsc -b && npm run lint && cd ../mobile && npx jest && npx tsc --noEmit` / Expected: 전부 PASS
+- [ ] **Step 5: 화면 확인** — 로컬에서 `/refund`·`/terms`·`/privacy`의 변경 예정 공지와 시행일 이후 본문, 웹 탈퇴 다이얼로그를 출처별(Paddle·Google·Apple 가짜 문서)로 확인
+- [ ] **Step 6: 커밋** — `git commit -m "docs(legal): 결제 경로 통일 환불 기준과 앱 결제 약관 개정"`
+
+---
+
 ## 구현 후, 계정이 생긴 뒤 (이 계획의 태스크 아님, 사용자 몫 포함)
 
 - 사용자가 스펙 "선행 조건" 체크리스트를 끝낸다(Apple Developer·소규모 사업자, App Store Connect 상품 2개, Play Console 상품·offer, Pub/Sub 푸시, 서비스 계정).
 - 사용자가 자기 터미널에서 `wrangler secret put`: `IAP_ACCOUNT_TOKEN_SECRET`, `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `GOOGLE_PLAY_SERVICE_ACCOUNT`.
 - 실측: 스펙 "테스트 > 실측" 항목 전부. 특히 Google `inFreeTrial`(`offerPhase.freeTrial`)과 유예 기간 중 `expiryTime` 의미를 실제 응답으로 확인한다.
-- 스토어 제출 전: **약관·환불 정책 개정 여부를 사용자와 다시 확인**(보류 항목).
+- 실측(Task 17·18): Google 테스트 트랙 구독 계정 탈퇴 → Play 구독 화면에서 해지 확인, Play Console 환불 + **권한 회수** → 프리미엄 회수 확인(스펙 11절 운영 절차), Apple 샌드박스 환불 요청 → `CONSUMPTION_REQUEST` 수신·회신 응답 확인.
+- 스토어 제출 전: Task 19 Step 0의 사용자 결정(시행일·판 구조·법률 확인)이 끝나고, 개정 문서가 IAP와 같은 릴리스에 들어가는지 확인.

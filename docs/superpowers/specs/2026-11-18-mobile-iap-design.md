@@ -253,6 +253,8 @@ storeLinks/{store}_{id}            // apple_{originalTransactionId} | google_{pu
   - `terms.ts` 제6조(체험): 앱에서는 스토어의 무료 체험으로 제공되고 웹·앱을 합쳐 계정당 한 번이라고 추가한다.
   - 웹 `accountDeletionDialog` `SUBSCRIPTION_NOTICE`, 앱 `DELETE_MESSAGE`: 7절 출처별 문구와 맞춘다.
   - `pricingSection.tsx`의 "결제 후 14일 이내 전액 환불" 문구는 웹 결제 화면이라 그대로 둔다.
+  - `privacy.ts`: 새로 받는 스토어 구독 식별자(`originalTransactionId`, `purchaseToken`)와 결제 처리 주체(Apple·Google)를 추가한다. Apple 환불 회신(4절)에 고객 동의가 필요하다고 확인되면 "환불 요청 시 Apple에 이용 정보 제공"도 고지한다. 그 고지 전에는 회신을 끄고 로그만 남긴다.
+  - 판 구조: 지금 `LEGAL_REVISIONS`는 판마다 설정값만 다르고 본문은 하나다(`config.ts` 주석). 본문이 바뀌는 이번 개정은 판별 본문 구조로 바꾸거나 시행일에 본문을 교체하는 방식이 필요하다. 사용자가 정한다.
 - **반영 시점**: 개정 문서는 앱 IAP 출시와 **같은 릴리스**에 낸다. 먼저 내면 아직 없는 결제 경로를 설명하게 된다. 기존 사용자에게 불리한 변경이 아니라 새 결제 경로를 설명하는 추가다. 개정판 번호(`LEGAL_REVISIONS` 3판)·공지 여부는 출시 전에 사용자가 정한다. `trial-reuse-after-deletion`의 방침 개정과 묶을 수 있다.
 - **법률 확인**: 전자상거래법 청약철회 문구와의 정합성은 최종 문구 확정 전에 사용자가 확인한다.
 
