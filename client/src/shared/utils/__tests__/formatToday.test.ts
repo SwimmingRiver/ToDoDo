@@ -31,19 +31,19 @@ describe('formatToday 유틸 함수', () => {
   })
 
   describe('formatDueTime', () => {
-    it('오전 시간이면 "오전 N시"를 반환해야 한다', () => {
+    it('오전 시각을 24시간제 HH:mm으로 반환해야 한다', () => {
       const dueAt = new Date(2026, 5, 15, 9, 0).toISOString()
-      expect(formatDueTime(dueAt)).toBe('오전 9시')
+      expect(formatDueTime(dueAt)).toBe('09:00')
     })
 
-    it('오후 시간이면 "오후 N시"를 반환해야 한다', () => {
+    it('오후 시각을 24시간제 HH:mm으로 반환해야 한다', () => {
       const dueAt = new Date(2026, 5, 15, 14, 0).toISOString()
-      expect(formatDueTime(dueAt)).toBe('오후 2시')
+      expect(formatDueTime(dueAt)).toBe('14:00')
     })
 
-    it('정오(12시)는 "오후 12시"를 반환해야 한다', () => {
+    it('정오(12시)는 "12:00"을 반환해야 한다', () => {
       const dueAt = new Date(2026, 5, 15, 12, 0).toISOString()
-      expect(formatDueTime(dueAt)).toBe('오후 12시')
+      expect(formatDueTime(dueAt)).toBe('12:00')
     })
 
     it('자정(00:00)이면 시간 정보 없음으로 간주하여 null을 반환해야 한다', () => {
@@ -51,9 +51,9 @@ describe('formatToday 유틸 함수', () => {
       expect(formatDueTime(dueAt)).toBeNull()
     })
 
-    it('분 단위가 있어도 시 단위로만 표시해야 한다', () => {
-      const dueAt = new Date(2026, 5, 15, 18, 30).toISOString()
-      expect(formatDueTime(dueAt)).toBe('오후 6시')
+    it('분까지 두 자리로 표시해야 한다', () => {
+      expect(formatDueTime(new Date(2026, 5, 15, 18, 30).toISOString())).toBe('18:30')
+      expect(formatDueTime(new Date(2026, 5, 15, 9, 5).toISOString())).toBe('09:05')
     })
   })
 })

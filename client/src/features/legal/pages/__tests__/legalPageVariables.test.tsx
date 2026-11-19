@@ -9,17 +9,22 @@ vi.mock("../../config", async (importOriginal) => ({
   ],
 }));
 vi.mock("../../content", () => ({
-  LEGAL_DOCUMENTS: {
-    terms: {
-      slug: "terms",
-      title: "{{sellerName}} 약관",
-      sections: [
-        {
-          heading: "{{sellerName}} 조항",
-          table: { headers: ["{{sellerName}} 항목", "내용"], rows: [["a", "b"]] },
+  LEGAL_EDITIONS: {
+    terms: [
+      {
+        effectiveOn: "",
+        document: {
+          slug: "terms",
+          title: "{{sellerName}} 약관",
+          sections: [
+            {
+              heading: "{{sellerName}} 조항",
+              table: { headers: ["{{sellerName}} 항목", "내용"], rows: [["a", "b"]] },
+            },
+          ],
         },
-      ],
-    },
+      },
+    ],
   },
 }));
 

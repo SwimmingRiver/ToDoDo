@@ -10,6 +10,7 @@ vi.mock("../../config", async (importOriginal) => ({
   LEGAL_REVISIONS: revisions,
 }));
 
+import { LEGAL_EDITIONS } from "../../content";
 import LegalPage from "../legalPage";
 
 const renderPage = (slug: "terms" | "privacy" | "refund") =>
@@ -87,6 +88,28 @@ describe("LegalPage", () => {
       expect(history).toHaveTextContent("2030년 3월 1일");
       expect(history).toHaveTextContent("2030년 3월 10일");
       expect(history).toHaveTextContent("판매자 변경");
+    });
+  });
+
+  describe("본문 판 전환", () => {
+    // 실제 판 목록에서 날짜를 읽는다 — 시행일을 테스트에 다시 적지 않는다.
+    const latestOn = LEGAL_EDITIONS.refund.at(-1)!.effectiveOn;
+    const seoulMidnight = new Date(`${latestOn}T00:00:00+09:00`);
+
+    it("새 본문 시행일 전날(서울)까지는 이전 본문을 보여준다", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(seoulMidnight.getTime() - 1));
+      renderPage("refund");
+      expect(screen.getByText(/Paddle을 통해 원래 결제 수단으로/)).toBeInTheDocument();
+      expect(screen.queryByText(/App Store에서 결제한 경우/)).not.toBeInTheDocument();
+    });
+
+    it("새 본문 시행일(서울 0시)부터 새 본문을 보여준다", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(seoulMidnight);
+      renderPage("refund");
+      expect(screen.getByText(/App Store에서 결제한 경우/)).toBeInTheDocument();
+      expect(screen.queryByText(/Paddle을 통해 원래 결제 수단으로/)).not.toBeInTheDocument();
     });
   });
 

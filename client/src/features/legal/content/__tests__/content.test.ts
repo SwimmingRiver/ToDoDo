@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { LEGAL_DOCUMENTS, LEGAL_LINKS } from "..";
+import { LEGAL_DOCUMENTS, LEGAL_EDITIONS, LEGAL_LINKS } from "..";
+import { LEGAL_REVISIONS } from "../../config";
 import { LEGAL_VARIABLE_KEYS } from "../../utils/fillLegalVariables";
 import type { LegalDocument } from "../../types/legal.type";
 
@@ -48,6 +49,91 @@ describe("법적 문서 본문", () => {
 
   it("환불 정책은 14일 전액 환불을 명시한다", () => {
     expect(allText(LEGAL_DOCUMENTS.refund)).toContain("14일 이내");
+  });
+
+  describe("결제한 곳과 관계없는 환불·해지 기준(IAP 스펙 11절)", () => {
+    const refundText = () => allText(LEGAL_DOCUMENTS.refund);
+
+    it("14일 기준은 공통 문장 하나로 쓰고, 세 결제처 모두에 적용한다고 밝힌다", () => {
+      const text = refundText();
+      expect(text.match(/결제일로부터 14일 이내에 요청하면 전액 환불/g)).toHaveLength(1);
+      expect(text).toContain("웹, Google Play, App Store 중 어디에서 결제했든 같은 기준");
+    });
+
+    it("App Store 결제는 Apple이 결정하고 Apple에 요청한다고 안내한다", () => {
+      const text = refundText();
+      expect(text).toContain("App Store 결제의 환불은 Apple이 결정");
+      expect(text).toContain("reportaproblem.apple.com");
+    });
+
+    it("Google Play 결제는 운영자 이메일과 주문번호로 요청받는다", () => {
+      expect(refundText()).toMatch(/Google Play에서 결제한 경우: \{\{contactEmail\}\}.*GPA\./);
+    });
+
+    it("환불은 결제한 곳을 통해 처리되고 다른 결제처 구독은 유지된다고 안내한다", () => {
+      const text = refundText();
+      expect(text).toContain("결제를 처리한 곳(Paddle, Google, Apple)");
+      expect(text).toContain("다른 곳에서 결제한 구독이 남아 있으면");
+    });
+
+    it("이용약관은 앱 결제의 처리 주체·해지 위치·앱 체험 방식을 적는다", () => {
+      const section = (keyword: string) =>
+        allText({ ...LEGAL_DOCUMENTS.terms, sections: LEGAL_DOCUMENTS.terms.sections.filter((s) => s.heading.includes(keyword)) });
+      expect(section("판매 주체")).toContain("Apple(App Store) 또는 Google(Google Play)이 결제를 처리");
+      expect(section("갱신")).toContain("App Store 또는 Google Play의 구독 관리에서 해지");
+      const trial = section("체험");
+      expect(trial).toContain("웹과 앱을 합쳐 계정당 한 번");
+      // 앱 체험은 스토어 결제 수단이 등록되고 자동 전환된다 — 웹 체험의 "동의 없이 결제되지 않음"과 섞으면 안 된다.
+      expect(trial).toContain("체험이 끝나기 전에 해지하지 않으면");
+    });
+
+    it("개인정보처리방침은 스토어 구독 식별자와 Apple·Google 결제 처리를 적는다", () => {
+      const text = allText(LEGAL_DOCUMENTS.privacy);
+      expect(text).toContain("App Store 원거래 식별자");
+      expect(text).toContain("Google Play 구매 토큰");
+      expect(text).toContain("Apple Inc.(App Store) 또는 Google LLC(Google Play)");
+    });
+  });
+
+  describe("본문 판(LEGAL_EDITIONS)", () => {
+    const revisionDates = LEGAL_REVISIONS.map((r) => r.effectiveOn);
+
+    it("문서마다 판이 시행일 순이고, 시행일은 LEGAL_REVISIONS의 판 시행일 중 하나다", () => {
+      for (const [slug, editions] of Object.entries(LEGAL_EDITIONS)) {
+        const dates = editions.map((e) => e.effectiveOn);
+        expect([...dates].sort(), slug).toEqual(dates);
+        expect(new Set(dates).size, slug).toBe(dates.length);
+        for (const date of dates) expect(revisionDates, slug).toContain(date);
+        for (const { document } of editions) expect(document.slug).toBe(slug);
+      }
+    });
+
+    it("첫 본문은 첫 판과 함께 시행된다", () => {
+      for (const editions of Object.values(LEGAL_EDITIONS)) {
+        expect(editions[0].effectiveOn).toBe(revisionDates[0]);
+      }
+    });
+
+    it("LEGAL_DOCUMENTS는 문서별 최신 본문이다", () => {
+      for (const [slug, editions] of Object.entries(LEGAL_EDITIONS)) {
+        expect(LEGAL_DOCUMENTS[slug as keyof typeof LEGAL_DOCUMENTS]).toBe(editions.at(-1)!.document);
+      }
+    });
+
+    it("지난 본문은 옛 문장 그대로다(새 본문 시행 전까지 화면에 보인다)", () => {
+      const firstRefund = allText(LEGAL_EDITIONS.refund[0].document);
+      expect(firstRefund).toContain("Paddle을 통해 원래 결제 수단으로");
+      expect(firstRefund).not.toContain("App Store");
+    });
+
+    it("모든 판 본문이 정의된 변수 토큰만 쓴다", () => {
+      for (const editions of Object.values(LEGAL_EDITIONS)) {
+        for (const { document } of editions) {
+          const tokens = [...allText(document).matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]);
+          for (const token of tokens) expect(LEGAL_VARIABLE_KEYS).toContain(token);
+        }
+      }
+    });
   });
 
   it("개인정보처리방침은 국외 이전 대상과 Paddle 안내를 모두 담는다", () => {
@@ -111,6 +197,15 @@ describe("법적 문서 본문", () => {
       expect(text).toContain("회원 탈퇴");
       expect(text).toContain("즉시 해지");
       expect(text).toContain("남은 기간");
+    });
+
+    it("이용약관·방침은 App Store 구독이 탈퇴로 해지되지 않는다고 알린다(Apple 5.1.1(v))", () => {
+      const account = LEGAL_DOCUMENTS.terms.sections.find((s) => s.heading.includes("계정"));
+      const termsText = [...(account?.paragraphs ?? []), ...(account?.items ?? [])].join("\n");
+      expect(termsText).toContain("App Store에서 결제한 구독은");
+      expect(termsText).toContain("탈퇴해도 해지되지 않고");
+      const rights = privacySection("권리");
+      expect((rights?.items ?? []).join("\n")).toContain("App Store에서 결제한 구독은 Apple에서 직접 해지");
     });
   });
 
