@@ -5,7 +5,54 @@ import { formatMonthDay, getPremiumView } from "../premiumView";
 const NOW = Date.parse("2026-10-10T00:00:00.000Z");
 const e = (overrides: Partial<Entitlement>): Entitlement => ({ ...DEFAULT_ENTITLEMENT, ...overrides });
 
+const record = {
+  status: "active" as const,
+  premiumUntil: "2026-11-13T00:00:00.000Z",
+  cancelAt: null,
+  currentPeriodEnd: "2026-11-10T00:00:00.000Z",
+  autoRenew: true,
+  startedAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "2026-10-01T00:00:00.000Z",
+};
+const paddleRecord = { ...record, customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: null, lastEventOccurredAt: null };
+
 describe("getPremiumView", () => {
+  it("대표 출처 apple이고 프리미엄 → store 보기(결제·포털 없음)", () => {
+    const view = getPremiumView(e({ status: "active", source: "apple", premiumUntil: "2026-11-13T00:00:00.000Z" }), NOW);
+    expect(view).toEqual({ kind: "store", store: "apple", until: new Date("2026-11-13T00:00:00.000Z"), canceling: false, pastDue: false });
+  });
+
+  it("google 해지 예약 → store 보기 canceling", () => {
+    const view = getPremiumView(
+      e({ status: "active", source: "google", premiumUntil: "2026-11-13T00:00:00.000Z", cancelAt: "2026-11-13T00:00:00.000Z" }),
+      NOW,
+    );
+    expect(view).toMatchObject({ kind: "store", store: "google", canceling: true, pastDue: false });
+  });
+
+  it("apple past_due → paddle pastDue가 아니라 store 보기(pastDue true)", () => {
+    const view = getPremiumView(e({ status: "past_due", source: "apple", premiumUntil: "2026-10-12T00:00:00.000Z" }), NOW);
+    expect(view).toMatchObject({ kind: "store", store: "apple", pastDue: true });
+  });
+
+  it("스토어 결제 재시도·보류(프리미엄 아님, 자동 갱신 중) → Paddle pastDue가 아니라 store 보기(pastDue)", () => {
+    // Apple status 3·Google ON_HOLD: premiumUntil=지금. Paddle 포털 버튼은 고객이 없어 실패한다.
+    const nowIso = new Date(NOW).toISOString();
+    const retry = { ...record, status: "past_due" as const, premiumUntil: nowIso };
+    const apple = { ...retry, originalTransactionId: "otx_1", productId: "premium_monthly", environment: "Production" as const, appAccountToken: null, lastNotificationUUID: null, lastSignedDate: null };
+    const view = getPremiumView(e({ status: "past_due", source: "apple", premiumUntil: nowIso, sources: { apple } }), NOW);
+    expect(view).toEqual({ kind: "store", store: "apple", until: new Date(nowIso), canceling: false, pastDue: true });
+    // 자동 갱신이 꺼졌으면 스토어가 더 청구하지 않는다 → 구매 권유
+    const off = getPremiumView(e({ status: "past_due", source: "apple", premiumUntil: nowIso, sources: { apple: { ...apple, autoRenew: false } } }), NOW);
+    expect(off.kind).toBe("offer");
+  });
+
+  it("구독 중 canManage는 sources.paddle.customerId 기준(최상위 customerId만으론 아님)", () => {
+    const base = { status: "active" as const, source: "paddle" as const, premiumUntil: "2026-11-13T00:00:00.000Z" };
+    expect(getPremiumView(e({ ...base, customerId: "ctm_1" }), NOW)).toMatchObject({ kind: "active", canManage: false });
+    expect(getPremiumView(e({ ...base, sources: { paddle: paddleRecord } }), NOW)).toMatchObject({ kind: "active", canManage: true });
+  });
+
   it("비프리미엄, 체험 미사용 → offer(canTrial)", () => {
     expect(getPremiumView(DEFAULT_ENTITLEMENT, NOW)).toEqual({ kind: "offer", canTrial: true });
   });
@@ -24,7 +71,7 @@ describe("getPremiumView", () => {
 
   it("구독 중 → 다음 결제일, 고객이 있으면 관리 가능", () => {
     const view = getPremiumView(
-      e({ status: "active", source: "paddle", premiumUntil: "2026-11-13T00:00:00.000Z", currentPeriodEnd: "2026-11-10T00:00:00.000Z", customerId: "ctm_1" }),
+      e({ status: "active", source: "paddle", premiumUntil: "2026-11-13T00:00:00.000Z", currentPeriodEnd: "2026-11-10T00:00:00.000Z", sources: { paddle: paddleRecord } }),
       NOW,
     );
     expect(view).toEqual({ kind: "active", nextBillingAt: new Date("2026-11-10T00:00:00.000Z"), canManage: true });

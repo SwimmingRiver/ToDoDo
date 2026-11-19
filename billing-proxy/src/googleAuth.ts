@@ -31,11 +31,15 @@ const pemToDer = (pem: string): Uint8Array => {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 };
 
-export const signServiceAccountJwt = async (sa: ServiceAccount, nowSec: number): Promise<string> => {
+export const signServiceAccountJwt = async (
+  sa: ServiceAccount,
+  nowSec: number,
+  scope: string = GOOGLE_SCOPES,
+): Promise<string> => {
   const header = encodeJson({ alg: "RS256", typ: "JWT" });
   const payload = encodeJson({
     iss: sa.client_email,
-    scope: GOOGLE_SCOPES,
+    scope,
     aud: TOKEN_URL,
     iat: nowSec,
     exp: nowSec + 3600,
@@ -65,13 +69,15 @@ export class GoogleTokenProvider {
     // Workers가 "Illegal invocation"을 던진다. 감싸서 전역 fetch로 호출되게 한다.
     private readonly fetchFn: typeof fetch = (input, init) => fetch(input, init),
     private readonly now: () => number = Date.now,
+    // Play용 계정은 androidpublisher 스코프를 넘긴다. 기본값은 기존 호출자 동작 그대로.
+    private readonly scope: string = GOOGLE_SCOPES,
   ) {}
 
   async getToken(): Promise<string> {
     if (this.cached && this.cached.expiresAt - REFRESH_MARGIN_MS > this.now()) {
       return this.cached.token;
     }
-    const assertion = await signServiceAccountJwt(this.sa, Math.floor(this.now() / 1000));
+    const assertion = await signServiceAccountJwt(this.sa, Math.floor(this.now() / 1000), this.scope);
     const res = await this.fetchFn(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },

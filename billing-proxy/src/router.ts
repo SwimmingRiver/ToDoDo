@@ -5,22 +5,38 @@ import type { ClaimsClient } from "./claims";
 import type { CommitDeps } from "./commit";
 import type { Env } from "./env";
 import { handleCheckout, handlePortal, handleTrial } from "./handlers/account";
+import { handleAccountToken } from "./handlers/accountToken";
 import { handleDeleteAccount } from "./handlers/deleteAccount";
+import { handleAppleVerify, handleAppleWebhook } from "./handlers/iapApple";
+import { handleGoogleVerify, handleGoogleWebhook } from "./handlers/iapGoogle";
 import { handleWebhook } from "./handlers/webhook";
+import type { AppleServerApi } from "./apple/serverApi";
+import type { PlayApi } from "./google/playApi";
 import type { PaddleClient } from "./paddle";
+import type { StoreLinkStore } from "./storeLinks";
 
 export interface BillingDeps extends CommitDeps {
   claims: Pick<ClaimsClient, "setPremiumUntil" | "deleteUser">;
   paddle: Pick<PaddleClient, "createCheckoutTransaction" | "createPortalUrl" | "cancelSubscriptionImmediately">;
   accountData: Pick<AccountDataStore, "deleteUserData">;
+  storeLinks: Pick<StoreLinkStore, "get" | "put">;
+  apple: Pick<AppleServerApi, "getSubscriptionSnapshot" | "sendConsumptionInfo">;
+  verifyAppleJws: (jws: string) => Promise<unknown>;
+  play: Pick<PlayApi, "getSubscription" | "acknowledge">;
+  /** 탈퇴 시 Google 구독 해지. play와 같은 인스턴스다 — Play 토큰은 처음 호출할 때 만들어진다. */
+  google: Pick<PlayApi, "cancelSubscription">;
+  verifyPubSub: (authHeader: string | null) => Promise<boolean>;
 }
 
-type AccountRoute = (uid: string, deps: BillingDeps, now: Date) => Promise<Response>;
+type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env, request: Request) => Promise<Response>;
 
 const ACCOUNT_ROUTES = new Map<string, AccountRoute>([
   ["/checkout", handleCheckout],
   ["/trial", handleTrial],
   ["/portal", (uid, deps) => handlePortal(uid, deps)],
+  ["/iap/account-token", (uid, _deps, _now, env) => handleAccountToken(uid, env)],
+  ["/iap/apple/verify", handleAppleVerify],
+  ["/iap/google/verify", handleGoogleVerify],
 ]);
 
 const withCors = (response: Response, origin: string | null, env: Env): Response => {
@@ -61,6 +77,14 @@ export const handleRequest = async (
     if (url.pathname === "/webhooks/paddle" && request.method === "POST") {
       return await handleWebhook(request, env, getDeps(), now);
     }
+    // Firebase 인증 대신 Apple 서명 체인으로 출처를 확인한다(App Store 서버가 보냄).
+    if (url.pathname === "/webhooks/apple" && request.method === "POST") {
+      return await handleAppleWebhook(request, env, getDeps(), now);
+    }
+    // Pub/Sub 푸시가 붙이는 OIDC 토큰으로 출처를 확인한다(Play RTDN).
+    if (url.pathname === "/webhooks/google" && request.method === "POST") {
+      return await handleGoogleWebhook(request, env, getDeps(), now);
+    }
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), origin, env);
 
     // 탈퇴는 결제 허용 목록과 무관하게 누구나 할 수 있어야 한다 — ACCOUNT_ROUTES(허용 목록 적용)와 분리한다.
@@ -78,7 +102,7 @@ export const handleRequest = async (
     if (!isBillingAllowed(uid, env.BILLING_ALLOWED_UIDS)) {
       return withCors(json({ error: "NOT_ALLOWED" }, 403), origin, env);
     }
-    return withCors(await route(uid, getDeps(), now), origin, env);
+    return withCors(await route(uid, getDeps(), now, env, request), origin, env);
   } catch (error) {
     console.error(`처리되지 않은 예외 (${url.pathname}):`, error);
     return withCors(new Response("Internal Server Error", { status: 500 }), origin, env);

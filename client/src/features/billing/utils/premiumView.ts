@@ -6,13 +6,37 @@ export type PremiumView =
   | { kind: "trialing"; until: Date; daysLeft: number }
   | { kind: "active"; nextBillingAt: Date | null; canManage: boolean }
   | { kind: "canceling"; until: Date }
-  | { kind: "pastDue" };
+  | { kind: "pastDue" }
+  | { kind: "store"; store: "apple" | "google"; until: Date; canceling: boolean; pastDue: boolean };
 
 const DAY_MS = 86_400_000;
 
 export const getPremiumView = (entitlement: Entitlement, nowMs: number): PremiumView => {
-  // 결제 실패는 이용 가능 여부와 무관하게 결제 수단 변경을 먼저 안내한다.
-  if (entitlement.status === "past_due") return { kind: "pastDue" };
+  // 대표 출처가 스토어면 결제·포털을 웹에서 다루지 않는다(체크아웃 숨김). past_due도 paddle 결제수단 안내가 아니라 스토어 보기로 처리한다.
+  const store = entitlement.source === "apple" || entitlement.source === "google" ? entitlement.source : null;
+  if (store && isPremiumEntitlement(entitlement, nowMs)) {
+    return {
+      kind: "store",
+      store,
+      until: new Date(entitlement.premiumUntil as string),
+      canceling: entitlement.cancelAt !== null,
+      pastDue: entitlement.status === "past_due",
+    };
+  }
+  // 스토어 결제 재시도·보류(Apple status 3·Google ON_HOLD/PAUSED)는 premiumUntil이 지금이라 프리미엄이 아니지만
+  // 스토어가 계속 청구를 시도한다. Paddle 결제 수단 변경(포털은 고객이 없어 실패)이 아니라 스토어 안내를 보여준다.
+  const retrying = store ? entitlement.sources[store] : undefined;
+  if (store && retrying && retrying.status === "past_due" && retrying.autoRenew && retrying.cancelAt === null) {
+    return {
+      kind: "store",
+      store,
+      until: new Date(entitlement.premiumUntil ?? nowMs),
+      canceling: false,
+      pastDue: true,
+    };
+  }
+  // 결제 실패는 이용 가능 여부와 무관하게 결제 수단 변경을 먼저 안내한다(Paddle만 — 스토어 결제 수단은 웹에서 못 바꾼다).
+  if (entitlement.status === "past_due" && !store) return { kind: "pastDue" };
   if (!isPremiumEntitlement(entitlement, nowMs)) return { kind: "offer", canTrial: entitlement.trialUsedAt === null };
 
   const until = new Date(entitlement.premiumUntil as string);
@@ -23,7 +47,7 @@ export const getPremiumView = (entitlement: Entitlement, nowMs: number): Premium
   return {
     kind: "active",
     nextBillingAt: entitlement.currentPeriodEnd ? new Date(entitlement.currentPeriodEnd) : null,
-    canManage: entitlement.customerId !== null,
+    canManage: !!entitlement.sources.paddle?.customerId,
   };
 };
 

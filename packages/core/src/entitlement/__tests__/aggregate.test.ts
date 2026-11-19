@@ -1,0 +1,271 @@
+import { describe, it, expect } from "vitest";
+import {
+  aggregate,
+  hasAutoRenewingStoreSubscription,
+  isAutoRenewingStore,
+  isPremiumAt,
+  toClaimSeconds,
+} from "../aggregate";
+import { normalizeEntitlement } from "../normalize";
+import { EMPTY_ENTITLEMENT, type AppleRecord, type EntitlementDoc, type GoogleRecord, type PaddleRecord, type SourceRecord } from "../types";
+
+const NOW = new Date("2026-12-01T00:00:00.000Z");
+const FUTURE = "2027-01-01T00:00:00.000Z";
+const FUTURE2 = "2027-02-01T00:00:00.000Z";
+const PAST = "2026-11-01T00:00:00.000Z";
+
+const rec = (over: Partial<SourceRecord> = {}): SourceRecord => ({
+  status: "active",
+  premiumUntil: FUTURE,
+  cancelAt: null,
+  currentPeriodEnd: null,
+  autoRenew: true,
+  startedAt: "2026-11-10T00:00:00.000Z",
+  updatedAt: "2026-11-10T00:00:00.000Z",
+  ...over,
+});
+const paddle = (over: Partial<PaddleRecord> = {}): PaddleRecord => ({
+  ...rec(),
+  customerId: "ctm_1",
+  subscriptionId: "sub_1",
+  lastWebhookEventId: "evt_1",
+  lastEventOccurredAt: "2026-11-10T00:00:00.000Z",
+  ...over,
+});
+const apple = (over: Partial<AppleRecord> = {}): AppleRecord => ({
+  ...rec(),
+  originalTransactionId: "otx_1",
+  productId: "premium_monthly",
+  environment: "Production",
+  appAccountToken: null,
+  lastNotificationUUID: null,
+  lastSignedDate: null,
+  ...over,
+});
+const google = (over: Partial<GoogleRecord> = {}): GoogleRecord => ({
+  ...rec(),
+  purchaseToken: "tok",
+  productId: "premium_monthly",
+  basePlanId: "monthly",
+  environment: "Production",
+  obfuscatedAccountId: null,
+  lastMessageId: null,
+  lastEventTime: null,
+  ...over,
+});
+const doc = (sources: EntitlementDoc["sources"], over: Partial<EntitlementDoc> = {}): EntitlementDoc => ({
+  ...EMPTY_ENTITLEMENT,
+  sources,
+  ...over,
+});
+
+describe("aggregate", () => {
+  it("no sources → free, premiumUntil null, status none, source null", () => {
+    const result = aggregate(doc({}, { plan: "premium", status: "active", source: "paddle", premiumUntil: FUTURE, cancelAt: FUTURE }), NOW);
+    expect(result).toMatchObject({
+      plan: "free",
+      status: "none",
+      source: null,
+      premiumUntil: null,
+      cancelAt: null,
+      currentPeriodEnd: null,
+      duplicate: null,
+    });
+  });
+
+  it("picks max premiumUntil and its source's status/cancelAt/currentPeriodEnd", () => {
+    const result = aggregate(
+      doc({
+        paddle: paddle({ premiumUntil: FUTURE, status: "active" }),
+        apple: apple({ premiumUntil: FUTURE2, status: "past_due", cancelAt: FUTURE2, currentPeriodEnd: "2027-01-30T00:00:00.000Z" }),
+      }),
+      NOW,
+    );
+    expect(result).toMatchObject({
+      plan: "premium",
+      source: "apple",
+      status: "past_due",
+      premiumUntil: FUTURE2,
+      cancelAt: FUTURE2,
+      currentPeriodEnd: "2027-01-30T00:00:00.000Z",
+    });
+  });
+
+  it("tie broken by paddle > apple > google > manual > trial", () => {
+    const all = {
+      trial: rec(),
+      manual: rec(),
+      google: google(),
+      apple: apple(),
+      paddle: paddle(),
+    };
+    expect(aggregate(doc(all), NOW).source).toBe("paddle");
+    const { paddle: _p, ...noPaddle } = all;
+    expect(aggregate(doc(noPaddle), NOW).source).toBe("apple");
+    const { apple: _a, ...noApple } = noPaddle;
+    expect(aggregate(doc(noApple), NOW).source).toBe("google");
+    const { google: _g, ...noGoogle } = noApple;
+    expect(aggregate(doc(noGoogle), NOW).source).toBe("manual");
+  });
+
+  it("customerId/subscriptionId/lastWebhookEventId/lastEventOccurredAt come from sources.paddle even when apple is representative", () => {
+    const result = aggregate(doc({ paddle: paddle({ premiumUntil: FUTURE }), apple: apple({ premiumUntil: FUTURE2 }) }), NOW);
+    expect(result.source).toBe("apple");
+    expect(result).toMatchObject({
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_1",
+      lastEventOccurredAt: "2026-11-10T00:00:00.000Z",
+    });
+  });
+
+  it("clears paddle-derived fields when there is no paddle record", () => {
+    const result = aggregate(doc({ apple: apple() }, { customerId: "stale", subscriptionId: "stale" }), NOW);
+    expect(result.customerId).toBeNull();
+    expect(result.subscriptionId).toBeNull();
+  });
+
+  it("expired sources still count for max (premiumUntil in past → plan free, source = that source)", () => {
+    const result = aggregate(doc({ apple: apple({ premiumUntil: PAST, status: "canceled" }) }, { plan: "premium" }), NOW);
+    expect(result).toMatchObject({ plan: "free", source: "apple", status: "canceled", premiumUntil: PAST });
+  });
+
+  it("ignores sources whose premiumUntil is null", () => {
+    const result = aggregate(doc({ apple: apple({ premiumUntil: null }), manual: rec({ premiumUntil: FUTURE }) }), NOW);
+    expect(result.source).toBe("manual");
+  });
+
+  describe("duplicate", () => {
+    it("two auto-renewing valid payment sources → laterSource = later startedAt", () => {
+      const result = aggregate(
+        doc({
+          paddle: paddle({ startedAt: "2026-11-01T00:00:00.000Z" }),
+          apple: apple({ startedAt: "2026-11-20T00:00:00.000Z" }),
+        }),
+        NOW,
+      );
+      expect(result.duplicate).toEqual({ laterSource: "apple", detectedAt: NOW.toISOString() });
+    });
+
+    it("null startedAt counts as earliest", () => {
+      const result = aggregate(
+        doc({ paddle: paddle({ startedAt: null }), google: google({ startedAt: "2026-11-20T00:00:00.000Z" }) }),
+        NOW,
+      );
+      expect(result.duplicate?.laterSource).toBe("google");
+      const reversed = aggregate(
+        doc({ paddle: paddle({ startedAt: "2026-11-20T00:00:00.000Z" }), google: google({ startedAt: null }) }),
+        NOW,
+      );
+      expect(reversed.duplicate?.laterSource).toBe("paddle");
+    });
+
+    it("canceling (autoRenew false) source is not counted", () => {
+      expect(aggregate(doc({ paddle: paddle({ autoRenew: false }), apple: apple() }), NOW).duplicate).toBeNull();
+      expect(aggregate(doc({ paddle: paddle({ cancelAt: FUTURE }), apple: apple() }), NOW).duplicate).toBeNull();
+    });
+
+    it("expired or canceled-status source is not counted", () => {
+      expect(aggregate(doc({ paddle: paddle({ premiumUntil: PAST }), apple: apple() }), NOW).duplicate).toBeNull();
+      expect(aggregate(doc({ paddle: paddle({ status: "canceled" }), apple: apple() }), NOW).duplicate).toBeNull();
+    });
+
+    it("manual + apple is not duplicate", () => {
+      expect(aggregate(doc({ manual: rec({ autoRenew: true }), apple: apple() }), NOW).duplicate).toBeNull();
+    });
+
+    it("keeps existing detectedAt when laterSource unchanged, sets now when new", () => {
+      const sources = {
+        paddle: paddle({ startedAt: "2026-11-01T00:00:00.000Z" }),
+        apple: apple({ startedAt: "2026-11-20T00:00:00.000Z" }),
+      };
+      const kept = aggregate(doc(sources, { duplicate: { laterSource: "apple", detectedAt: "2026-11-25T00:00:00.000Z" } }), NOW);
+      expect(kept.duplicate).toEqual({ laterSource: "apple", detectedAt: "2026-11-25T00:00:00.000Z" });
+      const changed = aggregate(doc(sources, { duplicate: { laterSource: "paddle", detectedAt: "2026-11-25T00:00:00.000Z" } }), NOW);
+      expect(changed.duplicate).toEqual({ laterSource: "apple", detectedAt: NOW.toISOString() });
+    });
+  });
+
+  it("trialUsedAt and updatedAt untouched", () => {
+    const result = aggregate(
+      doc({ apple: apple() }, { trialUsedAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-11-30T00:00:00.000Z" }),
+      NOW,
+    );
+    expect(result.trialUsedAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(result.updatedAt).toBe("2026-11-30T00:00:00.000Z");
+  });
+});
+
+describe("hasAutoRenewingStoreSubscription", () => {
+  it("returns apple before google, null when none qualify", () => {
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple(), google: google() }), NOW)).toBe("apple");
+    expect(hasAutoRenewingStoreSubscription(doc({ google: google() }), NOW)).toBe("google");
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ autoRenew: false }), google: google() }), NOW)).toBe("google");
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ cancelAt: FUTURE }) }), NOW)).toBeNull();
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ status: "canceled", premiumUntil: PAST }) }), NOW)).toBeNull();
+    expect(hasAutoRenewingStoreSubscription(doc({ paddle: paddle() }), NOW)).toBeNull();
+  });
+
+  it("결제 재시도·보류(유효 기간 없음)여도 스토어가 계속 청구하면 경고 대상이다", () => {
+    // Apple 결제 재시도(status 3)·Google ON_HOLD는 premiumUntil=지금이지만 스토어는 계속 청구를 시도한다.
+    const retry = { status: "past_due" as const, premiumUntil: NOW.toISOString(), autoRenew: true };
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple(retry) }), NOW)).toBe("apple");
+    expect(hasAutoRenewingStoreSubscription(doc({ google: google({ ...retry, premiumUntil: null }) }), NOW)).toBe("google");
+    expect(hasAutoRenewingStoreSubscription(doc({ apple: apple({ ...retry, autoRenew: false }) }), NOW)).toBeNull();
+  });
+
+  it("이중 구독 판정은 그대로 유효 기간이 있어야 한다", () => {
+    const retry = { status: "past_due" as const, premiumUntil: NOW.toISOString(), autoRenew: true };
+    expect(aggregate(doc({ apple: apple(retry), paddle: paddle() }), NOW).duplicate).toBeNull();
+  });
+});
+
+describe("isAutoRenewingStore", () => {
+  it("스토어별로 따로 판정한다 — apple이 있어도 google을 놓치지 않는다", () => {
+    const both = doc({ apple: apple(), google: google() });
+    expect(isAutoRenewingStore(both, "apple")).toBe(true);
+    expect(isAutoRenewingStore(both, "google")).toBe(true);
+    expect(isAutoRenewingStore(doc({ apple: apple() }), "google")).toBe(false);
+    expect(isAutoRenewingStore(doc({ google: google({ autoRenew: false }) }), "google")).toBe(false);
+    expect(isAutoRenewingStore(doc({ google: google({ cancelAt: FUTURE }) }), "google")).toBe(false);
+    expect(isAutoRenewingStore(doc({ google: google({ status: "canceled", premiumUntil: PAST }) }), "google")).toBe(false);
+  });
+});
+
+describe("isPremiumAt / toClaimSeconds", () => {
+  it("premium only while premiumUntil is strictly after now", () => {
+    expect(isPremiumAt({ premiumUntil: null }, NOW)).toBe(false);
+    expect(isPremiumAt({ premiumUntil: NOW.toISOString() }, NOW)).toBe(false);
+    expect(isPremiumAt({ premiumUntil: FUTURE }, NOW)).toBe(true);
+  });
+  it("claim seconds floors epoch seconds, null is 0", () => {
+    expect(toClaimSeconds(null)).toBe(0);
+    expect(toClaimSeconds("2026-12-01T00:00:00.999Z")).toBe(Date.parse("2026-12-01T00:00:00Z") / 1000);
+  });
+});
+
+describe("예전 manual 문서 + Paddle id 이주 뒤 aggregate", () => {
+  it("포털 id는 남고 대표·plan은 manual 그대로다", () => {
+    const legacy = normalizeEntitlement({
+      plan: "premium",
+      source: "manual",
+      status: "active",
+      premiumUntil: FUTURE,
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_9",
+      lastEventOccurredAt: PAST,
+    });
+    const out = aggregate(legacy, NOW);
+    expect(out).toMatchObject({
+      plan: "premium",
+      source: "manual",
+      premiumUntil: FUTURE,
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_9",
+      lastEventOccurredAt: PAST,
+      duplicate: null,
+    });
+  });
+});

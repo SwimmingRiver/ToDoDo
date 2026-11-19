@@ -7,11 +7,14 @@ const json = (body: unknown, status = 200): Response =>
 
 export const handleCheckout = async (uid: string, deps: BillingDeps, now: Date): Promise<Response> => {
   const { doc } = await deps.store.get(uid);
+  const paddle = doc.sources.paddle;
   // 살아 있는 구독 위에 또 결제하면 이중 청구된다. 해지 예약 상태도 포털에서 "해지 취소"로 되살린다.
-  if (doc.source === "paddle" && doc.status !== "canceled" && isPremiumAt(doc, now)) {
+  // 대표 출처가 아니라 Paddle 기록으로 본다 — Apple 만료가 더 늦어 대표가 apple이어도 Paddle 구독은 살아 있다.
+  if (paddle && paddle.status !== "canceled" && isPremiumAt(paddle, now)) {
     return json({ error: "ALREADY_SUBSCRIBED" }, 409);
   }
-  const transactionId = await deps.paddle.createCheckoutTransaction(uid, doc.customerId);
+  // 예전 Paddle 고객으로 결제를 묶어야 포털에서 구독 이력이 한곳에 보인다.
+  const transactionId = await deps.paddle.createCheckoutTransaction(uid, paddle?.customerId ?? null);
   return json({ transactionId });
 };
 

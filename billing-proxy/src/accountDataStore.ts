@@ -33,11 +33,11 @@ export class AccountDataStore {
     });
   }
 
-  private async findOwnedDocNames(collectionId: string, uid: string): Promise<string[]> {
+  private async findOwnedDocNames(collectionId: string, ownerField: string, uid: string): Promise<string[]> {
     const res = await this.post(":runQuery", {
       structuredQuery: {
         from: [{ collectionId }],
-        where: { fieldFilter: { field: { fieldPath: "userId" }, op: "EQUAL", value: { stringValue: uid } } },
+        where: { fieldFilter: { field: { fieldPath: ownerField }, op: "EQUAL", value: { stringValue: uid } } },
         select: { fields: [{ fieldPath: "__name__" }] },
         limit: BATCH_LIMIT,
       },
@@ -52,10 +52,15 @@ export class AccountDataStore {
     if (!res.ok) throw new Error(`Firestore 커밋 실패 (${res.status})`);
   }
 
-  /** userId가 uid인 문서를 조회가 빌 때까지 BATCH_LIMIT씩 처리한다. 처리된 문서는 더 이상 조회되지 않아야 한다. */
-  private async drain(collectionId: string, uid: string, toWrite: (name: string) => unknown): Promise<void> {
+  /** ownerField가 uid인 문서를 조회가 빌 때까지 BATCH_LIMIT씩 처리한다. 처리된 문서는 더 이상 조회되지 않아야 한다. */
+  private async drain(
+    collectionId: string,
+    ownerField: string,
+    uid: string,
+    toWrite: (name: string) => unknown,
+  ): Promise<void> {
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const names = await this.findOwnedDocNames(collectionId, uid);
+      const names = await this.findOwnedDocNames(collectionId, ownerField, uid);
       if (names.length === 0) return;
       await this.commit(names.map(toWrite));
     }
@@ -63,12 +68,15 @@ export class AccountDataStore {
   }
 
   async deleteUserData(uid: string): Promise<void> {
-    await this.drain("todos", uid, (name) => ({ delete: name }));
+    await this.drain("todos", "userId", uid, (name) => ({ delete: name }));
     // 피드백은 내용을 남기고 작성자 식별 정보만 지운다. updateMask에 있고 fields에 없는 필드는 삭제된다.
-    await this.drain("feedback", uid, (name) => ({
+    await this.drain("feedback", "userId", uid, (name) => ({
       update: { name, fields: {} },
       updateMask: { fieldPaths: ["userId", "email"] },
     }));
+    // 스토어 구독 연결은 uid 필드로 묶인다. Google 구독은 이보다 먼저 서버가 해지하지만, Apple 구독은 지워도 남으므로
+    // 화면에서 별도로 경고한다.
+    await this.drain("storeLinks", "uid", uid, (name) => ({ delete: name }));
     await this.commit(SINGLE_DOC_COLLECTIONS.map((collection) => ({ delete: `${this.root}/${collection}/${uid}` })));
   }
 }

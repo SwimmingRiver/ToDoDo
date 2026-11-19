@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import * as Sentry from "@sentry/react";
 import { useToast } from "@/shared";
 import { useEntitlement } from "@/features/entitlement/hooks/useEntitlement";
-import { isPremiumEntitlement } from "@/features/entitlement/utils/isPremiumEntitlement";
 import { BillingApiError, createCheckout } from "../api/billingApi";
 import { loadPaddle, onPaddleEvent } from "../lib/paddle";
 
@@ -17,10 +16,13 @@ export const useCheckout = () => {
   // 상태 업데이트는 비동기라 같은 틱의 연타를 막지 못한다. ref로 즉시 잠근다.
   const busyRef = useRef(false);
 
+  // 대표 출처(최상위 source)가 아니라 Paddle 기록 자체를 본다 — 더 오래 가는 운영자 부여·스토어 구독이 있으면
+  // 대표 출처가 그대로라 확인 중에서 영영 벗어나지 못한다.
+  const paddleRecord = entitlement?.sources.paddle;
   const subscribed =
-    entitlement?.status === "active" &&
-    entitlement.source === "paddle" &&
-    isPremiumEntitlement(entitlement, Date.now());
+    paddleRecord !== undefined && paddleRecord.status !== "canceled" &&
+    paddleRecord.premiumUntil !== null &&
+    Date.parse(paddleRecord.premiumUntil) > Date.now();
 
   useEffect(() => {
     if ((phase === "confirming" || phase === "slow") && subscribed) {

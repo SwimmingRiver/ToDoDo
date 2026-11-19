@@ -36,6 +36,8 @@ describe("getEntitlement", () => {
       lastWebhookEventId: null,
       lastEventOccurredAt: null,
       updatedAt: "",
+      sources: {},
+      duplicate: null,
     });
   });
 
@@ -84,6 +86,8 @@ describe("getEntitlement", () => {
       lastWebhookEventId: null,
       lastEventOccurredAt: null,
       updatedAt: "",
+      sources: {},
+      duplicate: null,
     });
   });
 
@@ -98,6 +102,27 @@ describe("getEntitlement", () => {
     const result = await getEntitlement();
 
     expect(result).toMatchObject({ premiumUntil: "2026-10-17T00:00:00.000Z", trialUsedAt: "2026-10-10T00:00:00.000Z", cancelAt: null });
+  });
+
+  it("sources 없는 옛 paddle 문서를 core 정규화로 sources.paddle에 이주한다", async () => {
+    const { getDoc } = await import("firebase/firestore");
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        plan: "premium",
+        status: "active",
+        source: "paddle",
+        premiumUntil: "2026-11-13T00:00:00.000Z",
+        customerId: "ctm_1",
+        subscriptionId: "sub_1",
+      }),
+    } as never);
+
+    const { getEntitlement } = await import("../entitlementApi");
+    const result = await getEntitlement();
+
+    expect(result.sources.paddle).toMatchObject({ customerId: "ctm_1", subscriptionId: "sub_1" });
+    expect(result.duplicate).toBeNull();
   });
 
   it("미인증 상태면 에러를 던진다", async () => {

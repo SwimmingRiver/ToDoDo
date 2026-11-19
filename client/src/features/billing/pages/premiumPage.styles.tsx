@@ -142,3 +142,15 @@ export const SecondaryButton = styled(BaseButton)`
   background-color: transparent;
   color: ${colors.text.primary};
 `;
+
+export const BannerBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: ${radius.md};
+  background-color: ${colors.danger.background};
+  color: ${colors.danger.text};
+  font-size: 14px;
+  font-weight: 600;
+`;

@@ -77,5 +77,10 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if false;
     }
+
+    match /storeLinks/{linkId} {
+      // 스토어 영수증 ↔ 계정 연결. 서버(billing-proxy, 서비스 계정)만 읽고 쓴다.
+      allow read, write: if false;
+    }
   }
 }

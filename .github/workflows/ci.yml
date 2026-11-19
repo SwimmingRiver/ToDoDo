@@ -61,6 +61,7 @@ jobs:
             billingProxy:
               - 'billing-proxy/**'
               - 'packages/worker-auth/**'
+              - 'packages/core/**'
             # 앱은 packages/core(dist)를 file: 의존성으로 직접 쓴다 — core만 바뀐 PR도
             # 앱 타입·테스트를 다시 돌려야 core 변경이 앱을 깨뜨리는 걸 병합 전에 잡는다.
             mobile:
