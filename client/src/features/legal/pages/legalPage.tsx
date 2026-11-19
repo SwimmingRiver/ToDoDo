@@ -3,10 +3,10 @@ import { Link, useNavigationType } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import Footer from "@/layouts/footer/footer";
 import { LEGAL_REVISIONS } from "../config";
-import { LEGAL_DOCUMENTS } from "../content";
+import { LEGAL_EDITIONS } from "../content";
 import type { LegalSlug } from "../types/legal.type";
 import { fillLegalVariables } from "../utils/fillLegalVariables";
-import { resolveLegalRevision } from "../utils/resolveLegalRevision";
+import { resolveLegalEdition, resolveLegalRevision } from "../utils/resolveLegalRevision";
 import {
   Article,
   ChangeNotice,
@@ -28,9 +28,10 @@ interface LegalPageProps {
  * 링크로 다른 문서에 가면 SPA라 스크롤이 유지되므로, 링크 이동(PUSH/REPLACE)일 때만 맨 위로 올린다.
  */
 const LegalPage = ({ slug }: LegalPageProps) => {
-  const legalDocument = LEGAL_DOCUMENTS[slug];
-  // 렌더마다 오늘(서울) 기준으로 판을 고른다 — 시행일이 지나면 배포 없이 새 판이 보인다.
-  const { current, upcoming, history } = resolveLegalRevision(LEGAL_REVISIONS, new Date());
+  // 렌더마다 오늘(서울) 기준으로 판과 본문을 고른다 — 시행일이 지나면 배포 없이 새 판이 보인다.
+  const now = new Date();
+  const legalDocument = resolveLegalEdition(LEGAL_EDITIONS[slug], now);
+  const { current, upcoming, history } = resolveLegalRevision(LEGAL_REVISIONS, now);
   const fill = (text: string) => fillLegalVariables(text, current);
 
   const navigationType = useNavigationType();

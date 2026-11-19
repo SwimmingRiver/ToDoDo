@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { LegalRevision } from "../../config";
-import { formatEffectiveOn, resolveLegalRevision, seoulDateKey } from "../resolveLegalRevision";
+import {
+  formatEffectiveOn,
+  resolveLegalEdition,
+  resolveLegalRevision,
+  seoulDateKey,
+} from "../resolveLegalRevision";
 
 const base = { contactEmail: "a@b.c", privacyOfficer: "책임자" };
 
@@ -48,5 +53,25 @@ describe("resolveLegalRevision", () => {
   it("첫 판 시행 전이라도 첫 판을 현재 판으로 보여준다", () => {
     const result = resolveLegalRevision(REVISIONS, new Date("2029-01-01T00:00:00Z"));
     expect(result.current.sellerName).toBe("첫판");
+  });
+});
+
+describe("resolveLegalEdition", () => {
+  // 실제 시행일과 무관한 가상의 본문 판 — 판정 로직만 검증한다.
+  const EDITIONS = [
+    { effectiveOn: "2030-03-01", document: "첫 본문" },
+    { effectiveOn: "2030-03-10", document: "둘째 본문" },
+  ];
+
+  it("서울 날짜로 시행일 전날까지는 이전 본문을 고른다", () => {
+    expect(resolveLegalEdition(EDITIONS, new Date("2030-03-09T14:59:59Z"))).toBe("첫 본문");
+  });
+
+  it("서울 날짜로 시행일이 되면 새 본문을 고른다", () => {
+    expect(resolveLegalEdition(EDITIONS, new Date("2030-03-09T15:00:00Z"))).toBe("둘째 본문");
+  });
+
+  it("첫 본문 시행 전이라도 첫 본문을 고른다", () => {
+    expect(resolveLegalEdition(EDITIONS, new Date("2029-01-01T00:00:00Z"))).toBe("첫 본문");
   });
 });

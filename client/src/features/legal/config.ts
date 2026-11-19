@@ -17,7 +17,9 @@ export interface LegalConfig {
  * 약관·방침의 한 판. 약관 11조·방침 13조는 "시행 7일 전부터 서비스 화면에 알린다"고 하므로,
  * 새 판은 시행일 7일 전 이전에 배포돼야 한다. 배포되면 시행일 전까지는 이전 판 + 변경 예정 공지가,
  * 시행일(서울 날짜)부터는 새 판이 자동으로 보인다 — 시행일 당일 배포가 필요 없다.
- * 본문 문장 자체를 바꾸는 변경은 이 구조로 표현되지 않으니(본문은 판 하나뿐) 그때는 다시 설계할 것.
+ * 본문 문장이 바뀌는 판은 content/index.ts LEGAL_EDITIONS에 같은 시행일로 본문을 추가한다(판매자 표기만
+ * 바뀌는 판은 본문을 추가하지 않고 직전 본문을 그대로 쓴다). 본문을 여기 두지 않는 이유: 이 파일은 모든 화면의
+ * 푸터가 import하므로 본문을 넣으면 약관 전문이 공유 청크에 실린다.
  */
 export interface LegalRevision {
   /** 서울 기준 시행일, "YYYY-MM-DD". 이전 판보다 늦어야 한다. */
@@ -41,6 +43,17 @@ export const LEGAL_REVISIONS: LegalRevision[] = [
     effectiveOn: "2026-11-12",
     change:
       "판매자 표기를 '강수영'에서 'TODODO'로 변경(개인사업자 등록에 따른 변경, 대표자 강수영). 그 밖의 내용은 같습니다.",
+    config: {
+      sellerName: "TODODO",
+      contactEmail: "dodonriver@gmail.com",
+      privacyOfficer: "강수영",
+    },
+  },
+  {
+    // 본문이 바뀌는 판 — 본문은 content/index.ts LEGAL_EDITIONS의 같은 시행일 항목이다.
+    effectiveOn: "2026-11-27",
+    change:
+      "앱(App Store·Google Play) 결제에 맞춰 환불·해지·체험·결제 정보 조항을 보완합니다. 결제한 곳과 관계없이 결제일로부터 14일 이내 전액 환불 기준을 같게 적용하고, App Store 결제의 환불은 Apple에 요청하며, App Store 구독은 탈퇴와 별개로 직접 해지해야 한다는 내용을 추가합니다. 웹 결제 이용자에게 적용되는 내용은 바뀌지 않습니다.",
     config: {
       sellerName: "TODODO",
       contactEmail: "dodonriver@gmail.com",
