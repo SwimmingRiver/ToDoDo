@@ -67,6 +67,19 @@ describe("normalizeEntitlement", () => {
     expect(doc.sources.paddle?.cancelAt).toBe(P);
   });
 
+  it("legacy canceled paddle doc without cancelAt has autoRenew false", () => {
+    const doc = normalizeEntitlement({
+      source: "paddle",
+      status: "canceled",
+      premiumUntil: P,
+      cancelAt: null,
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+    });
+    expect(doc.sources.paddle?.status).toBe("canceled");
+    expect(doc.sources.paddle?.autoRenew).toBe(false);
+  });
+
   it("migrates legacy trial and manual docs", () => {
     const trial = normalizeEntitlement({ source: "trial", status: "trialing", premiumUntil: P, updatedAt: T });
     expect(trial.sources.trial).toMatchObject({ status: "trialing", premiumUntil: P, autoRenew: false, startedAt: null });

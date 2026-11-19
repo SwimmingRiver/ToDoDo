@@ -95,7 +95,8 @@ const migrateLegacy = (raw, source) => {
     if (source === "paddle") {
         if (!paddleIds)
             return {};
-        return { paddle: { ...common, autoRenew: common.cancelAt === null, ...paddleIds } };
+        // 해지된 예전 구독은 cancelAt이 없어도 갱신되지 않는다.
+        return { paddle: { ...common, autoRenew: common.cancelAt === null && common.status !== "canceled", ...paddleIds } };
     }
     // 예전 부여 스크립트·체험은 Paddle 구독자 문서 위에 source만 바꿔 덮었다. Paddle id가 남아 있으면 권한 없는
     // Paddle 기록으로 함께 옮긴다 — 안 그러면 첫 쓰기에서 id가 영영 사라져 포털·같은 고객 결제·남의/낡은 이벤트
