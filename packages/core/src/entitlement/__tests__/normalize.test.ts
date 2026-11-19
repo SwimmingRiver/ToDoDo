@@ -77,6 +77,42 @@ describe("normalizeEntitlement", () => {
     expect(Object.keys(manual.sources)).toEqual(["manual"]);
   });
 
+  it("Paddle id가 남은 예전 manual·trial 문서는 Paddle 기록도 권한 없이 함께 이주한다", () => {
+    // 예전 부여 스크립트·체험이 Paddle 구독자 문서 위에 source만 바꿔 덮었다. Paddle 기록을 만들지 않으면
+    // 첫 쓰기에서 customerId·subscriptionId가 영영 사라진다(포털·같은 고객 결제·낡은 이벤트 차단이 꺼짐).
+    for (const source of ["manual", "trial"] as const) {
+      const doc = normalizeEntitlement({
+        source,
+        status: "active",
+        premiumUntil: P,
+        currentPeriodEnd: "2026-11-20T00:00:00.000Z",
+        customerId: "ctm_1",
+        subscriptionId: "sub_1",
+        lastWebhookEventId: "evt_9",
+        lastEventOccurredAt: T,
+        updatedAt: T,
+      });
+      expect(doc.sources[source]).toMatchObject({ status: "active", premiumUntil: P });
+      expect(doc.sources.paddle).toEqual({
+        status: "canceled",
+        premiumUntil: null,
+        cancelAt: null,
+        currentPeriodEnd: "2026-11-20T00:00:00.000Z",
+        autoRenew: false,
+        startedAt: null,
+        updatedAt: T,
+        customerId: "ctm_1",
+        subscriptionId: "sub_1",
+        lastWebhookEventId: "evt_9",
+        lastEventOccurredAt: T,
+      });
+    }
+    const nullSource = normalizeEntitlement({ source: null, customerId: "ctm_1", subscriptionId: "sub_1" });
+    expect(Object.keys(nullSource.sources)).toEqual(["paddle"]);
+    // id 하나만 있으면 Paddle 기록을 만들지 않는다.
+    expect(normalizeEntitlement({ source: "manual", premiumUntil: P, customerId: "ctm_1" }).sources.paddle).toBeUndefined();
+  });
+
   it("legacy doc with source null has empty sources", () => {
     expect(normalizeEntitlement({ plan: "free", source: null }).sources).toEqual({});
   });

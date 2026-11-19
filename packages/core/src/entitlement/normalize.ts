@@ -94,7 +94,6 @@ const normalizeSources = (raw: Raw): Sources => {
 
 /** `sources`가 없는 예전 문서: 최상위 필드를 그 출처 하나의 기록으로 간주한다. */
 const migrateLegacy = (raw: Raw, source: EntitlementSource): Sources => {
-  if (source === null) return {};
   const common: SourceRecord = {
     status: status(raw.status),
     premiumUntil: str(raw.premiumUntil),
@@ -104,23 +103,40 @@ const migrateLegacy = (raw: Raw, source: EntitlementSource): Sources => {
     startedAt: null,
     updatedAt: str(raw.updatedAt) ?? "",
   };
-  if (source === "paddle") {
-    const customerId = reqStr(raw.customerId);
-    const subscriptionId = reqStr(raw.subscriptionId);
-    if (!customerId || !subscriptionId) return {};
-    return {
-      paddle: {
-        ...common,
-        autoRenew: common.cancelAt === null,
+  const customerId = reqStr(raw.customerId);
+  const subscriptionId = reqStr(raw.subscriptionId);
+  const paddleIds = customerId && subscriptionId
+    ? {
         customerId,
         subscriptionId,
         lastWebhookEventId: str(raw.lastWebhookEventId),
         lastEventOccurredAt: str(raw.lastEventOccurredAt),
-      },
-    };
+      }
+    : null;
+  if (source === "paddle") {
+    if (!paddleIds) return {};
+    return { paddle: { ...common, autoRenew: common.cancelAt === null, ...paddleIds } };
   }
-  if (source === "trial" || source === "manual") return { [source]: common };
-  return {}; // apple·google은 예전 문서에 존재할 수 없다.
+  // 예전 부여 스크립트·체험은 Paddle 구독자 문서 위에 source만 바꿔 덮었다. Paddle id가 남아 있으면 권한 없는
+  // Paddle 기록으로 함께 옮긴다 — 안 그러면 첫 쓰기에서 id가 영영 사라져 포털·같은 고객 결제·남의/낡은 이벤트
+  // 판정이 꺼진다. 권한은 주지 않고(premiumUntil null) 다음 실제 Paddle 이벤트가 이 기록을 대신한다.
+  const paddle: Sources = paddleIds
+    ? {
+        paddle: {
+          status: "canceled",
+          premiumUntil: null,
+          cancelAt: null,
+          currentPeriodEnd: common.currentPeriodEnd,
+          autoRenew: false,
+          startedAt: null,
+          updatedAt: common.updatedAt,
+          ...paddleIds,
+        },
+      }
+    : {};
+  if (source === "trial" || source === "manual") return { ...paddle, [source]: common };
+  // source null: Paddle id만 보존한다. apple·google은 예전 문서에 존재할 수 없다.
+  return paddle;
 };
 
 /** Firestore에서 읽은 임의의 값을 EntitlementDoc으로. 잘못된 필드는 기본값, 예전 문서는 sources로 이주. */

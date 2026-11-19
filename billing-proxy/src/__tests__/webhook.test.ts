@@ -331,6 +331,42 @@ describe("handleWebhook", () => {
     expect(d.store.write.mock.calls[0][1]).toMatchObject({ status: "active", premiumUntil: "2026-11-13T00:00:00.000Z" });
   });
 
+  describe("Paddle id가 남은 예전 manual 문서(부여 스크립트가 source만 덮음)", () => {
+    const legacyManual = (): EntitlementDoc => ({
+      ...EMPTY_ENTITLEMENT,
+      plan: "premium",
+      status: "active",
+      source: "manual",
+      premiumUntil: "2027-01-01T00:00:00.000Z",
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_0",
+      lastEventOccurredAt: "2026-10-09T00:00:00.000Z",
+    });
+
+    it("그 구독의 새 active 이벤트는 반영되고 manual 부여와 고객 id가 함께 남는다", async () => {
+      const d = deps(legacyManual());
+      const res = await handleWebhook(await request(body()), ENV, d, NOW);
+      expect(res.status).toBe(200);
+      const written = d.store.write.mock.calls[0][1];
+      expect(written.sources.paddle).toMatchObject({ status: "active", customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: "evt_1" });
+      expect(written.sources.manual).toMatchObject({ premiumUntil: "2027-01-01T00:00:00.000Z" });
+      expect(written).toMatchObject({ source: "manual", customerId: "ctm_1", subscriptionId: "sub_1" });
+    });
+
+    it("이미 반영한 시각 이전의 낡은 이벤트는 건너뛴다(낡은 이벤트 차단이 유지된다)", async () => {
+      const d = deps(legacyManual());
+      const res = await handleWebhook(
+        await request(body({ event_id: "evt_old", occurred_at: "2026-10-08T00:00:00.000Z" })),
+        ENV,
+        d,
+        NOW,
+      );
+      expect(res.status).toBe(200);
+      expect(d.store.write).not.toHaveBeenCalled();
+    });
+  });
+
   it("JSON이 깨졌으면 400", async () => {
     const d = deps();
     const res = await handleWebhook(await request("{not json"), ENV, d, NOW);

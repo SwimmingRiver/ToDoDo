@@ -5,6 +5,7 @@ import {
   isPremiumAt,
   toClaimSeconds,
 } from "../aggregate";
+import { normalizeEntitlement } from "../normalize";
 import { EMPTY_ENTITLEMENT, type AppleRecord, type EntitlementDoc, type GoogleRecord, type PaddleRecord, type SourceRecord } from "../types";
 
 const NOW = new Date("2026-12-01T00:00:00.000Z");
@@ -227,5 +228,31 @@ describe("isPremiumAt / toClaimSeconds", () => {
   it("claim seconds floors epoch seconds, null is 0", () => {
     expect(toClaimSeconds(null)).toBe(0);
     expect(toClaimSeconds("2026-12-01T00:00:00.999Z")).toBe(Date.parse("2026-12-01T00:00:00Z") / 1000);
+  });
+});
+
+describe("예전 manual 문서 + Paddle id 이주 뒤 aggregate", () => {
+  it("포털 id는 남고 대표·plan은 manual 그대로다", () => {
+    const legacy = normalizeEntitlement({
+      plan: "premium",
+      source: "manual",
+      status: "active",
+      premiumUntil: FUTURE,
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_9",
+      lastEventOccurredAt: PAST,
+    });
+    const out = aggregate(legacy, NOW);
+    expect(out).toMatchObject({
+      plan: "premium",
+      source: "manual",
+      premiumUntil: FUTURE,
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_9",
+      lastEventOccurredAt: PAST,
+      duplicate: null,
+    });
   });
 });
