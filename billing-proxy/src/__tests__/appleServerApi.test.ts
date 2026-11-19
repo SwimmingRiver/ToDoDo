@@ -5,12 +5,19 @@ const NOW = new Date("2026-06-01T00:00:00Z");
 const PROD = "https://api.storekit.itunes.apple.com/inApps/v1/subscriptions/";
 const SANDBOX = "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/subscriptions/";
 
-const b64u = (bytes: ArrayBuffer | Uint8Array) =>
-  Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)).toString("base64url");
+// Node 전용 Buffer 대신 Workers 타입에도 있는 btoa/atob를 쓴다(CI tsc는 @types/node 없이 돈다).
+const b64 = (bytes: ArrayBuffer | Uint8Array) =>
+  btoa(String.fromCharCode(...(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))));
+const b64u = (bytes: ArrayBuffer | Uint8Array) => b64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromB64u = (s: string): Uint8Array => {
+  const n = s.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(n.padEnd(n.length + ((4 - (n.length % 4)) % 4), "=")), (c) => c.charCodeAt(0));
+};
+const decodeJson = (s: string) => JSON.parse(new TextDecoder().decode(fromB64u(s)));
 
 const makeKey = async () => {
   const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"])) as CryptoKeyPair;
-  const der = Buffer.from((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer).toString("base64");
+  const der = b64((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer);
   const pem = `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----`;
   return { pem, publicKey: pair.publicKey };
 };
@@ -59,8 +66,8 @@ describe("AppleServerApi", () => {
     const init = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1];
     const token = (init.headers as Record<string, string>).Authorization.replace("Bearer ", "");
     const [h, p, s] = token.split(".");
-    expect(JSON.parse(Buffer.from(h, "base64url").toString())).toEqual({ alg: "ES256", kid: "KEY123", typ: "JWT" });
-    const payload = JSON.parse(Buffer.from(p, "base64url").toString());
+    expect(decodeJson(h)).toEqual({ alg: "ES256", kid: "KEY123", typ: "JWT" });
+    const payload = decodeJson(p);
     const iat = Math.floor(NOW.getTime() / 1000);
     expect(payload).toMatchObject({ iss: "issuer-1", aud: "appstoreconnect-v1", bid: "com.swimmingriver.tododo", iat });
     expect(payload.exp).toBeLessThanOrEqual(iat + 3600);
@@ -68,7 +75,7 @@ describe("AppleServerApi", () => {
     const valid = await crypto.subtle.verify(
       { name: "ECDSA", hash: "SHA-256" },
       key.publicKey,
-      Buffer.from(s, "base64url"),
+      fromB64u(s),
       new TextEncoder().encode(`${h}.${p}`),
     );
     expect(valid).toBe(true);
