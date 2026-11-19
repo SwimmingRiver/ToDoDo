@@ -23,6 +23,16 @@ const set = (overrides: Partial<Entitlement>) => {
   entitlement = { ...DEFAULT_ENTITLEMENT, ...overrides };
 };
 
+const rec = {
+  status: "active" as const,
+  premiumUntil: "2026-11-13T00:00:00.000Z",
+  cancelAt: null,
+  currentPeriodEnd: null,
+  autoRenew: true,
+  startedAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "2026-10-01T00:00:00.000Z",
+};
+
 describe("PremiumPage", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -58,7 +68,13 @@ describe("PremiumPage", () => {
   });
 
   it("구독 중: 다음 결제일과 구독 관리", () => {
-    set({ status: "active", source: "paddle", premiumUntil: "2026-11-13T00:00:00.000Z", currentPeriodEnd: "2026-11-10T00:00:00.000Z", customerId: "ctm_1" });
+    set({
+      status: "active",
+      source: "paddle",
+      premiumUntil: "2026-11-13T00:00:00.000Z",
+      currentPeriodEnd: "2026-11-10T00:00:00.000Z",
+      sources: { paddle: { ...rec, customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: null, lastEventOccurredAt: null } },
+    });
     render(<PremiumPage />);
     expect(screen.getByText(/다음 결제일/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "구독 관리" }));
@@ -90,5 +106,38 @@ describe("PremiumPage", () => {
     checkout.phase = "slow";
     render(<PremiumPage />);
     expect(screen.getByText(/결제는 완료됐어요/)).toBeInTheDocument();
+  });
+
+  it("대표 출처 apple: App Store 안내만 있고 구독하기·구독 관리 버튼이 없다", () => {
+    set({ status: "active", source: "apple", premiumUntil: "2026-11-13T00:00:00.000Z" });
+    render(<PremiumPage />);
+    expect(screen.getByText("App Store에서 구독 중이에요. 구독 관리는 App Store에서 할 수 있어요")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("대표 출처 google: Google Play 문구", () => {
+    set({ status: "active", source: "google", premiumUntil: "2026-11-13T00:00:00.000Z" });
+    render(<PremiumPage />);
+    expect(screen.getByText("Google Play에서 구독 중이에요. 구독 관리는 Google Play에서 할 수 있어요")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /구독/ })).not.toBeInTheDocument();
+  });
+
+  it("이중 구독이면 페이지 상단에 배너를 보여주고 paddle이면 포털 버튼이 열린다", () => {
+    set({
+      status: "active",
+      source: "apple",
+      premiumUntil: "2026-11-13T00:00:00.000Z",
+      duplicate: { laterSource: "paddle", detectedAt: "2026-10-09T00:00:00.000Z" },
+    });
+    render(<PremiumPage />);
+    expect(screen.getByText(/나중에 시작한 웹 구독을 해지해 주세요/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "구독 관리" }));
+    expect(portal.mutate).toHaveBeenCalled();
+  });
+
+  it("duplicate가 없으면 배너가 없다", () => {
+    set({ status: "active", source: "apple", premiumUntil: "2026-11-13T00:00:00.000Z" });
+    render(<PremiumPage />);
+    expect(screen.queryByText(/두 군데서 결제/)).not.toBeInTheDocument();
   });
 });

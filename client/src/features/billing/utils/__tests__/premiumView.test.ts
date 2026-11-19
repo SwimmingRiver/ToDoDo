@@ -5,7 +5,42 @@ import { formatMonthDay, getPremiumView } from "../premiumView";
 const NOW = Date.parse("2026-10-10T00:00:00.000Z");
 const e = (overrides: Partial<Entitlement>): Entitlement => ({ ...DEFAULT_ENTITLEMENT, ...overrides });
 
+const record = {
+  status: "active" as const,
+  premiumUntil: "2026-11-13T00:00:00.000Z",
+  cancelAt: null,
+  currentPeriodEnd: "2026-11-10T00:00:00.000Z",
+  autoRenew: true,
+  startedAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "2026-10-01T00:00:00.000Z",
+};
+const paddleRecord = { ...record, customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: null, lastEventOccurredAt: null };
+
 describe("getPremiumView", () => {
+  it("대표 출처 apple이고 프리미엄 → store 보기(결제·포털 없음)", () => {
+    const view = getPremiumView(e({ status: "active", source: "apple", premiumUntil: "2026-11-13T00:00:00.000Z" }), NOW);
+    expect(view).toEqual({ kind: "store", store: "apple", until: new Date("2026-11-13T00:00:00.000Z"), canceling: false, pastDue: false });
+  });
+
+  it("google 해지 예약 → store 보기 canceling", () => {
+    const view = getPremiumView(
+      e({ status: "active", source: "google", premiumUntil: "2026-11-13T00:00:00.000Z", cancelAt: "2026-11-13T00:00:00.000Z" }),
+      NOW,
+    );
+    expect(view).toMatchObject({ kind: "store", store: "google", canceling: true, pastDue: false });
+  });
+
+  it("apple past_due → paddle pastDue가 아니라 store 보기(pastDue true)", () => {
+    const view = getPremiumView(e({ status: "past_due", source: "apple", premiumUntil: "2026-10-12T00:00:00.000Z" }), NOW);
+    expect(view).toMatchObject({ kind: "store", store: "apple", pastDue: true });
+  });
+
+  it("구독 중 canManage는 sources.paddle.customerId 기준(최상위 customerId만으론 아님)", () => {
+    const base = { status: "active" as const, source: "paddle" as const, premiumUntil: "2026-11-13T00:00:00.000Z" };
+    expect(getPremiumView(e({ ...base, customerId: "ctm_1" }), NOW)).toMatchObject({ kind: "active", canManage: false });
+    expect(getPremiumView(e({ ...base, sources: { paddle: paddleRecord } }), NOW)).toMatchObject({ kind: "active", canManage: true });
+  });
+
   it("비프리미엄, 체험 미사용 → offer(canTrial)", () => {
     expect(getPremiumView(DEFAULT_ENTITLEMENT, NOW)).toEqual({ kind: "offer", canTrial: true });
   });
@@ -24,7 +59,7 @@ describe("getPremiumView", () => {
 
   it("구독 중 → 다음 결제일, 고객이 있으면 관리 가능", () => {
     const view = getPremiumView(
-      e({ status: "active", source: "paddle", premiumUntil: "2026-11-13T00:00:00.000Z", currentPeriodEnd: "2026-11-10T00:00:00.000Z", customerId: "ctm_1" }),
+      e({ status: "active", source: "paddle", premiumUntil: "2026-11-13T00:00:00.000Z", currentPeriodEnd: "2026-11-10T00:00:00.000Z", sources: { paddle: paddleRecord } }),
       NOW,
     );
     expect(view).toEqual({ kind: "active", nextBillingAt: new Date("2026-11-10T00:00:00.000Z"), canManage: true });

@@ -11,7 +11,21 @@ vi.mock("../../api/deleteAccount", () => ({
 const mockLogout = vi.fn(async () => undefined);
 vi.mock("@/features/auth/context/useAuth", () => ({ useAuth: () => ({ logout: mockLogout }) }));
 
-let entitlement: { source: string | null; status: string } | undefined;
+import type { Entitlement } from "@/features/entitlement/types";
+
+let entitlement: Pick<Entitlement, "sources"> | undefined;
+const record = {
+  status: "active" as const,
+  premiumUntil: "2099-01-01T00:00:00.000Z",
+  cancelAt: null,
+  currentPeriodEnd: null,
+  autoRenew: true,
+  startedAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "2026-10-01T00:00:00.000Z",
+};
+const paddle = { ...record, customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: null, lastEventOccurredAt: null };
+const apple = { ...record, originalTransactionId: "o1", productId: "p", environment: "Production" as const, appAccountToken: null, lastNotificationUUID: null, lastSignedDate: null };
+const google = { ...record, purchaseToken: "t", productId: "p", basePlanId: null, environment: "Production" as const, obfuscatedAccountId: null, lastMessageId: null, lastEventTime: null };
 vi.mock("@/features/entitlement", () => ({ useEntitlement: () => ({ data: entitlement }) }));
 
 const mockSuccess = vi.fn();
@@ -53,11 +67,36 @@ describe("AccountDeletionDialog", () => {
   });
 
   it("살아 있는 Paddle 구독이면 구독 해지·환불 안내를 덧붙인다", async () => {
-    entitlement = { source: "paddle", status: "active" };
+    entitlement = { sources: { paddle } };
     await renderDialog();
     expect(
       screen.getByText(/구독이 즉시 해지되고 남은 기간은 사라집니다\. 결제 14일 이내라면 환불을 요청할 수 있습니다\./),
     ).toBeInTheDocument();
+  });
+
+  it("취소된 Paddle 구독이면 구독 안내가 없다", async () => {
+    entitlement = { sources: { paddle: { ...paddle, status: "canceled" } } };
+    await renderDialog();
+    expect(screen.queryByText(/구독이 즉시 해지되고/)).not.toBeInTheDocument();
+  });
+
+  it("자동 갱신 중인 apple 구독이면 App Store 경고를 덧붙인다", async () => {
+    entitlement = { sources: { apple } };
+    await renderDialog();
+    expect(screen.getByText(/App Store 구독은 탈퇴해도 자동으로 해지되지 않아요\. 먼저 구독을 해지해 주세요\./)).toBeInTheDocument();
+  });
+
+  it("google이면 Google Play 경고, paddle과 함께면 둘 다 보인다", async () => {
+    entitlement = { sources: { paddle, google } };
+    await renderDialog();
+    expect(screen.getByText(/Google Play 구독은 탈퇴해도 자동으로 해지되지 않아요\./)).toBeInTheDocument();
+    expect(screen.getByText(/구독이 즉시 해지되고/)).toBeInTheDocument();
+  });
+
+  it("해지 예약된 스토어 구독이면 경고가 없다", async () => {
+    entitlement = { sources: { apple: { ...apple, cancelAt: "2099-01-01T00:00:00.000Z", autoRenew: false } } };
+    await renderDialog();
+    expect(screen.queryByText(/자동으로 해지되지 않아요/)).not.toBeInTheDocument();
   });
 
   it("탈퇴하기를 누르면 삭제 → 스냅샷 정리 → 로그아웃 → 캐시 비움 → 홈 이동 + 토스트", async () => {
