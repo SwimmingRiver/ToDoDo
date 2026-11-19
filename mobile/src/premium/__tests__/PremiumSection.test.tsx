@@ -4,7 +4,8 @@ import { Linking } from "react-native";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
 
 let mockDoc: EntitlementDoc | undefined = EMPTY_ENTITLEMENT;
-jest.mock("../useEntitlement", () => ({ useEntitlement: () => ({ data: mockDoc, isLoading: false }) }));
+let mockLoading = false;
+jest.mock("../useEntitlement", () => ({ useEntitlement: () => ({ data: mockDoc, isLoading: mockLoading }) }));
 
 const mockBuy = jest.fn<(w: boolean) => Promise<void>>();
 const mockRestore = jest.fn<() => Promise<{ restored: number; failure: string | null }>>();
@@ -21,7 +22,7 @@ jest.mock("../iap/purchaseClient", () => ({
 
 import { PremiumSection } from "../PremiumSection";
 
-const FUTURE = "2026-12-19T00:00:00.000Z";
+const FUTURE = "2026-12-19T12:00:00.000Z"; // 한낮 UTC — 어느 TZ에서도 같은 날짜
 const mk = (over: Partial<EntitlementDoc>): EntitlementDoc => ({ ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", premiumUntil: FUTURE, ...over });
 const flush = () => act(async () => {});
 
@@ -30,6 +31,7 @@ describe("PremiumSection", () => {
     jest.useFakeTimers({ doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] }).setSystemTime(Date.parse("2026-11-19T00:00:00Z"));
     mockDoc = EMPTY_ENTITLEMENT;
     mockLastError = null;
+    mockLoading = false;
     mockBuy.mockReset().mockResolvedValue(undefined);
     mockRestore.mockReset().mockResolvedValue({ restored: 0, failure: null });
     mockTrial.mockReset().mockResolvedValue(true);
@@ -46,6 +48,73 @@ describe("PremiumSection", () => {
     expect(Linking.openURL).toHaveBeenCalledWith("https://tododo-app.com/terms");
     await fireEvent.press(screen.getByRole("button", { name: "개인정보처리방침" }));
     expect(Linking.openURL).toHaveBeenCalledWith("https://tododo-app.com/privacy");
+  });
+
+  it("loading entitlement → no buy button", async () => {
+    mockLoading = true;
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("trial disclosure shown only when withTrial", async () => {
+    const text = "7일 무료 체험이 끝나면 월 4,900원이 자동으로 결제돼요. 체험이 끝나기 24시간 전까지 해지하면 요금이 청구되지 않아요.";
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+
+  it("no trial disclosure when not eligible", async () => {
+    mockTrial.mockResolvedValue(false);
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.queryByText(/7일 무료 체험이 끝나면/)).toBeNull();
+  });
+
+  it("buy button disabled until trial eligibility resolves", async () => {
+    mockTrial.mockReturnValue(new Promise(() => {}));
+    await render(<PremiumSection />);
+    await flush();
+    await fireEvent.press(screen.getByRole("button", { name: "프리미엄 시작하기" }));
+    expect(mockBuy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["LINKED_TO_OTHER_ACCOUNT", "이 구독은 다른 계정에서 사용 중이에요"],
+    ["ALREADY_SUBSCRIBED", "이미 구독 중인 다른 Google Play 구독이 있어요. 새 결제는 승인되지 않아 자동으로 환불돼요"],
+    ["PENDING", "결제가 승인되면 프리미엄이 켜져요"],
+    ["INVALID", "구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요"],
+    ["NETWORK", "네트워크 문제로 구매 확인이 늦어지고 있어요. 앱을 다시 열면 이어서 확인해요"],
+  ])("error %s shows its copy", async (reason, text) => {
+    mockLastError = reason;
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+
+  it("restore failure from onRestore shows its error copy", async () => {
+    mockRestore.mockResolvedValue({ restored: 0, failure: "INVALID" });
+    await render(<PremiumSection />);
+    await flush();
+    await fireEvent.press(screen.getByRole("button", { name: "구매 복원" }));
+    await waitFor(() => expect(screen.getByText("구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요")).toBeTruthy());
+    expect(screen.queryByText("복원할 구매가 없어요")).toBeNull();
+  });
+
+  it("manual source → granted copy, no buttons", async () => {
+    mockDoc = mk({ source: "manual" });
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.getByText(/프리미엄 이용 중이에요\. 2026년 12월 19일까지 이용할 수 있어요/)).toBeTruthy();
+    expect(screen.queryByText(/웹에서 관리/)).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("store view with null until renders no date fragment", async () => {
+    mockDoc = mk({ source: "google", cancelAt: FUTURE, premiumUntil: null });
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.queryByText(/에 구독이 종료돼요/)).toBeNull();
   });
 
   it("buys with trial when eligible", async () => {

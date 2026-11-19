@@ -20,9 +20,9 @@ describe("getMobilePremiumView", () => {
   it("expired premium → offer", () => {
     expect(getMobilePremiumView(doc({ status: "canceled", source: "apple", premiumUntil: "2026-01-01T00:00:00.000Z" }), NOW, false).kind).toBe("offer");
   });
-  it("paddle or manual representative → external", () => {
+  it("paddle → external, manual → granted", () => {
     expect(getMobilePremiumView(storeDoc("apple", { source: "paddle" }), NOW, false)).toEqual({ kind: "external", until: FUTURE });
-    expect(getMobilePremiumView(storeDoc("apple", { source: "manual" }), NOW, false)).toEqual({ kind: "external", until: FUTURE });
+    expect(getMobilePremiumView(storeDoc("apple", { source: "manual" }), NOW, false)).toEqual({ kind: "granted", until: FUTURE });
   });
   it("trial source → trialing", () => {
     expect(getMobilePremiumView(storeDoc("apple", { source: "trial", status: "trialing" }), NOW, false)).toEqual({ kind: "trialing", until: FUTURE });

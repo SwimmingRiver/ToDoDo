@@ -6,6 +6,7 @@ export type MobilePremiumView =
   | { kind: "offer"; withTrial: boolean }
   | { kind: "store"; store: Store; until: string | null; canceling: boolean }
   | { kind: "external"; until: string | null }
+  | { kind: "granted"; until: string | null }
   | { kind: "trialing"; until: string | null }
   | { kind: "pastDue"; store: Store | null };
 
@@ -26,6 +27,8 @@ export const getMobilePremiumView = (
   if (doc.status === "past_due") return { kind: "pastDue", store };
   if (store) return { kind: "store", store, until: doc.premiumUntil, canceling: doc.cancelAt !== null };
   if (doc.source === "trial") return { kind: "trialing", until: doc.premiumUntil };
+  // 운영자 부여(manual)는 다른 기기·웹에서 관리하는 구독이 아니라 별도 문구를 쓴다.
+  if (doc.source === "manual") return { kind: "granted", until: doc.premiumUntil };
   return { kind: "external", until: doc.premiumUntil };
 };
 

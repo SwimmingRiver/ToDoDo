@@ -154,6 +154,24 @@ describe("AccountScreen", () => {
       expect(mockDeleteAccount).not.toHaveBeenCalled();
     });
 
+    it("Google Play 구독이면 Google Play 경고를 덧붙인다", async () => {
+      const future = new Date(Date.now() + 30 * 864e5).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "google", premiumUntil: future,
+        sources: { google: { status: "active", premiumUntil: future, cancelAt: null, currentPeriodEnd: future, autoRenew: true,
+          startedAt: null, updatedAt: future, purchaseToken: "t", productId: "premium_monthly", basePlanId: "monthly",
+          environment: "Production", obfuscatedAccountId: null, lastMessageId: null, lastEventTime: null } },
+      };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenCalledWith(
+        "회원 탈퇴",
+        `${DELETE_MESSAGE}\n\nGoogle Play 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`,
+        expect.any(Array),
+      );
+    });
+
     it("취소하면 아무것도 하지 않는다", async () => {
       await renderScreen();
 
