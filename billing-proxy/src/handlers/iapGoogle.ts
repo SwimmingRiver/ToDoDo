@@ -39,11 +39,17 @@ const isPendingState = (sub: PlaySubscription): boolean => sub.subscriptionState
 const isOurProduct = (sub: PlaySubscription): boolean =>
   sub.lineItems.some((item) => item.productId === PRODUCT_ID) || (sub.lineItems.length === 0 && isPendingState(sub));
 
+/** 반영을 끝낸 뒤 승인할 구매인지. 결제 대기 계열은 승인할 수 없다(아직 결제가 끝나지 않음). */
+const needsAcknowledge = (sub: PlaySubscription): boolean =>
+  sub.acknowledgementState === "ACKNOWLEDGEMENT_STATE_PENDING" && !isPendingState(sub);
+
 type LinkResult = "linked" | "conflict";
 
 /**
  * 업그레이드·재구독으로 새 토큰이 나오면 linkedPurchaseToken이 이전 토큰을 가리킨다.
  * 새 토큰에 연결이 없을 때만 이전 토큰의 연결을 본다 — 새 토큰의 연결이 있으면 그쪽이 우선이다.
+ * 사슬은 한 단계만 따라간다: 이전 토큰도 처음 교체될 때(verify 또는 이 경로로) 연결이 만들어지므로
+ * 토큰마다 연결이 이어져 있고, 여러 단계를 거슬러 오를 일이 없다. 중간 연결이 빠진 사슬은 앱 verify가 잇는다.
  */
 const linkedOwner = async (deps: GoogleIapDeps, sub: PlaySubscription): Promise<string | null> => {
   if (!sub.linkedPurchaseToken) return null;
@@ -86,6 +92,10 @@ const linkToAccount = async (
   throw new Error("storeLinks google 쓰기 경합이 반복됨");
 };
 
+/**
+ * verify는 Pub/Sub 메시지가 없어 lastMessageId·lastEventTime을 일부러 null로 쓴다 — 상태를 매번 다시 조회하므로
+ * 중복·역순 판정이 필요 없고, 결정 함수는 null이면 항상 반영한다. 다음 RTDN은 null과 비교하지 않고 그대로 반영된다.
+ */
 const verifyEvent = (purchaseToken: string): GoogleEvent => ({ purchaseToken, messageId: null, eventTime: null });
 
 /**
@@ -123,12 +133,17 @@ export const handleGoogleVerify = async (
     return json({ premiumUntil: doc.premiumUntil, pending: true });
   }
 
-  if (sub.acknowledgementState === "ACKNOWLEDGEMENT_STATE_PENDING" && !isPendingState(sub)) {
-    await deps.play.acknowledge(PRODUCT_ID, purchaseToken);
+  if (outcome.kind === "skipped" && outcome.reason === "OTHER_SUBSCRIPTION") {
+    // 다른 유효한 Google 구독이 계속 갱신 중이다. 기록하지 않은 이 구독을 승인하면 반영 안 된 정기 결제가 굳는다 —
+    // 승인하지 않고 409로 돌려준다. 앱은 거래를 끝내지 않고, Google이 3일 뒤 자동 환불한다.
+    console.warn("Google verify: 이미 다른 구독을 추적 중 — 승인하지 않음:", uid);
+    return json({ error: "ALREADY_SUBSCRIBED" }, 409);
   }
 
+  if (needsAcknowledge(sub)) await deps.play.acknowledge(PRODUCT_ID, purchaseToken);
+
   if (outcome.kind === "written") return json({ premiumUntil: outcome.doc.premiumUntil });
-  // 다른 유효한 Google 구독을 추적 중인 경우 등. 권한은 그대로이니 현재 값을 돌려준다.
+  // 중복·역순(STALE) 등. 권한은 그대로이니 현재 값을 돌려준다.
   console.warn("Google verify 반영 생략:", outcome.reason, uid);
   const { doc } = await deps.store.get(uid);
   return json({ premiumUntil: doc.premiumUntil });
@@ -139,7 +154,12 @@ interface DeveloperNotification {
   eventTime: string;
   purchaseToken: string | null;
   isTest: boolean;
+  /** 구독이 아닌 상품(일회성)의 환불 알림. 우리 상품이 아니니 조회하지 않는다. */
+  nonSubscriptionVoided: boolean;
 }
+
+/** voidedPurchaseNotification.productType: 1 = 구독, 2 = 일회성 상품. */
+const VOIDED_PRODUCT_TYPE_SUBSCRIPTION = 1;
 
 const decodeBase64Utf8 = (data: string): string =>
   new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)));
@@ -165,6 +185,8 @@ const parseDeveloperNotification = (data: string): DeveloperNotification | null 
     // 구독 알림과 환불(무효 구매) 알림 둘 다 구매 토큰만 신호로 쓰고 상태는 다시 조회한다.
     purchaseToken: tokenOf(value.subscriptionNotification) ?? tokenOf(value.voidedPurchaseNotification),
     isTest: value.testNotification !== undefined,
+    nonSubscriptionVoided:
+      isRecord(value.voidedPurchaseNotification) && value.voidedPurchaseNotification.productType !== VOIDED_PRODUCT_TYPE_SUBSCRIPTION,
   };
 };
 
@@ -175,7 +197,9 @@ const parseDeveloperNotification = (data: string): DeveloperNotification | null 
  *
  * 알림 본문의 상태(notificationType)는 믿지 않고 매번 subscriptionsv2로 지금 상태를 다시 조회한다 —
  * 그래서 알림이 역순으로 와도 최신 상태로 수렴한다. 중복·역순은 messageId·eventTimeMillis로 판정한다.
- * 승인(acknowledge)은 하지 않는다 — 앱의 verify가 반영을 확인한 뒤에 한다.
+ * 연결된 구매를 반영(written)했는데 아직 미승인이면 여기서도 승인한다 — 결제 대기였다가 완료된 구매는
+ * 앱이 다시 verify하지 않을 수 있고, 그러면 3일 뒤 자동 환불된다. 승인 실패는 500(반영은 같은 값이라 재전송이 승인까지 잇는다).
+ * 건너뛴 반영(다른 구독 추적 중 등)·결제 대기·연결 없음은 승인하지 않는다.
  */
 export const handleGoogleWebhook = async (
   request: Request,
@@ -204,7 +228,12 @@ export const handleGoogleWebhook = async (
     return ok();
   }
   // Play Console의 테스트 알림, 일회성 상품 알림 등은 반영할 구독이 없다.
-  if (notification.isTest || !notification.purchaseToken) return ok();
+  if (notification.isTest) return ok();
+  if (notification.nonSubscriptionVoided) {
+    console.log("Google RTDN: 구독이 아닌 상품의 환불 알림 — 무시:", messageId);
+    return ok();
+  }
+  if (!notification.purchaseToken) return ok();
   const purchaseToken = notification.purchaseToken;
 
   const sub = await deps.play.getSubscription(purchaseToken);
@@ -232,8 +261,11 @@ export const handleGoogleWebhook = async (
   }
 
   const ev: GoogleEvent = { purchaseToken, messageId, eventTime: notification.eventTime };
+  let applied: boolean;
   try {
     const outcome = await commitEntitlement(deps, uid, (existing) => applyGoogleSubscription(existing, sub, ev, now));
+    // 같은 messageId 중복은 "이미 반영함"이다 — 승인 실패(500) 뒤 재전송은 이 경로로 오므로 승인을 다시 시도해야 한다.
+    applied = outcome.kind === "written" || outcome.reason === "DUPLICATE_MESSAGE";
     if (outcome.kind === "skipped") console.log("Google RTDN 반영 생략:", outcome.reason, uid, messageId);
   } catch (error) {
     if (error instanceof UserNotFoundError) {
@@ -242,5 +274,6 @@ export const handleGoogleWebhook = async (
     }
     throw error;
   }
+  if (applied && needsAcknowledge(sub)) await deps.play.acknowledge(PRODUCT_ID, purchaseToken);
   return ok();
 };

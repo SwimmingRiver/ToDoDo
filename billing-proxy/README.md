@@ -11,8 +11,8 @@
 | `POST /account/delete` | Firebase ID 토큰 | 회원 탈퇴(허용 목록과 무관) |
 | `POST /iap/account-token` | Firebase ID 토큰 | 앱이 구매 때 붙일 `appAccountToken` |
 | `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
-| `POST /iap/google/verify` | Firebase ID 토큰 | 본문 `{ purchaseToken, productId }`(`productId`는 `premium_monthly`만) → Play Developer API `subscriptionsv2`로 현재 상태 조회 → 구매 토큰을 계정에 연결(교체 토큰이면 `linkedPurchaseToken`의 연결이 같은 계정이어야 함) → `sources.google` 반영 → 미승인이면 acknowledge → `{ premiumUntil }`. 결제 대기면 승인 없이 `{ premiumUntil, pending: true }`. 실패 `400 INVALID_PURCHASE`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT`, 승인 실패 `500`(반영은 같은 값이라 앱이 재시도하면 승인까지 이어짐) |
-| `POST /webhooks/google` | Pub/Sub 푸시 OIDC 토큰 | Play RTDN. 알림 본문 상태는 믿지 않고 `purchaseToken`으로 매번 다시 조회해 반영(환불 `voidedPurchaseNotification`도 같음). 연결된 계정에만 반영(교체 토큰은 이전 토큰의 계정을 따라가 새로 연결, 둘 다 없으면 200 무시), 승인은 하지 않음(verify 몫). OIDC 불일치 401, 형식 오류·다른 앱·테스트 알림 200, 일시 오류 500(Pub/Sub 재전송) |
+| `POST /iap/google/verify` | Firebase ID 토큰 | 본문 `{ purchaseToken, productId }`(`productId`는 `premium_monthly`만) → Play Developer API `subscriptionsv2`로 현재 상태 조회 → 구매 토큰을 계정에 연결(교체 토큰이면 `linkedPurchaseToken`의 연결이 같은 계정이어야 함) → `sources.google` 반영 → 미승인이면 acknowledge → `{ premiumUntil }`. 결제 대기면 승인 없이 `{ premiumUntil, pending: true }`. 실패 `400 INVALID_PURCHASE`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT`, 다른 Google 구독이 갱신 중 `409 ALREADY_SUBSCRIBED`(승인 안 함 → 자동 환불), 승인 실패 `500`(반영은 같은 값이라 앱이 재시도하면 승인까지 이어짐) |
+| `POST /webhooks/google` | Pub/Sub 푸시 OIDC 토큰 | Play RTDN. 알림 본문 상태는 믿지 않고 `purchaseToken`으로 매번 다시 조회해 반영(구독 환불 `voidedPurchaseNotification`(`productType` 1)도 같음, 다른 상품 환불은 무시). 연결된 계정에만 반영(교체 토큰은 이전 토큰의 계정을 따라가 새로 연결, 둘 다 없으면 200 무시), 반영했는데 미승인이면 승인. OIDC 불일치 401, 형식 오류·다른 앱·테스트 알림 200, 일시 오류 500(Pub/Sub 재전송) |
 | `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 알림은 신호로만 쓰고 상태는 매번 App Store Server API로 다시 조회한다(알림의 거래는 지난 갱신분일 수 있음). 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송) |
 
 ## 배포 준비 (사용자 작업 — 비밀값은 본인 터미널에서)
@@ -62,7 +62,7 @@
    ```
    `IAP_ACCOUNT_TOKEN_SECRET`은 Apple과 같은 값을 쓴다(앱이 `obfuscatedAccountId`에 넣는 값도 이 키로 만든다).
 
-승인(acknowledge)은 앱의 `/iap/google/verify`만 한다 — 승인하지 않은 구매는 3일 뒤 Google이 자동 환불하므로, 앱이 verify를 끝내지 못한 구매는 환불된다(검증 실패가 이어지는 구매가 돈만 받고 남지 않게).
+승인(acknowledge)은 반영(`sources.google` 기록)이 끝난 구매에만 한다 — 승인하지 않은 구매는 3일 뒤 Google이 자동 환불한다. 앱의 `/iap/google/verify`가 기본으로 승인하고, 결제 대기였다가 완료된 구매처럼 앱이 다시 verify하지 않는 경우를 위해 RTDN도 연결된 구매를 반영한 뒤 미승인이면 승인한다(실패는 500 → Pub/Sub 재전송). 다른 Google 구독이 계속 갱신 중이면(이중 구독) verify는 `409 ALREADY_SUBSCRIBED`로 승인하지 않아 새 구매가 자동 환불되게 둔다. 기존 구독이 해지 예약·자동 갱신 꺼짐이면 새 구매가 후속 구독으로 기록을 교체한다.
 
 ### 릴리스(develop→main) 전제
 

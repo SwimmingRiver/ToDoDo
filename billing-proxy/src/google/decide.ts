@@ -89,10 +89,12 @@ export const applyGoogleSubscription = (
     if (ev.eventTime !== null && previous.lastEventTime !== null && Date.parse(ev.eventTime) <= Date.parse(previous.lastEventTime)) {
       return { skip: "STALE" };
     }
-    // 기록은 구독 하나만 추적한다. 유효한 다른 구독이 있으면 덮어 권한을 지우지 않는다.
-    // 단 linkedPurchaseToken이 기존 토큰이면 업그레이드·재구독이므로 교체한다.
+    // 기록은 구독 하나만 추적한다. 유효하고 계속 갱신 중인 다른 구독이 있으면 덮어 권한을 지우지 않는다.
+    // 단 linkedPurchaseToken이 기존 토큰이면 업그레이드·재구독이므로 교체한다. 기존 기록이 해지 예약됐거나
+    // 자동 갱신이 꺼졌으면 새 토큰은 정당한 후속 구독이다(해지 예약 뒤 새로 구독) — 이것도 교체한다.
     const valid = previous.premiumUntil !== null && Date.parse(previous.premiumUntil) > now.getTime() && previous.status !== "canceled";
-    if (previous.purchaseToken !== ev.purchaseToken && valid && sub.linkedPurchaseToken !== previous.purchaseToken) {
+    const renewing = previous.autoRenew === true && previous.cancelAt === null;
+    if (previous.purchaseToken !== ev.purchaseToken && valid && renewing && sub.linkedPurchaseToken !== previous.purchaseToken) {
       return { skip: "OTHER_SUBSCRIPTION" };
     }
   }

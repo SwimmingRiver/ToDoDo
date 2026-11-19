@@ -335,7 +335,7 @@ describe("handleGoogleVerify", () => {
     expect(d.storeLinks.put.mock.calls[1][3]).toBe("t2");
   });
 
-  it("다른 유효한 Google 구독을 추적 중이면 쓰지 않고 현재 premiumUntil을 돌려준다", async () => {
+  it("OTHER_SUBSCRIPTION → 409 ALREADY_SUBSCRIBED and acknowledge not called", async () => {
     const until = new Date(NOW.getTime() + 10 * DAY).toISOString();
     const d = deps({
       ...EMPTY_ENTITLEMENT,
@@ -346,8 +346,10 @@ describe("handleGoogleVerify", () => {
       sources: { google: googleRecord({ purchaseToken: "purchase-token-other", premiumUntil: until }) },
     });
     const res = await handleGoogleVerify("u1", d, NOW, ENV, verifyRequest(VERIFY_BODY));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ premiumUntil: until });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "ALREADY_SUBSCRIBED" });
+    // 기록하지 않은 구독을 승인하면 반영 안 된 정기 결제가 굳는다 — 승인하지 않아 Google 자동 환불에 맡긴다.
+    expect(d.play.acknowledge).not.toHaveBeenCalled();
     expect(d.store.write).not.toHaveBeenCalled();
   });
 });
@@ -365,14 +367,86 @@ describe("handleGoogleWebhook", () => {
     expect(res.status).toBe(200);
     expect(d.verifyPubSub).toHaveBeenCalledWith("Bearer oidc");
     expect(d.play.getSubscription).toHaveBeenCalledWith(TOKEN);
-    expect(d.order).toEqual(["claim", "doc"]);
+    // 클레임 → 문서 → (미승인이면) 승인.
+    expect(d.order).toEqual(["claim", "doc", "ack"]);
     expect(d.store.get).toHaveBeenCalledWith("u1");
     const google = d.store.write.mock.calls[0][1].sources.google;
     expect(google?.lastMessageId).toBe("msg-1");
     expect(google?.lastEventTime).toBe(new Date(NOW.getTime() - 1000).toISOString());
     expect(google?.premiumUntil).toBe(new Date(EXPIRES + 3 * DAY).toISOString());
-    // 웹훅은 승인하지 않는다(verify 몫).
-    expect(d.play.acknowledge).not.toHaveBeenCalled();
+  });
+
+  it("webhook acknowledges completed purchase after write", async () => {
+    // 결제 대기였다가 완료된 구매: 앱이 다시 verify하지 않아도 3일 자동 환불되지 않게 웹훅이 승인한다.
+    const d = deps(EMPTY_ENTITLEMENT, { [TOKEN]: linkOf("u1") });
+    expect((await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, d, NOW)).status).toBe(200);
+    expect(d.order).toEqual(["claim", "doc", "ack"]);
+    expect(d.play.acknowledge).toHaveBeenCalledWith("premium_monthly", TOKEN);
+
+    // 교체 토큰(이전 토큰의 연결을 따라감)도 같다.
+    const viaOld = deps(EMPTY_ENTITLEMENT, { [OLD_TOKEN]: linkOf("u1") });
+    viaOld.play.getSubscription.mockResolvedValue(subscription({ linkedPurchaseToken: OLD_TOKEN }));
+    await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, viaOld, NOW);
+    expect(viaOld.play.acknowledge).toHaveBeenCalledWith("premium_monthly", TOKEN);
+
+    // 이미 승인된 구매는 다시 승인하지 않는다.
+    const acked = deps(EMPTY_ENTITLEMENT, { [TOKEN]: linkOf("u1") });
+    acked.play.getSubscription.mockResolvedValue(subscription({ acknowledgementState: "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED" }));
+    await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, acked, NOW);
+    expect(acked.play.acknowledge).not.toHaveBeenCalled();
+  });
+
+  it("webhook does not acknowledge when skipped or pending", async () => {
+    const pending = deps(EMPTY_ENTITLEMENT, { [TOKEN]: linkOf("u1") });
+    pending.play.getSubscription.mockResolvedValue(subscription({ subscriptionState: "SUBSCRIPTION_STATE_PENDING", lineItems: [] }));
+    expect((await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, pending, NOW)).status).toBe(200);
+    expect(pending.play.acknowledge).not.toHaveBeenCalled();
+
+    const until = new Date(NOW.getTime() + 10 * DAY).toISOString();
+    const other = deps(
+      { ...EMPTY_ENTITLEMENT, sources: { google: googleRecord({ purchaseToken: "purchase-token-other", premiumUntil: until }) } },
+      { [TOKEN]: linkOf("u1") },
+    );
+    expect((await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, other, NOW)).status).toBe(200);
+    expect(other.store.write).not.toHaveBeenCalled();
+    expect(other.play.acknowledge).not.toHaveBeenCalled();
+
+    // 연결이 없으면 반영도 승인도 없다.
+    const unlinked = deps();
+    await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, unlinked, NOW);
+    expect(unlinked.play.acknowledge).not.toHaveBeenCalled();
+  });
+
+  it("웹훅 승인 실패는 500(반영은 같은 값이라 재전송이 승인까지 이어짐)", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, { [TOKEN]: linkOf("u1") });
+    d.play.acknowledge.mockRejectedValue(new Error("Play 구매 승인 실패: 503"));
+    const req = webhookRequest(pushBody(rtdn()));
+    await expect(handleGoogleWebhook(req.clone(), ENV, d, NOW)).rejects.toThrow("503");
+    expect((await handleRequest(req, ROUTER_ENV, () => d as unknown as BillingDeps, NOW)).status).toBe(500);
+  });
+
+  it("승인 실패 뒤 같은 messageId 재전송은 쓰지 않고 승인만 다시 시도한다", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, { [TOKEN]: linkOf("u1") });
+    d.play.acknowledge.mockRejectedValueOnce(new Error("Play 구매 승인 실패: 503"));
+    await expect(handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, d, NOW)).rejects.toThrow("503");
+    d.store.get.mockResolvedValue({ doc: d.store.write.mock.calls[0][1], updateTime: "t1" });
+    d.store.write.mockClear();
+    expect((await handleGoogleWebhook(webhookRequest(pushBody(rtdn())), ENV, d, NOW)).status).toBe(200);
+    expect(d.store.write).not.toHaveBeenCalled();
+    expect(d.play.acknowledge).toHaveBeenCalledTimes(2);
+  });
+
+  it("구독이 아닌 상품의 환불 알림(productType ≠ 1)은 200으로 무시", async () => {
+    const d = deps(EMPTY_ENTITLEMENT, { [TOKEN]: linkOf("u1") });
+    for (const productType of [2, undefined]) {
+      const body = pushBody(
+        rtdn({ subscriptionNotification: undefined, voidedPurchaseNotification: { purchaseToken: TOKEN, orderId: "GPA.1", productType } }),
+      );
+      expect((await handleGoogleWebhook(webhookRequest(body), ENV, d, NOW)).status).toBe(200);
+    }
+    expect(console.log).toHaveBeenCalledTimes(2);
+    expect(d.play.getSubscription).not.toHaveBeenCalled();
+    expect(d.store.write).not.toHaveBeenCalled();
   });
 
   it("webhook before link is a no-op", async () => {

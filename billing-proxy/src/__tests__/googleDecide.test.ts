@@ -158,6 +158,18 @@ describe("applyGoogleSubscription", () => {
     expect(applyGoogleSubscription(d, sub(), ev(), NOW)).toEqual({ skip: "OTHER_SUBSCRIPTION" });
   });
 
+  it("new token replaces cancel-scheduled existing record", () => {
+    // 해지 예약(자동 갱신 끔) 뒤 재구독한 새 토큰은 정당한 후속 구독이다 — linkedPurchaseToken이 없어도 교체한다.
+    const scheduled = google({ purchaseToken: "old", autoRenew: false, cancelAt: iso(EXPIRY) });
+    const out = written(applyGoogleSubscription(doc({ sources: { google: scheduled } }), sub(), ev(), NOW));
+    expect(out.sources.google?.purchaseToken).toBe("tok_1");
+    // cancelAt만 남은 기록(autoRenew 표시가 아직 true)도 같다.
+    const cancelOnly = google({ purchaseToken: "old", cancelAt: iso(EXPIRY) });
+    expect(written(applyGoogleSubscription(doc({ sources: { google: cancelOnly } }), sub(), ev(), NOW)).sources.google?.purchaseToken).toBe("tok_1");
+    const notRenewing = google({ purchaseToken: "old", autoRenew: false });
+    expect(written(applyGoogleSubscription(doc({ sources: { google: notRenewing } }), sub(), ev(), NOW)).sources.google?.purchaseToken).toBe("tok_1");
+  });
+
   it("different token but existing record already canceled → replaces", () => {
     const d = doc({ sources: { google: google({ purchaseToken: "old", status: "canceled", premiumUntil: NOW.toISOString() }) } });
     expect(written(applyGoogleSubscription(d, sub(), ev(), NOW)).sources.google?.purchaseToken).toBe("tok_1");
