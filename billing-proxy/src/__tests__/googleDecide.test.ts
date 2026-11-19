@@ -1,0 +1,182 @@
+import { describe, it, expect } from "vitest";
+import { EMPTY_ENTITLEMENT, RENEWAL_GRACE_MS, type EntitlementDoc } from "../entitlement";
+import { applyGoogleSubscription, type GoogleEvent } from "../google/decide";
+import type { PlaySubscription, PlaySubscriptionLineItem } from "../google/playApi";
+import { asStored } from "./helpers/storedDoc";
+
+const NOW = new Date("2026-10-10T00:00:00.000Z");
+const DAY = 86_400_000;
+const EXPIRY = NOW.getTime() + 20 * DAY;
+const iso = (ms: number) => new Date(ms).toISOString();
+
+const item = (o: Partial<PlaySubscriptionLineItem> = {}): PlaySubscriptionLineItem => ({
+  productId: "premium_monthly",
+  expiryTime: iso(EXPIRY),
+  autoRenewEnabled: true,
+  basePlanId: "monthly",
+  offerId: null,
+  inFreeTrial: false,
+  ...o,
+});
+const sub = (o: Partial<PlaySubscription> = {}): PlaySubscription => ({
+  subscriptionState: "SUBSCRIPTION_STATE_ACTIVE",
+  startTime: iso(NOW.getTime() - 40 * DAY),
+  linkedPurchaseToken: null,
+  acknowledgementState: "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+  testPurchase: false,
+  obfuscatedAccountId: "acct",
+  lineItems: [item()],
+  ...o,
+});
+const state = (s: string, o: Partial<PlaySubscription> = {}) => sub({ subscriptionState: `SUBSCRIPTION_STATE_${s}`, ...o });
+const ev = (o: Partial<GoogleEvent> = {}): GoogleEvent => ({ purchaseToken: "tok_1", messageId: "m1", eventTime: iso(NOW.getTime()), ...o });
+const doc = (o: Partial<EntitlementDoc> = {}): EntitlementDoc => asStored({ ...EMPTY_ENTITLEMENT, ...o });
+
+const written = (r: ReturnType<typeof applyGoogleSubscription>): EntitlementDoc => {
+  if (!("write" in r)) throw new Error(`expected write, got skip ${r.skip}`);
+  return r.write;
+};
+const google = (o = {}) => ({
+  status: "active" as const,
+  premiumUntil: iso(EXPIRY + RENEWAL_GRACE_MS),
+  cancelAt: null,
+  currentPeriodEnd: iso(EXPIRY),
+  autoRenew: true,
+  startedAt: iso(NOW.getTime() - 40 * DAY),
+  updatedAt: iso(NOW.getTime() - DAY),
+  purchaseToken: "tok_1",
+  productId: "premium_monthly",
+  basePlanId: "monthly",
+  environment: "Production" as const,
+  obfuscatedAccountId: "acct",
+  lastMessageId: "m0",
+  lastEventTime: iso(NOW.getTime() - DAY),
+  ...o,
+});
+
+describe("applyGoogleSubscription", () => {
+  it("ACTIVE autoRenew → active, expiry + 3d, record fields", () => {
+    const g = written(applyGoogleSubscription(doc(), sub(), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({
+      status: "active",
+      premiumUntil: iso(EXPIRY + RENEWAL_GRACE_MS),
+      cancelAt: null,
+      currentPeriodEnd: iso(EXPIRY),
+      autoRenew: true,
+      startedAt: iso(NOW.getTime() - 40 * DAY),
+      updatedAt: NOW.toISOString(),
+      purchaseToken: "tok_1",
+      productId: "premium_monthly",
+      basePlanId: "monthly",
+      environment: "Production",
+      obfuscatedAccountId: "acct",
+      lastMessageId: "m1",
+      lastEventTime: iso(NOW.getTime()),
+    });
+  });
+
+  it("ACTIVE inFreeTrial → trialing and sets trialUsedAt when null", () => {
+    const out = written(applyGoogleSubscription(doc(), sub({ lineItems: [item({ inFreeTrial: true })] }), ev(), NOW));
+    expect(out.sources.google?.status).toBe("trialing");
+    expect(out.trialUsedAt).toBe(NOW.toISOString());
+  });
+
+  it("existing trialUsedAt is kept but record still applied", () => {
+    const out = written(
+      applyGoogleSubscription(doc({ trialUsedAt: "2026-01-01T00:00:00.000Z" }), sub({ lineItems: [item({ inFreeTrial: true })] }), ev(), NOW),
+    );
+    expect(out.trialUsedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(out.sources.google?.status).toBe("trialing");
+  });
+
+  it("lapsed trial (EXPIRED, inFreeTrial) still marks trialUsedAt", () => {
+    const out = written(applyGoogleSubscription(doc(), state("EXPIRED", { lineItems: [item({ inFreeTrial: true })] }), ev(), NOW));
+    expect(out.sources.google?.status).toBe("canceled");
+    expect(out.trialUsedAt).toBe(NOW.toISOString());
+  });
+
+  it("CANCELED with future expiry → active, autoRenew false, cancelAt = premiumUntil = expiry", () => {
+    const g = written(applyGoogleSubscription(doc(), state("CANCELED", { lineItems: [item({ autoRenewEnabled: false })] }), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({ status: "active", autoRenew: false, cancelAt: iso(EXPIRY), premiumUntil: iso(EXPIRY) });
+  });
+
+  it("IN_GRACE_PERIOD → past_due, premiumUntil = max(existing, expiry + 3d)", () => {
+    const later = iso(EXPIRY + 10 * DAY);
+    const a = written(applyGoogleSubscription(doc({ sources: { google: google({ premiumUntil: later }) } }), state("IN_GRACE_PERIOD"), ev(), NOW));
+    expect(a.sources.google).toMatchObject({ status: "past_due", premiumUntil: later });
+    const b = written(applyGoogleSubscription(doc(), state("IN_GRACE_PERIOD"), ev(), NOW));
+    expect(b.sources.google).toMatchObject({ status: "past_due", premiumUntil: iso(EXPIRY + RENEWAL_GRACE_MS) });
+  });
+
+  it("ON_HOLD → past_due, premiumUntil = now", () => {
+    const g = written(applyGoogleSubscription(doc(), state("ON_HOLD"), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({ status: "past_due", premiumUntil: NOW.toISOString() });
+  });
+
+  it.each(["PAUSED", "EXPIRED", "PENDING_PURCHASE_CANCELED"])("%s → canceled, now, autoRenew false", (s) => {
+    const g = written(applyGoogleSubscription(doc(), state(s), ev(), NOW)).sources.google;
+    expect(g).toMatchObject({ status: "canceled", premiumUntil: NOW.toISOString(), autoRenew: false });
+  });
+
+  it("PENDING_PURCHASE_CANCELED with no line items → canceled", () => {
+    const g = written(applyGoogleSubscription(doc(), state("PENDING_PURCHASE_CANCELED", { lineItems: [] }), ev(), NOW)).sources.google;
+    expect(g?.status).toBe("canceled");
+    expect(g?.currentPeriodEnd).toBeNull();
+  });
+
+  it("PENDING → skip PENDING even without line items", () => {
+    expect(applyGoogleSubscription(doc(), state("PENDING", { lineItems: [] }), ev(), NOW)).toEqual({ skip: "PENDING" });
+  });
+
+  it("ACTIVE without line item or expiry, and unknown state → throw", () => {
+    expect(() => applyGoogleSubscription(doc(), sub({ lineItems: [] }), ev(), NOW)).toThrow();
+    expect(() => applyGoogleSubscription(doc(), sub({ lineItems: [item({ expiryTime: null })] }), ev(), NOW)).toThrow();
+    expect(() => applyGoogleSubscription(doc(), state("WHATEVER"), ev(), NOW)).toThrow();
+  });
+
+  it("same messageId → DUPLICATE_MESSAGE", () => {
+    const d = doc({ sources: { google: google({ lastMessageId: "m1" }) } });
+    expect(applyGoogleSubscription(d, sub(), ev(), NOW)).toEqual({ skip: "DUPLICATE_MESSAGE" });
+  });
+
+  it("older or equal eventTime → STALE; null eventTime always applies", () => {
+    const d = doc({ sources: { google: google({ lastEventTime: iso(NOW.getTime()) }) } });
+    expect(applyGoogleSubscription(d, sub(), ev({ eventTime: iso(NOW.getTime() - 1000) }), NOW)).toEqual({ skip: "STALE" });
+    expect(applyGoogleSubscription(d, sub(), ev({ eventTime: iso(NOW.getTime()) }), NOW)).toEqual({ skip: "STALE" });
+    expect("write" in applyGoogleSubscription(d, sub(), ev({ eventTime: null, messageId: null }), NOW)).toBe(true);
+  });
+
+  it("linkedPurchaseToken equal to existing token → replaces record", () => {
+    const d = doc({ sources: { google: google({ purchaseToken: "old" }) } });
+    const out = written(applyGoogleSubscription(d, sub({ linkedPurchaseToken: "old" }), ev(), NOW));
+    expect(out.sources.google?.purchaseToken).toBe("tok_1");
+  });
+
+  it("different token while existing valid and not linked → OTHER_SUBSCRIPTION", () => {
+    const d = doc({ sources: { google: google({ purchaseToken: "old" }) } });
+    expect(applyGoogleSubscription(d, sub(), ev(), NOW)).toEqual({ skip: "OTHER_SUBSCRIPTION" });
+  });
+
+  it("different token but existing record already canceled → replaces", () => {
+    const d = doc({ sources: { google: google({ purchaseToken: "old", status: "canceled", premiumUntil: NOW.toISOString() }) } });
+    expect(written(applyGoogleSubscription(d, sub(), ev(), NOW)).sources.google?.purchaseToken).toBe("tok_1");
+  });
+
+  it("testPurchase → Sandbox", () => {
+    expect(written(applyGoogleSubscription(doc(), sub({ testPurchase: true }), ev(), NOW)).sources.google?.environment).toBe("Sandbox");
+  });
+
+  it("picks the line item matching the record productId, else the first", () => {
+    const other = item({ productId: "other", expiryTime: iso(EXPIRY + 5 * DAY) });
+    const out = written(applyGoogleSubscription(doc(), sub({ lineItems: [other, item()] }), ev(), NOW));
+    expect(out.sources.google?.currentPeriodEnd).toBe(iso(EXPIRY));
+    const fb = written(applyGoogleSubscription(doc(), sub({ lineItems: [other] }), ev(), NOW));
+    expect(fb.sources.google?.currentPeriodEnd).toBe(iso(EXPIRY + 5 * DAY));
+  });
+
+  it("aggregates into top-level fields", () => {
+    const out = written(applyGoogleSubscription(doc(), sub(), ev(), NOW));
+    expect(out.source).toBe("google");
+    expect(out.premiumUntil).toBe(iso(EXPIRY + RENEWAL_GRACE_MS));
+  });
+});
