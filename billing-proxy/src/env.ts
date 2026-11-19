@@ -21,4 +21,10 @@ export interface Env {
   APPLE_ISSUER_ID: string;
   APPLE_KEY_ID: string;
   APPLE_PRIVATE_KEY: string;
+  /** Play Developer API용. 패키지명과, 기존 계정과 분리한 Play 전용 서비스 계정 JSON 전체. */
+  GOOGLE_PLAY_PACKAGE_NAME: string;
+  GOOGLE_PLAY_SERVICE_ACCOUNT: string;
+  /** Pub/Sub 푸시 구독의 OIDC 토큰 audience(푸시 엔드포인트 URL)와 토큰을 서명하는 서비스 계정 이메일. */
+  GOOGLE_PUBSUB_AUDIENCE: string;
+  GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL: string;
 }

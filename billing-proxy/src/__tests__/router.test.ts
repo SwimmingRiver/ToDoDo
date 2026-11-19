@@ -29,6 +29,10 @@ const ENV: Env = {
   APPLE_ISSUER_ID: "test-issuer",
   APPLE_KEY_ID: "test-key",
   APPLE_PRIVATE_KEY: "test-pem",
+  GOOGLE_PLAY_PACKAGE_NAME: "com.swimmingriver.tododo",
+  GOOGLE_PLAY_SERVICE_ACCOUNT: "{}",
+  GOOGLE_PUBSUB_AUDIENCE: "https://billing.example/iap/google/notify",
+  GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL: "pubsub@test.iam.gserviceaccount.com",
 };
 
 const PADDLE_IDS = { customerId: "ctm_1", subscriptionId: "sub_1" };
