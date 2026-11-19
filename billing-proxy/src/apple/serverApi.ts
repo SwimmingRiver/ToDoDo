@@ -39,7 +39,7 @@ const optionalField = (obj: Record<string, unknown>, key: string, type: "string"
   if (obj[key] !== undefined && typeof obj[key] !== type) throw new Error(`Apple ${label} 페이로드 형식 오류: ${key}`);
 };
 
-const parseTransaction = (value: unknown): AppleTransaction => {
+export const parseTransaction = (value: unknown): AppleTransaction => {
   if (!isRecord(value)) throw new Error("Apple 거래 페이로드 형식 오류");
   for (const key of ["originalTransactionId", "transactionId", "bundleId", "productId"]) {
     requireField(value, key, "string", "거래");
@@ -55,7 +55,7 @@ const parseTransaction = (value: unknown): AppleTransaction => {
   return value as unknown as AppleTransaction;
 };
 
-const parseRenewal = (value: unknown): AppleRenewalInfo => {
+export const parseRenewal = (value: unknown): AppleRenewalInfo => {
   if (!isRecord(value)) throw new Error("Apple 갱신 정보 페이로드 형식 오류");
   if (value.autoRenewStatus !== 0 && value.autoRenewStatus !== 1) {
     throw new Error("Apple 갱신 정보 페이로드 형식 오류: autoRenewStatus");

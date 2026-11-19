@@ -8,6 +8,10 @@
 | `POST /trial` | Firebase ID 토큰 | 카드 없는 7일 체험(계정당 1회) |
 | `POST /portal` | Firebase ID 토큰 | Paddle 고객 포털 URL |
 | `POST /webhooks/paddle` | `Paddle-Signature` | `subscription.created/updated/canceled` 반영 |
+| `POST /account/delete` | Firebase ID 토큰 | 회원 탈퇴(허용 목록과 무관) |
+| `POST /iap/account-token` | Firebase ID 토큰 | 앱이 구매 때 붙일 `appAccountToken` |
+| `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
+| `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송) |
 
 ## 배포 준비 (사용자 작업 — 비밀값은 본인 터미널에서)
 
@@ -25,6 +29,20 @@
    npx wrangler secret put GOOGLE_SERVICE_ACCOUNT < ~/billing-service-account.json
    ```
 4. 첫 배포는 수동 `npx wrangler deploy`로 확인하고, 이후는 main push 시 CI가 배포한다.
+
+## 인앱결제(Apple) 설정 (사용자 작업 — 비밀값은 본인 터미널에서)
+
+스펙: `docs/superpowers/specs/2026-11-18-mobile-iap-design.md`. 번들 id는 `wrangler.toml`의 `APPLE_BUNDLE_ID`(`com.swimmingriver.tododo`)다.
+
+1. **App Store Server API 키**: App Store Connect > 사용자 및 액세스 > 통합 > App Store Connect API의 **인앱 구입** 키를 만든다 → `.p8` 파일(한 번만 내려받을 수 있다), Key ID, Issuer ID.
+2. **서버 알림 URL**: App Store Connect > 앱 > 앱 정보 > App Store 서버 알림에서 **버전 2**로 운영·샌드박스 둘 다 `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/apple`(자체 도메인이면 그 주소)을 넣는다. 샌드박스 알림(TestFlight·심사 결제)도 반영하고 `sources.apple.environment`에 `Sandbox`로 기록한다. 등록 후 App Store Server API의 "테스트 알림 요청"을 보내면 `TEST` 알림이 200으로 끝나는지 `wrangler tail`로 확인한다.
+3. **시크릿 등록** (`cd billing-proxy`). `IAP_ACCOUNT_TOKEN_SECRET`은 `appAccountToken`(uid 기반 UUID)을 만드는 키다 — **한 번 정하면 바꾸지 않는다**(바꾸면 기존 구매의 토큰과 달라진다. 연결은 막지 않지만 불일치 로그가 쏟아진다). Issuer ID·Key ID는 비밀은 아니지만 계정 고유 값이라 저장소에 두지 않는다:
+   ```bash
+   openssl rand -hex 32 | npx wrangler secret put IAP_ACCOUNT_TOKEN_SECRET
+   npx wrangler secret put APPLE_ISSUER_ID
+   npx wrangler secret put APPLE_KEY_ID
+   npx wrangler secret put APPLE_PRIVATE_KEY < ~/AuthKey_XXXXXXXXXX.p8
+   ```
 
 ### 릴리스(develop→main) 전제
 

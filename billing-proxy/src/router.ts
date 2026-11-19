@@ -7,7 +7,9 @@ import type { Env } from "./env";
 import { handleCheckout, handlePortal, handleTrial } from "./handlers/account";
 import { handleAccountToken } from "./handlers/accountToken";
 import { handleDeleteAccount } from "./handlers/deleteAccount";
+import { handleAppleVerify, handleAppleWebhook } from "./handlers/iapApple";
 import { handleWebhook } from "./handlers/webhook";
+import type { AppleServerApi } from "./apple/serverApi";
 import type { PaddleClient } from "./paddle";
 import type { StoreLinkStore } from "./storeLinks";
 
@@ -16,15 +18,18 @@ export interface BillingDeps extends CommitDeps {
   paddle: Pick<PaddleClient, "createCheckoutTransaction" | "createPortalUrl" | "cancelSubscriptionImmediately">;
   accountData: Pick<AccountDataStore, "deleteUserData">;
   storeLinks: Pick<StoreLinkStore, "get" | "put">;
+  apple: Pick<AppleServerApi, "getSubscriptionSnapshot">;
+  verifyAppleJws: (jws: string) => Promise<unknown>;
 }
 
-type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env) => Promise<Response>;
+type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env, request: Request) => Promise<Response>;
 
 const ACCOUNT_ROUTES = new Map<string, AccountRoute>([
   ["/checkout", handleCheckout],
   ["/trial", handleTrial],
   ["/portal", (uid, deps) => handlePortal(uid, deps)],
   ["/iap/account-token", (uid, _deps, _now, env) => handleAccountToken(uid, env)],
+  ["/iap/apple/verify", handleAppleVerify],
 ]);
 
 const withCors = (response: Response, origin: string | null, env: Env): Response => {
@@ -65,6 +70,10 @@ export const handleRequest = async (
     if (url.pathname === "/webhooks/paddle" && request.method === "POST") {
       return await handleWebhook(request, env, getDeps(), now);
     }
+    // Firebase 인증 대신 Apple 서명 체인으로 출처를 확인한다(App Store 서버가 보냄).
+    if (url.pathname === "/webhooks/apple" && request.method === "POST") {
+      return await handleAppleWebhook(request, env, getDeps(), now);
+    }
     if (request.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), origin, env);
 
     // 탈퇴는 결제 허용 목록과 무관하게 누구나 할 수 있어야 한다 — ACCOUNT_ROUTES(허용 목록 적용)와 분리한다.
@@ -82,7 +91,7 @@ export const handleRequest = async (
     if (!isBillingAllowed(uid, env.BILLING_ALLOWED_UIDS)) {
       return withCors(json({ error: "NOT_ALLOWED" }, 403), origin, env);
     }
-    return withCors(await route(uid, getDeps(), now, env), origin, env);
+    return withCors(await route(uid, getDeps(), now, env, request), origin, env);
   } catch (error) {
     console.error(`처리되지 않은 예외 (${url.pathname}):`, error);
     return withCors(new Response("Internal Server Error", { status: 500 }), origin, env);

@@ -5,6 +5,7 @@ import type { AppleRecord, PaddleRecord } from "@tododo/core/dist/entitlement/in
 import type { Env } from "../env";
 import { deriveAccountToken } from "../accountToken";
 import { asStored } from "./helpers/storedDoc";
+import { AppleJwsError } from "../apple/jws";
 
 vi.mock("@tododo/worker-auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tododo/worker-auth")>()),
@@ -71,6 +72,10 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   },
   accountData: { deleteUserData: vi.fn(async () => undefined) },
   storeLinks: { get: vi.fn(async () => ({ link: null, updateTime: null })), put: vi.fn(async () => "ok" as const) },
+  apple: { getSubscriptionSnapshot: vi.fn(async () => null) },
+  verifyAppleJws: vi.fn(async (_jws: string): Promise<unknown> => {
+    throw new AppleJwsError("JWS 형식이 아님");
+  }),
 });
 
 const post = (path: string, body?: unknown) =>
@@ -224,6 +229,39 @@ describe("router", () => {
     expect(await res.text()).toBe("Invalid signature");
     expect(verifyFirebaseIdToken).not.toHaveBeenCalled();
     expect(deps.store.get).not.toHaveBeenCalled();
+  });
+
+  it("not allowed uid → 403 on /iap/apple/verify", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    const deps = makeDeps();
+    const res = await call(post("/iap/apple/verify", { jws: "a.b.c" }), deps);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "NOT_ALLOWED" });
+    expect(deps.verifyAppleJws).not.toHaveBeenCalled();
+  });
+
+  it("POST /iap/apple/verify는 인증을 요구하고 본문을 핸들러로 넘긴다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValueOnce(new Error("bad"));
+    expect((await call(post("/iap/apple/verify", { jws: "a.b.c" }), makeDeps())).status).toBe(401);
+
+    const deps = makeDeps();
+    const res = await call(post("/iap/apple/verify", { jws: "a.b.c" }), deps);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "INVALID_TRANSACTION" });
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://tododo-83576.web.app");
+    expect(deps.verifyAppleJws).toHaveBeenCalledWith("a.b.c");
+  });
+
+  it("POST /webhooks/apple은 Firebase 인증·허용 목록 없이 서명 검증으로 간다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
+    const deps = makeDeps();
+    const res = await call(
+      new Request("https://billing.example/webhooks/apple", { method: "POST", body: JSON.stringify({ signedPayload: "a.b.c" }) }),
+      deps,
+    );
+    expect(res.status).toBe(401);
+    expect(verifyFirebaseIdToken).not.toHaveBeenCalled();
+    expect(deps.verifyAppleJws).toHaveBeenCalledWith("a.b.c");
   });
 
   it("모르는 경로는 404", async () => {
