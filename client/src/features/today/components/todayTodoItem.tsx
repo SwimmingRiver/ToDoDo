@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { colors } from "@/styles/colors";
 import type { Todo } from "@/features/todo/types";
 import { RecurrenceBadge, extractLinks } from "@/shared";
-import { getDaysLeft, getDueBadgeLabel, getUrgency } from "@/shared/utils/due";
+import { getDaysLeft, getDueBadgeLabel, getDueLabel, getUrgency } from "@/shared/utils/due";
+import useMinuteNow from "@/shared/hooks/useMinuteNow";
 import { getPeriodProgress } from "@/shared/utils/dateRange";
 import { toDateKey } from "@/shared/utils/date";
 import { formatDueTime } from "@/shared/utils/formatToday";
@@ -45,7 +46,8 @@ const TodayTodoItem = ({
   const navigate = useNavigate();
   const isDone = todo.status === "done";
   const dateKey = selectedDate ?? toDateKey(new Date());
-  const daysLeft = todo.dueAt ? getDaysLeft(todo.dueAt) : null;
+  const now = useMinuteNow();
+  const daysLeft = todo.dueAt ? getDaysLeft(todo.dueAt, now) : null;
   const urgency = daysLeft !== null ? getUrgency(daysLeft) : "normal";
   const dueTime = todo.dueAt ? formatDueTime(todo.dueAt) : null;
   const periodProgress = !isDone ? getPeriodProgress(dateKey, todo) : null;
@@ -105,10 +107,10 @@ const TodayTodoItem = ({
         )}
       </Content>
       {!isDone && daysLeft !== null && urgency === "danger" && (
-        <OverdueBadge>{getDueBadgeLabel(daysLeft)}</OverdueBadge>
+        <OverdueBadge>{getDueLabel(todo.dueAt!, now)}</OverdueBadge>
       )}
       {!isDone && daysLeft !== null && urgency === "soon" && (
-        <DueSoonBadge>{getDueBadgeLabel(daysLeft)}</DueSoonBadge>
+        <DueSoonBadge>{getDueLabel(todo.dueAt!, now)}</DueSoonBadge>
       )}
       {!isDone && urgency === "normal" && (
         <>

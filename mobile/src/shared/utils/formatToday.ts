@@ -22,7 +22,7 @@ export function formatTodayLabel(date: string): string {
 }
 
 /**
- * 마감 시각 포맷 "오후 2시". dueAt이 자정(00:00, 시간 정보 없음으로 간주)이면 null.
+ * 마감 시각 포맷. 24시간제 "14:30"(배지 폭을 줄이려고 오전/오후 대신 사용). dueAt이 자정(00:00, 시간 정보 없음으로 간주)이면 null.
  */
 export function formatDueTime(dueAt: string): string | null {
   const due = new Date(dueAt);
@@ -33,8 +33,5 @@ export function formatDueTime(dueAt: string): string | null {
     return null;
   }
 
-  const period = hours < 12 ? "오전" : "오후";
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-
-  return `${period} ${hour12}시`;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }

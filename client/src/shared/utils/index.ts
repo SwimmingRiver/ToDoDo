@@ -1,4 +1,4 @@
-export { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel, getUrgency, isTodoOverdue } from "./due";
+export { DUE_SOON_DAYS, getDaysLeft, getDueBadgeLabel, getDueLabel, getUrgency, isTodoOverdue } from "./due";
 export type { Urgency, TodoOverdueLike } from "./due";
 export { formatTodayLabel, formatDueTime } from "./formatToday";
 export {

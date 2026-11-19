@@ -4,7 +4,8 @@ import { Checkbox } from "../checkbox/Checkbox";
 import { PeriodBadge } from "../periodBadge/PeriodBadge";
 import { DueBadge } from "../dueBadge/DueBadge";
 import { RecurrenceBadge } from "../recurrenceBadge/RecurrenceBadge";
-import { getDaysLeft, getDueBadgeLabel, getUrgency } from "../../utils/due";
+import { getDaysLeft, getDueBadgeLabel, getDueLabel, getUrgency } from "../../utils/due";
+import { useMinuteNow } from "../../../hooks/useMinuteNow";
 import { getPeriodProgress } from "../../utils/dateRange";
 import { formatDueTime } from "../../utils/formatToday";
 import { colors } from "../../../theme/colors";
@@ -26,7 +27,8 @@ interface TodayTodoItemProps {
  */
 export const TodayTodoItem = ({ todo, selectedDate, onToggleDone, onPress, isLast = false }: TodayTodoItemProps) => {
   const isDone = todo.status === "done";
-  const daysLeft = todo.dueAt ? getDaysLeft(todo.dueAt) : null;
+  const now = useMinuteNow();
+  const daysLeft = todo.dueAt ? getDaysLeft(todo.dueAt, now) : null;
   const urgency = daysLeft !== null ? getUrgency(daysLeft) : "normal";
   const periodProgress = !isDone ? getPeriodProgress(selectedDate, todo) : null;
   // 기간 항목의 마지막 날(=마감일 당일)에는 시각(dueTime)을, 그 이전 진행 중인 날에는
@@ -65,7 +67,7 @@ export const TodayTodoItem = ({ todo, selectedDate, onToggleDone, onPress, isLas
         )}
       </Pressable>
       {!isDone && daysLeft !== null && urgency !== "normal" && (
-        <DueBadge daysLeft={daysLeft} urgency={urgency} testID={`due-badge-${todo.id}`} />
+        <DueBadge label={getDueLabel(todo.dueAt!, now)} urgency={urgency} testID={`due-badge-${todo.id}`} />
       )}
       {!isDone && urgency === "normal" && (
         <>
