@@ -74,7 +74,8 @@ export class AccountDataStore {
       update: { name, fields: {} },
       updateMask: { fieldPaths: ["userId", "email"] },
     }));
-    // 스토어 구독 연결은 uid 필드로 묶인다. 지워도 스토어 구독 자체는 남으므로 화면에서 별도로 경고한다.
+    // 스토어 구독 연결은 uid 필드로 묶인다. Google 구독은 이보다 먼저 서버가 해지하지만, Apple 구독은 지워도 남으므로
+    // 화면에서 별도로 경고한다.
     await this.drain("storeLinks", "uid", uid, (name) => ({ delete: name }));
     await this.commit(SINGLE_DOC_COLLECTIONS.map((collection) => ({ delete: `${this.root}/${collection}/${uid}` })));
   }
