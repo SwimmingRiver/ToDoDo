@@ -37,6 +37,20 @@ const summarize = (revision: LegalRevision): RevisionSummary => ({
   change: revision.change,
 });
 
+/**
+ * 판별 본문 중 오늘(서울) 시행 중인 것을 고른다. 판 정보(LEGAL_REVISIONS)와 같은 날짜 기준이라
+ * 시행일이 되면 판매자 표기와 본문이 함께, 배포 없이 바뀐다.
+ * 첫 본문 시행 전(이론상만 가능)에도 빈 화면 대신 첫 본문을 보여준다.
+ */
+export const resolveLegalEdition = <T>(
+  editions: readonly { effectiveOn: string; document: T }[],
+  now: Date,
+): T => {
+  const today = seoulDateKey(now);
+  const effective = editions.filter((e) => e.effectiveOn <= today);
+  return (effective.at(-1) ?? editions[0]).document;
+};
+
 export const resolveLegalRevision = (
   revisions: LegalRevision[],
   now: Date,
