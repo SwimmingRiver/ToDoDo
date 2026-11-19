@@ -158,6 +158,22 @@ describe("applyGoogleSubscription", () => {
     expect("write" in applyGoogleSubscription(d, sub(), ev({ eventTime: null, messageId: null }), NOW)).toBe(true);
   });
 
+  it("unlinked new token with older eventTime is not STALE — goes on to foreign/takeover rules", () => {
+    // 이어지지 않은 다른 구독의 늦게 온 알림을 시각만으로 버리면 영영 반영·승인되지 않는다(미승인 → 자동 환불).
+    const t = iso(NOW.getTime());
+    const older = ev({ eventTime: iso(NOW.getTime() - 1000) });
+    const canceledOld = doc({ sources: { google: google({ purchaseToken: "old", status: "canceled", premiumUntil: t, lastEventTime: t }) } });
+    expect(written(applyGoogleSubscription(canceledOld, sub(), older, NOW)).sources.google?.purchaseToken).toBe("tok_1");
+    const renewingOld = doc({ sources: { google: google({ purchaseToken: "old", lastEventTime: t }) } });
+    expect(applyGoogleSubscription(renewingOld, sub(), older, NOW)).toEqual({ skip: "OTHER_SUBSCRIPTION" });
+  });
+
+  it("linked successor token with older eventTime → STALE", () => {
+    const d = doc({ sources: { google: google({ purchaseToken: "old", lastEventTime: iso(NOW.getTime()) }) } });
+    const older = ev({ eventTime: iso(NOW.getTime() - 1000) });
+    expect(applyGoogleSubscription(d, sub({ linkedPurchaseToken: "old" }), older, NOW)).toEqual({ skip: "STALE" });
+  });
+
   it("linkedPurchaseToken equal to existing token → replaces record", () => {
     const d = doc({ sources: { google: google({ purchaseToken: "old" }) } });
     const out = written(applyGoogleSubscription(d, sub({ linkedPurchaseToken: "old" }), ev(), NOW));

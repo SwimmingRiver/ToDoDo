@@ -88,8 +88,11 @@ export const applyGoogleSubscription = (
   const previous = existing.sources.google;
   if (previous) {
     if (ev.messageId !== null && previous.lastMessageId === ev.messageId) return { skip: "DUPLICATE_MESSAGE" };
-    // Pub/Sub 이벤트 시각은 구독 체인(linked 토큰 포함) 안에서 단조 증가하므로 토큰이 달라도 비교한다.
-    if (ev.eventTime !== null && previous.lastEventTime !== null && Date.parse(ev.eventTime) <= Date.parse(previous.lastEventTime)) {
+    // Pub/Sub 이벤트 시각은 한 구독 체인(같은 토큰·linkedPurchaseToken으로 이어진 교체) 안에서만 순서 비교가 의미 있다.
+    // 이어지지 않은 다른 토큰의 늦게 온 알림을 시각만으로 버리면 영영 반영·승인되지 않아(미승인 → 자동 환불)
+    // 아래 foreign·교체 규칙으로 넘긴다. messageId는 메시지마다 고유하므로 중복 판정은 토큰과 무관하다.
+    const sameChain = previous.purchaseToken === ev.purchaseToken || sub.linkedPurchaseToken === previous.purchaseToken;
+    if (sameChain && ev.eventTime !== null && previous.lastEventTime !== null && Date.parse(ev.eventTime) <= Date.parse(previous.lastEventTime)) {
       return { skip: "STALE" };
     }
   }
