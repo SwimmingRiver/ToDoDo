@@ -17,6 +17,14 @@ jest.mock("../../account/deleteAccount", () => ({
   deleteAccount: () => mockDeleteAccount(),
 }));
 
+import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
+
+let mockEntitlement: EntitlementDoc | undefined;
+jest.mock("../../premium/useEntitlement", () => ({ useEntitlement: () => ({ data: mockEntitlement, isLoading: false }) }));
+jest.mock("../../premium/PremiumSection", () => ({ PremiumSection: () => null }));
+const mockManage = jest.fn<() => Promise<void>>();
+jest.mock("../../premium/iap/purchaseClient", () => ({ purchaseClient: { openManageSubscriptions: () => mockManage() } }));
+
 const queryClient = new QueryClient();
 
 const renderScreen = async () => {
@@ -49,6 +57,8 @@ describe("AccountScreen", () => {
   let alertSpy: jest.SpiedFunction<typeof Alert.alert>;
 
   beforeEach(() => {
+    mockEntitlement = undefined;
+    mockManage.mockReset().mockResolvedValue(undefined);
     mockSignOut.mockReset().mockResolvedValue(undefined);
     mockDeleteAccount.mockReset().mockResolvedValue(undefined);
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
@@ -121,6 +131,27 @@ describe("AccountScreen", () => {
 
       expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
       expect(mockSignOut).toHaveBeenCalledWith(queryClient);
+    });
+
+    it("자동 갱신 스토어 구독이 있으면 경고를 덧붙이고 구독 관리 버튼을 낸다", async () => {
+      const future = new Date(Date.now() + 30 * 864e5).toISOString();
+      mockEntitlement = {
+        ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: future,
+        sources: { apple: { status: "active", premiumUntil: future, cancelAt: null, currentPeriodEnd: future, autoRenew: true,
+          startedAt: null, updatedAt: future, originalTransactionId: "1", productId: "premium_monthly", environment: "Production",
+          appAccountToken: null, lastNotificationUUID: null, lastSignedDate: null } },
+      };
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenCalledWith(
+        "회원 탈퇴",
+        `${DELETE_MESSAGE}\n\nApp Store 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`,
+        expect.any(Array),
+      );
+      await pressAlertButton(alertSpy, "구독 관리");
+      expect(mockManage).toHaveBeenCalled();
+      expect(mockDeleteAccount).not.toHaveBeenCalled();
     });
 
     it("취소하면 아무것도 하지 않는다", async () => {

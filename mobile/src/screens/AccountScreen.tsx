@@ -5,16 +5,24 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
 import { deleteAccount } from "../account/deleteAccount";
+import { hasAutoRenewingStoreSubscription } from "@tododo/core/dist/entitlement/index.js";
+import { PremiumSection } from "../premium/PremiumSection";
+import { useEntitlement } from "../premium/useEntitlement";
+import { purchaseClient } from "../premium/iap/purchaseClient";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
 
-// 앱은 아직 구독 상태를 표시하지 않으므로 구독 해지 안내를 항상 함께 보여준다.
+// 구독 출처와 무관하게 공통 해지 안내를 항상 보여준다. 자동 갱신 중인 스토어 구독이 있으면 아래 경고를 덧붙인다.
 const DELETE_MESSAGE =
   "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.\n\n구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
 
+const storeWarning = (store: "apple" | "google") =>
+  `${store === "apple" ? "App Store" : "Google Play"} 구독은 탈퇴해도 자동으로 해지되지 않아요. 먼저 구독을 해지해 주세요.`;
+
 export const AccountScreen = () => {
   const { user } = useAuthState();
+  const { data: entitlement } = useEntitlement();
   const queryClient = useQueryClient();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -56,8 +64,11 @@ export const AccountScreen = () => {
   };
 
   const handleDeletePress = () => {
-    Alert.alert("회원 탈퇴", DELETE_MESSAGE, [
+    const store = entitlement ? hasAutoRenewingStoreSubscription(entitlement, new Date()) : null;
+    const message = store ? `${DELETE_MESSAGE}\n\n${storeWarning(store)}` : DELETE_MESSAGE;
+    Alert.alert("회원 탈퇴", message, [
       { text: "취소", style: "cancel" },
+      ...(store ? [{ text: "구독 관리", onPress: () => void purchaseClient.openManageSubscriptions() }] : []),
       { text: "탈퇴하기", style: "destructive", onPress: runDeleteAccount },
     ]);
   };
@@ -68,6 +79,7 @@ export const AccountScreen = () => {
         <Text style={styles.label}>로그인 계정</Text>
         <Text style={styles.email}>{user?.email ?? ""}</Text>
       </View>
+      <PremiumSection />
       <Button
         title="로그아웃"
         variant="outline"
