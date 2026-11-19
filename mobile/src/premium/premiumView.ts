@@ -34,7 +34,14 @@ export const getMobilePremiumView = (
   }
   const store: Store | null = doc.source === "apple" || doc.source === "google" ? doc.source : null;
   if (doc.status === "past_due") return { kind: "pastDue", store };
-  if (store) return { kind: "store", store, until: doc.premiumUntil, canceling: doc.cancelAt !== null };
+  if (store) {
+    // 자동 갱신 중인 스토어 구독의 premiumUntil은 기간 끝 + 유예(RENEWAL_GRACE_MS)라 다음 결제일로 쓰면 며칠 늦다.
+    // 갱신 중이면 기간 끝(currentPeriodEnd), 해지 예약이면 만료 시각(cancelAt, 유예 없음)을 보인다.
+    const record = doc.sources[store];
+    const cancelAt = record?.cancelAt ?? doc.cancelAt;
+    if (cancelAt !== null) return { kind: "store", store, until: cancelAt, canceling: true };
+    return { kind: "store", store, until: record?.currentPeriodEnd ?? doc.currentPeriodEnd, canceling: false };
+  }
   if (doc.source === "trial") return { kind: "trialing", until: doc.premiumUntil };
   // 운영자 부여(manual)는 다른 기기·웹에서 관리하는 구독이 아니라 별도 문구를 쓴다.
   if (doc.source === "manual") return { kind: "granted", until: doc.premiumUntil };
@@ -42,6 +49,10 @@ export const getMobilePremiumView = (
 };
 
 const STORE_NAME: Record<Store, string> = { apple: "App Store", google: "Google Play" };
+const PLATFORM_STORE: Record<"ios" | "android", Store> = { ios: "apple", android: "google" };
+/** 구독 관리 화면은 현재 기기의 스토어만 열 수 있다. 다른 스토어 기록이면 버튼을 숨긴다. */
+export const isOwnStore = (store: Store | null, platform: "ios" | "android"): boolean =>
+  store !== null && PLATFORM_STORE[platform] === store;
 export const storeName = (store: Store): string => STORE_NAME[store];
 
 /**

@@ -4,6 +4,7 @@ import { duplicateNotice, getMobilePremiumView } from "../premiumView";
 
 const NOW = Date.parse("2026-11-19T00:00:00Z");
 const FUTURE = "2026-12-19T00:00:00.000Z";
+const PERIOD_END = "2026-12-16T00:00:00.000Z"; // FUTURE - 유예 3일
 const doc = (over: Partial<EntitlementDoc>): EntitlementDoc => ({ ...EMPTY_ENTITLEMENT, ...over });
 const storeDoc = (source: "apple" | "google", over: Partial<EntitlementDoc> = {}) =>
   doc({ plan: "premium", status: "active", source, premiumUntil: FUTURE, ...over });
@@ -28,8 +29,27 @@ describe("getMobilePremiumView", () => {
     expect(getMobilePremiumView(storeDoc("apple", { source: "trial", status: "trialing" }), NOW, false)).toEqual({ kind: "trialing", until: FUTURE });
   });
   it("store source → store with canceling flag", () => {
-    expect(getMobilePremiumView(storeDoc("google"), NOW, false)).toEqual({ kind: "store", store: "google", until: FUTURE, canceling: false });
+    expect(getMobilePremiumView(storeDoc("google", { currentPeriodEnd: PERIOD_END }), NOW, false)).toEqual({ kind: "store", store: "google", until: PERIOD_END, canceling: false });
     expect(getMobilePremiumView(storeDoc("apple", { cancelAt: FUTURE }), NOW, false)).toEqual({ kind: "store", store: "apple", until: FUTURE, canceling: true });
+  });
+  // 자동 갱신 중인 스토어 구독의 premiumUntil은 기간 끝 + 유예 3일이다. 다음 결제일로 보이면 3일 늦다.
+  it("renewing store → until is the record's currentPeriodEnd, not premiumUntil (+grace)", () => {
+    const record: SourceRecord = {
+      status: "active",
+      premiumUntil: FUTURE,
+      cancelAt: null,
+      currentPeriodEnd: PERIOD_END,
+      autoRenew: true,
+      startedAt: null,
+      updatedAt: "",
+    };
+    const d = storeDoc("apple", { currentPeriodEnd: null, sources: { apple: { ...record, originalTransactionId: "o", productId: "p", environment: "Production", appAccountToken: null, lastNotificationUUID: null, lastSignedDate: null } } });
+    expect(getMobilePremiumView(d, NOW, false)).toEqual({ kind: "store", store: "apple", until: PERIOD_END, canceling: false });
+    expect(getMobilePremiumView(storeDoc("google", { currentPeriodEnd: null }), NOW, false)).toEqual({ kind: "store", store: "google", until: null, canceling: false });
+  });
+  it("canceling store → until is cancelAt (expiry, no grace)", () => {
+    const d = storeDoc("google", { premiumUntil: FUTURE, cancelAt: PERIOD_END, currentPeriodEnd: PERIOD_END });
+    expect(getMobilePremiumView(d, NOW, false)).toEqual({ kind: "store", store: "google", until: PERIOD_END, canceling: true });
   });
   it("past_due → pastDue with store", () => {
     expect(getMobilePremiumView(storeDoc("apple", { status: "past_due" }), NOW, false)).toEqual({ kind: "pastDue", store: "apple" });

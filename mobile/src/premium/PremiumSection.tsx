@@ -6,7 +6,7 @@ import { radius, spacing } from "../theme/spacing";
 import { useEntitlement } from "./useEntitlement";
 import { purchaseClient } from "./iap/purchaseClient";
 import { usePurchase } from "./iap/usePurchase";
-import { duplicateNotice, getMobilePremiumView, storeName } from "./premiumView";
+import { duplicateNotice, getMobilePremiumView, isOwnStore, storeName } from "./premiumView";
 
 const TERMS_URL = "https://tododo-app.com/terms";
 const PRIVACY_URL = "https://tododo-app.com/privacy";
@@ -32,9 +32,8 @@ const formatDate = (iso: string | null): string => {
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 };
 
-const platform = Platform.OS === "ios" ? "ios" : "android";
-
 export const PremiumSection = () => {
+  const platform = Platform.OS === "ios" ? "ios" : "android";
   const { data, isLoading } = useEntitlement();
   const { buy, restore, phase, lastError } = usePurchase();
   const [trialEligible, setTrialEligible] = useState(false);
@@ -101,7 +100,7 @@ export const PremiumSection = () => {
               ? view.until ? `${formatDate(view.until)}에 구독이 종료돼요` : "구독이 종료될 예정이에요"
               : `${storeName(view.store)} 구독 중이에요.${view.until ? ` 다음 결제일은 ${formatDate(view.until)}이에요` : ""}`}
           </Text>
-          {manageButton}
+          {isOwnStore(view.store, platform) && manageButton}
         </>
       )}
       {view.kind === "external" && (
@@ -116,7 +115,7 @@ export const PremiumSection = () => {
       {view.kind === "pastDue" && (
         <>
           <Text style={styles.body}>결제 수단을 확인해 주세요</Text>
-          {view.store && manageButton}
+          {isOwnStore(view.store, platform) && manageButton}
         </>
       )}
       {notice && (

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, act } from "@testing-library/react-native";
-import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { Linking } from "react-native";
+import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { Linking, Platform } from "react-native";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
 
 let mockDoc: EntitlementDoc | undefined = EMPTY_ENTITLEMENT;
@@ -111,10 +111,66 @@ describe("PremiumSection", () => {
   });
 
   it("store view with null until renders no date fragment", async () => {
-    mockDoc = mk({ source: "google", cancelAt: FUTURE, premiumUntil: null });
+    mockDoc = mk({ source: "google", currentPeriodEnd: null });
     await render(<PremiumSection />);
     await flush();
-    expect(screen.queryByText(/에 구독이 종료돼요/)).toBeNull();
+    expect(screen.getByText("Google Play 구독 중이에요.")).toBeTruthy();
+    expect(screen.queryByText(/다음 결제일/)).toBeNull();
+  });
+
+  it("renewing store view shows next billing = currentPeriodEnd, not premiumUntil (+3d grace)", async () => {
+    mockDoc = mk({ source: "apple", premiumUntil: FUTURE, currentPeriodEnd: "2026-12-16T12:00:00.000Z" });
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.getByText(/다음 결제일은 2026년 12월 16일이에요/)).toBeTruthy();
+  });
+
+  it("canceling store view shows cancelAt as the end date", async () => {
+    mockDoc = mk({ source: "apple", premiumUntil: FUTURE, cancelAt: "2026-12-16T12:00:00.000Z" });
+    await render(<PremiumSection />);
+    await flush();
+    expect(screen.getByText("2026년 12월 16일에 구독이 종료돼요")).toBeTruthy();
+  });
+
+  describe("구독 관리 버튼은 기록의 스토어가 현재 기기 스토어일 때만", () => {
+    const setOS = (os: "ios" | "android") => jest.replaceProperty(Platform, "OS", os);
+    afterEach(() => jest.restoreAllMocks());
+
+    it("google store record on ios → text only, no manage button", async () => {
+      setOS("ios");
+      mockDoc = mk({ source: "google" });
+      await render(<PremiumSection />);
+      await flush();
+      expect(screen.getByText(/Google Play 구독 중이에요/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "구독 관리" })).toBeNull();
+    });
+
+    it("apple store record on android → text only, no manage button", async () => {
+      setOS("android");
+      mockDoc = mk({ source: "apple" });
+      await render(<PremiumSection />);
+      await flush();
+      expect(screen.getByText(/App Store 구독 중이에요/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "구독 관리" })).toBeNull();
+    });
+
+    it("pastDue on the other store → no manage button", async () => {
+      setOS("ios");
+      mockDoc = mk({ source: "google", status: "past_due" });
+      await render(<PremiumSection />);
+      await flush();
+      expect(screen.getByText(/결제 수단을 확인해 주세요/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "구독 관리" })).toBeNull();
+    });
+
+    it("google store record on android → manage button", async () => {
+      setOS("android");
+      mockDoc = mk({ source: "google" });
+      await render(<PremiumSection />);
+      await flush();
+      await fireEvent.press(screen.getByRole("button", { name: "구독 관리" }));
+      expect(mockManage).toHaveBeenCalled();
+    });
   });
 
   it("buys with trial when eligible", async () => {
