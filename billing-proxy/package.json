@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tododo/core": "file:../packages/core",
     "@tododo/worker-auth": "file:../packages/worker-auth"
   },
   "devDependencies": {
