@@ -134,7 +134,9 @@ describe("PremiumSection", () => {
 
   describe("구독 관리 버튼은 기록의 스토어가 현재 기기 스토어일 때만", () => {
     const setOS = (os: "ios" | "android") => jest.replaceProperty(Platform, "OS", os);
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
 
     it("google store record on ios → text only, no manage button", async () => {
       setOS("ios");
