@@ -7,6 +7,7 @@ import {
   getPendingTransactionsIOS,
   initConnection,
   isEligibleForIntroOfferIOS,
+  isUserCancelledError,
   purchaseErrorListener,
   purchaseUpdatedListener,
   requestPurchase,
@@ -27,6 +28,7 @@ export interface StorePurchase {
 
 /** expo-iap를 감싼 얇은 경계. 라이브러리 API는 이 파일에서만 쓰고, 테스트는 이 인터페이스를 mock한다. */
 export interface PurchaseClient {
+  /** 결제창을 연다. 결과는 onPurchase로 온다. 사용자 취소는 정상 종료(이벤트 없음)다. */
   buy(opts: { withTrial: boolean; accountToken: string }): Promise<void>;
   /** 아직 끝내지(finish) 않은 거래. iOS는 StoreKit 미완료 거래, Android는 승인 전 구매. */
   listUnfinished(): Promise<StorePurchase[]>;
@@ -77,28 +79,45 @@ const googleOfferToken = async (withTrial: boolean): Promise<string | null> => {
   return pickGoogleOffer(product.subscriptionOffers, withTrial);
 };
 
+/**
+ * 스토어 결제창을 연다. 사용자가 취소하면 라이브러리가 requestPurchase를 거절로 끝내는데, 이건 오류가 아니라
+ * "아무 일도 없었음"이라 정상 종료로 바꾼다(그대로 두면 화면에 네트워크 오류로 보인다). 다른 거절은 그대로 던진다.
+ */
+const requestCancellable = async (request: () => Promise<unknown>): Promise<void> => {
+  try {
+    await request();
+  } catch (error) {
+    if (isUserCancelledError(error)) return;
+    throw error;
+  }
+};
+
 export const purchaseClient: PurchaseClient = {
   async buy({ withTrial, accountToken }) {
     await ensureConnected();
     if (platform() === "ios") {
-      await requestPurchase({
-        type: "subs",
-        request: { apple: { sku: withTrial ? APPLE_PRODUCTS.trial : APPLE_PRODUCTS.plain, appAccountToken: accountToken } },
-      });
+      await requestCancellable(() =>
+        requestPurchase({
+          type: "subs",
+          request: { apple: { sku: withTrial ? APPLE_PRODUCTS.trial : APPLE_PRODUCTS.plain, appAccountToken: accountToken } },
+        }),
+      );
       return;
     }
     const offerToken = await googleOfferToken(withTrial);
     if (!offerToken) throw new Error(`Google 구독 offer를 찾지 못함 (withTrial=${withTrial})`);
-    await requestPurchase({
-      type: "subs",
-      request: {
-        google: {
-          skus: [GOOGLE_PRODUCT.productId],
-          subscriptionOffers: [{ sku: GOOGLE_PRODUCT.productId, offerToken }],
-          obfuscatedAccountId: accountToken,
+    await requestCancellable(() =>
+      requestPurchase({
+        type: "subs",
+        request: {
+          google: {
+            skus: [GOOGLE_PRODUCT.productId],
+            subscriptionOffers: [{ sku: GOOGLE_PRODUCT.productId, offerToken }],
+            obfuscatedAccountId: accountToken,
+          },
         },
-      },
-    });
+      }),
+    );
   },
 
   async listUnfinished() {

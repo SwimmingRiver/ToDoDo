@@ -68,7 +68,50 @@ describe("usePurchase", () => {
     });
     expect(mockFetchAccountToken).toHaveBeenCalledTimes(1);
     expect(mockClient.buy).toHaveBeenCalledWith({ withTrial: true, accountToken: TOKEN });
+  });
+
+  it("client.buy rejects with cancel → lastError stays null, phase idle", async () => {
+    // purchaseClient가 취소 거절을 삼켜 정상 종료로 바꾼다 — 훅에는 이벤트 없이 끝난 buy로 보인다.
+    mockClient.buy.mockResolvedValue(undefined);
+    const { result } = await renderHook(() => usePurchase());
+    await act(async () => {
+      await result.current.buy(true);
+    });
+    expect(result.current.lastError).toBeNull();
+    expect(result.current.phase).toBe("idle");
+  });
+
+  it("구매 이벤트 없이 buy가 끝나면(Ask to Buy·보류) idle로 돌아간다", async () => {
+    let resolveBuy: () => void = () => {};
+    mockClient.buy.mockImplementation(() => new Promise<void>((r) => (resolveBuy = r)));
+    const { result } = await renderHook(() => usePurchase());
+    let pending: Promise<void> = Promise.resolve();
+    await act(async () => {
+      pending = result.current.buy(false);
+    });
     expect(result.current.phase).toBe("buying");
+    await act(async () => {
+      resolveBuy();
+      await pending;
+    });
+    expect(result.current.phase).toBe("idle");
+  });
+
+  it("buy가 끝나기 전에 구매 이벤트가 오면 검증 단계를 덮어쓰지 않는다", async () => {
+    let resolveVerify: (r: VerifyResult) => void = () => {};
+    mockVerify.mockImplementation(() => new Promise<VerifyResult>((r) => (resolveVerify = r)));
+    mockClient.buy.mockImplementation(async () => {
+      listeners.purchase?.(purchase("jws-1"));
+    });
+    const { result } = await renderHook(() => usePurchase());
+    await act(async () => {
+      await result.current.buy(false);
+    });
+    expect(result.current.phase).toBe("verifying");
+    await act(async () => {
+      resolveVerify({ ok: true });
+    });
+    await waitFor(() => expect(result.current.phase).toBe("idle"));
   });
 
   it("purchase event → verify → refreshClaims → finish", async () => {
@@ -150,10 +193,12 @@ describe("usePurchase", () => {
     mockVerify.mockImplementation(async (p) => (p.proof === "c" ? { ok: false, reason: "INVALID" } : { ok: true }));
 
     const { result } = await renderHook(() => usePurchase());
+    let outcome: Awaited<ReturnType<typeof result.current.restore>> | undefined;
     await act(async () => {
-      await result.current.restore();
+      outcome = await result.current.restore();
     });
 
+    expect(outcome).toEqual({ restored: 2, failure: null });
     expect(mockVerify.mock.calls.map(([p]) => p.proof).sort()).toEqual(["a", "b", "c"]);
     expect(mockClient.finish.mock.calls.map(([p]) => p.proof).sort()).toEqual(["a", "b"]);
     expect(result.current.phase).toBe("idle");
@@ -166,11 +211,26 @@ describe("usePurchase", () => {
     mockVerify.mockResolvedValue({ ok: false, reason: "LINKED_TO_OTHER_ACCOUNT" });
 
     const { result } = await renderHook(() => usePurchase());
+    let outcome: Awaited<ReturnType<typeof result.current.restore>> | undefined;
     await act(async () => {
-      await result.current.restore();
+      outcome = await result.current.restore();
     });
     expect(mockClient.finish).not.toHaveBeenCalled();
     expect(result.current.lastError).toBe("LINKED_TO_OTHER_ACCOUNT");
+    expect(outcome).toEqual({ restored: 0, failure: "LINKED_TO_OTHER_ACCOUNT" });
+  });
+
+  it("restore with no purchases → restored 0, failure null", async () => {
+    mockClient.listUnfinished.mockResolvedValue([]);
+    mockClient.listAvailable.mockResolvedValue([]);
+    const { result } = await renderHook(() => usePurchase());
+    let outcome: Awaited<ReturnType<typeof result.current.restore>> | undefined;
+    await act(async () => {
+      outcome = await result.current.restore();
+    });
+    expect(outcome).toEqual({ restored: 0, failure: null });
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(result.current.lastError).toBeNull();
   });
 
   it("언마운트하면 리스너를 해제한다", async () => {
