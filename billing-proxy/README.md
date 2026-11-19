@@ -8,6 +8,12 @@
 | `POST /trial` | Firebase ID 토큰 | 카드 없는 7일 체험(계정당 1회) |
 | `POST /portal` | Firebase ID 토큰 | Paddle 고객 포털 URL |
 | `POST /webhooks/paddle` | `Paddle-Signature` | `subscription.created/updated/canceled` 반영 |
+| `POST /account/delete` | Firebase ID 토큰 | 회원 탈퇴(허용 목록과 무관). 순서: 살아 있는 Paddle 구독 즉시 해지 → 자동 갱신 중인 Google Play 구독 `subscriptionsv2.cancel`(갱신 중지, 이미 해지·만료면 성공으로 봄) → 데이터 삭제 → Auth 삭제. 해지 실패면 아무것도 지우지 않고 `502 PADDLE_CANCEL_FAILED`/`502 GOOGLE_CANCEL_FAILED`. Apple 구독은 서버가 해지할 수 없어 화면 경고만 한다 |
+| `POST /iap/account-token` | Firebase ID 토큰 | 앱이 구매 때 붙일 `appAccountToken` |
+| `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
+| `POST /iap/google/verify` | Firebase ID 토큰 | 본문 `{ purchaseToken, productId }`(`productId`는 `premium_monthly`만) → Play Developer API `subscriptionsv2`로 현재 상태 조회 → 구매 토큰을 계정에 연결(교체 토큰이면 `linkedPurchaseToken`의 연결이 같은 계정이어야 함) → `sources.google` 반영 → 미승인이면 acknowledge → `{ premiumUntil }`. 결제 대기면 승인 없이 `{ premiumUntil, pending: true }`. 실패 `400 INVALID_PURCHASE`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT`, 다른 Google 구독이 갱신 중 `409 ALREADY_SUBSCRIBED`(승인 안 함 → 자동 환불), 승인 실패 `500`(반영은 같은 값이라 앱이 재시도하면 승인까지 이어짐) |
+| `POST /webhooks/google` | Pub/Sub 푸시 OIDC 토큰 | Play RTDN. 알림 본문 상태는 믿지 않고 `purchaseToken`으로 매번 다시 조회해 반영(구독 환불 `voidedPurchaseNotification`(`productType` 1)도 같음, 다른 상품 환불은 무시). 연결된 계정에만 반영(교체 토큰은 이전 토큰의 계정을 따라가 새로 연결, 둘 다 없으면 200 무시), 반영했는데 미승인이면 승인. OIDC 불일치 401, 형식 오류·다른 앱·테스트 알림 200, 일시 오류 500(Pub/Sub 재전송) |
+| `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 알림은 신호로만 쓰고 상태는 매번 App Store Server API로 다시 조회한다(알림의 거래는 지난 갱신분일 수 있음). 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송). `CONSUMPTION_REQUEST`(환불 요청)는 권한을 바꾸지 않고 결제일 14일 이내면 `GRANT_FULL`, 지나면 `DECLINE`으로 회신한다(`APPLE_CONSUMPTION_REPLY_ENABLED="true"`일 때만, 실패해도 200) |
 
 ## 배포 준비 (사용자 작업 — 비밀값은 본인 터미널에서)
 
@@ -26,10 +32,45 @@
    ```
 4. 첫 배포는 수동 `npx wrangler deploy`로 확인하고, 이후는 main push 시 CI가 배포한다.
 
+## 인앱결제(Apple) 설정 (사용자 작업 — 비밀값은 본인 터미널에서)
+
+스펙: `docs/superpowers/specs/2026-11-18-mobile-iap-design.md`. 번들 id는 `wrangler.toml`의 `APPLE_BUNDLE_ID`(`com.swimmingriver.tododo`)다.
+
+1. **App Store Server API 키**: App Store Connect > 사용자 및 액세스 > 통합 > App Store Connect API의 **인앱 구입** 키를 만든다 → `.p8` 파일(한 번만 내려받을 수 있다), Key ID, Issuer ID.
+2. **서버 알림 URL**: App Store Connect > 앱 > 앱 정보 > App Store 서버 알림에서 **버전 2**로 운영·샌드박스 둘 다 `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/apple`(자체 도메인이면 그 주소)을 넣는다. 샌드박스 알림(TestFlight·심사 결제)도 반영하고 `sources.apple.environment`에 `Sandbox`로 기록한다. 등록 후 App Store Server API의 "테스트 알림 요청"을 보내면 `TEST` 알림이 200으로 끝나는지 `wrangler tail`로 확인한다.
+3. **시크릿 등록** (`cd billing-proxy`). `IAP_ACCOUNT_TOKEN_SECRET`은 `appAccountToken`(uid 기반 UUID)을 만드는 키다 — **한 번 정하면 바꾸지 않는다**(바꾸면 기존 구매의 토큰과 달라진다. 연결은 막지 않지만 불일치 로그가 쏟아진다). Issuer ID·Key ID는 비밀은 아니지만 계정 고유 값이라 저장소에 두지 않는다:
+   ```bash
+   openssl rand -hex 32 | npx wrangler secret put IAP_ACCOUNT_TOKEN_SECRET
+   npx wrangler secret put APPLE_ISSUER_ID
+   npx wrangler secret put APPLE_KEY_ID
+   npx wrangler secret put APPLE_PRIVATE_KEY < ~/AuthKey_XXXXXXXXXX.p8
+   ```
+4. **환불 요청 회신**(`CONSUMPTION_REQUEST`): 사용자가 Apple에 환불을 요청하면 알림이 오고, 우리는 App Store Server API "Send Consumption Information"(`PUT /inApps/v2/transactions/consumption/{transactionId}`)으로 환불 선호를 회신한다. 기준은 웹·Google과 같은 **결제일(이 거래의 `purchaseDate`, 갱신분이면 갱신일) 14일 이내 → `GRANT_FULL`, 지나면 `DECLINE`**(정확히 14일은 기간 안)이다. 판단이 결제일만으로 정해지므로 계정 연결이 없어도(탈퇴한 계정 포함) 회신하고, 권한은 바꾸지 않는다 — 실제 환불되면 뒤따르는 `REFUND` 알림이 회수한다. 회신이 실패해도 알림은 200으로 받는다(로그만).
+   - Apple은 **고객 동의(`customerConsented: true`) 없이는 회신하지 말라**고 한다(`true`가 아니면 400). 그래서 `wrangler.toml`의 `APPLE_CONSUMPTION_REPLY_ENABLED`가 `"true"`가 아니면 회신하지 않고 `환불 회신 비활성(동의 고지 전)` 로그만 남긴다. 개인정보처리방침에 "환불 요청 시 Apple에 이용 정보 제공"을 고지한 릴리스에서 `"true"`로 바꾼다.
+
+## 인앱결제(Google Play) 설정 (사용자 작업 — 비밀값은 본인 터미널에서)
+
+스펙: `docs/superpowers/specs/2026-11-18-mobile-iap-design.md`. 패키지명은 `wrangler.toml`의 `GOOGLE_PLAY_PACKAGE_NAME`(`com.swimmingriver.tododo`)이다. 상품 `premium_monthly`, 기본 요금제 `monthly`, 체험 offer `free-trial-7d`.
+
+1. **Play 전용 서비스 계정**(결제용 `GOOGLE_SERVICE_ACCOUNT`와 별도 — Firestore·Auth 권한을 주지 않는다): GCP에서 서비스 계정을 만들고 JSON 키를 내려받는다. 그 GCP 프로젝트에서 **Google Play Android Developer API**를 사용 설정한다. Play Console > 사용자 및 권한에서 그 서비스 계정 이메일을 초대하고, 앱 권한으로 **재무 데이터 보기**와 **주문 및 구독 관리**를 준다(구독 조회 `subscriptionsv2.get`·승인 `acknowledge`·탈퇴 시 해지 `subscriptionsv2.cancel`에 필요). 권한 반영에 시간이 걸릴 수 있어 처음 몇 시간은 `401/403`이 날 수 있다.
+2. **Pub/Sub 토픽**: 같은 GCP 프로젝트에 토픽(예: `play-rtdn`)을 만들고, 토픽 권한에 `google-play-developer-notifications@system.gserviceaccount.com`을 **Pub/Sub 게시자**로 추가한다.
+3. **푸시 구독**: 그 토픽에 구독을 만들고 전송 유형 **푸시**, 엔드포인트 `https://tododo-billing-proxy.<subdomain>.workers.dev/webhooks/google`(자체 도메인이면 그 주소). **인증 사용**을 켜고 토큰을 서명할 서비스 계정(푸시 전용으로 하나 만든다)과 **audience**(엔드포인트 URL을 그대로 쓰면 된다)를 정한다 — 이 두 값이 아래 `GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL`·`GOOGLE_PUBSUB_AUDIENCE`다. 프로젝트의 Pub/Sub 서비스 에이전트(`service-<프로젝트번호>@gcp-sa-pubsub.iam.gserviceaccount.com`)에 그 서비스 계정에 대한 **서비스 계정 토큰 생성자** 역할이 있어야 한다.
+4. **RTDN 연결**: Play Console > 앱 > 수익 창출 설정 > 실시간 개발자 알림에 토픽 이름(`projects/<프로젝트>/topics/play-rtdn`)을 넣고 **테스트 알림 보내기**로 `testNotification`이 200으로 끝나는지 `wrangler tail`로 확인한다.
+5. **시크릿 등록** (`cd billing-proxy`). audience·이메일은 비밀은 아니지만 계정 고유 값이라 저장소에 두지 않는다:
+   ```bash
+   npx wrangler secret put GOOGLE_PLAY_SERVICE_ACCOUNT < ~/play-service-account.json
+   npx wrangler secret put GOOGLE_PUBSUB_AUDIENCE
+   npx wrangler secret put GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL
+   ```
+   `IAP_ACCOUNT_TOKEN_SECRET`은 Apple과 같은 값을 쓴다(앱이 `obfuscatedAccountId`에 넣는 값도 이 키로 만든다).
+
+승인(acknowledge)은 반영(`sources.google` 기록)이 끝난 구매에만 한다 — 승인하지 않은 구매는 3일 뒤 Google이 자동 환불한다. 앱의 `/iap/google/verify`가 기본으로 승인하고, 결제 대기였다가 완료된 구매처럼 앱이 다시 verify하지 않는 경우를 위해 RTDN도 연결된 구매를 반영한 뒤 미승인이면 승인한다(실패는 500 → Pub/Sub 재전송). 다른 Google 구독이 계속 갱신 중이면(이중 구독) verify는 `409 ALREADY_SUBSCRIBED`로 승인하지 않아 새 구매가 자동 환불되게 둔다. 기존 구독이 해지 예약·자동 갱신 꺼짐이면 새 구매가 후속 구독으로 기록을 교체한다.
+
 ### 릴리스(develop→main) 전제
 
 - `PADDLE_PRICE_ID` placeholder 교체 완료 + 샌드박스 실측(Task 11) 완료 **후에만** 릴리스 PR을 연다. main CI의 `billing-proxy` job은 placeholder면 실패하는데, `deploy` job(rules·클라이언트)은 이 job을 기다리지 않아 rules·클라이언트만 먼저 나가 버린다.
 - 릴리스 직후 운영자 계정에 `npm run grant:entitlement`(루트)를 다시 실행한다.
+- Apple/Google 스토어 시크릿은 스토어 계정 준비 전까지 비워도 된다(스토어 경로만 실패). `IAP_ACCOUNT_TOKEN_SECRET`·`APPLE_*`·`GOOGLE_PLAY_SERVICE_ACCOUNT`·`GOOGLE_PUBSUB_*`가 없으면 `/iap/*`·`/webhooks/apple`·`/webhooks/google`만 500이고, Paddle 웹훅·`/checkout`·`/portal`·`/trial`·`/account/delete`는 그대로 동작한다. 단, 자동 갱신 중인 Google 구독이 있는 사용자의 `/account/delete`는 `GOOGLE_PLAY_SERVICE_ACCOUNT`가 없으면 해지할 수 없어 `502 GOOGLE_CANCEL_FAILED`로 멈춘다(아무것도 지우지 않음).
 
 ## 로컬·프리뷰 테스트
 

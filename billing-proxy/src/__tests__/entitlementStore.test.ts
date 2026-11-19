@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { EntitlementStore } from "../entitlementStore";
+import { EntitlementStore, toFirestoreValue, fromFirestoreValue } from "../entitlementStore";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
 
 const getToken = async () => "access-token";
@@ -49,7 +49,36 @@ describe("EntitlementStore.get", () => {
       source: "manual",
       premiumUntil: "2099-12-31T00:00:00.000Z",
       updatedAt: "2026-09-19T00:00:00.000Z",
+      // 예전 문서(sources 없음)는 최상위 필드가 manual 출처 하나로 이주된다.
+      sources: {
+        manual: {
+          status: "none",
+          premiumUntil: "2099-12-31T00:00:00.000Z",
+          cancelAt: null,
+          currentPeriodEnd: null,
+          autoRenew: false,
+          startedAt: null,
+          updatedAt: "2026-09-19T00:00:00.000Z",
+        },
+      },
     });
+  });
+
+  it("decodes legacy doc without sources into migrated sources", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      jsonRes({
+        updateTime: "t",
+        fields: {
+          source: { stringValue: "paddle" },
+          status: { stringValue: "active" },
+          premiumUntil: { stringValue: "2026-12-01T00:00:00.000Z" },
+          customerId: { stringValue: "ctm_1" },
+          subscriptionId: { stringValue: "sub_1" },
+        },
+      }),
+    );
+    const { doc } = await new EntitlementStore("proj", getToken, fetchFn).get("u1");
+    expect(doc.sources.paddle).toMatchObject({ customerId: "ctm_1", subscriptionId: "sub_1", autoRenew: true });
   });
 
   it("그 외 오류는 던진다", async () => {
@@ -94,5 +123,73 @@ describe("EntitlementStore.write", () => {
   it("다른 400·500은 던진다", async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonRes({ error: { status: "INVALID_ARGUMENT" } }, 400));
     await expect(new EntitlementStore("proj", getToken, fetchFn).write("u1", SAMPLE, null)).rejects.toThrow("400");
+  });
+});
+
+const PADDLE_APPLE: EntitlementDoc = {
+  ...SAMPLE,
+  customerId: "ctm_1",
+  subscriptionId: "sub_1",
+  sources: {
+    paddle: {
+      status: "active",
+      premiumUntil: "2026-11-13T00:00:00.000Z",
+      cancelAt: null,
+      currentPeriodEnd: "2026-11-10T00:00:00.000Z",
+      autoRenew: true,
+      startedAt: null,
+      updatedAt: "2026-10-10T00:00:00.000Z",
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: null,
+      lastEventOccurredAt: null,
+    },
+    apple: {
+      status: "active",
+      premiumUntil: "2026-12-01T00:00:00.000Z",
+      cancelAt: null,
+      currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+      autoRenew: false,
+      startedAt: "2026-11-01T00:00:00.000Z",
+      updatedAt: "2026-11-01T00:00:00.000Z",
+      originalTransactionId: "tx1",
+      productId: "premium_monthly",
+      environment: "Sandbox",
+      appAccountToken: null,
+      lastNotificationUUID: null,
+      lastSignedDate: null,
+    },
+  },
+  duplicate: { laterSource: "apple", detectedAt: "2026-11-01T00:00:00.000Z" },
+};
+
+describe("Firestore 값 인코딩", () => {
+  it("encodes sources as mapValue with booleanValue for autoRenew", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonRes({}));
+    await new EntitlementStore("proj", getToken, fetchFn).write("u1", PADDLE_APPLE, null);
+    const fields = JSON.parse(fetchFn.mock.calls[0][1].body).fields;
+    expect(fields.sources.mapValue.fields.paddle.mapValue.fields.autoRenew).toEqual({ booleanValue: true });
+    expect(fields.sources.mapValue.fields.apple.mapValue.fields.autoRenew).toEqual({ booleanValue: false });
+    expect(fields.duplicate.mapValue.fields.laterSource).toEqual({ stringValue: "apple" });
+  });
+
+  it("round-trips a doc with paddle+apple sources and duplicate", async () => {
+    let stored: unknown;
+    const fetchFn = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        stored = JSON.parse(init.body as string).fields;
+        return jsonRes({});
+      }
+      return jsonRes({ updateTime: "t", fields: stored });
+    });
+    const store = new EntitlementStore("proj", getToken, fetchFn);
+    await store.write("u1", PADDLE_APPLE, null);
+    expect((await store.get("u1")).doc).toEqual(PADDLE_APPLE);
+  });
+
+  it("omits undefined source keys instead of writing null", () => {
+    const value = toFirestoreValue({ a: "x", b: undefined, c: null });
+    expect(Object.keys(value.mapValue?.fields ?? {}).sort()).toEqual(["a", "c"]);
+    expect(fromFirestoreValue(value)).toEqual({ a: "x", c: null });
   });
 });

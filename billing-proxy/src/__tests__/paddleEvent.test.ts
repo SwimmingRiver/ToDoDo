@@ -9,6 +9,7 @@ const payload = (overrides: Record<string, unknown> = {}, data: Record<string, u
     id: "sub_1",
     status: "active",
     customer_id: "ctm_1",
+    started_at: "2026-10-01T00:00:00Z",
     custom_data: { uid: "u1", uid_sig: "sig_1" },
     current_billing_period: { starts_at: "2026-10-10T00:00:00Z", ends_at: "2026-11-10T00:00:00Z" },
     scheduled_change: null,
@@ -33,8 +34,18 @@ describe("parseWebhook", () => {
         subscriptionId: "sub_1",
         currentPeriodEndsAt: "2026-11-10T00:00:00Z",
         scheduledCancelAt: null,
+        startedAt: "2026-10-01T00:00:00Z",
       },
     });
+  });
+
+  it("paddleEvent parses started_at — 없거나 해석 불가면 null(이벤트는 반영)", () => {
+    const missing = parseWebhook(payload({}, { started_at: null }));
+    expect(missing.kind === "subscription" && missing.event.startedAt).toBeNull();
+    // started_at은 이중 구독 판정용 부가 정보다 — 이 값 하나 때문에 권한 이벤트 전체를 버리지 않는다.
+    const garbled = parseWebhook(payload({}, { started_at: "not-a-date" }));
+    expect(garbled.kind).toBe("subscription");
+    expect(garbled.kind === "subscription" && garbled.event.startedAt).toBeNull();
   });
 
   it("items의 가격 id를 모두 모으고, items가 없거나 형식이 다르면 빈 목록", () => {

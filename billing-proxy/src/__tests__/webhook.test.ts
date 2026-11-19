@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { handleWebhook } from "../handlers/webhook";
 import { UserNotFoundError } from "../claims";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
+import { asStored } from "./helpers/storedDoc";
 import { signUid } from "../uidSignature";
 import { signForTest } from "./helpers/signForTest";
 
@@ -46,7 +47,7 @@ const request = async (raw: string, header?: string) =>
 
 const deps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   store: {
-    get: vi.fn(async () => ({ doc: existing, updateTime: null })),
+    get: vi.fn(async () => ({ doc: asStored(existing), updateTime: null })),
     write: vi.fn(async (_uid: string, _doc: EntitlementDoc, _updateTime: string | null) => "ok" as const),
   },
   claims: { setPremiumUntil: vi.fn(async (_uid: string, _seconds: number) => undefined) },
@@ -166,7 +167,7 @@ describe("handleWebhook", () => {
   });
 
   it("이미 처리한 이벤트면 200이고 쓰지 않는다", async () => {
-    const d = deps({ ...EMPTY_ENTITLEMENT, lastWebhookEventId: "evt_1" });
+    const d = deps({ ...EMPTY_ENTITLEMENT, source: "paddle", customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: "evt_1" });
     const res = await handleWebhook(await request(body()), ENV, d, NOW);
     expect(res.status).toBe(200);
     expect(d.store.write).not.toHaveBeenCalled();
@@ -253,6 +254,7 @@ describe("handleWebhook", () => {
       ...EMPTY_ENTITLEMENT,
       source: "paddle",
       status: "active",
+      customerId: "ctm_1",
       subscriptionId: "sub_old",
       premiumUntil: "2026-11-13T00:00:00.000Z",
     });
@@ -272,6 +274,7 @@ describe("handleWebhook", () => {
       ...EMPTY_ENTITLEMENT,
       source: "paddle",
       status: "active",
+      customerId: "ctm_1",
       subscriptionId: "sub_1",
       premiumUntil: "2026-11-13T00:00:00.000Z",
     });
@@ -284,6 +287,38 @@ describe("handleWebhook", () => {
     expect(d.store.write.mock.calls[0][1]).toMatchObject({ status: "canceled", premiumUntil: NOW.toISOString() });
   });
 
+  it("Paddle 해지는 Apple 기록을 건드리지 않고 클레임은 Apple 만료로 남긴다", async () => {
+    const appleUntil = "2026-12-01T00:00:00.000Z";
+    const apple = {
+      status: "active" as const,
+      premiumUntil: appleUntil,
+      cancelAt: null,
+      currentPeriodEnd: appleUntil,
+      autoRenew: true,
+      startedAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "",
+      originalTransactionId: "otx_1",
+      productId: "premium_monthly",
+      environment: "Production" as const,
+      appAccountToken: null,
+      lastNotificationUUID: null,
+      lastSignedDate: null,
+    };
+    const d = deps({ ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "apple", premiumUntil: appleUntil, sources: { apple } });
+    const raw = body({
+      event_type: "subscription.canceled",
+      data: { id: "sub_1", status: "canceled", customer_id: "ctm_1", custom_data: { uid: "u1", uid_sig: SIG_U1 }, current_billing_period: null, scheduled_change: null, items: ITEMS },
+    });
+    const res = await handleWebhook(await request(raw), ENV, d, NOW);
+    expect(res.status).toBe(200);
+    expect(d.claims.setPremiumUntil).toHaveBeenCalledWith("u1", Math.floor(Date.parse(appleUntil) / 1000));
+    expect(d.store.write.mock.calls[0][1]).toMatchObject({
+      plan: "premium",
+      source: "apple",
+      sources: { apple, paddle: { status: "canceled", premiumUntil: NOW.toISOString() } },
+    });
+  });
+
   it("Paddle trialing은 예상 밖이라 경고하되 active처럼 반영한다", async () => {
     const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
     const d = deps();
@@ -294,6 +329,42 @@ describe("handleWebhook", () => {
     expect(res.status).toBe(200);
     expect(warnLog).toHaveBeenCalledWith(expect.stringContaining("trialing"), "u1", "sub_1");
     expect(d.store.write.mock.calls[0][1]).toMatchObject({ status: "active", premiumUntil: "2026-11-13T00:00:00.000Z" });
+  });
+
+  describe("Paddle id가 남은 예전 manual 문서(부여 스크립트가 source만 덮음)", () => {
+    const legacyManual = (): EntitlementDoc => ({
+      ...EMPTY_ENTITLEMENT,
+      plan: "premium",
+      status: "active",
+      source: "manual",
+      premiumUntil: "2027-01-01T00:00:00.000Z",
+      customerId: "ctm_1",
+      subscriptionId: "sub_1",
+      lastWebhookEventId: "evt_0",
+      lastEventOccurredAt: "2026-10-09T00:00:00.000Z",
+    });
+
+    it("그 구독의 새 active 이벤트는 반영되고 manual 부여와 고객 id가 함께 남는다", async () => {
+      const d = deps(legacyManual());
+      const res = await handleWebhook(await request(body()), ENV, d, NOW);
+      expect(res.status).toBe(200);
+      const written = d.store.write.mock.calls[0][1];
+      expect(written.sources.paddle).toMatchObject({ status: "active", customerId: "ctm_1", subscriptionId: "sub_1", lastWebhookEventId: "evt_1" });
+      expect(written.sources.manual).toMatchObject({ premiumUntil: "2027-01-01T00:00:00.000Z" });
+      expect(written).toMatchObject({ source: "manual", customerId: "ctm_1", subscriptionId: "sub_1" });
+    });
+
+    it("이미 반영한 시각 이전의 낡은 이벤트는 건너뛴다(낡은 이벤트 차단이 유지된다)", async () => {
+      const d = deps(legacyManual());
+      const res = await handleWebhook(
+        await request(body({ event_id: "evt_old", occurred_at: "2026-10-08T00:00:00.000Z" })),
+        ENV,
+        d,
+        NOW,
+      );
+      expect(res.status).toBe(200);
+      expect(d.store.write).not.toHaveBeenCalled();
+    });
   });
 
   it("JSON이 깨졌으면 400", async () => {

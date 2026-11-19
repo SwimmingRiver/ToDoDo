@@ -47,6 +47,10 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
 
   const currentPeriodEndsAt = str(period?.ends_at);
   const scheduledCancelAt = scheduled?.action === "cancel" ? str(scheduled.effective_at) : null;
+  // started_at은 이중 구독에서 "나중 구독" 판정에만 쓰는 부가 정보다. 해석이 안 되면 모르는 값(null)으로 두고
+  // 이벤트는 반영한다 — 이 값 하나로 권한 이벤트 전체를 버리면 결제·해지가 반영되지 않는다.
+  const rawStartedAt = str(data.started_at);
+  const startedAt = rawStartedAt !== null && Number.isNaN(Date.parse(rawStartedAt)) ? null : rawStartedAt;
   for (const value of [currentPeriodEndsAt, scheduledCancelAt]) {
     if (value !== null && Number.isNaN(Date.parse(value))) return { kind: "invalid", reason: `시각 해석 불가(${value})` };
   }
@@ -64,6 +68,7 @@ export const parseWebhook = (body: unknown): ParsedWebhook => {
       subscriptionId,
       currentPeriodEndsAt,
       scheduledCancelAt,
+      startedAt,
     },
   };
 };

@@ -2,6 +2,7 @@ import { useEntitlement } from "@/features/entitlement/hooks/useEntitlement";
 import { DEFAULT_ENTITLEMENT } from "@/features/entitlement/types";
 import { PREMIUM_BENEFITS, PREMIUM_MONTHLY_PRICE_LABEL } from "../config";
 import { useCheckout, useOpenPortal, useStartTrial } from "../hooks";
+import DuplicateSubscriptionBanner from "../components/duplicateSubscriptionBanner";
 import { formatMonthDay, getPremiumView } from "../utils/premiumView";
 import {
   Actions,
@@ -30,7 +31,8 @@ const PremiumPage = () => {
 
   if (isLoading) return null;
 
-  const view = getPremiumView(data ?? DEFAULT_ENTITLEMENT, Date.now());
+  const entitlement = data ?? DEFAULT_ENTITLEMENT;
+  const view = getPremiumView(entitlement, Date.now());
   const checkoutBusy = checkout.phase !== "idle";
   const busy = checkoutBusy || trial.isPending || portal.isPending;
 
@@ -91,6 +93,18 @@ const PremiumPage = () => {
             <HintText>구독 관리에서 해지를 취소할 수 있어요</HintText>
           </>
         );
+      case "store": {
+        const label = view.store === "apple" ? "App Store" : "Google Play";
+        return (
+          <>
+            {view.pastDue && <Warning role="alert">결제에 실패했어요. {label}에서 결제 수단을 확인해 주세요</Warning>}
+            <StatusText>
+              {label}에서 구독 중이에요. 구독 관리는 {label}에서 할 수 있어요
+            </StatusText>
+            {view.canceling && <HintText>{formatMonthDay(view.until)}까지 이용 가능해요</HintText>}
+          </>
+        );
+      }
       case "pastDue":
         return (
           <>
@@ -106,6 +120,7 @@ const PremiumPage = () => {
   return (
     <PremiumContainer>
       <PremiumBody>
+        <DuplicateSubscriptionBanner duplicate={entitlement.duplicate} onManage={() => portal.mutate()} disabled={busy} />
         <Heading>ToDoDo 프리미엄</Heading>
         <Card>
           <BenefitList>

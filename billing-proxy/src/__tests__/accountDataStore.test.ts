@@ -21,9 +21,10 @@ const fakeFirestore = (queryPages: Record<string, unknown[][]>) => {
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok");
     if (url === `${API}:runQuery`) {
       const { from, where, limit } = body.structuredQuery;
-      expect(where).toEqual({ fieldFilter: { field: { fieldPath: "userId" }, op: "EQUAL", value: { stringValue: "u1" } } });
+      const fieldPath = from[0].collectionId === "storeLinks" ? "uid" : "userId";
+      expect(where).toEqual({ fieldFilter: { field: { fieldPath }, op: "EQUAL", value: { stringValue: "u1" } } });
       queries.push({ collectionId: from[0].collectionId, limit });
-      return jsonRes(queryPages[from[0].collectionId].shift() ?? rows(from[0].collectionId, []));
+      return jsonRes(queryPages[from[0].collectionId]?.shift() ?? rows(from[0].collectionId, []));
     }
     if (url === `${API}:commit`) {
       commits.push(body.writes);
@@ -37,16 +38,18 @@ const fakeFirestore = (queryPages: Record<string, unknown[][]>) => {
 const store = (fetchFn: typeof fetch) => new AccountDataStore("p1", async () => "tok", fetchFn);
 
 describe("AccountDataStore.deleteUserData", () => {
-  it("할 일 삭제 → 피드백 익명화 → 단일 문서 삭제 순서로 커밋한다", async () => {
+  it("할 일 삭제 → 피드백 익명화 → storeLinks 삭제(uid 필드 조회) → 단일 문서 삭제 순서로 커밋한다", async () => {
     const { fetchFn, commits } = fakeFirestore({
       todos: [rows("todos", ["t1", "t2"])],
       feedback: [rows("feedback", ["f1"])],
+      storeLinks: [rows("storeLinks", ["apple_o1"])],
     });
     await store(fetchFn as unknown as typeof fetch).deleteUserData("u1");
 
     expect(commits).toEqual([
       [{ delete: `${ROOT}/todos/t1` }, { delete: `${ROOT}/todos/t2` }],
       [{ update: { name: `${ROOT}/feedback/f1`, fields: {} }, updateMask: { fieldPaths: ["userId", "email"] } }],
+      [{ delete: `${ROOT}/storeLinks/apple_o1` }],
       [
         { delete: `${ROOT}/userSettings/u1` },
         { delete: `${ROOT}/calendarIntegrations/u1` },
