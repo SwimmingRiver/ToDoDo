@@ -1,6 +1,5 @@
+import { normalizeEntitlement } from "@tododo/core/dist/entitlement/index.js";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "./entitlement";
-
-type FirestoreValue = { stringValue?: string; nullValue?: null };
 
 export interface StoredEntitlement {
   doc: EntitlementDoc;
@@ -8,42 +7,38 @@ export interface StoredEntitlement {
   updateTime: string | null;
 }
 
-const STATUSES = new Set(["none", "trialing", "active", "past_due", "canceled"]);
-const SOURCES = new Set(["manual", "trial", "paddle"]);
-const PLANS = new Set(["free", "premium"]);
-const FIELD_NAMES = Object.keys(EMPTY_ENTITLEMENT) as (keyof EntitlementDoc)[];
+export interface FirestoreValue {
+  stringValue?: string;
+  nullValue?: null;
+  booleanValue?: boolean;
+  integerValue?: string;
+  mapValue?: { fields?: Record<string, FirestoreValue> };
+}
 
-const readString = (value: FirestoreValue | undefined): string | null =>
-  value && typeof value.stringValue === "string" ? value.stringValue : null;
-
-const decode = (fields: Record<string, FirestoreValue>): EntitlementDoc => {
-  const text = (name: keyof EntitlementDoc) => readString(fields[name]);
-  const plan = text("plan");
-  const status = text("status");
-  const source = text("source");
-  return {
-    plan: plan && PLANS.has(plan) ? (plan as EntitlementDoc["plan"]) : EMPTY_ENTITLEMENT.plan,
-    status: status && STATUSES.has(status) ? (status as EntitlementDoc["status"]) : EMPTY_ENTITLEMENT.status,
-    source: source && SOURCES.has(source) ? (source as EntitlementDoc["source"]) : null,
-    premiumUntil: text("premiumUntil"),
-    trialUsedAt: text("trialUsedAt"),
-    cancelAt: text("cancelAt"),
-    currentPeriodEnd: text("currentPeriodEnd"),
-    customerId: text("customerId"),
-    subscriptionId: text("subscriptionId"),
-    lastWebhookEventId: text("lastWebhookEventId"),
-    lastEventOccurredAt: text("lastEventOccurredAt"),
-    updatedAt: text("updatedAt") ?? "",
-  };
+/** 평범한 JS 값을 Firestore REST 값으로. undefined 키는 null로 쓰지 않고 생략한다. */
+export const toFirestoreValue = (value: unknown): FirestoreValue => {
+  if (value === null || value === undefined) return { nullValue: null };
+  if (typeof value === "string") return { stringValue: value };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") return { integerValue: String(Math.trunc(value)) };
+  const fields: Record<string, FirestoreValue> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (child !== undefined) fields[key] = toFirestoreValue(child);
+  }
+  return { mapValue: { fields } };
 };
 
-const encode = (doc: EntitlementDoc): Record<string, FirestoreValue> =>
-  Object.fromEntries(
-    FIELD_NAMES.map((name) => {
-      const value = doc[name];
-      return [name, value === null ? { nullValue: null } : { stringValue: value }];
-    }),
-  );
+export const fromFirestoreValue = (value: FirestoreValue): unknown => {
+  if (typeof value.stringValue === "string") return value.stringValue;
+  if (typeof value.booleanValue === "boolean") return value.booleanValue;
+  if (typeof value.integerValue === "string") return Number(value.integerValue);
+  if (value.mapValue) {
+    return Object.fromEntries(
+      Object.entries(value.mapValue.fields ?? {}).map(([key, child]) => [key, fromFirestoreValue(child)]),
+    );
+  }
+  return null;
+};
 
 const PRECONDITION_FAILURES = new Set(["FAILED_PRECONDITION", "ALREADY_EXISTS", "NOT_FOUND", "ABORTED"]);
 
@@ -76,7 +71,7 @@ export class EntitlementStore {
     if (res.status === 404) return { doc: EMPTY_ENTITLEMENT, updateTime: null };
     if (!res.ok) throw new Error(`Firestore 엔타이틀먼트 조회 실패 (${res.status})`);
     const body = (await res.json()) as { fields?: Record<string, FirestoreValue>; updateTime: string };
-    return { doc: decode(body.fields ?? {}), updateTime: body.updateTime };
+    return { doc: normalizeEntitlement(fromFirestoreValue({ mapValue: { fields: body.fields ?? {} } })), updateTime: body.updateTime };
   }
 
   async write(uid: string, doc: EntitlementDoc, updateTime: string | null): Promise<"ok" | "conflict"> {
@@ -87,7 +82,7 @@ export class EntitlementStore {
     const res = await this.request(`/entitlements/${encodeURIComponent(uid)}?${precondition}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields: encode(doc) }),
+      body: JSON.stringify({ fields: toFirestoreValue(doc).mapValue?.fields }),
     });
     if (res.ok) return "ok";
     const body = (await res.json().catch(() => null)) as { error?: { status?: string } } | null;

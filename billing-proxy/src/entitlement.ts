@@ -3,38 +3,20 @@
  * 권한 판단은 premiumUntil 하나로만 한다 — 만료 시각이 지나면 아무도 쓰지 않아도 잠기므로
  * 체험 종료·해지 후 회수 스케줄러가 필요 없다.
  */
-export type EntitlementStatus = "none" | "trialing" | "active" | "past_due" | "canceled";
-export type EntitlementSource = "manual" | "trial" | "paddle" | null;
+import {
+  EMPTY_ENTITLEMENT,
+  RENEWAL_GRACE_MS,
+  TRIAL_MS,
+  isPremiumAt,
+  toClaimSeconds,
+  type EntitlementDoc,
+  type EntitlementSource,
+  type EntitlementStatus,
+} from "@tododo/core/dist/entitlement/index.js";
 
-export interface EntitlementDoc {
-  plan: "free" | "premium";
-  status: EntitlementStatus;
-  source: EntitlementSource;
-  premiumUntil: string | null;
-  trialUsedAt: string | null;
-  cancelAt: string | null;
-  currentPeriodEnd: string | null;
-  customerId: string | null;
-  subscriptionId: string | null;
-  lastWebhookEventId: string | null;
-  lastEventOccurredAt: string | null;
-  updatedAt: string;
-}
-
-export const EMPTY_ENTITLEMENT: EntitlementDoc = {
-  plan: "free",
-  status: "none",
-  source: null,
-  premiumUntil: null,
-  trialUsedAt: null,
-  cancelAt: null,
-  currentPeriodEnd: null,
-  customerId: null,
-  subscriptionId: null,
-  lastWebhookEventId: null,
-  lastEventOccurredAt: null,
-  updatedAt: "",
-};
+// 모델·상수·판정은 core가 단일 출처다. 기존 `./entitlement` import 경로가 그대로 동작하도록 재수출한다.
+export { EMPTY_ENTITLEMENT, RENEWAL_GRACE_MS, TRIAL_MS, isPremiumAt, toClaimSeconds };
+export type { EntitlementDoc, EntitlementSource, EntitlementStatus };
 
 export interface PaddleSubscriptionEvent {
   eventId: string;
@@ -50,15 +32,7 @@ export interface PaddleSubscriptionEvent {
 export type Decision<R extends string> = { write: EntitlementDoc } | { skip: R };
 export type TrialRejection = "TRIAL_ALREADY_USED" | "ALREADY_PREMIUM";
 
-const DAY_MS = 86_400_000;
-/** 토큰 갱신이 최대 1시간 늦어도 정상 갱신자가 기간 경계에서 잠기지 않게 둔 여유. */
-export const RENEWAL_GRACE_MS = 3 * DAY_MS;
-export const TRIAL_MS = 7 * DAY_MS;
-
 const iso = (ms: number): string => new Date(ms).toISOString();
-
-export const isPremiumAt = (doc: EntitlementDoc, now: Date): boolean =>
-  doc.premiumUntil !== null && Date.parse(doc.premiumUntil) > now.getTime();
 
 const withPlan = (doc: EntitlementDoc, now: Date): EntitlementDoc => ({
   ...doc,
@@ -153,7 +127,3 @@ export const applyTrial = (existing: EntitlementDoc, now: Date): Decision<TrialR
     },
   };
 };
-
-/** 커스텀 클레임 premiumUntil 값(epoch 초). null은 0 = 비프리미엄. */
-export const toClaimSeconds = (premiumUntil: string | null): number =>
-  premiumUntil === null ? 0 : Math.floor(Date.parse(premiumUntil) / 1000);
