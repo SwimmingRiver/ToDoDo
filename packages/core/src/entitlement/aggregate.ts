@@ -25,10 +25,18 @@ const isRenewingAndValid = (record: SourceRecord, now: Date): boolean =>
  */
 export const hasAutoRenewingStoreSubscription = (doc: EntitlementDoc, _now: Date): "apple" | "google" | null => {
   for (const key of ["apple", "google"] as const) {
-    const record = doc.sources[key];
-    if (record && record.autoRenew && record.cancelAt === null && record.status !== "canceled") return key;
+    if (isAutoRenewingStore(doc, key)) return key;
   }
   return null;
+};
+
+/**
+ * 스토어 하나가 자동 갱신 중인지(유효 기간은 보지 않는다 — 위와 같은 이유).
+ * 탈퇴 시 서버의 Google 해지 대상과 화면의 Apple 경고·Google 안내가 같은 기준을 쓰도록 스토어별로 따로 묻는다.
+ */
+export const isAutoRenewingStore = (doc: EntitlementDoc, key: "apple" | "google"): boolean => {
+  const record = doc.sources[key];
+  return !!record && record.autoRenew && record.cancelAt === null && record.status !== "canceled";
 };
 
 const detectDuplicate = (doc: EntitlementDoc, now: Date): DuplicateInfo | null => {

@@ -8,5 +8,10 @@ export declare const toClaimSeconds: (premiumUntil: string | null) => number;
  * 계속 청구를 시도하므로, 이때 탈퇴하면 나중에 청구된다. 이중 구독 판정(detectDuplicate)은 그대로 유효 기간을 본다.
  */
 export declare const hasAutoRenewingStoreSubscription: (doc: EntitlementDoc, _now: Date) => "apple" | "google" | null;
+/**
+ * 스토어 하나가 자동 갱신 중인지(유효 기간은 보지 않는다 — 위와 같은 이유).
+ * 탈퇴 시 서버의 Google 해지 대상과 화면의 Apple 경고·Google 안내가 같은 기준을 쓰도록 스토어별로 따로 묻는다.
+ */
+export declare const isAutoRenewingStore: (doc: EntitlementDoc, key: "apple" | "google") => boolean;
 /** 출처별 기록을 최상위 필드로 합친다. 규칙은 설계 스펙 1절. updatedAt·trialUsedAt은 건드리지 않는다. */
 export declare const aggregate: (doc: EntitlementDoc, now: Date) => EntitlementDoc;

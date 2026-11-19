@@ -84,6 +84,7 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
     getSubscription: vi.fn(async (_token: string) => null),
     acknowledge: vi.fn(async (_productId: string, _token: string) => undefined),
   },
+  google: { cancelSubscription: vi.fn(async (_token: string): Promise<"canceled" | "already_inactive"> => "canceled") },
   verifyPubSub: vi.fn(async (_authHeader: string | null) => false),
 });
 

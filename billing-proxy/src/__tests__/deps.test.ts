@@ -101,11 +101,30 @@ describe("스토어 시크릿이 없을 때의 의존성", () => {
     expect(fakes.accountData.deleteUserData).toHaveBeenCalledWith("u1");
   });
 
+  it("/account/delete: 자동 갱신 중인 Google 구독이 있는데 Play 시크릿이 없으면 해지 실패로 보고 아무것도 지우지 않는다(502)", async () => {
+    const { deps, fakes } = realDepsWithFakeBackends();
+    const google = {
+      status: "active", premiumUntil: "2026-12-01T00:00:00.000Z", cancelAt: null, currentPeriodEnd: "2026-12-01T00:00:00.000Z",
+      autoRenew: true, startedAt: "2026-10-01T00:00:00.000Z", updatedAt: "", purchaseToken: "gpa-token", productId: "premium_monthly",
+      basePlanId: "monthly", environment: "Production", obfuscatedAccountId: null, lastMessageId: null, lastEventTime: null,
+    } as const;
+    fakes.store.get.mockResolvedValueOnce({
+      doc: asStored({ ...EMPTY_ENTITLEMENT, plan: "premium", status: "active", source: "google", premiumUntil: google.premiumUntil, sources: { google } }),
+      updateTime: null,
+    });
+    const res = await handleRequest(post("/account/delete"), ENV_WITHOUT_STORE, () => deps, NOW);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "GOOGLE_CANCEL_FAILED" });
+    expect(fakes.accountData.deleteUserData).not.toHaveBeenCalled();
+    expect(fakes.claims.deleteUser).not.toHaveBeenCalled();
+  });
+
   it("스토어 경로만 실패한다(500)", async () => {
     const { deps } = realDepsWithFakeBackends();
     const call = (request: Request) => handleRequest(request, ENV_WITHOUT_STORE, () => deps, NOW);
     expect((await call(post("/iap/account-token"))).status).toBe(500);
     await expect(deps.play.getSubscription("token")).rejects.toThrow("GOOGLE_PLAY_SERVICE_ACCOUNT");
+    await expect(deps.google.cancelSubscription("token")).rejects.toThrow("GOOGLE_PLAY_SERVICE_ACCOUNT");
     await expect(deps.apple.getSubscriptionSnapshot("otx_1")).rejects.toThrow("APPLE_ISSUER_ID");
     await expect(deps.verifyPubSub("Bearer oidc")).rejects.toThrow("GOOGLE_PUBSUB_AUDIENCE");
     expect((await call(post("/webhooks/google", "{}", { Authorization: "Bearer oidc" }))).status).toBe(500);

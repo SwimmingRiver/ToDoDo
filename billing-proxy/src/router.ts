@@ -23,6 +23,8 @@ export interface BillingDeps extends CommitDeps {
   apple: Pick<AppleServerApi, "getSubscriptionSnapshot">;
   verifyAppleJws: (jws: string) => Promise<unknown>;
   play: Pick<PlayApi, "getSubscription" | "acknowledge">;
+  /** 탈퇴 시 Google 구독 해지. play와 같은 인스턴스다 — Play 토큰은 처음 호출할 때 만들어진다. */
+  google: Pick<PlayApi, "cancelSubscription">;
   verifyPubSub: (authHeader: string | null) => Promise<boolean>;
 }
 

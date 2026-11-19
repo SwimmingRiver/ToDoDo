@@ -140,4 +140,49 @@ describe("PlayApi", () => {
     const fetchFn = vi.fn().mockResolvedValue(new Response("", { status: 400 }));
     await expect(new PlayApi(PKG, async () => "t", fetchFn as unknown as typeof fetch).acknowledge("p", "t")).rejects.toThrow();
   });
+
+  describe("cancelSubscription", () => {
+    const api = (fetchFn: ReturnType<typeof vi.fn>) => new PlayApi(PKG, async () => "tok", fetchFn as unknown as typeof fetch);
+    const errRes = (status: number) => jsonRes({ error: { code: status, message: "x", status: "FAILED_PRECONDITION" } }, status);
+    const canceledState = {
+      ...fullResponse,
+      subscriptionState: "SUBSCRIPTION_STATE_CANCELED",
+      lineItems: [{ ...fullResponse.lineItems[0], autoRenewingPlan: { autoRenewEnabled: false } }],
+    };
+
+    it("cancelSubscription POSTs v3 applications/{pkg}/purchases/subscriptionsv2/tokens/{token}:cancel with developer cancellation type", async () => {
+      const fetchFn = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+      await expect(api(fetchFn).cancelSubscription("a/b")).resolves.toBe("canceled");
+      const [url, init] = fetchFn.mock.calls[0];
+      expect(url).toBe(`${BASE}/${PKG}/purchases/subscriptionsv2/tokens/a%2Fb:cancel`);
+      expect(init.method).toBe("POST");
+      expect(init.headers.Authorization).toBe("Bearer tok");
+      expect(init.headers["Content-Type"]).toBe("application/json");
+      expect(JSON.parse(init.body)).toEqual({ cancellationContext: { cancellationType: "DEVELOPER_REQUESTED_STOP_PAYMENTS" } });
+    });
+
+    it("cancelSubscription returns already_inactive for already-canceled/expired response", async () => {
+      // 거절된 뒤 다시 조회해 더 이상 갱신되지 않으면 이미 해지된 것으로 본다.
+      const canceled = vi.fn().mockResolvedValueOnce(errRes(400)).mockResolvedValueOnce(jsonRes(canceledState));
+      await expect(api(canceled).cancelSubscription("t")).resolves.toBe("already_inactive");
+      expect(canceled.mock.calls[1][0]).toBe(`${BASE}/${PKG}/purchases/subscriptionsv2/tokens/t`);
+
+      const expired = vi.fn().mockResolvedValueOnce(errRes(400)).mockResolvedValueOnce(jsonRes({ ...canceledState, subscriptionState: "SUBSCRIPTION_STATE_EXPIRED" }));
+      await expect(api(expired).cancelSubscription("t")).resolves.toBe("already_inactive");
+
+      const gone = vi.fn().mockResolvedValueOnce(errRes(410)).mockResolvedValueOnce(errRes(410));
+      await expect(api(gone).cancelSubscription("t")).resolves.toBe("already_inactive");
+    });
+
+    it("거절됐는데 다시 조회해도 여전히 자동 갱신 중이면 throw", async () => {
+      const fetchFn = vi.fn().mockResolvedValueOnce(errRes(400)).mockResolvedValueOnce(jsonRes(fullResponse));
+      await expect(api(fetchFn).cancelSubscription("t")).rejects.toThrow(/Play 구독 해지 실패: 400/);
+    });
+
+    it.each([500, 503, 429, 401, 403])("cancelSubscription throws on %i (다시 조회하지 않는다)", async (status) => {
+      const fetchFn = vi.fn().mockResolvedValue(errRes(status));
+      await expect(api(fetchFn).cancelSubscription("t")).rejects.toThrow(`Play 구독 해지 실패: ${status}`);
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    });
+  });
 });

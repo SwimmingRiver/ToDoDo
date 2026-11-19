@@ -62,6 +62,17 @@ const parseSubscription = (raw: unknown): PlaySubscription => {
   };
 };
 
+/** 아직 Google이 다음 결제를 시도할 수 있는 상태. 이 밖(CANCELED·EXPIRED·PENDING 등)은 해지할 것이 없다. */
+const RENEWABLE_STATES = new Set([
+  "SUBSCRIPTION_STATE_ACTIVE",
+  "SUBSCRIPTION_STATE_IN_GRACE_PERIOD",
+  "SUBSCRIPTION_STATE_ON_HOLD",
+  "SUBSCRIPTION_STATE_PAUSED",
+]);
+
+const isStillRenewing = (sub: PlaySubscription): boolean =>
+  RENEWABLE_STATES.has(sub.subscriptionState) && sub.lineItems.some((item) => item.autoRenewEnabled);
+
 export class PlayApi {
   constructor(
     private readonly packageName: string,
@@ -77,6 +88,31 @@ export class PlayApi {
     if (res.status === 404 || res.status === 410) return null;
     if (!res.ok) throw new Error(`Play 구독 조회 실패: ${res.status}`);
     return parseSubscription(await res.json());
+  }
+
+  /**
+   * 탈퇴 시 자동 갱신을 끈다. revoke(환불+즉시 종료)가 아니라 cancel(다음 결제 중지)이다.
+   * 취소 유형은 DEVELOPER_REQUESTED_STOP_PAYMENTS — 계정이 사라지므로 사용자가 되살릴 수 있는
+   * USER_REQUESTED_STOP_RENEWALS가 아니라 개발자 요청(복원 불가)으로 보낸다(2026-11 API 문서 확인).
+   *
+   * "이미 해지·만료됨" 오류의 상태 코드·reason은 문서에 없다(미확인). 그래서 reason 문자열에 기대지 않고,
+   * 인증·일시 오류가 아닌 4xx로 거절되면 구독을 다시 조회해 더 이상 갱신되지 않을 때만 already_inactive로 본다.
+   * 여전히 갱신 중이면 던진다 — 탈퇴가 멈추는 쪽(fail-closed)이 청구가 계속되는 쪽보다 낫다.
+   */
+  async cancelSubscription(purchaseToken: string): Promise<"canceled" | "already_inactive"> {
+    const url = `${API_BASE}/${encodeURIComponent(this.packageName)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}:cancel`;
+    const res = await this.fetchFn(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await this.getToken()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ cancellationContext: { cancellationType: "DEVELOPER_REQUESTED_STOP_PAYMENTS" } }),
+    });
+    if (res.ok) return "canceled";
+    const retryable = res.status >= 500 || res.status === 401 || res.status === 403 || res.status === 429;
+    if (!retryable && res.status >= 400) {
+      const current = await this.getSubscription(purchaseToken);
+      if (current === null || !isStillRenewing(current)) return "already_inactive";
+    }
+    throw new Error(`Play 구독 해지 실패: ${res.status}`);
   }
 
   async acknowledge(productId: string, purchaseToken: string): Promise<void> {

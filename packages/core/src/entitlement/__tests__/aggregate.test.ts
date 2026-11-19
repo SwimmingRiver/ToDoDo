@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   aggregate,
   hasAutoRenewingStoreSubscription,
+  isAutoRenewingStore,
   isPremiumAt,
   toClaimSeconds,
 } from "../aggregate";
@@ -216,6 +217,18 @@ describe("hasAutoRenewingStoreSubscription", () => {
   it("이중 구독 판정은 그대로 유효 기간이 있어야 한다", () => {
     const retry = { status: "past_due" as const, premiumUntil: NOW.toISOString(), autoRenew: true };
     expect(aggregate(doc({ apple: apple(retry), paddle: paddle() }), NOW).duplicate).toBeNull();
+  });
+});
+
+describe("isAutoRenewingStore", () => {
+  it("스토어별로 따로 판정한다 — apple이 있어도 google을 놓치지 않는다", () => {
+    const both = doc({ apple: apple(), google: google() });
+    expect(isAutoRenewingStore(both, "apple")).toBe(true);
+    expect(isAutoRenewingStore(both, "google")).toBe(true);
+    expect(isAutoRenewingStore(doc({ apple: apple() }), "google")).toBe(false);
+    expect(isAutoRenewingStore(doc({ google: google({ autoRenew: false }) }), "google")).toBe(false);
+    expect(isAutoRenewingStore(doc({ google: google({ cancelAt: FUTURE }) }), "google")).toBe(false);
+    expect(isAutoRenewingStore(doc({ google: google({ status: "canceled", premiumUntil: PAST }) }), "google")).toBe(false);
   });
 });
 

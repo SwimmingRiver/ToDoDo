@@ -49,6 +49,9 @@ export const buildDeps = (env: Env): BillingDeps => {
       },
       verify,
     ));
+  // 토큰을 처음 쓸 때 만들므로 PlayApi 생성 자체는 시크릿 없이도 안전하다. 탈퇴의 Google 해지도 이 인스턴스를 쓴다 —
+  // 자동 갱신 중인 Google 구독이 없으면 호출되지 않고, 있는데 시크릿이 없으면 해지 실패(502)로 탈퇴가 멈춘다.
+  const play = new PlayApi(env.GOOGLE_PLAY_PACKAGE_NAME, getPlayToken);
   const deps: BillingDeps = {
     store: new EntitlementStore(env.FIREBASE_PROJECT_ID, getToken),
     claims: new ClaimsClient(env.FIREBASE_PROJECT_ID, getToken),
@@ -57,7 +60,8 @@ export const buildDeps = (env: Env): BillingDeps => {
     storeLinks: new StoreLinkStore(env.FIREBASE_PROJECT_ID, getToken),
     apple: { getSubscriptionSnapshot: async (transactionId) => getApple().getSubscriptionSnapshot(transactionId) },
     verifyAppleJws: verify,
-    play: new PlayApi(env.GOOGLE_PLAY_PACKAGE_NAME, getPlayToken),
+    play,
+    google: play,
     // Apple과 같은 이유로 now는 호출마다 새로 잡는다(토큰 만료 판정).
     // 설정이 없으면 401이 아니라 500 — Pub/Sub이 재전송해 설정 후에 반영된다.
     verifyPubSub: async (authHeader) =>
