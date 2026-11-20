@@ -13,6 +13,8 @@ interface DateFieldProps {
   /** "YYYY-MM-DD" 로컬 날짜 키 또는 null(클리어). */
   onChange: (dateKey: string | null) => void;
   placeholder?: string;
+  /** "YYYY-MM-DD" 로컬 날짜 키. 이 날짜 이전은 고를 수 없다. */
+  minimumDate?: string;
 }
 
 const CLEAR_SIZE = MIN_TOUCH_TARGET / 2;
@@ -34,9 +36,11 @@ const fromKey = (key: string | null): Date => {
  * 날짜만 고르는 필드(시각 없음). iOS는 DateTimeField처럼 모달 spinner + 확인/취소,
  * Android는 날짜 다이얼로그 하나만 띄운다.
  */
-export const DateField = ({ label, value, onChange, placeholder = "날짜 선택" }: DateFieldProps) => {
+export const DateField = ({ label, value, onChange, placeholder = "날짜 선택", minimumDate }: DateFieldProps) => {
   const [iosModalVisible, setIosModalVisible] = useState(false);
   const [iosPendingDate, setIosPendingDate] = useState<Date>(() => fromKey(value));
+
+  const minDate = minimumDate ? fromKey(minimumDate) : undefined;
 
   const openPicker = () => {
     const base = fromKey(value);
@@ -44,6 +48,7 @@ export const DateField = ({ label, value, onChange, placeholder = "날짜 선택
       DateTimePickerAndroid.open({
         value: base,
         mode: "date",
+        minimumDate: minDate,
         onChange: (event, selectedDate) => {
           if (event.type !== "set" || !selectedDate) return;
           onChange(toLocalKey(selectedDate));
@@ -102,6 +107,7 @@ export const DateField = ({ label, value, onChange, placeholder = "날짜 선택
                 value={iosPendingDate}
                 mode="date"
                 display="spinner"
+                minimumDate={minDate}
                 onChange={(_event, selectedDate) => {
                   if (selectedDate) setIosPendingDate(selectedDate);
                 }}

@@ -7,8 +7,8 @@ import { DateField } from "../DateField";
 // 네이티브 피커 대신, 로컬 2026-07-10 00:30 Date를 고르는 스텁.
 jest.mock("@react-native-community/datetimepicker", () => {
   const { Pressable, Text } = require("react-native");
-  const Picker = ({ onChange }: { onChange: (e: unknown, d: Date) => void }) => (
-    <Pressable onPress={() => onChange({ type: "set" }, new Date(2026, 6, 10, 0, 30))}>
+  const Picker = ({ onChange, minimumDate }: { onChange: (e: unknown, d: Date) => void; minimumDate?: Date }) => (
+    <Pressable testID="picker" accessibilityHint={minimumDate ? String(minimumDate.getTime()) : ""} onPress={() => onChange({ type: "set" }, new Date(2026, 6, 10, 0, 30))}>
       <Text>피커 선택</Text>
     </Pressable>
   );
@@ -23,6 +23,29 @@ describe("DateField", () => {
     await fireEvent.press(await screen.findByText("피커 선택"));
     await fireEvent.press(screen.getByText("확인"));
     expect(onChange).toHaveBeenCalledWith("2026-07-10");
+  });
+
+  it("minimumDate를 로컬 자정 Date로 iOS 피커에 넘긴다", async () => {
+    await render(<DateField label="시작일" value={null} onChange={jest.fn()} minimumDate="2026-11-20" />);
+    await fireEvent.press(screen.getByRole("button", { name: /시작일/ }));
+    const picker = await screen.findByTestId("picker");
+    expect(picker.props.accessibilityHint).toBe(String(new Date(2026, 10, 20).getTime()));
+  });
+
+  it("minimumDate를 Android 다이얼로그에도 넘긴다", async () => {
+    const RN = require("react-native");
+    const original = RN.Platform.OS;
+    RN.Platform.OS = "android";
+    try {
+      const { DateTimePickerAndroid } = require("@react-native-community/datetimepicker");
+      await render(<DateField label="시작일" value={null} onChange={jest.fn()} minimumDate="2026-11-20" />);
+      await fireEvent.press(screen.getByRole("button", { name: /시작일/ }));
+      expect(DateTimePickerAndroid.open).toHaveBeenCalledWith(
+        expect.objectContaining({ minimumDate: new Date(2026, 10, 20) }),
+      );
+    } finally {
+      RN.Platform.OS = original;
+    }
   });
 
   it("값이 있으면 표시하고 지우기는 null을 전달한다", async () => {
