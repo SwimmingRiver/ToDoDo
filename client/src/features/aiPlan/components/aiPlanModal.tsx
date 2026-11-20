@@ -12,7 +12,7 @@ import {
   ModalCloseButton,
 } from "@/shared/ui/modal/modal.styles";
 import { toDateKey } from "@/shared/utils/date";
-import { AiPlanError, type GeneratePlanInput, type PlanUsage } from "../api";
+import { AiPlanError, rebaseInputToToday, type GeneratePlanInput, type PlanUsage } from "../api";
 import { useGeneratePlan, usePlanDraft, toSubmission, checkedCount } from "../hooks";
 import { aiPlanErrorMessage } from "../utils/aiPlanErrorMessage";
 import PlanGoalStep from "./planGoalStep";
@@ -95,7 +95,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
       setPendingConfirm("regenerate");
       return;
     }
-    runGenerate({ ...lastInput, today });
+    runGenerate(rebaseInputToToday(lastInput, today));
   };
 
   const handleSubmit = () => {
@@ -120,7 +120,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
     const action = pendingConfirm;
     setPendingConfirm(null);
     if (action === "close") onClose();
-    if (action === "regenerate" && lastInput) runGenerate({ ...lastInput, today });
+    if (action === "regenerate" && lastInput) runGenerate(rebaseInputToToday(lastInput, today));
   };
 
   const renderBody = () => {

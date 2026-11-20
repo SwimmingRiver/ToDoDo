@@ -7,6 +7,7 @@ import {
   AiPlanError,
   aiPlanErrorMessage,
   checkedCount,
+  rebaseInputToToday,
   toSubmission,
   type GeneratePlanInput,
   type PlanUsage,
@@ -115,12 +116,12 @@ export const AiPlanScreen = () => {
         "다시 만들면 편집한 계획이 새 결과로 바뀌고 사용 횟수가 1회 차감돼요.",
         [
           { text: "계속 편집", style: "cancel" },
-          { text: "다시 만들기", onPress: () => runGenerate({ ...lastInput, today }) },
+          { text: "다시 만들기", onPress: () => runGenerate(rebaseInputToToday(lastInput, today)) },
         ],
       );
       return;
     }
-    runGenerate({ ...lastInput, today });
+    runGenerate(rebaseInputToToday(lastInput, today));
   };
 
   const handleSubmit = () => {

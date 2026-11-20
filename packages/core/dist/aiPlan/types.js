@@ -37,3 +37,12 @@ export const parsePlanResponse = async (res) => {
         : "UNKNOWN";
     throw new AiPlanError(code, res.status);
 };
+/**
+ * 「다시 만들기」용: 직전 입력의 today를 현재 날짜로 바꾼다. 자정을 넘기면 직전 마감일이
+ * 새 today보다 앞설 수 있는데, 서버는 dueDate < today를 거절하므로 그때는 오늘로 맞춘다.
+ */
+export const rebaseInputToToday = (input, today) => ({
+    ...input,
+    today,
+    dueDate: input.dueDate !== null && input.dueDate < today ? today : input.dueDate,
+});

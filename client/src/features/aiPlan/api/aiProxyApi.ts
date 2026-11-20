@@ -2,7 +2,7 @@ import { authorizedFetch } from "@/shared/lib/authorizedFetch";
 import { parsePlanResponse } from "@tododo/core/dist/aiPlan/index.js";
 import type { GeneratePlanInput, GeneratePlanResult } from "@tododo/core/dist/aiPlan/index.js";
 
-export { AiPlanError, isExpectedAiPlanError } from "@tododo/core/dist/aiPlan/index.js";
+export { AiPlanError, isExpectedAiPlanError, rebaseInputToToday } from "@tododo/core/dist/aiPlan/index.js";
 export type {
   PlanPriority,
   GeneratedPlanItem,

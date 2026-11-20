@@ -42,3 +42,8 @@ export declare class AiPlanError extends Error {
 export declare const isExpectedAiPlanError: (error: unknown) => boolean;
 /** /plan 응답을 결과 또는 AiPlanError로 해석한다. fetch 자체는 호출 측(웹·앱)이 한다. */
 export declare const parsePlanResponse: (res: Response) => Promise<GeneratePlanResult>;
+/**
+ * 「다시 만들기」용: 직전 입력의 today를 현재 날짜로 바꾼다. 자정을 넘기면 직전 마감일이
+ * 새 today보다 앞설 수 있는데, 서버는 dueDate < today를 거절하므로 그때는 오늘로 맞춘다.
+ */
+export declare const rebaseInputToToday: (input: GeneratePlanInput, today: string) => GeneratePlanInput;

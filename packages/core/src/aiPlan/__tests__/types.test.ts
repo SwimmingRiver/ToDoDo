@@ -58,3 +58,19 @@ describe("isExpectedAiPlanError", () => {
     expect(isExpectedAiPlanError(new TypeError("Failed to fetch"))).toBe(false);
   });
 });
+
+describe("rebaseInputToToday", () => {
+  it("today를 바꾸고, 지난 마감일은 오늘로 맞춘다", async () => {
+    const { rebaseInputToToday } = await import("../types");
+    expect(rebaseInputToToday({ goal: "g", dueDate: "2026-11-20", today: "2026-11-20" }, "2026-11-21")).toEqual({
+      goal: "g",
+      dueDate: "2026-11-21",
+      today: "2026-11-21",
+    });
+  });
+  it("오늘 이후 마감일과 null은 그대로 둔다", async () => {
+    const { rebaseInputToToday } = await import("../types");
+    expect(rebaseInputToToday({ goal: "g", dueDate: "2026-11-30", today: "2026-11-20" }, "2026-11-21").dueDate).toBe("2026-11-30");
+    expect(rebaseInputToToday({ goal: "g", dueDate: null, today: "2026-11-20" }, "2026-11-21").dueDate).toBeNull();
+  });
+});
