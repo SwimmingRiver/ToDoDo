@@ -7,6 +7,7 @@ import KanbanSkeleton from "@/shared/ui/skeleton/kanbanSkeleton";
 import TodayItemSkeleton from "@/shared/ui/skeleton/todayItemSkeleton";
 import CalendarSkeleton from "@/shared/ui/skeleton/calendarSkeleton";
 import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
+import RouteErrorPage from "@/shared/ui/routeError/routeErrorPage";
 
 // 라우트 컴포넌트는 전부 lazy로 둔다. 정적 import 하나만 되살아나도 해당 라우트의
 // 의존성(FullCalendar, dnd-kit, Firestore 등)이 통째로 초기 청크로 딸려온다.
@@ -31,7 +32,9 @@ const CalendarPage = lazy(
   () => import("@/features/dashboard/Pages/calendarPage"),
 );
 const KanbanPage = lazy(() => import("@/features/kanban/pages/kanbanPage"));
-const InsightsPage = lazy(() => import("@/features/insights/pages/insightsPage"));
+const InsightsPage = lazy(
+  () => import("@/features/insights/pages/insightsPage"),
+);
 const PremiumPage = lazy(() => import("@/features/billing/pages/premiumPage"));
 // 법적 페이지는 로그인 여부와 무관하게 열려야 한다(Paddle 심사자는 로그인하지 않는다).
 // 그래서 RootGate·ProtectedRoute 밖의 최상위 라우트로 둔다.
@@ -43,56 +46,84 @@ const withSuspense = (element: ReactNode, fallback: ReactNode = null) => (
   <Suspense fallback={fallback}>{element}</Suspense>
 );
 
+// 셸 안의 없는 주소. loader에서 404 Response를 던져 inline errorElement가 404 문구를
+// 그리게 한다(문구를 RouteErrorPage 한 곳에만 둔다). 렌더 중에 던지면 라우터가
+// ErrorResponse로 바꾸지 않아 isRouteErrorResponse가 false가 되므로 loader여야 한다.
+const notFoundLoader = () => {
+  throw new Response("Not Found", { status: 404 });
+};
+
+// 오류 화면은 두 층이다.
+// - 바깥(pathless 루트): 셸 밖 라우트(로그인·게스트·약관)와 셸 자체가 실패했을 때 전체 화면.
+// - 안쪽(셸 children을 감싸는 pathless 라우트): 셸 안 페이지 오류는 헤더·SNB를 남긴 채
+//   Outlet 자리에만 안내 → 사용자가 사이드바로 바로 다른 화면으로 이동할 수 있다.
+// 없는 주소용 "*"는 셸 안에만 둔다. 최상위에도 두면 셸 안 "*"와 순위가 같아 충돌하고,
+// 비로그인 사용자는 ProtectedRoute가 먼저 /login으로 보내므로 따로 필요 없다.
 export const routes: RouteObject[] = [
   {
-    path: "/login",
-    element: withSuspense(<LoginPage />),
-  },
-  {
-    path: "/",
-    element: <RootGate />,
-  },
-  {
-    path: "/guest",
-    element: withSuspense(<GuestTodayPage />),
-  },
-  { path: "/terms", element: withSuspense(<LegalPage slug="terms" />) },
-  { path: "/privacy", element: withSuspense(<LegalPage slug="privacy" />) },
-  { path: "/refund", element: withSuspense(<LegalPage slug="refund" />) },
-  {
-    // Suspense가 2단인 이유: 바깥은 App 셸(헤더/SNB/푸터), 안쪽은 페이지 본문이다.
-    // 셸 청크는 최초 1회만 받으므로 이후 라우트 이동에서는 안쪽 스켈레톤만 교체된다.
-    element: (
-      <ProtectedRoute>{withSuspense(<App />)}</ProtectedRoute>
-    ),
+    errorElement: <RouteErrorPage variant="fullPage" />,
     children: [
       {
-        path: "today",
-        element: withSuspense(<TodayPage />, <TodayItemSkeleton />),
+        path: "/login",
+        element: withSuspense(<LoginPage />),
       },
       {
-        path: "todo/:id",
-        element: withSuspense(<TodoDetail />, <CheckboxSkeleton count={3} />),
+        path: "/",
+        element: <RootGate />,
       },
       {
-        path: "todo",
-        element: withSuspense(<TodoListPage />, <CheckboxSkeleton count={5} />),
+        path: "/guest",
+        element: withSuspense(<GuestTodayPage />),
       },
+      { path: "/terms", element: withSuspense(<LegalPage slug="terms" />) },
+      { path: "/privacy", element: withSuspense(<LegalPage slug="privacy" />) },
+      { path: "/refund", element: withSuspense(<LegalPage slug="refund" />) },
       {
-        path: "calendar",
-        element: withSuspense(<CalendarPage />, <CalendarSkeleton />),
-      },
-      {
-        path: "kanban",
-        element: withSuspense(<KanbanPage />, <KanbanSkeleton />),
-      },
-      {
-        path: "insights",
-        element: withSuspense(<InsightsPage />, <InsightsSkeleton />),
-      },
-      {
-        path: "premium",
-        element: withSuspense(<PremiumPage />),
+        // Suspense가 2단인 이유: 바깥은 App 셸(헤더/SNB/푸터), 안쪽은 페이지 본문이다.
+        // 셸 청크는 최초 1회만 받으므로 이후 라우트 이동에서는 안쪽 스켈레톤만 교체된다.
+        element: <ProtectedRoute>{withSuspense(<App />)}</ProtectedRoute>,
+        children: [
+          {
+            errorElement: <RouteErrorPage variant="inline" />,
+            children: [
+              {
+                path: "today",
+                element: withSuspense(<TodayPage />, <TodayItemSkeleton />),
+              },
+              {
+                path: "todo/:id",
+                element: withSuspense(
+                  <TodoDetail />,
+                  <CheckboxSkeleton count={3} />,
+                ),
+              },
+              {
+                path: "todo",
+                element: withSuspense(
+                  <TodoListPage />,
+                  <CheckboxSkeleton count={5} />,
+                ),
+              },
+              {
+                path: "calendar",
+                element: withSuspense(<CalendarPage />, <CalendarSkeleton />),
+              },
+              {
+                path: "kanban",
+                element: withSuspense(<KanbanPage />, <KanbanSkeleton />),
+              },
+              {
+                path: "insights",
+                element: withSuspense(<InsightsPage />, <InsightsSkeleton />),
+              },
+              {
+                path: "premium",
+                element: withSuspense(<PremiumPage />),
+              },
+              { path: "*", loader: notFoundLoader },
+            ],
+          },
+        ],
       },
     ],
   },
