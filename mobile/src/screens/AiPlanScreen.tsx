@@ -36,13 +36,13 @@ export const AiPlanScreen = () => {
   const [lastInput, setLastInput] = useState<GeneratePlanInput | null>(null);
   // 클레임 전파 지연 등으로 서버가 403을 주면 UI 판정과 무관하게 잠금 안내로 전환한다.
   const [serverLocked, setServerLocked] = useState(false);
-  // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
   // 구독 후 돌아오면(isPremium false→true) 서버 잠금을 푼다. 이미 true였던 상태의 403(클레임 지연)은 유지한다.
   const prevIsPremium = useRef(isPremium);
   useEffect(() => {
     if (!prevIsPremium.current && isPremium) setServerLocked(false);
     prevIsPremium.current = isPremium;
   }, [isPremium]);
+  // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
   const generateInFlight = useRef(false);
   const saveInFlight = useRef(false);
   // 이탈 가드는 usePreventRemove로 건다. 그래야 native-stack이 iOS 스와이프·헤더 뒤로가기도 막는다.
