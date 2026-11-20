@@ -117,7 +117,18 @@ describe("RouteErrorPage", () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("10초 안에 청크 오류가 재발하면 새로고침하지 않고 오류 화면을 보여준다", async () => {
+  it("오프라인이면 청크 오류여도 새로고침하지 않고 오류 화면을 보여준다", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    renderThrowing(() => {
+      throw new Error("Failed to fetch dynamically imported module: /assets/x.js");
+    });
+
+    expect(await screen.findByRole("heading", { name: "문제가 발생했어요" })).toBeInTheDocument();
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("tododo:chunkReloadAt")).toBeNull();
+  });
+
+  it("5분 안에 청크 오류가 재발하면 새로고침하지 않고 오류 화면을 보여준다", async () => {
     sessionStorage.setItem("tododo:chunkReloadAt", String(Date.now()));
     renderThrowing(() => {
       throw new Error("Failed to fetch dynamically imported module: /assets/x.js");

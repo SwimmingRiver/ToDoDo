@@ -4,7 +4,9 @@
 // 대신 오류 화면을 보여준다.
 
 export const CHUNK_RELOAD_KEY = "tododo:chunkReloadAt";
-export const CHUNK_RELOAD_WINDOW_MS = 10_000;
+// 5분: 새로고침 후 재실패가 느린 망에서 수십 초 뒤에 와도 반복 새로고침되지 않게 넉넉히
+// 잡는다. 그래도 몇 시간 뒤 다음 배포 때의 실패는 다시 자동 복구된다.
+export const CHUNK_RELOAD_WINDOW_MS = 5 * 60_000;
 
 // 브라우저마다 문구가 다르다: Chrome / Safari / Firefox, 그리고 Vite의 CSS preload 실패.
 const CHUNK_ERROR_PATTERNS = [

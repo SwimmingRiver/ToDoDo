@@ -34,7 +34,7 @@
    - 셸 children에 `path: "*"`를 두어 로그인 사용자의 없는 주소는 셸 안 404. 셸 밖 최상위에도 `path: "*"` 404(fullPage) — 단 비로그인 시 ProtectedRoute 리다이렉트와의 우선순위는 빌더가 확인(로그인 사용자 기준 셸 안 404가 우선되도록).
 3. **청크 로드 실패 자동 복구**
    - 판별: 메시지에 "Failed to fetch dynamically imported module" / "Importing a module script failed"(Safari) / "error loading dynamically imported module"(Firefox) 등 포함.
-   - 첫 실패 시 `sessionStorage`에 시각 기록 후 `location.reload()` 1회. 기록이 최근(예: 10초 이내)이면 재시도하지 않고 오류 화면 표시. storage 접근은 try/catch, 실패 시 자동 새로고침 생략하고 화면 표시.
+   - 첫 실패 시 `sessionStorage`에 시각 기록 후 `location.reload()` 1회. 기록이 최근(5분 이내 — 리뷰 후 10초에서 상향, 느린 망 반복 방지)이거나 오프라인(`navigator.onLine === false`)이면 재시도하지 않고 오류 화면 표시. storage 접근은 try/catch, 실패 시 자동 새로고침 생략하고 화면 표시.
    - 청크 실패는 Sentry에 별도 보고 안 함(자동 복구 성공 시 노이즈) — 재시도 후에도 실패해 화면이 뜰 때만 보고.
 4. **테스트**: 404 문구, 일반 오류 문구+Sentry 호출, 셸 안 오류 시 셸 유지, 청크 오류 1회 reload·재발 시 화면 표시. TZ/CI 규칙(`VITE_FIREBASE_API_KEY=` 실행) 준수.
 

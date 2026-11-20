@@ -33,17 +33,19 @@ describe("canAutoReload / markAutoReload", () => {
 
   it("상수 값", () => {
     expect(CHUNK_RELOAD_KEY).toBe("tododo:chunkReloadAt");
-    expect(CHUNK_RELOAD_WINDOW_MS).toBe(10_000);
+    expect(CHUNK_RELOAD_WINDOW_MS).toBe(5 * 60_000);
   });
 
   it("기록이 없으면 재시도할 수 있다", () => {
     expect(canAutoReload(1_000_000)).toBe(true);
   });
 
-  it("10초 안에 다시 실패하면 재시도하지 않고, 10초가 지나면 다시 할 수 있다", () => {
+  it("5분 안에 다시 실패하면 재시도하지 않고, 5분이 지나면 다시 할 수 있다", () => {
     markAutoReload(1_000_000);
     expect(canAutoReload(1_005_000)).toBe(false);
-    expect(canAutoReload(1_010_000)).toBe(true);
+    // 느린 망: 새로고침 후 인증·청크 요청이 오래 걸려 1분 뒤에 실패해도 다시 새로고침하지 않는다
+    expect(canAutoReload(1_060_000)).toBe(false);
+    expect(canAutoReload(1_300_000)).toBe(true);
   });
 
   it("저장소 읽기가 막히면 재시도하지 않는다", () => {
