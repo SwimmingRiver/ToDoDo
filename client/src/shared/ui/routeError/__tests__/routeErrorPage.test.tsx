@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import * as Sentry from "@sentry/react";
 import { setupUser } from "@/test/setupUser";
@@ -42,6 +42,31 @@ const renderNotFound = () => {
   return router;
 };
 
+const renderInlineSequence = () => {
+  const Boom = () => {
+    throw new Error("boom");
+  };
+  const ChunkFail = () => {
+    throw new Error("Failed to fetch dynamically imported module: /assets/b.js");
+  };
+  const router = createMemoryRouter(
+    [
+      {
+        errorElement: <RouteErrorPage variant="inline" />,
+        children: [
+          { path: "/a", element: <Boom /> },
+          { path: "/b", element: <ChunkFail /> },
+        ],
+      },
+    ],
+    { initialEntries: ["/a"] },
+  );
+  render(<RouterProvider router={router} />);
+  return router;
+};
+
+const originalLocation = Object.getOwnPropertyDescriptor(window, "location")!;
+
 describe("RouteErrorPage", () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   let reloadSpy: ReturnType<typeof vi.fn>;
@@ -61,6 +86,29 @@ describe("RouteErrorPage", () => {
   afterEach(() => {
     consoleErrorSpy.mockRestore();
     vi.restoreAllMocks();
+    Object.defineProperty(window, "location", originalLocation);
+  });
+
+  it("오류 화면이 떠 있는 채로 다른 라우트에서 청크 오류가 나면 새로 판단해 새로고침한다", async () => {
+    const router = renderInlineSequence();
+    expect(await screen.findByRole("heading", { name: "문제가 발생했어요" })).toBeInTheDocument();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+
+    await act(() => router.navigate("/b"));
+
+    await vi.waitFor(() => expect(reloadSpy).toHaveBeenCalledTimes(1));
+  });
+
+  it("저장소 쓰기가 막히면 청크 오류여도 새로고침하지 않고 오류 화면을 보여준다", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    renderThrowing(() => {
+      throw new Error("Failed to fetch dynamically imported module: /assets/x.js");
+    });
+
+    expect(await screen.findByRole("heading", { name: "문제가 발생했어요" })).toBeInTheDocument();
+    expect(reloadSpy).not.toHaveBeenCalled();
   });
 
   it("렌더 오류면 오류 문구와 두 버튼을 보여주고 Sentry에 보고한다", async () => {

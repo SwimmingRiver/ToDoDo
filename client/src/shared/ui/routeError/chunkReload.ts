@@ -33,10 +33,13 @@ export const canAutoReload = (now: number = Date.now()): boolean => {
   }
 };
 
-export const markAutoReload = (now: number = Date.now()): void => {
+/** 기록에 성공했는지 돌려준다. 실패하면 호출자는 새로고침하면 안 된다 — 읽기는 되고
+ * 쓰기만 막힌 저장소(용량 초과 등)에서는 기록이 남지 않아 매번 "처음 실패"로 보이기 때문. */
+export const markAutoReload = (now: number = Date.now()): boolean => {
   try {
     sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+    return true;
   } catch {
-    // 쓰기 실패는 무시한다 — canAutoReload가 읽기 단계에서 이미 걸러낸다.
+    return false;
   }
 };

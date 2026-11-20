@@ -32,15 +32,21 @@ const RouteErrorPage = ({ variant }: RouteErrorPageProps) => {
   // 함수를 두 번 불러도 두 번째 호출이 "방금 재시도했음"으로 잘못 판단하지 않게.
   // 오프라인이면 새로고침해 봐야 브라우저 오프라인 화면으로 튕기므로, 셸·오류 화면을
   // 남겨 두고 사용자가 다시 연결된 뒤 직접 새로고침하게 한다.
-  const [willReload] = useState(
+  const [canReload] = useState(
     () => isChunkLoadError(error) && navigator.onLine !== false && canAutoReload(),
   );
+  // 기록을 못 남겨(쓰기만 막힌 저장소) 새로고침을 포기하면 오류 화면으로 바꾼다.
+  const [reloadBlocked, setReloadBlocked] = useState(false);
+  const willReload = canReload && !reloadBlocked;
   const reportedRef = useRef(false);
 
   useEffect(() => {
     if (willReload) {
-      markAutoReload();
-      window.location.reload();
+      if (markAutoReload()) {
+        window.location.reload();
+      } else {
+        setReloadBlocked(true);
+      }
       return;
     }
     // 404는 오타·크롤러 노이즈라 보고하지 않는다.

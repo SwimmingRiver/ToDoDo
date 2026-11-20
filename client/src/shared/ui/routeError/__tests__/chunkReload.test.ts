@@ -60,5 +60,10 @@ describe("canAutoReload / markAutoReload", () => {
       throw new Error("denied");
     });
     expect(() => markAutoReload()).not.toThrow();
+    expect(markAutoReload()).toBe(false);
+  });
+
+  it("기록에 성공하면 true를 돌려준다", () => {
+    expect(markAutoReload()).toBe(true);
   });
 });
