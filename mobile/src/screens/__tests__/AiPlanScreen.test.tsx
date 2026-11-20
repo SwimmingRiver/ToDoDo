@@ -15,23 +15,25 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockSetOptions = jest.fn();
-type BeforeRemoveEvent = { preventDefault: () => void; data: { action: unknown } };
-let beforeRemoveHandler: ((e: BeforeRemoveEvent) => void) | undefined;
-const mockUnsubscribe = jest.fn();
-const mockAddListener = jest.fn((name: string, handler: (e: BeforeRemoveEvent) => void) => {
-  if (name === "beforeRemove") beforeRemoveHandler = handler;
-  return mockUnsubscribe;
-});
-// useNavigation이 렌더마다 같은 객체를 돌려줘야 구독이 다시 걸리지 않는다(실제 react-navigation도 동일).
+// usePreventRemove(flag, cb)의 가장 최근 인자를 잡는다. 실제 훅은 flag가 true인 동안 항상 막는다.
+type PreventCb = (o: { data: { action: unknown } }) => void;
+let preventFlag: boolean | undefined;
+let preventCb: PreventCb | undefined;
+let flagAtGoBack: boolean | undefined;
+let flagAtDispatch: boolean | undefined;
+// useNavigation이 렌더마다 같은 객체를 돌려줘야 effect가 다시 돌지 않는다(실제 react-navigation도 동일).
 const mockNavigation = {
   navigate: mockNavigate,
   goBack: mockGoBack,
   dispatch: mockDispatch,
   setOptions: mockSetOptions,
-  addListener: mockAddListener,
 };
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => mockNavigation,
+  usePreventRemove: (flag: boolean, cb: PreventCb) => {
+    preventFlag = flag;
+    preventCb = cb;
+  },
 }));
 
 type Callbacks = { onSuccess?: (r: unknown) => void; onError?: (e: Error) => void; onSettled?: () => void };
@@ -97,9 +99,12 @@ describe("AiPlanScreen", () => {
     mockGoBack.mockReset();
     mockDispatch.mockReset();
     mockSetOptions.mockReset();
-    mockUnsubscribe.mockReset();
-    mockAddListener.mockClear();
-    beforeRemoveHandler = undefined;
+    preventFlag = undefined;
+    preventCb = undefined;
+    flagAtGoBack = undefined;
+    flagAtDispatch = undefined;
+    mockGoBack.mockImplementation(() => { flagAtGoBack = preventFlag; });
+    mockDispatch.mockImplementation(() => { flagAtDispatch = preventFlag; });
     mockGenerateIsPending = false;
     mockCreateIsPending = false;
     mockGenerateMutate.mockReset();
@@ -281,77 +286,72 @@ describe("AiPlanScreen", () => {
     expect(screen.getByRole("button", { name: "2개 추가" }).props.accessibilityState.disabled).toBe(true);
   });
 
-  describe("이탈 가드", () => {
-    const makeEvent = () => ({ preventDefault: jest.fn(), data: { action: { type: "GO_BACK" } } });
-    const alertButtons = () =>
+  describe("이탈 가드 (usePreventRemove)", () => {
+    const action = { type: "GO_BACK" };
+    const alertArgs = () =>
       ((Alert.alert as jest.Mock).mock.calls.at(-1) as unknown as [string, string, { text: string; onPress?: () => void }[]]);
 
-    it("생성 중 beforeRemove → preventDefault, Alert 없음", async () => {
+    it("처음에는 막지 않는다", async () => {
+      const { AiPlanScreen } = await import("../AiPlanScreen");
+      await render(<AiPlanScreen />);
+      expect(preventFlag).toBe(false);
+    });
+
+    it("생성 중 → true, 콜백이 불려도 Alert 없음", async () => {
       mockGenerateIsPending = true;
       const { AiPlanScreen } = await import("../AiPlanScreen");
       await render(<AiPlanScreen />);
-      const e = makeEvent();
-      beforeRemoveHandler!(e);
-      expect(e.preventDefault).toHaveBeenCalled();
+      expect(preventFlag).toBe(true);
+      preventCb!({ data: { action } });
       expect(Alert.alert).not.toHaveBeenCalled();
     });
 
-    it("구독 이후에 바뀐 isPending도 현재 값으로 판정한다", async () => {
-      const { AiPlanScreen } = await import("../AiPlanScreen");
-      const view = await render(<AiPlanScreen />);
-      const handler = beforeRemoveHandler!;
-      const before = makeEvent();
-      handler(before);
-      expect(before.preventDefault).not.toHaveBeenCalled();
-      mockGenerateIsPending = true;
-      await view.rerender(<AiPlanScreen />);
-      expect(mockAddListener).toHaveBeenCalledTimes(1); // 재구독 없이 같은 핸들러
-      const during = makeEvent();
-      handler(during);
-      expect(during.preventDefault).toHaveBeenCalled();
+    it("미리보기 편집 전 → false, 편집 후 → true", async () => {
+      await generateAndPreview();
+      expect(preventFlag).toBe(false);
+      await fireEvent.changeText(screen.getByDisplayValue("박스 구하기"), "박스 사기");
+      expect(preventFlag).toBe(true);
     });
 
-    it("미리보기 dirty → preventDefault + 확인 Alert, 「닫기」면 원래 action을 dispatch", async () => {
+    it("dirty에서 콜백 → 확인 Alert, 「닫기」 → 플래그 false가 된 뒤 원래 action dispatch", async () => {
       await generateAndPreview();
-      const handler = beforeRemoveHandler!; // 편집 전에 잡은 핸들러
       await fireEvent.changeText(screen.getByDisplayValue("박스 구하기"), "박스 사기");
-      const e = makeEvent();
-      handler(e);
-      expect(e.preventDefault).toHaveBeenCalled();
-      const [title, message, buttons] = alertButtons();
+      await act(async () => {
+        preventCb!({ data: { action } });
+      });
+      const [title, message, buttons] = alertArgs();
       expect(title).toBe("수정한 내용이 사라져요");
       expect(message).toBe("편집한 계획을 저장하지 않고 닫을까요?");
       expect(buttons.map((b) => b.text)).toEqual(["계속 편집", "닫기"]);
       expect(mockDispatch).not.toHaveBeenCalled();
+      expect(preventFlag).toBe(true);
       await act(async () => {
         buttons.find((b) => b.text === "닫기")!.onPress!();
       });
-      expect(mockDispatch).toHaveBeenCalledWith(e.data.action);
-      // dispatch가 다시 일으키는 beforeRemove는 통과시켜야 무한 루프가 안 생긴다.
-      const again = makeEvent();
-      handler(again);
-      expect(again.preventDefault).not.toHaveBeenCalled();
+      expect(mockDispatch).toHaveBeenCalledWith(action);
+      expect(flagAtDispatch).toBe(false);
     });
 
-    it("dirty가 아니면 preventDefault 안 함", async () => {
-      await generateAndPreview();
-      const e = makeEvent();
-      beforeRemoveHandler!(e);
-      expect(e.preventDefault).not.toHaveBeenCalled();
-      expect(Alert.alert).not.toHaveBeenCalled();
-    });
-
-    it("dirty에서 저장 성공 → goBack 시 preventDefault 하지 않음", async () => {
+    it("「계속 편집」은 아무것도 하지 않는다", async () => {
       await generateAndPreview();
       await fireEvent.changeText(screen.getByDisplayValue("박스 구하기"), "박스 사기");
+      await act(async () => {
+        preventCb!({ data: { action } });
+      });
+      expect(mockDispatch).not.toHaveBeenCalled();
+      expect(preventFlag).toBe(true);
+    });
+
+    it("dirty에서 저장 성공 → 플래그 false가 된 뒤 goBack", async () => {
+      await generateAndPreview();
+      await fireEvent.changeText(screen.getByDisplayValue("박스 구하기"), "박스 사기");
+      expect(preventFlag).toBe(true);
       await fireEvent.press(screen.getByText("2개 추가"));
       await act(async () => {
         mockCreateMutate.mock.calls[0][1].onSuccess?.({ parentId: "p", count: 3 });
       });
       expect(mockGoBack).toHaveBeenCalledTimes(1);
-      const e = makeEvent();
-      beforeRemoveHandler!(e);
-      expect(e.preventDefault).not.toHaveBeenCalled();
+      expect(flagAtGoBack).toBe(false);
     });
 
     it("생성 중에는 제스처·헤더 뒤로가기를 끄고, 끝나면 되돌린다", async () => {
@@ -364,13 +364,6 @@ describe("AiPlanScreen", () => {
       mockGenerateIsPending = false;
       await view.rerender(<AiPlanScreen />);
       expect(mockSetOptions).toHaveBeenLastCalledWith({ gestureEnabled: true, headerBackVisible: true });
-    });
-
-    it("언마운트하면 리스너를 해제한다", async () => {
-      const { AiPlanScreen } = await import("../AiPlanScreen");
-      const view = await render(<AiPlanScreen />);
-      await view.unmount();
-      expect(mockUnsubscribe).toHaveBeenCalled();
     });
   });
 });

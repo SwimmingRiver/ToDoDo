@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { usePreventRemove, useNavigation, type NavigationAction } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   AiPlanError,
@@ -39,38 +39,29 @@ export const AiPlanScreen = () => {
   // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
   const generateInFlight = useRef(false);
   const saveInFlight = useRef(false);
-  // 저장 성공 후의 goBack, 사용자가 "닫기"로 확인한 뒤의 dispatch는 이탈 가드가 막지 않는다.
-  // state면 같은 틱의 goBack에 반영되지 않으므로 ref로 둔다.
-  const savedRef = useRef(false);
-  const discardConfirmedRef = useRef(false);
-  // beforeRemove 리스너는 한 번만 구독하므로, 최신 값은 ref로 읽는다.
-  const isGeneratingRef = useRef(false);
-  const isDirtyRef = useRef(false);
-  isGeneratingRef.current = generate.isPending;
-  isDirtyRef.current = draft.dirty;
-
-  useEffect(() => {
-    return navigation.addListener("beforeRemove", (e) => {
-      if (savedRef.current || discardConfirmedRef.current) return;
-      if (isGeneratingRef.current) {
-        e.preventDefault();
-        return;
-      }
-      if (!isDirtyRef.current) return;
-      e.preventDefault();
+  // 이탈 가드는 usePreventRemove로 건다. 그래야 native-stack이 iOS 스와이프·헤더 뒤로가기도 막는다.
+  // 이 훅은 플래그가 true인 동안 항상 막으므로, 통과시킬 때는 플래그를 먼저 false로 만든 뒤
+  // 다음 렌더의 effect에서 goBack/dispatch 한다.
+  const [saved, setSaved] = useState(false);
+  const [discardAction, setDiscardAction] = useState<NavigationAction | null>(null);
+  usePreventRemove(
+    generate.isPending || (draft.dirty && !saved && discardAction === null),
+    ({ data }) => {
+      if (generate.isPending) return; // 생성 중에는 조용히 막는다.
       Alert.alert("수정한 내용이 사라져요", "편집한 계획을 저장하지 않고 닫을까요?", [
         { text: "계속 편집", style: "cancel" },
-        {
-          text: "닫기",
-          style: "destructive",
-          onPress: () => {
-            discardConfirmedRef.current = true;
-            navigation.dispatch(e.data.action);
-          },
-        },
+        { text: "닫기", style: "destructive", onPress: () => setDiscardAction(data.action) },
       ]);
-    });
-  }, [navigation]);
+    },
+  );
+
+  useEffect(() => {
+    if (saved) navigation.goBack();
+  }, [saved, navigation]);
+
+  useEffect(() => {
+    if (discardAction) navigation.dispatch(discardAction);
+  }, [discardAction, navigation]);
 
   // 생성 중에는 제스처·헤더 뒤로가기도 막는다(하드웨어 뒤로 키는 beforeRemove가 막는다).
   useEffect(() => {
@@ -132,8 +123,7 @@ export const AiPlanScreen = () => {
     createPlan.mutate(toSubmission(draft), {
       onSuccess: () => {
         Alert.alert("계획 추가 완료", `할 일 ${addedCount}개를 추가했어요`);
-        savedRef.current = true;
-        navigation.goBack();
+        setSaved(true);
       },
       onError: () => {
         Alert.alert("추가하지 못했어요", "잠시 후 다시 시도해 주세요");
