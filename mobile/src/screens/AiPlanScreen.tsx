@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   AiPlanError,
   aiPlanErrorMessage,
@@ -14,16 +15,14 @@ import { useCreatePlanTodos, useGeneratePlan, usePlanDraft } from "../aiPlan";
 import { PlanGoalStep } from "../aiPlan/components/PlanGoalStep";
 import { PlanLockedNotice } from "../aiPlan/components/PlanLockedNotice";
 import { PlanPreviewStep } from "../aiPlan/components/PlanPreviewStep";
+import type { TodoListStackParamList } from "../navigation/types";
 import { useIsPremium } from "../premium";
 import { toDateKey } from "../shared/utils/dateRange";
 import { colors } from "../theme/colors";
 import { spacing } from "../theme/spacing";
 
-// Task 6에서 실제 스택 타입으로 좁힌다.
-type AiPlanNavigation = { navigate: (name: "Account") => void; goBack: () => void };
-
 export const AiPlanScreen = () => {
-  const navigation = useNavigation() as unknown as AiPlanNavigation;
+  const navigation = useNavigation<NativeStackNavigationProp<TodoListStackParamList, "AiPlan">>();
   const { isPremium, isLoading: isEntitlementLoading } = useIsPremium();
   const generate = useGeneratePlan();
   const createPlan = useCreatePlanTodos();
@@ -40,8 +39,45 @@ export const AiPlanScreen = () => {
   // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
   const generateInFlight = useRef(false);
   const saveInFlight = useRef(false);
-  // Task 6의 이탈 가드가 저장 성공 후 goBack을 막지 않도록 쓴다.
+  // 저장 성공 후의 goBack, 사용자가 "닫기"로 확인한 뒤의 dispatch는 이탈 가드가 막지 않는다.
+  // state면 같은 틱의 goBack에 반영되지 않으므로 ref로 둔다.
   const savedRef = useRef(false);
+  const discardConfirmedRef = useRef(false);
+  // beforeRemove 리스너는 한 번만 구독하므로, 최신 값은 ref로 읽는다.
+  const isGeneratingRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  isGeneratingRef.current = generate.isPending;
+  isDirtyRef.current = draft.dirty;
+
+  useEffect(() => {
+    return navigation.addListener("beforeRemove", (e) => {
+      if (savedRef.current || discardConfirmedRef.current) return;
+      if (isGeneratingRef.current) {
+        e.preventDefault();
+        return;
+      }
+      if (!isDirtyRef.current) return;
+      e.preventDefault();
+      Alert.alert("수정한 내용이 사라져요", "편집한 계획을 저장하지 않고 닫을까요?", [
+        { text: "계속 편집", style: "cancel" },
+        {
+          text: "닫기",
+          style: "destructive",
+          onPress: () => {
+            discardConfirmedRef.current = true;
+            navigation.dispatch(e.data.action);
+          },
+        },
+      ]);
+    });
+  }, [navigation]);
+
+  // 생성 중에는 제스처·헤더 뒤로가기도 막는다(하드웨어 뒤로 키는 beforeRemove가 막는다).
+  useEffect(() => {
+    if (!generate.isPending) return;
+    navigation.setOptions({ gestureEnabled: false, headerBackVisible: false });
+    return () => navigation.setOptions({ gestureEnabled: true, headerBackVisible: true });
+  }, [generate.isPending, navigation]);
 
   const runGenerate = (input: GeneratePlanInput) => {
     if (generate.isPending || generateInFlight.current) return;

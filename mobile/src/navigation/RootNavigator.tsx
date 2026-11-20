@@ -15,6 +15,7 @@ import { TodoFormScreen } from "../screens/TodoFormScreen";
 import { TodoDetailScreen } from "../screens/TodoDetailScreen";
 import { CalendarScreen } from "../screens/CalendarScreen";
 import { AccountScreen } from "../screens/AccountScreen";
+import { AiPlanScreen } from "../screens/AiPlanScreen";
 import { IconButton } from "../shared/ui/iconButton/IconButton";
 import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList } from "./types";
 import { colors } from "../theme/colors";
@@ -60,6 +61,7 @@ const TodoListTabStack = () => (
     <TodoListStack.Screen name="TodoList" component={TodoListScreen} options={{ title: "할 일" }} />
     <TodoListStack.Screen name="TodoForm" component={TodoFormScreen} options={{ title: "할 일 추가" }} />
     <TodoListStack.Screen name="TodoDetail" component={TodoDetailScreen} options={{ title: "할 일 상세" }} />
+    <TodoListStack.Screen name="AiPlan" component={AiPlanScreen} options={{ title: "AI로 계획" }} />
     <TodoListStack.Screen name="Account" component={AccountScreen} options={accountScreenOptions} />
   </TodoListStack.Navigator>
 );
