@@ -63,7 +63,8 @@ export const AiPlanScreen = () => {
     if (discardAction) navigation.dispatch(discardAction);
   }, [discardAction, navigation]);
 
-  // 생성 중에는 제스처·헤더 뒤로가기도 막는다(하드웨어 뒤로 키는 beforeRemove가 막는다).
+  // 이탈 자체는 usePreventRemove가 막는다(native preventNativeDismiss도 설정). 여기서는 생성 중
+  // 제스처·헤더 뒤로가기 UI도 함께 꺼 두는 보조 장치다.
   useEffect(() => {
     if (!generate.isPending) return;
     navigation.setOptions({ gestureEnabled: false, headerBackVisible: false });

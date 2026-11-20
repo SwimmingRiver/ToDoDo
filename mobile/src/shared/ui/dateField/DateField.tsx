@@ -56,7 +56,8 @@ export const DateField = ({ label, value, onChange, placeholder = "날짜 선택
       });
       return;
     }
-    setIosPendingDate(base);
+    // 현재 값이 최소일 이전이면 스피너가 최소일을 보여주므로 pending도 같이 보정한다.
+    setIosPendingDate(minDate && base < minDate ? minDate : base);
     setIosModalVisible(true);
   };
 

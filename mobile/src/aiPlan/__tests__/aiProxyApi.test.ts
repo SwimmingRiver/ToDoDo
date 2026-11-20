@@ -1,10 +1,11 @@
+import type { GeneratePlanInput, GeneratePlanResult } from "@tododo/core/dist/aiPlan/index.js";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const getIdToken = jest.fn<() => Promise<string>>();
 const mockAuth: { currentUser: { getIdToken: typeof getIdToken } | null } = { currentUser: { getIdToken } };
 jest.mock("../../firebase", () => ({ get auth() { return mockAuth; } }));
 
-const input = { goal: "자격증 따기", deadline: "2026-12-31" } as never;
+const input: GeneratePlanInput = { goal: "자격증 따기", dueDate: "2026-12-31", today: "2026-11-20" };
 
 describe("requestPlan", () => {
   const originalFetch = global.fetch;
@@ -20,7 +21,10 @@ describe("requestPlan", () => {
   });
 
   it("토큰을 실어 /plan에 POST하고 응답을 해석한다", async () => {
-    const result = { plan: { parent: {}, children: [] }, usage: { used: 1, limit: 20 } };
+    const result: GeneratePlanResult = {
+      plan: { title: "자격증 따기", dueDate: "2026-12-31", items: [{ title: "교재 구입", dueDate: "2026-11-25", priority: "high" }] },
+      usage: { used: 1, limit: 20 },
+    };
     const fetchMock = jest.fn<typeof fetch>().mockResolvedValue({ ok: true, status: 200, json: async () => result } as Response);
     global.fetch = fetchMock;
     const { requestPlan } = await import("../aiProxyApi");

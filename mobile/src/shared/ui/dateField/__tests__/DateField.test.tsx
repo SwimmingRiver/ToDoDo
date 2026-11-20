@@ -32,6 +32,15 @@ describe("DateField", () => {
     expect(picker.props.accessibilityHint).toBe(String(new Date(2026, 10, 20).getTime()));
   });
 
+  it("값이 minimumDate 이전이면 iOS에서 스크롤 없이 확인해도 최소일이 저장된다", async () => {
+    const onChange = jest.fn();
+    await render(<DateField label="시작일" value="2026-11-10" onChange={onChange} minimumDate="2026-11-20" />);
+    await fireEvent.press(screen.getByLabelText("시작일, 2026-11-10"));
+    await screen.findByTestId("picker");
+    await fireEvent.press(screen.getByText("확인"));
+    expect(onChange).toHaveBeenCalledWith("2026-11-20");
+  });
+
   it("minimumDate를 Android 다이얼로그에도 넘긴다", async () => {
     const RN = require("react-native");
     const original = RN.Platform.OS;
