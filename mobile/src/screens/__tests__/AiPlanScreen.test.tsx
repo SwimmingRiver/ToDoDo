@@ -180,6 +180,23 @@ describe("AiPlanScreen", () => {
     expect(screen.getByText("AI 할 일 플랜은 프리미엄 기능입니다")).toBeTruthy();
   });
 
+  it("구독 전 403으로 잠긴 뒤 isPremium이 false→true가 되면 목표 단계로 돌아온다", async () => {
+    const { AiPlanScreen } = await import("../AiPlanScreen");
+    const view = await render(<AiPlanScreen />);
+    await fireEvent.changeText(screen.getByLabelText("목표"), "이사 준비");
+    await fireEvent.press(screen.getByText("계획 만들기"));
+    mockIsPremium = false;
+    await view.rerender(<AiPlanScreen />);
+    await act(async () => {
+      mockGenerateMutate.mock.calls[0][1].onError?.(new AiPlanError("PREMIUM_REQUIRED", 403));
+      mockGenerateMutate.mock.calls[0][1].onSettled?.();
+    });
+    expect(screen.getByText("AI 할 일 플랜은 프리미엄 기능입니다")).toBeTruthy();
+    mockIsPremium = true;
+    await view.rerender(<AiPlanScreen />);
+    expect(screen.getByText("AI로 계획 만들기")).toBeTruthy();
+  });
+
   it("프리미엄이던 사용자가 isPremium=false로 바뀌면 잠금", async () => {
     const { AiPlanScreen } = await import("../AiPlanScreen");
     const view = await render(<AiPlanScreen />);
@@ -246,6 +263,17 @@ describe("AiPlanScreen", () => {
     expect(mockGenerateMutate.mock.calls[1][0]).toEqual({ goal: "이사 준비", dueDate: null, today: "2026-11-20" });
   });
 
+  it("자정을 넘긴 뒤 다시 만들기는 현재 날짜(today)로 재요청한다", async () => {
+    jest.setSystemTime(new Date(2026, 10, 20, 23, 55));
+    await generateAndPreview();
+    jest.setSystemTime(new Date(2026, 10, 21, 0, 5));
+    const { AiPlanScreen } = await import("../AiPlanScreen");
+    await screen.rerender(<AiPlanScreen />);
+    await fireEvent.press(screen.getByText("다시 만들기"));
+    expect(mockGenerateMutate).toHaveBeenCalledTimes(2);
+    expect(mockGenerateMutate.mock.calls[1][0]).toEqual({ goal: "이사 준비", dueDate: null, today: "2026-11-21" });
+  });
+
   it("생성 실패 뒤 「계획 만들기」를 다시 누르면 mutate 2회", async () => {
     const { AiPlanScreen } = await import("../AiPlanScreen");
     await render(<AiPlanScreen />);
@@ -304,6 +332,27 @@ describe("AiPlanScreen", () => {
       expect(preventFlag).toBe(true);
       preventCb!({ data: { action } });
       expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it("저장 중 → true, 콜백이 불려도 Alert 없음", async () => {
+      await generateAndPreview();
+      const { AiPlanScreen } = await import("../AiPlanScreen");
+      mockCreateIsPending = true;
+      await screen.rerender(<AiPlanScreen />);
+      expect(preventFlag).toBe(true);
+      preventCb!({ data: { action } });
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it("저장 중에는 제스처·헤더 뒤로가기를 끄고, 끝나면 되돌린다", async () => {
+      const { AiPlanScreen } = await import("../AiPlanScreen");
+      const view = await render(<AiPlanScreen />);
+      mockCreateIsPending = true;
+      await view.rerender(<AiPlanScreen />);
+      expect(mockSetOptions).toHaveBeenLastCalledWith({ gestureEnabled: false, headerBackVisible: false });
+      mockCreateIsPending = false;
+      await view.rerender(<AiPlanScreen />);
+      expect(mockSetOptions).toHaveBeenLastCalledWith({ gestureEnabled: true, headerBackVisible: true });
     });
 
     it("미리보기 편집 전 → false, 편집 후 → true", async () => {

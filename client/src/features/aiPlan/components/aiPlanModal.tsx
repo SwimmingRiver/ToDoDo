@@ -95,7 +95,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
       setPendingConfirm("regenerate");
       return;
     }
-    runGenerate(lastInput);
+    runGenerate({ ...lastInput, today });
   };
 
   const handleSubmit = () => {
@@ -120,7 +120,7 @@ const AiPlanModal = ({ onClose }: { onClose: () => void }) => {
     const action = pendingConfirm;
     setPendingConfirm(null);
     if (action === "close") onClose();
-    if (action === "regenerate" && lastInput) runGenerate(lastInput);
+    if (action === "regenerate" && lastInput) runGenerate({ ...lastInput, today });
   };
 
   const renderBody = () => {

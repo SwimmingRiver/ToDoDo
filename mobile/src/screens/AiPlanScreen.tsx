@@ -37,6 +37,12 @@ export const AiPlanScreen = () => {
   // 클레임 전파 지연 등으로 서버가 403을 주면 UI 판정과 무관하게 잠금 안내로 전환한다.
   const [serverLocked, setServerLocked] = useState(false);
   // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
+  // 구독 후 돌아오면(isPremium false→true) 서버 잠금을 푼다. 이미 true였던 상태의 403(클레임 지연)은 유지한다.
+  const prevIsPremium = useRef(isPremium);
+  useEffect(() => {
+    if (!prevIsPremium.current && isPremium) setServerLocked(false);
+    prevIsPremium.current = isPremium;
+  }, [isPremium]);
   const generateInFlight = useRef(false);
   const saveInFlight = useRef(false);
   // 이탈 가드는 usePreventRemove로 건다. 그래야 native-stack이 iOS 스와이프·헤더 뒤로가기도 막는다.
@@ -45,9 +51,9 @@ export const AiPlanScreen = () => {
   const [saved, setSaved] = useState(false);
   const [discardAction, setDiscardAction] = useState<NavigationAction | null>(null);
   usePreventRemove(
-    generate.isPending || (draft.dirty && !saved && discardAction === null),
+    generate.isPending || createPlan.isPending || (draft.dirty && !saved && discardAction === null),
     ({ data }) => {
-      if (generate.isPending) return; // 생성 중에는 조용히 막는다.
+      if (generate.isPending || createPlan.isPending) return; // 생성·저장 중에는 조용히 막는다.
       Alert.alert("수정한 내용이 사라져요", "편집한 계획을 저장하지 않고 닫을까요?", [
         { text: "계속 편집", style: "cancel" },
         { text: "닫기", style: "destructive", onPress: () => setDiscardAction(data.action) },
@@ -66,10 +72,10 @@ export const AiPlanScreen = () => {
   // 이탈 자체는 usePreventRemove가 막는다(native preventNativeDismiss도 설정). 여기서는 생성 중
   // 제스처·헤더 뒤로가기 UI도 함께 꺼 두는 보조 장치다.
   useEffect(() => {
-    if (!generate.isPending) return;
+    if (!generate.isPending && !createPlan.isPending) return;
     navigation.setOptions({ gestureEnabled: false, headerBackVisible: false });
     return () => navigation.setOptions({ gestureEnabled: true, headerBackVisible: true });
-  }, [generate.isPending, navigation]);
+  }, [generate.isPending, createPlan.isPending, navigation]);
 
   const runGenerate = (input: GeneratePlanInput) => {
     if (generate.isPending || generateInFlight.current) return;
@@ -109,12 +115,12 @@ export const AiPlanScreen = () => {
         "다시 만들면 편집한 계획이 새 결과로 바뀌고 사용 횟수가 1회 차감돼요.",
         [
           { text: "계속 편집", style: "cancel" },
-          { text: "다시 만들기", onPress: () => runGenerate(lastInput) },
+          { text: "다시 만들기", onPress: () => runGenerate({ ...lastInput, today }) },
         ],
       );
       return;
     }
-    runGenerate(lastInput);
+    runGenerate({ ...lastInput, today });
   };
 
   const handleSubmit = () => {

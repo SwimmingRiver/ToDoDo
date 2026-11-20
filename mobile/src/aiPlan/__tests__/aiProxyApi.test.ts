@@ -12,6 +12,7 @@ describe("requestPlan", () => {
   beforeEach(() => {
     process.env.EXPO_PUBLIC_AI_PROXY_URL = "https://ai.example.com";
     mockAuth.currentUser = { getIdToken };
+    getIdToken.mockReset();
     getIdToken.mockResolvedValue("tok");
     jest.spyOn(console, "warn").mockImplementation(() => {});
   });
@@ -60,5 +61,44 @@ describe("requestPlan", () => {
       .mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: "PREMIUM_REQUIRED" }) } as Response);
     const { requestPlan } = await import("../aiProxyApi");
     await expect(requestPlan(input)).rejects.toMatchObject({ code: "PREMIUM_REQUIRED" });
+  });
+
+  // 실제 Response처럼 clone()으로 본문을 한 번 더 읽을 수 있게 한다.
+  const res403 = () => {
+    const res = { ok: false, status: 403, json: async () => ({ error: "PREMIUM_REQUIRED" }), clone: () => res } as unknown as Response;
+    return res;
+  };
+
+  it("403 PREMIUM_REQUIRED면 토큰을 강제 갱신해 한 번 재시도한다", async () => {
+    const result: GeneratePlanResult = { plan: { title: "t", dueDate: null, items: [] }, usage: { used: 1, limit: 20 } };
+    getIdToken.mockResolvedValueOnce("old").mockResolvedValueOnce("fresh");
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(res403())
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => result } as Response);
+    global.fetch = fetchMock;
+    const { requestPlan } = await import("../aiProxyApi");
+    await expect(requestPlan(input)).resolves.toEqual(result);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getIdToken).toHaveBeenNthCalledWith(2, true);
+    expect((fetchMock.mock.calls[1][1] as RequestInit).headers).toMatchObject({ Authorization: "Bearer fresh" });
+  });
+
+  it("403이 두 번이면 PREMIUM_REQUIRED로 거절하고 fetch는 정확히 2번", async () => {
+    const fetchMock = jest.fn<typeof fetch>().mockImplementation(async () => res403());
+    global.fetch = fetchMock;
+    const { requestPlan } = await import("../aiProxyApi");
+    await expect(requestPlan(input)).rejects.toMatchObject({ code: "PREMIUM_REQUIRED" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("429 DAILY_LIMIT은 재시도하지 않는다", async () => {
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockResolvedValue({ ok: false, status: 429, json: async () => ({ error: "DAILY_LIMIT" }) } as Response);
+    global.fetch = fetchMock;
+    const { requestPlan } = await import("../aiProxyApi");
+    await expect(requestPlan(input)).rejects.toMatchObject({ code: "DAILY_LIMIT" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
