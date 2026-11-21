@@ -118,6 +118,18 @@ describe("useConnectCalendar", () => {
     expect(mockSetDoc).not.toHaveBeenCalled();
   });
 
+  it("잠김(locked) 등 cancel/dismiss가 아닌 실패는 error", async () => {
+    mockOpen.mockResolvedValue({ type: "locked" } as never);
+    await expect(connectWith()).resolves.toBe("error");
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
+  it("복귀 URL의 쿼리가 깨져 있어도 throw하지 않고 error", async () => {
+    mockOpen.mockResolvedValue({ type: "success", url: "tododo://calendar?%E0%A4%A=1&calendar%ZZ=1" });
+    await expect(connectWith()).resolves.toBe("error");
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
   it("success + calendarCancelled=1이면 cancelled", async () => {
     mockOpen.mockResolvedValue({ type: "success", url: "tododo://calendar?calendarCancelled=1" });
     await expect(connectWith()).resolves.toBe("cancelled");

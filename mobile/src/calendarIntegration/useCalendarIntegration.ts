@@ -31,13 +31,15 @@ export const useCalendarIntegrationStatus = () => {
 
 export type ConnectCalendarResult = "connected" | "cancelled" | "error" | "saveFailed";
 
-/** 딥링크 쿼리를 직접 읽는다 — RN의 URL 폴리필은 searchParams가 미구현이다. */
+/** 딥링크 쿼리를 직접 읽는다 — RN의 URL 폴리필은 searchParams가 미구현이다.
+ *  찾는 키가 고정된 ASCII라 디코딩하지 않는다(깨진 % 시퀀스로 throw할 여지를 없앤다).
+ *  어떤 입력에도 throw하지 않고, 알아볼 수 없으면 빈 집합 → 호출부에서 "error". */
 const readCallbackParams = (url: string): Set<string> => {
   const query = url.split("?")[1]?.split("#")[0] ?? "";
   const flags = new Set<string>();
   for (const pair of query.split("&")) {
     const [key, value] = pair.split("=");
-    if (key && value === "1") flags.add(decodeURIComponent(key));
+    if (key && value === "1") flags.add(key);
   }
   return flags;
 };
@@ -57,7 +59,10 @@ export const useConnectCalendar = () => {
         console.warn("[calendar] 연결 시작 실패", error);
         return "error";
       }
-      if (result.type !== "success") return "cancelled";
+      // 사용자가 닫은 경우만 취소로 본다. Android의 locked/opened 등 다른 비성공 결과는
+      // 실패를 숨기지 않도록 error로 돌린다.
+      if (result.type === "cancel" || result.type === "dismiss") return "cancelled";
+      if (result.type !== "success") return "error";
       const flags = readCallbackParams(result.url);
       if (flags.has("calendarCancelled")) return "cancelled";
       if (!flags.has("calendarConnected")) return "error";
