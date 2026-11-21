@@ -167,5 +167,25 @@ describe("handleOAuthCallback", () => {
       );
       expect(response.headers.get("Location")).toBe("https://app.example.com/calendar?calendarError=1");
     });
+
+    it("access_denied가 아닌 error(server_error) → calendarError 딥링크", async () => {
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue(null);
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?error=server_error&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarError=1`);
+    });
+
+    it("consumeOAuthState(KV)가 throw해도 앱이면 calendarError 딥링크", async () => {
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockRejectedValue(new Error("KV down"));
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?code=c&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarError=1`);
+    });
   });
 });
