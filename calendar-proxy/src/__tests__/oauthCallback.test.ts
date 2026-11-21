@@ -106,4 +106,86 @@ describe("handleOAuthCallback", () => {
     const response = await handleOAuthCallback(request, makeEnv());
     expect(response.headers.get("Location")).toBe("http://localhost:5173/calendar?calendarError=1");
   });
+
+  describe("앱(tododo://calendar) 복귀", () => {
+    const APP = "tododo://calendar";
+
+    it("target:app 레코드 + 교환 성공 → calendarConnected 딥링크", async () => {
+      const { exchangeCodeForTokens } = await import("../googleOAuth");
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue({ uid: "user-123", target: "app" });
+      vi.mocked(exchangeCodeForTokens).mockResolvedValue({ access_token: "at", refresh_token: "rt", expires_in: 3600 });
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?code=c&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarConnected=1`);
+    });
+
+    it("target:app 레코드 + 교환 실패 → calendarError 딥링크", async () => {
+      const { exchangeCodeForTokens } = await import("../googleOAuth");
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue({ uid: "user-123", target: "app" });
+      vi.mocked(exchangeCodeForTokens).mockRejectedValue(new Error("fail"));
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?code=c&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarError=1`);
+    });
+
+    it("error=access_denied(code 없음) → calendarCancelled 딥링크, 교환 안 함, state는 소비 시도", async () => {
+      const { exchangeCodeForTokens } = await import("../googleOAuth");
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue(null);
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?error=access_denied&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarCancelled=1`);
+      expect(vi.mocked(exchangeCodeForTokens)).not.toHaveBeenCalled();
+      expect(vi.mocked(consumeOAuthState)).toHaveBeenCalledWith(expect.anything(), "app.xxx");
+    });
+
+    it("state 만료(consume null) → calendarError 딥링크", async () => {
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue(null);
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?code=c&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarError=1`);
+    });
+
+    it("접두사 없는 state + error → 기존처럼 웹 에러 페이지", async () => {
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue(null);
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?error=access_denied&state=0000-uuid"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe("https://app.example.com/calendar?calendarError=1");
+    });
+
+    it("access_denied가 아닌 error(server_error) → calendarError 딥링크", async () => {
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockResolvedValue(null);
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?error=server_error&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarError=1`);
+    });
+
+    it("consumeOAuthState(KV)가 throw해도 앱이면 calendarError 딥링크", async () => {
+      const { consumeOAuthState } = await import("../tokenStore");
+      vi.mocked(consumeOAuthState).mockRejectedValue(new Error("KV down"));
+      const response = await handleOAuthCallback(
+        new Request("https://proxy.example.com/oauth/callback?code=c&state=app.xxx"),
+        makeEnv(),
+      );
+      expect(response.headers.get("Location")).toBe(`${APP}?calendarError=1`);
+    });
+  });
 });
