@@ -8,6 +8,7 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import type { Todo } from "../types/todo";
+import { mapDocToTodo } from "../api/todoDocs";
 import { getDefaultHorizonEnd } from "./recurrence";
 import { withRecurringSeriesLock } from "./seriesLock";
 import {
@@ -34,9 +35,6 @@ export type StartupMaintenanceOptions = {
   /** 스윕이 실패해 삼켜질 때 호출된다. 로깅·Sentry는 호출부(웹/앱)가 주입한다. */
   onSweepError?: (error: unknown, sweep: SweepName) => void;
 };
-
-const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
-  ({ id, ...data }) as Todo;
 
 /** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
  *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */

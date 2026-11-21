@@ -9,12 +9,10 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import type { Todo, TodoFields } from "../types/todo";
+import { mapDocToTodo } from "./todoDocs";
 
 const normalizeOrder = (order: number | undefined): number =>
   typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
-
-const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
-  ({ id, ...data }) as Todo;
 
 export const getTodos = async (db: Firestore, userId: string): Promise<Todo[]> => {
   const q = query(
