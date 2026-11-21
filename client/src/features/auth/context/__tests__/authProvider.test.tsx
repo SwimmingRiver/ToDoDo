@@ -87,6 +87,25 @@ describe('AuthProvider', () => {
 
     expect(Sentry.setUser).toHaveBeenCalledWith(null)
   })
+
+  it('인증 상태를 다음 방문의 청크 선로딩 힌트로 남긴다(로그인 → 저장, 로그아웃 → 삭제)', async () => {
+    localStorage.clear()
+    render(
+      <AuthProvider>
+        <Consumer />
+      </AuthProvider>,
+    )
+
+    act(() => {
+      authStateCallback?.(mockUser)
+    })
+    await waitFor(() => expect(localStorage.getItem('tododo:signedInHint')).toBe('1'))
+
+    act(() => {
+      authStateCallback?.(null)
+    })
+    await waitFor(() => expect(localStorage.getItem('tododo:signedInHint')).toBeNull())
+  })
 })
 
 const logoutViaProvider = async () => {
