@@ -1,6 +1,6 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { Todo } from "@tododo/core";
-import { buildCalendarMarkedDates } from "../calendarMarkers";
+import { addGoogleEventDots, buildCalendarMarkedDates, type CalendarMarkedDates } from "../calendarMarkers";
 import { statusColors } from "../../../theme/statusColors";
 import { colors } from "../../../theme/colors";
 
@@ -104,5 +104,44 @@ describe("buildCalendarMarkedDates", () => {
   it("startAt/dueAt이 모두 없는 항목은 무시한다", () => {
     const todos = [makeTodo({ startAt: null, dueAt: null, status: "todo" })];
     expect(buildCalendarMarkedDates(todos)).toEqual({});
+  });
+});
+
+describe("addGoogleEventDots", () => {
+  const googleDot = {
+    key: "google",
+    color: colors.text.tertiary,
+    selectedDotColor: colors.background.primary,
+  };
+
+  it("같은 날짜 키가 여러 번 와도(이벤트 3개) google 점은 하나만 붙는다", () => {
+    const marked = addGoogleEventDots({}, ["2026-06-20", "2026-06-20", "2026-06-20"]);
+    expect(marked["2026-06-20"].dots).toEqual([googleDot]);
+  });
+
+  it("overdue 단일 점 정책과 무관하게 overdue 날짜에도 google 점을 덧붙인다", () => {
+    const base: CalendarMarkedDates = {
+      "2026-06-10": {
+        dots: [{ key: "overdue", color: colors.danger.main, selectedDotColor: colors.background.primary }],
+      },
+    };
+    const marked = addGoogleEventDots(base, ["2026-06-10"]);
+    expect(marked["2026-06-10"].dots.map((d) => d.key)).toEqual(["overdue", "google"]);
+  });
+
+  it("원본 markedDates를 바꾸지 않는다", () => {
+    const base: CalendarMarkedDates = {
+      "2026-06-10": { dots: [{ key: "todo", color: statusColors.todo.main }] },
+    };
+    const snapshot = JSON.parse(JSON.stringify(base));
+    const marked = addGoogleEventDots(base, ["2026-06-10", "2026-06-11"]);
+    expect(base).toEqual(snapshot);
+    expect(marked).not.toBe(base);
+    expect(marked["2026-06-11"].dots).toEqual([googleDot]);
+  });
+
+  it("이벤트 날짜가 없으면 같은 객체를 그대로 돌려준다", () => {
+    const base: CalendarMarkedDates = {};
+    expect(addGoogleEventDots(base, [])).toBe(base);
   });
 });

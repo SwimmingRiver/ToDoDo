@@ -6,15 +6,22 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Calendar, LocaleConfig, type CalendarProps, type DateData } from "react-native-calendars";
 import { AlertCircle } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
+import {
+  filterUnsyncedEvents,
+  getGoogleEventDateKeys,
+  isDateInGoogleEventRange,
+} from "@tododo/core/dist/calendarSync/index.js";
 import type { CalendarStackParamList } from "../navigation/types";
 import { useCalendarTodos } from "../hooks/useCalendarTodos";
+import { useGoogleCalendarEvents } from "../calendarIntegration/useGoogleCalendarEvents";
+import { CalendarConnectionBar } from "../calendarIntegration/components/CalendarConnectionBar";
 import { CalendarDayCell } from "../shared/ui/calendarDayCell/CalendarDayCell";
 import { DateTodosSheet } from "../shared/ui/dateTodosSheet/DateTodosSheet";
 import { EmptyState } from "../shared/ui/emptyState/EmptyState";
 import { ListSkeleton } from "../shared/ui/skeleton/ListSkeleton";
 import { formatTodayLabel } from "../shared/utils/formatToday";
-import { parseLocalDateOnly } from "../shared/utils/dateRange";
-import type { CalendarMarkedDates } from "../shared/utils/calendarMarkers";
+import { parseLocalDateOnly, toDateKey } from "../shared/utils/dateRange";
+import { addGoogleEventDots, type CalendarMarkedDates } from "../shared/utils/calendarMarkers";
 import { colors } from "../theme/colors";
 
 // react-native-calendars는 LocaleConfig 등록이 없으면 XDate의 영어 로케일로
@@ -57,6 +64,29 @@ function withSelection(markedDates: CalendarMarkedDates, selectedDate: string | 
   return { ...markedDates, [selectedDate]: { ...existing, selected: true } };
 }
 
+interface VisibleMonth {
+  year: number;
+  /** 1~12 (react-native-calendars DateData.month와 같은 규칙). */
+  month: number;
+}
+
+const currentMonth = (): VisibleMonth => {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+};
+
+/** 보이는 달의 1일 로컬 0시 ~ 다음 달 1일 로컬 0시(end 배타). 앞뒤 달 회색 날짜는 범위 밖이라
+ *  구글 점이 찍히지 않는다. */
+const toMonthRange = ({ year, month }: VisibleMonth) => {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  return {
+    range: { start: start.toISOString(), end: end.toISOString() },
+    startKey: toDateKey(start),
+    endKeyExclusive: toDateKey(end),
+  };
+};
+
 export const CalendarScreen = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -64,11 +94,27 @@ export const CalendarScreen = () => {
   // 안쪽 컨테이너에 고정 높이로 넘긴다.
   const [calendarHeight, setCalendarHeight] = useState<number | null>(null);
   const navigation = useNavigation<NativeStackNavigationProp<CalendarStackParamList>>();
-  const { markedDates, isLoading, isError, getTodosForDate } = useCalendarTodos();
-  const markedDatesWithSelection = useMemo(
-    () => withSelection(markedDates, selectedDate),
-    [markedDates, selectedDate],
+  const { todos, markedDates, isLoading, isError, getTodosForDate } = useCalendarTodos();
+  const [visibleMonth, setVisibleMonth] = useState<VisibleMonth>(currentMonth);
+  const monthRange = useMemo(() => toMonthRange(visibleMonth), [visibleMonth]);
+  // 조회 실패는 화면 오류로 만들지 않는다 — data가 없으면 점·줄만 빠진다.
+  const { data: googleEvents } = useGoogleCalendarEvents(monthRange.range);
+  // ToDoDo가 만든(googleEventId로 링크된) 이벤트는 같은 할 일이 두 번 보이지 않게 뺀다.
+  const overlayEvents = useMemo(() => filterUnsyncedEvents(googleEvents ?? [], todos), [googleEvents, todos]);
+  const markedDatesWithSelection = useMemo(() => {
+    const eventDateKeys = overlayEvents.flatMap((event) =>
+      getGoogleEventDateKeys(event, monthRange.startKey, monthRange.endKeyExclusive),
+    );
+    return withSelection(addGoogleEventDots(markedDates, eventDateKeys), selectedDate);
+  }, [markedDates, overlayEvents, monthRange, selectedDate]);
+  const selectedDateGoogleEvents = useMemo(
+    () => (selectedDate ? overlayEvents.filter((event) => isDateInGoogleEventRange(selectedDate, event)) : []),
+    [overlayEvents, selectedDate],
   );
+
+  const handleMonthChange = (month: DateData) => {
+    setVisibleMonth({ year: month.year, month: month.month });
+  };
 
   const handleDayPress = (day: DateData) => {
     // day.dateString은 react-native-calendars가 이미 로컬 캘린더 날짜 기준
@@ -115,11 +161,14 @@ export const CalendarScreen = () => {
 
   return (
     <SafeAreaView style={styles.screen} edges={[]}>
+      {/* calendarArea 밖에 둬야 onLayout이 연결 줄을 뺀 남은 높이를 잰다. */}
+      <CalendarConnectionBar todos={todos} />
       <View style={styles.calendarArea} onLayout={handleLayout}>
         <Calendar
           markingType="multi-dot"
           markedDates={markedDatesWithSelection}
           onDayPress={handleDayPress}
+          onMonthChange={handleMonthChange}
           dayComponent={CalendarDayCell}
           theme={CALENDAR_THEME}
           style={calendarHeight != null ? { height: calendarHeight } : undefined}
@@ -129,7 +178,9 @@ export const CalendarScreen = () => {
         isOpen={isSheetOpen}
         onClose={() => setIsSheetOpen(false)}
         dateLabel={selectedDate ? formatTodayLabel(selectedDate) : ""}
+        dateKey={selectedDate}
         todos={selectedDate ? getTodosForDate(selectedDate) : []}
+        googleEvents={selectedDateGoogleEvents}
         onPressTodo={handlePressTodo}
         onAddTodo={handleAddTodo}
       />

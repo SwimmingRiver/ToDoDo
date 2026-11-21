@@ -23,12 +23,22 @@ import { Calendar, LocaleConfig } from "react-native-calendars";
 // 대상에 영향을 주지 않는다.
 jest.mock("../../hooks/useCalendarTodos", () => ({
   useCalendarTodos: () => ({
+    todos: [],
     markedDates: {},
     isLoading: false,
     isError: false,
     getTodosForDate: () => [],
     toggleDone: jest.fn(),
   }),
+}));
+
+// 구글 캘린더 오버레이 모듈도 같은 이유로 스텁한다 — 실제 구현은 firebase(ESM)까지
+// 이어지고, 이 파일의 검증 대상(LocaleConfig 등록)과 무관하다.
+jest.mock("../../calendarIntegration/useGoogleCalendarEvents", () => ({
+  useGoogleCalendarEvents: () => ({ data: undefined }),
+}));
+jest.mock("../../calendarIntegration/components/CalendarConnectionBar", () => ({
+  CalendarConnectionBar: () => null,
 }));
 
 describe("react-native-calendars 로딩/로케일 스모크 테스트", () => {
