@@ -23,3 +23,4 @@ export {
   CALENDAR_REDIRECT_URL,
 } from "./useCalendarIntegration";
 export type { ConnectCalendarResult, DisconnectTodoRef } from "./useCalendarIntegration";
+export { useSyncTodosToCalendar } from "./useSyncTodosToCalendar";
