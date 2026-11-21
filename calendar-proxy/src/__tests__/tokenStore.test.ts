@@ -62,13 +62,13 @@ describe("createOAuthState / consumeOAuthState", () => {
   });
 
   it("발급한 state로 원래 uid·returnOrigin을 조회할 수 있다", async () => {
-    const state = await createOAuthState(kv as never, "user-1", "https://app.example.com");
+    const state = await createOAuthState(kv as never, "user-1", { kind: "web", returnOrigin: "https://app.example.com" });
     const record = await consumeOAuthState(kv as never, state);
     expect(record).toEqual({ uid: "user-1", returnOrigin: "https://app.example.com" });
   });
 
   it("한 번 소비한 state는 다시 쓸 수 없다(1회용)", async () => {
-    const state = await createOAuthState(kv as never, "user-1", "https://app.example.com");
+    const state = await createOAuthState(kv as never, "user-1", { kind: "web", returnOrigin: "https://app.example.com" });
     await consumeOAuthState(kv as never, state);
     const second = await consumeOAuthState(kv as never, state);
     expect(second).toBeNull();
@@ -80,8 +80,20 @@ describe("createOAuthState / consumeOAuthState", () => {
   });
 
   it("호출마다 서로 다른 state를 발급한다", async () => {
-    const state1 = await createOAuthState(kv as never, "user-1", "https://app.example.com");
-    const state2 = await createOAuthState(kv as never, "user-1", "https://app.example.com");
+    const state1 = await createOAuthState(kv as never, "user-1", { kind: "web", returnOrigin: "https://app.example.com" });
+    const state2 = await createOAuthState(kv as never, "user-1", { kind: "web", returnOrigin: "https://app.example.com" });
     expect(state1).not.toBe(state2);
+  });
+
+  it("app 대상 state는 app. 접두사가 붙고 레코드에 target:app만 저장된다", async () => {
+    const state = await createOAuthState(kv as never, "user-1", { kind: "app" });
+    expect(state).toMatch(/^app\.[0-9a-f-]{36}$/);
+    const record = await consumeOAuthState(kv as never, state);
+    expect(record).toEqual({ uid: "user-1", target: "app" });
+  });
+
+  it("web 대상 state에는 접두사가 없다", async () => {
+    const state = await createOAuthState(kv as never, "user-1", { kind: "web", returnOrigin: "https://app.example.com" });
+    expect(state.startsWith("app.")).toBe(false);
   });
 });

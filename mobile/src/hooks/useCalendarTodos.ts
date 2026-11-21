@@ -5,6 +5,8 @@ import { isDateInTodoRange } from "../shared/utils/dateRange";
 import { buildCalendarMarkedDates, type CalendarMarkedDates } from "../shared/utils/calendarMarkers";
 
 export interface UseCalendarTodosResult {
+  /** 구글 오버레이에서 이미 동기화된 이벤트를 빼거나, 연동 해제 대상을 고를 때 쓴다. */
+  todos: Todo[];
   markedDates: CalendarMarkedDates;
   isLoading: boolean;
   isError: boolean;
@@ -17,14 +19,15 @@ export interface UseCalendarTodosResult {
  * 리스너 도입 안 함"과 동일 정책).
  */
 export const useCalendarTodos = (): UseCalendarTodosResult => {
-  const { data: todos, isLoading, isError } = useTodos();
+  const { data, isLoading, isError } = useTodos();
+  const todos = useMemo(() => data ?? [], [data]);
 
-  const markedDates = useMemo(() => buildCalendarMarkedDates(todos ?? []), [todos]);
+  const markedDates = useMemo(() => buildCalendarMarkedDates(todos), [todos]);
 
   const getTodosForDate = useCallback(
-    (dateKey: string) => (todos ?? []).filter((todo) => isDateInTodoRange(dateKey, todo)),
+    (dateKey: string) => todos.filter((todo) => isDateInTodoRange(dateKey, todo)),
     [todos],
   );
 
-  return { markedDates, isLoading, isError, getTodosForDate };
+  return { todos, markedDates, isLoading, isError, getTodosForDate };
 };

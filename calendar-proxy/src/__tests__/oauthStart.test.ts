@@ -36,7 +36,7 @@ describe("handleOAuthStart", () => {
     expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(
       expect.anything(),
       "user-123",
-      "https://app.example.com",
+      { kind: "web", returnOrigin: "https://app.example.com" },
     );
     expect(body.authUrl).toContain("state=random-state-token");
     expect(body.authUrl).not.toContain("state=user-123");
@@ -53,7 +53,7 @@ describe("handleOAuthStart", () => {
     expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(
       expect.anything(),
       "user-123",
-      "http://localhost:5173",
+      { kind: "web", returnOrigin: "http://localhost:5173" },
     );
   });
 
@@ -66,8 +66,31 @@ describe("handleOAuthStart", () => {
     expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(
       expect.anything(),
       "user-123",
-      "https://app.example.com",
+      { kind: "web", returnOrigin: "https://app.example.com" },
     );
+  });
+
+  it("?client=app이면 Origin 없이도 app 대상 state를 발급하고 authUrl의 state가 app.으로 시작한다", async () => {
+    const { createOAuthState } = await import("../tokenStore");
+    vi.mocked(createOAuthState).mockResolvedValueOnce("app.random-uuid");
+    const request = new Request("https://proxy.example.com/oauth/start?client=app", {
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const response = await handleOAuthStart(request, makeEnv());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { authUrl: string };
+    expect(vi.mocked(createOAuthState)).toHaveBeenCalledWith(expect.anything(), "user-123", { kind: "app" });
+    expect(new URL(body.authUrl).searchParams.get("state")).toMatch(/^app\./);
+  });
+
+  it("client=app이어도 프리미엄이 아니면 403", async () => {
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValueOnce({ uid: "user-123", premium: false, premiumUntil: null });
+    const request = new Request("https://proxy.example.com/oauth/start?client=app", {
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const response = await handleOAuthStart(request, makeEnv());
+    expect(response.status).toBe(403);
   });
 
   it("premium이 아니면 403 PREMIUM_REQUIRED를 반환한다", async () => {

@@ -1,3 +1,15 @@
+import {
+  CalendarRevokedError,
+  CalendarNotConnectedError,
+  parseOAuthStartResponse,
+  parseSyncResponse,
+  parseEventsResponse,
+  parseDisconnectResponse,
+  type SyncTodoPayload,
+  type SyncTodoResult,
+  type GoogleCalendarEvent,
+  type DisconnectResult,
+} from "@tododo/core/dist/calendarSync/index.js";
 import { authorizedFetch as authorizedFetchTo } from "@/shared/lib/authorizedFetch";
 
 const CALENDAR_PROXY_URL = import.meta.env.VITE_CALENDAR_PROXY_URL as string;
@@ -5,81 +17,22 @@ const CALENDAR_PROXY_URL = import.meta.env.VITE_CALENDAR_PROXY_URL as string;
 const authorizedFetch = (path: string, init: RequestInit = {}): Promise<Response> =>
   authorizedFetchTo(CALENDAR_PROXY_URL, path, init);
 
-export const getOAuthStartUrl = async (): Promise<string> => {
-  const res = await authorizedFetch("/oauth/start");
-  if (!res.ok) throw new Error("OAuth 시작 실패");
-  const data = (await res.json()) as { authUrl: string };
-  return data.authUrl;
-};
+export { CalendarRevokedError, CalendarNotConnectedError };
+export type { SyncTodoPayload, SyncTodoResult, GoogleCalendarEvent, DisconnectResult };
 
-export interface SyncTodoPayload {
-  id: string;
-  title: string;
-  /** "YYYY-MM-DD" 로컬 캘린더 날짜 키. ISO 타임스탬프가 아니다 — 호출부(useSyncTodosToCalendar)가
-   *  toDateKeyFromISO로 변환해서 채운다. */
-  dueAt: string;
-  googleEventId: string | null;
-  action: "upsert" | "delete";
-}
-
-export interface SyncTodoResult {
-  id: string;
-  googleEventId: string | null;
-  /** 이 항목이 실패했을 때만 채워진다. 있으면 googleEventId는 신뢰하지 말고,
-   *  이 항목은 다음 동기화 실행에서 다시 시도되도록 둔다(스냅샷 갱신 안 함). */
-  error?: string;
-}
-
-/** Worker가 리프레시 토큰 철회(invalid_grant)를 감지하면 401 `{error:"revoked"}`를
- *  반환한다(Task 6). 일반 401(잘못된 ID Token)과 구분해야 호출부가 "다시
- *  연결해주세요" 상태로 전환할지 판단할 수 있으므로, 이 경우만 별도 에러
- *  타입으로 구분해서 던진다. */
-export class CalendarRevokedError extends Error {
-  constructor() {
-    super("구글 캘린더 연동이 해제되었습니다");
-    this.name = "CalendarRevokedError";
-  }
-}
-
-/** Worker는 토큰 레코드가 없으면(연동 해제 뒤) 409 {error:"not_connected"}를 준다.
- *  다른 탭에서 해제한 뒤 이 탭의 연동 캐시가 stale할 때 만나는 정상 경로라
- *  Sentry 오탐이 되지 않도록 별도 타입으로 구분한다. */
-export class CalendarNotConnectedError extends Error {
-  constructor() {
-    super("구글 캘린더가 연동되어 있지 않습니다");
-    this.name = "CalendarNotConnectedError";
-  }
-}
+export const getOAuthStartUrl = async (): Promise<string> =>
+  parseOAuthStartResponse(await authorizedFetch("/oauth/start"));
 
 export const syncTodosToCalendar = async (
   todos: SyncTodoPayload[],
-): Promise<SyncTodoResult[]> => {
-  const res = await authorizedFetch("/sync-todos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ todos }),
-  });
-  if (res.status === 401) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (body.error === "revoked") throw new CalendarRevokedError();
-    throw new Error(`동기화 실패: ${res.status}`);
-  }
-  if (res.status === 409) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (body.error === "not_connected") throw new CalendarNotConnectedError();
-    throw new Error(`동기화 실패: ${res.status}`);
-  }
-  if (!res.ok) throw new Error(`동기화 실패: ${res.status}`);
-  const data = (await res.json()) as { results: SyncTodoResult[] };
-  return data.results;
-};
-
-export interface GoogleCalendarEvent {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-}
+): Promise<SyncTodoResult[]> =>
+  parseSyncResponse(
+    await authorizedFetch("/sync-todos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ todos }),
+    }),
+  );
 
 export interface GoogleCalendarEventsRange {
   /** ISO 타임스탬프. 구글 API와 같이 timeMax는 배타적(exclusive)이다. */
@@ -91,32 +44,14 @@ export const getGoogleCalendarEvents = async (
   range: GoogleCalendarEventsRange,
 ): Promise<GoogleCalendarEvent[]> => {
   const params = new URLSearchParams({ timeMin: range.timeMin, timeMax: range.timeMax });
-  const res = await authorizedFetch(`/events?${params.toString()}`);
-  if (res.status === 401) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (body.error === "revoked") throw new CalendarRevokedError();
-    throw new Error("이벤트 조회 실패: 401");
-  }
-  if (!res.ok) throw new Error("이벤트 조회 실패");
-  const data = (await res.json()) as { events: GoogleCalendarEvent[] };
-  return data.events;
+  return parseEventsResponse(await authorizedFetch(`/events?${params.toString()}`));
 };
 
-export interface DisconnectResult {
-  /** 구글에서 실제로 삭제(또는 이미 없었음) 확인된 이벤트 id만 담긴다 — 호출부는
-   *  이 목록에 있는 것만 Firestore의 googleEventId를 지워야 한다. 실패한 항목의
-   *  id까지 지우면, 구글에 여전히 남아있는 이벤트를 다음부터는 추적할 방법이
-   *  없어진다. */
-  deletedGoogleEventIds: string[];
-}
-
-export const disconnectCalendar = async (googleEventIds: string[]): Promise<DisconnectResult> => {
-  const res = await authorizedFetch("/disconnect", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ googleEventIds }),
-  });
-  if (!res.ok) throw new Error("연동 해제 실패");
-  const data = (await res.json().catch(() => ({}))) as { deletedGoogleEventIds?: string[] };
-  return { deletedGoogleEventIds: data.deletedGoogleEventIds ?? [] };
-};
+export const disconnectCalendar = async (googleEventIds: string[]): Promise<DisconnectResult> =>
+  parseDisconnectResponse(
+    await authorizedFetch("/disconnect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ googleEventIds }),
+    }),
+  );

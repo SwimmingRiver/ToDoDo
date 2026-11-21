@@ -5,19 +5,15 @@ import { doc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/shared/lib/firestore";
 import { auth } from "@/shared/lib/firebase";
 import { useGetTodos } from "@/features/todo";
-import type { Todo } from "@/features/todo";
-import { toDateKeyFromISO } from "@/shared/utils/date";
+import { planCalendarSync, applySyncResults } from "@tododo/core/dist/calendarSync/index.js";
 import {
   syncTodosToCalendar,
   CalendarRevokedError,
   CalendarNotConnectedError,
-  type SyncTodoPayload,
 } from "../api";
 import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
 import { markCalendarRevoked } from "./markCalendarRevoked";
 import { loadSnapshot, saveSnapshot, clearSnapshot, type SyncSnapshot } from "./syncSnapshot";
-
-const isSyncEligible = (todo: Todo): boolean => !!todo.dueAt && !todo.archived;
 
 /** Worker가 409 not_connected를 줬을 때 연동 상태를 다시 읽고, 그래도 Firestore가
  *  connected:true라면(해제가 Worker 단계 뒤 Firestore 단계에서 실패한 경우) Worker를
@@ -81,39 +77,14 @@ export const useSyncTodosToCalendar = (): void => {
     }
 
     const snapshot = snapshotRef.current;
-    const eligible = todos.filter(isSyncEligible);
-    const eligibleById = new Map(eligible.map((t) => [t.id, t]));
-    const eligibleIds = new Set(eligible.map((t) => t.id));
-
     // Firestore에 googleEventId가 없으면 스냅샷이 뭐라 하든 미동기화 상태다 —
     // 다른 기기에서 연동을 해제했거나 localStorage가 어긋난 경우에도 앱 진입
-    // 시 스스로 복구되게 한다(스냅샷이 stale한 id를 주면 Worker가 PATCH 404 →
-    // 결정론적 id로 재생성 폴백해 수렴한다).
-    const upserts: SyncTodoPayload[] = eligible
-      .filter((t) => !t.googleEventId || snapshot.get(t.id)?.updatedAt !== t.updatedAt)
-      .map((t) => ({
-        id: t.id,
-        title: t.title,
-        // Worker는 UTC로만 동작해 로컬 캘린더 날짜를 모른다 — 여기서 반드시
-        // 로컬 타임존 기준으로 변환해서 보낸다 (dueAt을 그대로 슬라이싱 금지).
-        dueAt: toDateKeyFromISO(t.dueAt as string),
-        // Firestore의 id만 믿고 스냅샷 id로는 폴백하지 않는다 — 연동 해제로 지워진
-        // 이벤트는 404가 아니라 tombstone(200 + cancelled)이라, 스냅샷의 옛 id로
-        // PATCH하면 성공처럼 보이면서 캘린더엔 영영 안 나타난다. null이면 Worker가
-        // 결정론적 id로 POST→409→되살리기 경로를 타 같은 이벤트로 수렴한다.
-        googleEventId: t.googleEventId ?? null,
-        action: "upsert" as const,
-      }));
-
-    const deletes: SyncTodoPayload[] = Array.from(snapshot.entries())
-      .filter(([id, entry]) => !eligibleIds.has(id) && !!entry.googleEventId)
-      .map(([id, entry]) => ({
-        id,
-        title: "",
-        dueAt: "",
-        googleEventId: entry.googleEventId,
-        action: "delete" as const,
-      }));
+    // 시 스스로 복구되게 한다. 스냅샷의 옛 id로는 폴백하지 않고 Firestore의 id만
+    // 쓴다: 연동 해제로 지워진 이벤트는 404가 아니라 tombstone(구글이
+    // status:"cancelled"로 돌려줌)이라 옛 id로 PATCH하면 성공처럼 보이면서 캘린더엔
+    // 안 나타난다. id가 null이면 Worker가 결정론적 id로 POST→409→status:"confirmed"로
+    // 되살려 같은 이벤트로 수렴한다.
+    const { upserts, deletes, eligibleById } = planCalendarSync(todos, snapshot);
 
     const batch = [...upserts, ...deletes];
     if (batch.length === 0) return;
@@ -129,35 +100,23 @@ export const useSyncTodosToCalendar = (): void => {
         // 반영하지 않으면 다음 실행이 googleEventId를 몰라 중복 이벤트를
         // 만든다.
         const firestoreBatch = writeBatch(db);
-        let hasWrites = false;
 
-        results.forEach(({ id, googleEventId, error }) => {
-          if (error) {
-            // 스냅샷을 갱신하지 않는다 — 다음 실행(todos 변경 또는 다음 앱 진입)에서
-            // updatedAt이 그대로 다르게 남아 이 항목이 다시 동기화 대상에 잡힌다.
-            console.error(`캘린더 동기화 실패 (todo ${id}):`, error);
-            return;
-          }
-          const todo = eligibleById.get(id);
-          if (todo) {
-            snapshot.set(id, { updatedAt: todo.updatedAt, googleEventId });
-            if (todo.googleEventId !== googleEventId) {
-              firestoreBatch.update(doc(db, "todos", id), { googleEventId });
-              hasWrites = true;
-            }
-          } else {
-            // 삭제 성공. 스냅샷에서는 지우되, Todo 문서 자체가 아직 존재한다면
-            // (archived·dueAt 제거로 대상에서만 빠진 경우) googleEventId도
-            // 같이 지운다 — 안 지우면 나중에 다시 대상이 됐을 때 이미 삭제된
-            // 이벤트 id로 PATCH를 시도해 404로 계속 실패하고, 실패한 항목은
-            // 스냅샷이 갱신되지 않으니 영원히 같은 오류가 반복된다.
-            snapshot.delete(id);
-            if (todos.some((t) => t.id === id)) {
-              firestoreBatch.update(doc(db, "todos", id), { googleEventId: null });
-              hasWrites = true;
-            }
-          }
+        results.forEach(({ id, error }) => {
+          // 실패 항목은 스냅샷을 갱신하지 않아 다음 실행에서 다시 시도된다.
+          if (error) console.error(`캘린더 동기화 실패 (todo ${id}):`, error);
         });
+        // existingTodoIds는 비대상(archived·dueAt 없음) 포함 전체 id여야 한다 —
+        // 삭제 성공 시 아직 존재하는 Todo의 googleEventId를 null로 정리하기 위함.
+        const { firestoreUpdates } = applySyncResults(
+          results,
+          eligibleById,
+          new Set(todos.map((t) => t.id)),
+          snapshot,
+        );
+        firestoreUpdates.forEach(({ todoId, googleEventId }) => {
+          firestoreBatch.update(doc(db, "todos", todoId), { googleEventId });
+        });
+        const hasWrites = firestoreUpdates.length > 0;
 
         // 동기화 도중 연동이 해제돼 snapshotRef가 교체됐다면, 이 클로저의 옛
         // 스냅샷을 되돌려 쓰지 않는다 — 되돌려 쓰면 해제 시점의 clear가 무효가

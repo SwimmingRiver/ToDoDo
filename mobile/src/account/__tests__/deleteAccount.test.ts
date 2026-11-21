@@ -14,6 +14,17 @@ jest.mock("firebase/firestore", () => ({
   getDocs: () => mockGetDocs(),
 }));
 
+const mockLoadSnapshot = jest.fn<(uid: string) => Promise<Map<string, { title: string; dueAt: string; googleEventId: string }>>>();
+const mockClearSnapshot = jest.fn<(uid: string) => Promise<void>>();
+jest.mock("../../calendarIntegration/snapshotStorage", () => {
+  const core = jest.requireActual("@tododo/core/dist/calendarSync/index.js") as Record<string, unknown>;
+  return {
+    loadSnapshot: (uid: string) => mockLoadSnapshot(uid),
+    clearSnapshot: (uid: string) => mockClearSnapshot(uid),
+    findOrphanGoogleEventIds: core.findOrphanGoogleEventIds,
+  };
+});
+
 const ENV_KEYS = ["EXPO_PUBLIC_CALENDAR_PROXY_URL", "EXPO_PUBLIC_REMINDER_PROXY_URL", "EXPO_PUBLIC_BILLING_PROXY_URL"] as const;
 
 const fetchMock = jest.fn<typeof fetch>();
@@ -25,6 +36,8 @@ describe("deleteAccount", () => {
     process.env.EXPO_PUBLIC_BILLING_PROXY_URL = "https://bill.example";
     mockGetIdToken.mockResolvedValue("id-token");
     mockGetDocs.mockResolvedValue({ docs: [{ data: () => ({ googleEventId: "ev_1" }) }, { data: () => ({ googleEventId: null }) }] });
+    mockLoadSnapshot.mockReset().mockResolvedValue(new Map());
+    mockClearSnapshot.mockReset().mockResolvedValue(undefined);
     fetchMock.mockReset().mockImplementation(async () => new Response(null, { status: 204 }));
     global.fetch = fetchMock;
   });
@@ -47,6 +60,32 @@ describe("deleteAccount", () => {
     for (const [, init] of fetchMock.mock.calls) {
       expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer id-token");
     }
+  });
+
+  it("앱 스냅샷에만 남은 고아 이벤트 id도 함께 보내고(중복 없이), 성공하면 스냅샷을 지운다", async () => {
+    mockLoadSnapshot.mockResolvedValue(
+      new Map([
+        ["t_deleted", { title: "지운 할 일", dueAt: "2026-11-20", googleEventId: "ev_orphan" }],
+        ["t_live", { title: "남은 할 일", dueAt: "2026-11-21", googleEventId: "ev_1" }],
+      ]),
+    );
+    const { deleteAccount } = await import("../deleteAccount");
+    await deleteAccount();
+
+    expect(mockLoadSnapshot).toHaveBeenCalledWith("u1");
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as { googleEventIds: string[] };
+    expect([...body.googleEventIds].sort()).toEqual(["ev_1", "ev_orphan"]);
+    expect(mockClearSnapshot).toHaveBeenCalledWith("u1");
+  });
+
+  it("실패하면 스냅샷을 지우지 않는다(재시도 때 고아 id가 필요하다)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const { deleteAccount } = await import("../deleteAccount");
+    await expect(deleteAccount()).rejects.toThrow("billing-proxy");
+    expect(mockClearSnapshot).not.toHaveBeenCalled();
   });
 
   it("중간 단계가 실패하면 멈추고 던진다", async () => {

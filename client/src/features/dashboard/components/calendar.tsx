@@ -32,7 +32,12 @@ import { AlertCircle, Plus, Repeat, CalendarDays, ChevronRight } from "lucide-re
 import styled, { keyframes } from "styled-components";
 import * as Sentry from "@sentry/react";
 import { colors } from "@/styles/colors";
-import { isOverdue, getDropDates, isDateInGoogleEventRange } from "../utils/calendarUtils";
+import { isOverdue, getDropDates } from "../utils/calendarUtils";
+import {
+  filterUnsyncedEvents,
+  formatGoogleEventTime,
+  isDateInGoogleEventRange,
+} from "@tododo/core/dist/calendarSync/index.js";
 import { formatRecurrenceSummary } from "@/features/todo/utils/recurrenceSummary";
 import { parseLocalDateOnly, toDateKey, toDateKeyFromISO } from "@/shared/utils/date";
 import { isDateInTodoRange } from "@/shared/utils/dateRange";
@@ -73,17 +78,6 @@ const getTappedDateKey = (info: EventClickArg): string => {
   const dateKey = cell?.getAttribute("data-date");
   if (dateKey) return dateKey;
   return toDateKey(info.event.start ?? new Date());
-};
-
-/**
- * 구글 이벤트의 시트 캡션. 종일이면 "종일", 시간 이벤트는 그날 시작하면 로컬 시각,
- * 전날부터 이어지는 날이면 "전날부터 이어짐" — 시작 시각을 그대로 쓰면 16일 시트에
- * "오후 11:30"이 떠서 16일 밤 일정으로 오해된다.
- */
-const formatGoogleEventTime = (start: string, dateKey: string): string => {
-  if (!start.includes("T")) return "종일";
-  if (toDateKeyFromISO(start) < dateKey) return "전날부터 이어짐";
-  return new Date(start).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
 };
 
 const Calendar = () => {
@@ -156,12 +150,7 @@ const Calendar = () => {
   // 링크된) 이벤트는 같은 Todo가 두 번 보이지 않도록 뺀다. 격자와 날짜 바텀시트가
   // 같은 목록을 써야 칸에 보이는 것과 시트 목록이 어긋나지 않는다.
   const overlayGoogleEvents = useMemo(() => {
-    const syncedGoogleEventIds = new Set(
-      (todos ?? [])
-        .map((t) => t.googleEventId)
-        .filter((id): id is string => !!id),
-    );
-    return (googleEvents ?? []).filter((event) => !syncedGoogleEventIds.has(event.id));
+    return filterUnsyncedEvents(googleEvents ?? [], todos ?? []);
   }, [todos, googleEvents]);
 
   const events = useMemo(() => {
