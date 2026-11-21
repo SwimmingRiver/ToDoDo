@@ -6,11 +6,12 @@
 //
 // 힌트는 최적화 용도일 뿐 권한 판단에 쓰지 않는다. 틀려도(다른 탭에서 로그아웃 등)
 // 쓰이지 않을 청크를 한 번 받는 것뿐이고, 실제 라우팅은 여전히 useAuth가 결정한다.
-const KEY = "tododo:signedInHint";
+// index.html의 preconnect 인라인 스크립트도 이 키를 직접 읽는다(바꾸면 함께 바꿀 것).
+export const SIGNED_IN_HINT_KEY = "tododo:signedInHint";
 
 export const readSignedInHint = (): boolean => {
   try {
-    return localStorage.getItem(KEY) === "1";
+    return localStorage.getItem(SIGNED_IN_HINT_KEY) === "1";
   } catch {
     return false;
   }
@@ -18,8 +19,8 @@ export const readSignedInHint = (): boolean => {
 
 export const writeSignedInHint = (signedIn: boolean) => {
   try {
-    if (signedIn) localStorage.setItem(KEY, "1");
-    else localStorage.removeItem(KEY);
+    if (signedIn) localStorage.setItem(SIGNED_IN_HINT_KEY, "1");
+    else localStorage.removeItem(SIGNED_IN_HINT_KEY);
   } catch {
     // 저장소가 막혀 있으면 미리 받기만 못 할 뿐 동작에는 영향이 없다.
   }

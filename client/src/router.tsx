@@ -68,9 +68,16 @@ const shellPageLoaders = new Map<string, () => Promise<unknown>>([
  * 청크 실패가 unhandled rejection으로 Sentry에 쌓인다.
  */
 export const preloadSignedInRoute = async (pathname: string): Promise<void> => {
-  const [first = "", second] = pathname.split("/").filter(Boolean);
+  // React Router는 기본이 대소문자 무시라 /Today도 오늘 화면이다 → 소문자로 맞춘다.
+  // 세그먼트 수도 라우트와 같아야 한다(/today/x·/todo/a/b는 셸 안 404라 받을 게 없다).
+  const segments = pathname.toLowerCase().split("/").filter(Boolean);
+  const [first = ""] = segments;
   const pageLoader =
-    first === "todo" && second ? loadTodoDetail : shellPageLoaders.get(first);
+    first === "todo" && segments.length === 2
+      ? loadTodoDetail
+      : segments.length <= 1
+        ? shellPageLoaders.get(first)
+        : undefined;
   if (!pageLoader) return;
   // allSettled라 어느 쪽이 실패해도 거부되지 않는다(반환값은 완료 시점을 알려 줄 뿐).
   await Promise.allSettled([loadApp(), pageLoader()]);

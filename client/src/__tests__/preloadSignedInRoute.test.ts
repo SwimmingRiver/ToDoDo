@@ -43,13 +43,23 @@ describe("preloadSignedInRoute", () => {
     ["/kanban", "kanban"],
     ["/insights", "insights"],
     ["/premium", "premium"],
+    ["/Today", "today"],
+    ["/CALENDAR/", "calendar"],
   ])("%s → 셸과 %s 청크를 미리 받는다", async (path, page) => {
     await preloadAt(path);
     expect([...loaded].sort()).toEqual(["App", page].sort());
   });
 
-  it.each(["/login", "/guest", "/terms", "/constructor", "/no-such-page"])(
-    "%s는 셸 밖이거나 모르는 주소라 아무것도 받지 않는다",
+  it.each([
+    "/login",
+    "/guest",
+    "/terms",
+    "/constructor",
+    "/no-such-page",
+    "/today/x",
+    "/todo/a/b",
+  ])(
+    "%s는 셸 밖이거나 404인 주소라 아무것도 받지 않는다",
     async (path) => {
       await preloadAt(path);
       expect(loaded.size).toBe(0);

@@ -48,6 +48,8 @@ describe('AuthProvider', () => {
   beforeEach(() => {
     authStateCallback = null
     vi.mocked(Sentry.setUser).mockClear()
+    // 로그인 콜백을 부르는 테스트는 모두 힌트를 남기므로 테스트마다 비운다.
+    localStorage.clear()
   })
 
   it('로그인 상태가 되면 Sentry.setUser에 uid만 전달하고 email은 전달하지 않는다', async () => {
@@ -89,7 +91,6 @@ describe('AuthProvider', () => {
   })
 
   it('인증 상태를 다음 방문의 청크 선로딩 힌트로 남긴다(로그인 → 저장, 로그아웃 → 삭제)', async () => {
-    localStorage.clear()
     render(
       <AuthProvider>
         <Consumer />
