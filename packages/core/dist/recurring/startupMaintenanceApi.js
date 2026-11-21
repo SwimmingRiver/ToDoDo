@@ -1,4 +1,5 @@
 import { collection, doc, getDocs, query, where, writeBatch, } from "firebase/firestore";
+import { mapDocToTodo } from "../api/todoDocs";
 import { getDefaultHorizonEnd } from "./recurrence";
 import { withRecurringSeriesLock } from "./seriesLock";
 import { buildExtensionCreates, planArchivedSweep, planIndefiniteExtension, planOverdueRecurringSweep, } from "./startupMaintenance";
@@ -7,7 +8,6 @@ import { buildExtensionCreates, planArchivedSweep, planIndefiniteExtension, plan
 // 누적돼 있을 수 있으므로, 상한 근처까지 채우지 않고 여유를 둔다(backfillArchivedField.ts
 // 스크립트와 동일한 값).
 const SWEEP_BATCH_SIZE = 400;
-const mapDocToTodo = (id, data) => ({ id, ...data });
 /** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
  *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
 const fetchAllUserTodos = async (db, userId) => {
