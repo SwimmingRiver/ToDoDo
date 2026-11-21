@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";
+import { syncTodosToGoogleCalendar, fetchGoogleWithRetry, type SyncTodoItem } from "../googleCalendar";
 import { deriveGoogleCalendarEventId } from "../googleEventId";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -107,21 +107,47 @@ describe("syncTodosToGoogleCalendar", () => {
       .fn()
       .mockResolvedValueOnce({ ok: false, status: 409, text: async () => "Conflict" })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "candidate-id", status: "cancelled" }) })
-      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => "Too Many Requests" });
+      // Worker 내부 백오프 재시도(최대 2회)까지 전부 429인 경우
+      .mockResolvedValue({ ok: false, status: 429, text: async () => "Too Many Requests" });
     vi.stubGlobal("fetch", fetchMock);
 
     const todos: SyncTodoItem[] = [
       { id: "todo-retry", title: "테스트", dueAt: "2026-09-01", googleEventId: null, action: "upsert" },
     ];
 
-    const results = await syncTodosToGoogleCalendar(todos, "access-token", 1);
+    const results = await syncTodosToGoogleCalendar(todos, "access-token", 1, { sleep: async () => {} });
 
     // 다른 탭이 방금 되살렸을 수 있으므로 새 랜덤 id 이벤트를 만들면 중복이 된다 —
     // 에러로 남기면 호출부가 스냅샷을 갱신하지 않아 다음 실행에서 같은 id로 수렴한다.
     expect(results).toEqual([
       { id: "todo-retry", googleEventId: null, error: expect.stringContaining("429") },
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // POST 409 + GET + 되살리기 PATCH 3회(첫 시도 + 재시도 2회). id 미지정 POST는 없다.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock.mock.calls.slice(2).every(([, init]) => init.method === "PATCH")).toBe(true);
+  });
+
+  it("409 충돌 후 조회가 레이트 리밋 403으로 재시도까지 실패해도 id 미지정 POST로 폴백하지 않는다", async () => {
+    const rateLimited = JSON.stringify({ error: { errors: [{ domain: "usageLimits", reason: "rateLimitExceeded" }] } });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 409, text: async () => "Conflict" })
+      .mockImplementation(async () => new Response(rateLimited, { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const results = await syncTodosToGoogleCalendar(
+      [{ id: "todo-rl", title: "테스트", dueAt: "2026-09-01", googleEventId: null, action: "upsert" }],
+      "access-token",
+      1,
+      { sleep: async () => {} },
+    );
+
+    expect(results).toEqual([
+      { id: "todo-rl", googleEventId: null, error: expect.stringContaining("rateLimitExceeded") },
+    ]);
+    // POST 1 + GET 3(첫 시도 + 재시도 2회)
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
 
   it("409 충돌 후 조회가 일시적 오류(403)면 id 미지정 POST로 폴백하지 않고 에러로 남긴다", async () => {
@@ -341,5 +367,161 @@ describe("syncTodosToGoogleCalendar", () => {
       { id: "todo-ok", googleEventId: "event-success" },
       { id: "todo-fail", googleEventId: null, error: expect.stringContaining("500") },
     ]);
+  });
+});
+
+// 11-21 첫 동기화에서 30건을 동시 10개로 쏘다 구글이 403 rateLimitExceeded를 무더기로
+// 돌려줬다. 레이트 리밋 응답은 잠깐 기다리면 풀리므로 Worker 안에서 백오프 재시도한다.
+describe("fetchGoogleWithRetry", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const rateLimitBody = (reason: string) =>
+    JSON.stringify({ error: { errors: [{ domain: "usageLimits", reason }], code: 403, message: "Rate Limit Exceeded" } });
+
+  const noSleep = () => {
+    const delays: number[] = [];
+    return { delays, sleep: async (ms: number) => void delays.push(ms) };
+  };
+
+  it("429면 백오프 후 재시도해 성공 응답을 돌려준다", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("Too Many Requests", { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "ok" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { delays, sleep } = noSleep();
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, { method: "POST" }, { sleep, random: () => 0 });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: "ok" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(delays).toEqual([500]);
+  });
+
+  it.each(["rateLimitExceeded", "userRateLimitExceeded"])("403 %s면 재시도한다", async (reason) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(rateLimitBody(reason), { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "ok" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { sleep } = noSleep();
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep });
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("지수 백오프 + 지터로 최대 2번까지만 재시도하고, 마지막 응답 본문을 그대로 읽을 수 있게 돌려준다", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => new Response(rateLimitBody("rateLimitExceeded"), { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { delays, sleep } = noSleep();
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep, random: () => 0.5 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(delays).toEqual([750, 1250]);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain("rateLimitExceeded");
+  });
+
+  it("레이트 리밋이 아닌 403(권한 등)은 재시도하지 않고 같은 상태·본문으로 돌려준다", async () => {
+    const forbidden = JSON.stringify({ error: { errors: [{ domain: "global", reason: "forbidden" }], code: 403 } });
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(forbidden, { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { delays, sleep } = noSleep();
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(delays).toEqual([]);
+    expect(res.status).toBe(403);
+    expect(res.ok).toBe(false);
+    expect(await res.text()).toBe(forbidden);
+  });
+
+  it("5xx·404 등 다른 상태는 재시도하지 않는다", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response("err", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { sleep } = noSleep();
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep });
+
+    expect(res.status).toBe(500);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("재시도 전에 버리는 429 응답 본문은 반드시 취소한다(drainBody 규칙)", async () => {
+    const first = new Response("Too Many Requests", { status: 429 });
+    const cancelSpy = vi.spyOn(first.body!, "cancel");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(new Response("{}", { status: 200 })),
+    );
+    const { sleep } = noSleep();
+
+    await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep });
+
+    expect(cancelSpy).toHaveBeenCalled();
+  });
+});
+
+describe("syncTodosToGoogleCalendar 레이트 리밋", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("PATCH가 403 rateLimitExceeded면 재시도해서 성공시킨다", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { errors: [{ domain: "usageLimits", reason: "rateLimitExceeded" }] } }), {
+          status: 403,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "existing" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const results = await syncTodosToGoogleCalendar(
+      [{ id: "todo-1", title: "t", dueAt: "2026-09-01", googleEventId: "existing", action: "upsert" }],
+      "access-token",
+      1,
+      { sleep: async () => {} },
+    );
+
+    expect(results).toEqual([{ id: "todo-1", googleEventId: "existing" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("기본 동시 요청 수는 3이다(구글 레이트 리밋 회피)", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { ok: true, json: async () => ({ id: "event-id" }) };
+      }),
+    );
+
+    const todos: SyncTodoItem[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `todo-${i}`,
+      title: `할 일 ${i}`,
+      dueAt: "2026-09-01",
+      googleEventId: null,
+      action: "upsert" as const,
+    }));
+
+    await syncTodosToGoogleCalendar(todos, "access-token");
+
+    expect(maxInFlight).toBe(3);
   });
 });

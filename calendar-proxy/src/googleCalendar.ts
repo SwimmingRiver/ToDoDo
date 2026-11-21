@@ -63,13 +63,76 @@ export const runWithConcurrencyLimit = async <T, R>(
 // Workers 런타임은 응답 바디를 읽지 않은 fetch가 일정 개수 이상 동시에 쌓이면
 // 데드락 방지를 위해 가장 오래된 요청을 강제로 취소한다 — 이 취소는 아직
 // 응답을 안 읽은 "죽은" 요청뿐 아니라 마침 진행 중이던 다른(정상적인) 요청까지
-// 덮칠 수 있다. 연동 해제처럼 한 번에 수십 건을 동시에(concurrency 10) 처리할
+// 덮칠 수 있다. 연동 해제처럼 한 번에 수십 건을 동시에(concurrency 3) 처리할
 // 때 이걸 안 지키면, 오래전에 이미 지워진 이벤트들의 처리되지 않은 응답이
 // 쌓이면서 방금 만든 진짜 이벤트의 삭제 요청까지 강제로 취소당할 수 있다.
 // 그래서 성공/실패/404 모든 분기에서 바디를 반드시 읽거나 취소한다.
 const drainBody = async (res: Response): Promise<void> => {
   await res.body?.cancel();
 };
+
+export interface GoogleRetryOptions {
+  /** 첫 시도 이후 추가 재시도 횟수. Workers는 요청당 서브리퀘스트 수가 제한돼 있어
+   *  항목당 최대 (1 + maxRetries)배로만 늘어나도록 작게 둔다. */
+  maxRetries?: number;
+  baseDelayMs?: number;
+  /** 테스트에서 실제로 기다리지 않도록 주입한다. */
+  sleep?: (ms: number) => Promise<void>;
+  random?: () => number;
+}
+
+const RATE_LIMIT_REASONS = new Set(["rateLimitExceeded", "userRateLimitExceeded"]);
+
+const isRateLimitBody = (text: string): boolean => {
+  try {
+    const parsed = JSON.parse(text) as { error?: { errors?: { reason?: string }[] } };
+    const errors = parsed?.error?.errors;
+    return Array.isArray(errors) && errors.some((e) => !!e?.reason && RATE_LIMIT_REASONS.has(e.reason));
+  } catch {
+    return false;
+  }
+};
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// 11-21 첫 동기화에서 googleEventId가 있는 할 일 ~30건을 동시 10개로 쏘다 구글이
+// 403 usageLimits/rateLimitExceeded를 무더기로 돌려줬다. 실패 항목은 클라이언트
+// 스냅샷에 안 들어가 todos 재조회마다 즉시 재전송돼 403 폭주(88건)가 됐다. 레이트
+// 리밋은 잠깐 기다리면 풀리므로 구글 캘린더 API 호출은 전부 이 헬퍼를 거쳐 429와
+// 레이트 리밋 403만 지수 백오프(+지터)로 재시도한다. 권한 등 다른 403은 바디를 이미
+// 읽었으므로 같은 상태·본문으로 다시 만든 Response를 돌려줘 기존 에러 처리·메시지를
+// 그대로 살린다.
+export const fetchGoogleWithRetry = async (
+  url: string,
+  init: RequestInit,
+  opts: GoogleRetryOptions = {},
+): Promise<Response> => {
+  const { maxRetries = 2, baseDelayMs = 500, sleep = defaultSleep, random = Math.random } = opts;
+  for (let attempt = 0; ; attempt += 1) {
+    const res = await fetch(url, init);
+    let rateLimited = false;
+    let bodyText: string | null = null;
+    if (res.status === 429) {
+      rateLimited = true;
+    } else if (res.status === 403) {
+      bodyText = await res.text().catch(() => "");
+      rateLimited = isRateLimitBody(bodyText);
+    }
+
+    if (!rateLimited || attempt >= maxRetries) {
+      if (bodyText === null) return res;
+      return new Response(bodyText, { status: res.status, statusText: res.statusText, headers: res.headers });
+    }
+
+    // 버리는 응답도 바디를 반드시 정리한다(drainBody 참고). 403은 이미 text()로 읽었다.
+    if (bodyText === null) await drainBody(res);
+    const delay = baseDelayMs * 2 ** attempt + random() * baseDelayMs;
+    console.warn(`구글 캘린더 레이트 리밋 (${res.status}), ${Math.round(delay)}ms 후 재시도 (${attempt + 1}/${maxRetries})`);
+    await sleep(delay);
+  }
+};
+
+type GoogleFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 // 신규 이벤트 생성을 결정론적 id로 시도한다(id는 todo.id로부터 유도 — deriveGoogleCalendarEventId
 // 참고). 여러 탭이 같은 Todo를 동시에 최초 동기화해도 같은 id로 수렴하므로, 나중에 도착한
@@ -80,6 +143,7 @@ const drainBody = async (res: Response): Promise<void> => {
 const createGoogleEventIdempotently = async (
   todo: SyncTodoItem,
   accessToken: string,
+  googleFetch: GoogleFetch,
 ): Promise<{ id: string }> => {
   const candidateId = await deriveGoogleCalendarEventId(todo.id);
   const authHeaders = {
@@ -88,7 +152,7 @@ const createGoogleEventIdempotently = async (
   };
   const eventBody = toGoogleEventBody(todo);
 
-  const res = await fetch(CALENDAR_API_BASE, {
+  const res = await googleFetch(CALENDAR_API_BASE, {
     method: "POST",
     headers: authHeaders,
     body: JSON.stringify({ id: candidateId, ...eventBody }),
@@ -106,7 +170,7 @@ const createGoogleEventIdempotently = async (
     // 막으려는 중복을 그대로 재현한다. throw하면 호출부가 스냅샷을 갱신하지 않아 다음
     // 실행에서 같은 경로(POST X→409→GET X)로 재시도돼 X로 수렴한다.
     await drainBody(res);
-    const getRes = await fetch(`${CALENDAR_API_BASE}/${candidateId}`, {
+    const getRes = await googleFetch(`${CALENDAR_API_BASE}/${candidateId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
@@ -117,7 +181,7 @@ const createGoogleEventIdempotently = async (
       // tombstone — 같은 id를 status: confirmed로 되살린다(실계정 검증됨). 실패는 throw:
       // 다른 탭이 방금 되살렸을 수 있으므로 재시도하면 GET이 confirmed를 돌려준다.
       console.info(`tombstone 복원 (todo ${todo.id})`);
-      const reviveRes = await fetch(`${CALENDAR_API_BASE}/${candidateId}`, {
+      const reviveRes = await googleFetch(`${CALENDAR_API_BASE}/${candidateId}`, {
         method: "PATCH",
         headers: authHeaders,
         body: JSON.stringify({ ...eventBody, status: "confirmed" }),
@@ -138,7 +202,7 @@ const createGoogleEventIdempotently = async (
     // 동시에 여기 도달하면 중복이 남을 수 있다.
     await drainBody(getRes);
     console.warn(`id 예약됐으나 이벤트 조회 불가 (todo ${todo.id}): ${getRes.status} — 자동 id로 생성한다`);
-    const fallbackRes = await fetch(CALENDAR_API_BASE, {
+    const fallbackRes = await googleFetch(CALENDAR_API_BASE, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify(eventBody),
@@ -157,10 +221,14 @@ const createGoogleEventIdempotently = async (
   return (await res.json()) as { id: string };
 };
 
-const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<SyncResult> => {
+const syncOneOrThrow = async (
+  todo: SyncTodoItem,
+  accessToken: string,
+  googleFetch: GoogleFetch,
+): Promise<SyncResult> => {
   if (todo.action === "delete") {
     if (!todo.googleEventId) return { id: todo.id, googleEventId: null };
-    const res = await fetch(`${CALENDAR_API_BASE}/${todo.googleEventId}`, {
+    const res = await googleFetch(`${CALENDAR_API_BASE}/${todo.googleEventId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -175,11 +243,11 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
   const hasExistingId = !!todo.googleEventId;
 
   if (!hasExistingId) {
-    const data = await createGoogleEventIdempotently(todo, accessToken);
+    const data = await createGoogleEventIdempotently(todo, accessToken, googleFetch);
     return { id: todo.id, googleEventId: data.id };
   }
 
-  const res = await fetch(`${CALENDAR_API_BASE}/${todo.googleEventId}`, {
+  const res = await googleFetch(`${CALENDAR_API_BASE}/${todo.googleEventId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -194,7 +262,7 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
   // 같은 404로 재시도만 반복하게 된다.
   if (!res.ok && (res.status === 404 || res.status === 410)) {
     await drainBody(res);
-    const data = await createGoogleEventIdempotently(todo, accessToken);
+    const data = await createGoogleEventIdempotently(todo, accessToken, googleFetch);
     return { id: todo.id, googleEventId: data.id };
   }
 
@@ -209,9 +277,9 @@ const syncOneOrThrow = async (todo: SyncTodoItem, accessToken: string): Promise<
 // syncOneOrThrow가 던지는 에러를 여기서 흡수한다 — 한 항목의 실패가 나머지 항목의
 // 결과까지 지워버리면(Promise.all 전체 reject) 이미 구글에 반영된 항목의
 // googleEventId를 호출부가 영영 못 받아 다음 실행에서 중복 이벤트를 만든다.
-const syncOne = async (todo: SyncTodoItem, accessToken: string): Promise<SyncResult> => {
+const syncOne = async (todo: SyncTodoItem, accessToken: string, googleFetch: GoogleFetch): Promise<SyncResult> => {
   try {
-    return await syncOneOrThrow(todo, accessToken);
+    return await syncOneOrThrow(todo, accessToken, googleFetch);
   } catch (error) {
     // 항목별 실패는 결과 배열의 error 필드에만 담겨 호출부(disconnect.ts 등)로
     // 조용히 전달되던 것을 여기서도 로그로 남긴다 — 그러지 않으면 어떤 이벤트가
@@ -225,9 +293,14 @@ const syncOne = async (todo: SyncTodoItem, accessToken: string): Promise<SyncRes
   }
 };
 
+// 기본 동시 요청 수는 3이다 — 10으로 두었을 때 첫 동기화(~30건)만으로도 구글 사용자별
+// 레이트 리밋에 걸렸다(11-21). 연동 해제(disconnect.ts)도 이 기본값을 그대로 쓴다.
 export const syncTodosToGoogleCalendar = async (
   todos: SyncTodoItem[],
   accessToken: string,
-  concurrency = 10,
-): Promise<SyncResult[]> =>
-  runWithConcurrencyLimit(todos, concurrency, (todo) => syncOne(todo, accessToken));
+  concurrency = 3,
+  retryOptions?: GoogleRetryOptions,
+): Promise<SyncResult[]> => {
+  const googleFetch: GoogleFetch = (url, init) => fetchGoogleWithRetry(url, init, retryOptions);
+  return runWithConcurrencyLimit(todos, concurrency, (todo) => syncOne(todo, accessToken, googleFetch));
+};
