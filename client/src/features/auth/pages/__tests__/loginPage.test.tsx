@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { signInWithPopup, browserPopupRedirectResolver } from 'firebase/auth'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import LoginPage from '../loginPage'
 import { AuthContext } from '../../context/authContext'
@@ -12,6 +13,11 @@ vi.mock('@/shared/lib/firebase', () => ({
 
 vi.mock('@/shared/lib/firestore', () => ({
   db: {},
+}))
+
+vi.mock('firebase/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('firebase/auth')>()),
+  signInWithPopup: vi.fn().mockResolvedValue(undefined),
 }))
 
 const mockAuthContext = (user: User | null, loading = false) => ({
@@ -71,5 +77,23 @@ describe('LoginPage 컴포넌트', () => {
     )
 
     expect(container.firstChild).toBeNull()
+  })
+
+  it('Google 로그인은 팝업 처리기를 함께 넘긴다(auth를 처리기 없이 초기화하므로 빠지면 auth/argument-error)', async () => {
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <AuthContext.Provider value={mockAuthContext(null)}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/" element={<div>홈</div>} />
+          </Routes>
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByText('Google로 로그인'))
+
+    await waitFor(() => expect(signInWithPopup).toHaveBeenCalled())
+    expect(vi.mocked(signInWithPopup).mock.calls[0][2]).toBe(browserPopupRedirectResolver)
   })
 })
