@@ -1,3 +1,5 @@
+import { APP_STATE_PREFIX } from "./appReturn";
+
 export interface CalendarTokenRecord {
   refreshToken: string;
 }
@@ -36,8 +38,13 @@ export interface OAuthStateRecord {
   /** `/oauth/start`를 호출한 클라이언트의 origin. 로컬 개발(localhost)과
    *  프로덕션이 같은 배포된 Worker를 공유하므로, 콜백이 어디로 돌아가야 하는지는
    *  고정된 CLIENT_APP_URL이 아니라 여기서 왕복시킨 값으로 결정해야 한다. */
-  returnOrigin: string;
+  returnOrigin?: string;
+  /** 앱에서 시작한 플로우면 "app" — 이때는 returnOrigin 없이 고정 딥링크로 돌아간다.
+   *  이 필드가 없는 옛 레코드(returnOrigin만 있음)는 web으로 취급한다. */
+  target?: "app";
 }
+
+export type OAuthStateTarget = { kind: "web"; returnOrigin: string } | { kind: "app" };
 
 /**
  * OAuth 플로우 시작 시점에 실제로 인증된 uid와 되돌아갈 origin을 서버 쪽에 짧게
@@ -49,10 +56,12 @@ export interface OAuthStateRecord {
 export const createOAuthState = async (
   kv: KVNamespace,
   uid: string,
-  returnOrigin: string,
+  target: OAuthStateTarget,
 ): Promise<string> => {
-  const state = crypto.randomUUID();
-  const record: OAuthStateRecord = { uid, returnOrigin };
+  const uuid = crypto.randomUUID();
+  const state = target.kind === "app" ? `${APP_STATE_PREFIX}${uuid}` : uuid;
+  const record: OAuthStateRecord =
+    target.kind === "app" ? { uid, target: "app" } : { uid, returnOrigin: target.returnOrigin };
   await kv.put(oauthStateKey(state), JSON.stringify(record), { expirationTtl: OAUTH_STATE_TTL_SECONDS });
   return state;
 };
