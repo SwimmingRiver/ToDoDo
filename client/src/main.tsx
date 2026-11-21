@@ -14,11 +14,16 @@ import { ThemePreferenceProvider } from "@/shared/theme/themePreference";
 import ErrorBoundary from "@/shared/ui/errorBoundary/errorBoundary";
 import { AuthProvider } from "@/features/auth/context/authProvider";
 import { initSentry } from "@/shared/lib/sentry";
-import { router } from "./router";
+import { readSignedInHint } from "@/features/auth/utils/signedInHint";
+import { preloadSignedInRoute, router } from "./router";
 
 // 다른 모든 초기화(Firebase, React Query 등)보다 먼저 호출해야
 // 이후 렌더링/네트워크 단계에서 발생하는 에러도 빠짐없이 캡처할 수 있다.
 initSentry();
+
+// 로그인 사용자로 보이면 인증 확인과 병렬로 셸·현재 페이지 청크를 받기 시작한다.
+// 비로그인(힌트 없음)이면 아무것도 하지 않아 랜딩·로그인 화면의 초기 다운로드는 그대로다.
+if (readSignedInHint()) void preloadSignedInRoute(window.location.pathname);
 
 const queryClient = new QueryClient({
   defaultOptions: {

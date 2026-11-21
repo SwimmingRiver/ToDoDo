@@ -337,4 +337,22 @@ describe("TodoListScreen", () => {
 
     expect(mockNavigate).toHaveBeenCalledWith("TodoForm", { parentId: "root-1" });
   });
+
+  it("「AI로 계획」 버튼이 「할 일 추가」 옆에 보이고, 누르면 AiPlan으로 이동", async () => {
+    mockUseTodos.mockReturnValue({ isLoading: false, isError: false, data: [rootTodo()] });
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+    expect(screen.getByLabelText("할 일 추가")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("AI로 계획"));
+    expect(mockNavigate).toHaveBeenCalledWith("AiPlan");
+  });
+
+  it("빈 상태에서도 웹과 같이 푸터의 「AI로 계획」은 유지되고 EmptyState 액션에는 없다", async () => {
+    mockUseTodos.mockReturnValue({ isLoading: false, isError: false, data: [] });
+    const { TodoListScreen } = await import("../TodoListScreen");
+    await render(<TodoListScreen />);
+    expect(screen.getAllByLabelText("AI로 계획")).toHaveLength(1);
+    await fireEvent.press(screen.getByText("새 할일 추가"));
+    expect(mockNavigate).toHaveBeenCalledWith("TodoForm");
+  });
 });

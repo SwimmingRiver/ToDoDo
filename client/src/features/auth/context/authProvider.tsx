@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import * as Sentry from "@sentry/react";
 import { auth } from "@/shared/lib/firebase";
 import { AuthContext } from "@/features/auth/context/authContext";
+import { writeSignedInHint } from "@/features/auth/utils/signedInHint";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -15,6 +16,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clearTimeout(timeout);
       setUser(user);
       setLoading(false);
+      // 다음 방문 때 인증 확인을 기다리지 않고 청크를 미리 받을지 판단하는 힌트(main.tsx).
+      writeSignedInHint(!!user);
       // uid만 태깅한다. email 등은 절대 넘기지 않는다(beforeSend에서도 걸러지지만 여기서도 이중 방어).
       Sentry.setUser(user ? { id: user.uid } : null);
     });

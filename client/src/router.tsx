@@ -18,27 +18,70 @@ import RouteErrorPage from "@/shared/ui/routeError/routeErrorPage";
 //
 // ProtectedRoute / RootGate만 eager다. 최초 라우팅 판단에 즉시 필요하고 auth 외
 // 의존성이 없어 비용이 사실상 0이다.
-const App = lazy(() => import("@/App"));
+const loadApp = () => import("@/App");
+const loadTodayPage = () => import("@/features/today/pages/todayPage");
+const loadTodoListPage = () => import("@/features/todo/pages/todoListPage");
+const loadTodoDetail = () =>
+  import("@/features/todo/components/todoDetail/todoDetail");
+const loadCalendarPage = () => import("@/features/dashboard/Pages/calendarPage");
+const loadKanbanPage = () => import("@/features/kanban/pages/kanbanPage");
+const loadInsightsPage = () => import("@/features/insights/pages/insightsPage");
+const loadPremiumPage = () => import("@/features/billing/pages/premiumPage");
+
+const App = lazy(loadApp);
 const LoginPage = lazy(() => import("@/features/auth/pages/loginPage"));
 const GuestTodayPage = lazy(
   () => import("@/features/guest/pages/guestTodayPage"),
 );
-const TodayPage = lazy(() => import("@/features/today/pages/todayPage"));
-const TodoListPage = lazy(() => import("@/features/todo/pages/todoListPage"));
-const TodoDetail = lazy(
-  () => import("@/features/todo/components/todoDetail/todoDetail"),
-);
-const CalendarPage = lazy(
-  () => import("@/features/dashboard/Pages/calendarPage"),
-);
-const KanbanPage = lazy(() => import("@/features/kanban/pages/kanbanPage"));
-const InsightsPage = lazy(
-  () => import("@/features/insights/pages/insightsPage"),
-);
-const PremiumPage = lazy(() => import("@/features/billing/pages/premiumPage"));
+const TodayPage = lazy(loadTodayPage);
+const TodoListPage = lazy(loadTodoListPage);
+const TodoDetail = lazy(loadTodoDetail);
+const CalendarPage = lazy(loadCalendarPage);
+const KanbanPage = lazy(loadKanbanPage);
+const InsightsPage = lazy(loadInsightsPage);
+const PremiumPage = lazy(loadPremiumPage);
 // 법적 페이지는 로그인 여부와 무관하게 열려야 한다(Paddle 심사자는 로그인하지 않는다).
 // 그래서 RootGate·ProtectedRoute 밖의 최상위 라우트로 둔다.
 const LegalPage = lazy(() => import("@/features/legal/pages/legalPage"));
+
+// 셸 안 경로의 첫 세그먼트 → 그 페이지 청크. "/"는 로그인 사용자를 /today로 보내므로
+// today로 취급한다. 여기 없는 경로(login·guest·약관 등)는 미리 받지 않는다.
+// 객체 대신 Map인 이유: "/constructor" 같은 주소가 프로토타입 메서드를 꺼내 오지 않게.
+const shellPageLoaders = new Map<string, () => Promise<unknown>>([
+  ["", loadTodayPage],
+  ["today", loadTodayPage],
+  ["todo", loadTodoListPage],
+  ["calendar", loadCalendarPage],
+  ["kanban", loadKanbanPage],
+  ["insights", loadInsightsPage],
+  ["premium", loadPremiumPage],
+]);
+
+/**
+ * 로그인 사용자로 보이면 인증 확인(accounts:lookup)을 기다리지 않고 셸·페이지 청크를
+ * 미리 받기 시작한다. 지금은 Auth 응답 → 청크 → Firestore가 직렬이라 모바일에서
+ * FCP·LCP가 그 합만큼 늦어진다. import()는 모듈 캐시를 공유하므로 lazy가 나중에
+ * 같은 청크를 요청하면 진행 중이거나 끝난 다운로드를 그대로 쓴다.
+ *
+ * 실패는 삼킨다. 실제로 필요하면 lazy가 다시 import하고, 그때의 실패는 기존 경로
+ * (RouteErrorPage·청크 실패 자동 새로고침)가 처리한다. 여기서 던지면 쓰지도 않을
+ * 청크 실패가 unhandled rejection으로 Sentry에 쌓인다.
+ */
+export const preloadSignedInRoute = async (pathname: string): Promise<void> => {
+  // React Router는 기본이 대소문자 무시라 /Today도 오늘 화면이다 → 소문자로 맞춘다.
+  // 세그먼트 수도 라우트와 같아야 한다(/today/x·/todo/a/b는 셸 안 404라 받을 게 없다).
+  const segments = pathname.toLowerCase().split("/").filter(Boolean);
+  const [first = ""] = segments;
+  const pageLoader =
+    first === "todo" && segments.length === 2
+      ? loadTodoDetail
+      : segments.length <= 1
+        ? shellPageLoaders.get(first)
+        : undefined;
+  if (!pageLoader) return;
+  // allSettled라 어느 쪽이 실패해도 거부되지 않는다(반환값은 완료 시점을 알려 줄 뿐).
+  await Promise.allSettled([loadApp(), pageLoader()]);
+};
 
 // 청크를 받는 동안 보여줄 것. fallback이 null인 곳은 ProtectedRoute/RootGate가
 // 인증 로딩 중 null을 반환하는 기존 컨벤션과 맞춘 것이다(깜빡임 방지).

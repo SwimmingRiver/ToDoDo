@@ -48,8 +48,8 @@ const renderModal = (onClose = vi.fn()) => {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
   );
-  render(<AiPlanModal onClose={onClose} />, { wrapper });
-  return { onClose };
+  const view = render(<AiPlanModal onClose={onClose} />, { wrapper });
+  return { onClose, rerender: () => view.rerender(<AiPlanModal onClose={onClose} />) };
 };
 
 // 실제 useMutation은 onSuccess/onError 뒤에 항상 onSettled를 호출한다. mock도 이를
@@ -208,6 +208,32 @@ describe("AiPlanModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "다시 만들기" }));
     expect(generateMutate).toHaveBeenLastCalledWith(
       { goal: "다음 달 이사 준비", dueDate: null, today: "2026-09-25" },
+      expect.any(Object),
+    );
+  });
+
+  it("자정을 넘긴 뒤 다시 만들기는 현재 날짜(today)로 재요청한다", () => {
+    const { rerender } = renderModal();
+    goToPreview();
+    vi.setSystemTime(new Date(2026, 8, 26, 0, 5));
+    rerender();
+    fireEvent.click(screen.getByRole("button", { name: "다시 만들기" }));
+    expect(generateMutate).toHaveBeenLastCalledWith(
+      { goal: "다음 달 이사 준비", dueDate: null, today: "2026-09-26" },
+      expect.any(Object),
+    );
+  });
+
+  it("수정 후 확인을 거친 다시 만들기도 현재 날짜(today)로 재요청한다", () => {
+    const { rerender } = renderModal();
+    goToPreview();
+    fireEvent.change(screen.getByDisplayValue("견적 받기"), { target: { value: "견적 5곳" } });
+    fireEvent.click(screen.getByRole("button", { name: "다시 만들기" }));
+    vi.setSystemTime(new Date(2026, 8, 26, 0, 5));
+    rerender();
+    fireEvent.click(screen.getAllByRole("button", { name: "다시 만들기" }).at(0)!);
+    expect(generateMutate).toHaveBeenLastCalledWith(
+      { goal: "다음 달 이사 준비", dueDate: null, today: "2026-09-26" },
       expect.any(Object),
     );
   });
