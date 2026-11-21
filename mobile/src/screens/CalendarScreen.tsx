@@ -82,6 +82,8 @@ const toMonthRange = ({ year, month }: VisibleMonth) => {
   const end = new Date(year, month, 1);
   return {
     range: { start: start.toISOString(), end: end.toISOString() },
+    // Calendar initialDate로도 넘긴다 — 오류 화면 등으로 달력이 언마운트됐다 다시 올라와도
+    // 오늘 달로 돌아가지 않고 사용자가 보던 달(= 조회 범위)과 계속 맞물리게 한다.
     startKey: toDateKey(start),
     endKeyExclusive: toDateKey(end),
   };
@@ -113,7 +115,11 @@ export const CalendarScreen = () => {
   );
 
   const handleMonthChange = (month: DateData) => {
-    setVisibleMonth({ year: month.year, month: month.month });
+    // 라이브러리는 initialDate 반영·마운트 때도 같은 달로 onMonthChange를 쏜다 — 같은 달이면
+    // 이전 상태를 그대로 둬서 불필요한 재렌더·재계산이 없게 한다(initialDate 문자열도 그대로라 루프 없음).
+    setVisibleMonth((prev) =>
+      prev.year === month.year && prev.month === month.month ? prev : { year: month.year, month: month.month },
+    );
   };
 
   const handleDayPress = (day: DateData) => {
@@ -165,6 +171,7 @@ export const CalendarScreen = () => {
       <CalendarConnectionBar todos={todos} />
       <View style={styles.calendarArea} onLayout={handleLayout}>
         <Calendar
+          initialDate={monthRange.startKey}
           markingType="multi-dot"
           markedDates={markedDatesWithSelection}
           onDayPress={handleDayPress}

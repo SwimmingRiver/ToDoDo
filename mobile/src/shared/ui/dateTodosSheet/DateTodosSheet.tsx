@@ -59,7 +59,9 @@ export const DateTodosSheet = ({
   onPressTodo,
   onAddTodo,
 }: DateTodosSheetProps) => {
-  const hasItems = todos.length > 0 || googleEvents.length > 0;
+  // 구글 일정 캡션("전날부터 이어짐" 판정)은 날짜 키가 있어야 정확하다 — 없으면 일정 줄을 그리지 않는다.
+  const visibleGoogleEvents = dateKey ? googleEvents : [];
+  const hasItems = todos.length > 0 || visibleGoogleEvents.length > 0;
 
   return (
     <Modal transparent animationType="slide" visible={isOpen} onRequestClose={onClose}>
@@ -75,9 +77,10 @@ export const DateTodosSheet = ({
               {todos.map((todo) => (
                 <DateTodoItem key={todo.id} todo={todo} onPress={onPressTodo} />
               ))}
-              {googleEvents.map((event) => (
-                <GoogleEventItem key={`google-${event.id}`} event={event} dateKey={dateKey ?? ""} />
-              ))}
+              {dateKey &&
+                visibleGoogleEvents.map((event) => (
+                  <GoogleEventItem key={`google-${event.id}`} event={event} dateKey={dateKey} />
+                ))}
             </ScrollView>
           ) : (
             <View style={styles.empty}>
