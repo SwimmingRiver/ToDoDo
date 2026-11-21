@@ -1,4 +1,11 @@
-import { getAuth, GoogleAuthProvider, connectAuthEmulator } from "firebase/auth";
+import {
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  GoogleAuthProvider,
+  connectAuthEmulator,
+} from "firebase/auth";
 import { app, isEmulator } from "./firebaseApp";
 
 // ⚠️ 이 모듈은 Firebase **Auth 전용**이다. Firestore는 `./firestore`에 따로 있다.
@@ -10,7 +17,18 @@ import { app, isEmulator } from "./firebaseApp";
 //
 // Firestore가 필요하면 `import { db } from "@/shared/lib/firestore"`를 쓸 것.
 
-export const auth = getAuth(app);
+// getAuth() 대신 initializeAuth를 쓰는 이유: getAuth는 브라우저 기본값으로
+// browserPopupRedirectResolver까지 붙여 시작 시점에 팝업/리디렉트 처리기를 초기화한다
+// (getProjectConfig 호출 + 리디렉트 결과 확인용 사용자 재조회). 이미 로그인한 사용자의
+// 첫 화면에는 필요 없는 네트워크 왕복이라, 처리기는 로그인 버튼에서만 넘긴다(loginPage).
+// persistence는 getAuth의 브라우저 기본값과 같은 순서로 둬야 기존 로그인 세션(IndexedDB)이 유지된다.
+export const auth = initializeAuth(app, {
+  persistence: [
+    indexedDBLocalPersistence,
+    browserLocalPersistence,
+    browserSessionPersistence,
+  ],
+});
 export const googleProvider = new GoogleAuthProvider();
 
 if (isEmulator) {

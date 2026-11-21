@@ -1,4 +1,4 @@
-import { signInWithPopup } from "firebase/auth";
+import { browserPopupRedirectResolver, signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "@/shared/lib/firebase";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -31,7 +31,8 @@ const LoginPage = () => {
     setErrorMessage(null);
     setIsLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      // auth를 처리기 없이 초기화했으므로(shared/lib/firebase.ts) 팝업 처리기를 여기서 넘긴다.
+      await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
       navigate("/");
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
