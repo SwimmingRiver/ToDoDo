@@ -2,6 +2,7 @@
   "expo": {
     "name": "ToDoDo",
     "slug": "mobile",
+    "scheme": "tododo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -36,7 +37,8 @@
           }
         }
       ],
-      "expo-iap"
+      "expo-iap",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

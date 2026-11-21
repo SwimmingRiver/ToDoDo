@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react-native";
 import { describe, it, expect, jest } from "@jest/globals";
 import type { Todo } from "@tododo/core";
 import { colors } from "../../../../theme/colors";
@@ -157,6 +157,58 @@ describe("DateTodosSheet", () => {
 
     await waitFor(() => {
       expect(screen.getByText("할 일 추가")).toBeTruthy();
+    });
+  });
+
+  describe("구글 캘린더 일정", () => {
+    const allDayEvent = { id: "g1", title: "가족 모임", start: "2026-06-20", end: "2026-06-21" };
+
+    it("할 일 아래에 '구글 캘린더 · 종일' 줄을 보여주고, 그 줄은 버튼이 아니다", async () => {
+      const { DateTodosSheet } = await import("../DateTodosSheet");
+      await render(
+        <DateTodosSheet
+          isOpen
+          onClose={jest.fn()}
+          dateLabel="6월 20일, 토요일"
+          dateKey="2026-06-20"
+          todos={[baseTodo]}
+          googleEvents={[allDayEvent]}
+          onPressTodo={jest.fn()}
+          onAddTodo={jest.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("가족 모임")).toBeTruthy();
+      });
+      expect(screen.getByText("구글 캘린더 · 종일")).toBeTruthy();
+      expect(screen.getByText("할 일 A")).toBeTruthy();
+      // 읽기 전용 행: 버튼 역할 요소 중 어떤 것도 구글 일정 제목을 담지 않는다.
+      const buttons = screen.queryAllByRole("button");
+      for (const button of buttons) {
+        expect(within(button).queryByText("가족 모임")).toBeNull();
+      }
+    });
+
+    it("할 일이 0개여도 구글 일정이 있으면 빈 상태 대신 목록을 보여준다", async () => {
+      const { DateTodosSheet } = await import("../DateTodosSheet");
+      await render(
+        <DateTodosSheet
+          isOpen
+          onClose={jest.fn()}
+          dateLabel="6월 20일, 토요일"
+          dateKey="2026-06-20"
+          todos={[]}
+          googleEvents={[allDayEvent]}
+          onPressTodo={jest.fn()}
+          onAddTodo={jest.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("구글 캘린더 · 종일")).toBeTruthy();
+      });
+      expect(screen.queryByText("이 날짜엔 할 일이 없어요")).toBeNull();
     });
   });
 });

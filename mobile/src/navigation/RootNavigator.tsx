@@ -22,6 +22,7 @@ import { colors } from "../theme/colors";
 import { useEntitlementSync } from "../premium";
 import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 import { resumePendingPurchases } from "../premium/iap/resumePending";
+import { useSyncTodosToCalendar } from "../calendarIntegration/useSyncTodosToCalendar";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -109,6 +110,13 @@ const EntitlementSync = () => {
   return null;
 };
 
+// 할 일 → 구글 캘린더 단방향 동기화. 로그인 중에만 돌아야 해서 EntitlementSync와 같이 감싼다.
+// 무료 사용자는 연동 상태 조회 자체가 꺼져 있어 아무 요청도 하지 않는다.
+const CalendarSync = () => {
+  useSyncTodosToCalendar();
+  return null;
+};
+
 // 지난 실행에서 끝내지 못한 스토어 거래(검증 실패·앱 종료)를 로그인 직후 한 번 다시 검증한다.
 // 서버 검증에 ID 토큰이 필요해 로그인 분기 안에서 마운트한다. resumePendingPurchases는 던지지 않는다.
 const PendingPurchaseResume = () => {
@@ -134,6 +142,7 @@ export const RootNavigator = () => {
   return <NavigationContainer>{user ? (
         <>
           <EntitlementSync />
+          <CalendarSync />
           <PendingPurchaseResume />
           <MainTabs />
         </>

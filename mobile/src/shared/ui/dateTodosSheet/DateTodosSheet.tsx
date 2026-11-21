@@ -1,6 +1,10 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CalendarDays } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
+import {
+  formatGoogleEventTime,
+  type GoogleCalendarEvent,
+} from "@tododo/core/dist/calendarSync/index.js";
 import { EmptyState } from "../emptyState/EmptyState";
 import { Button } from "../button/Button";
 import { RecurrenceBadge } from "../recurrenceBadge/RecurrenceBadge";
@@ -27,7 +31,11 @@ interface DateTodosSheetProps {
   onClose: () => void;
   /** formatTodayLabel(selectedDate) 결과, 예: "6월 20일, 토요일". */
   dateLabel: string;
+  /** 선택한 날짜 키("yyyy-MM-dd"). 구글 일정 시각 캡션("전날부터 이어짐" 판정)에 쓴다. */
+  dateKey?: string | null;
   todos: Todo[];
+  /** 이 날짜에 걸친 구글 오버레이 일정(이미 동기화된 것은 제외된 상태). 읽기 전용으로 할 일 아래에 붙는다. */
+  googleEvents?: GoogleCalendarEvent[];
   onPressTodo: (todo: Todo) => void;
   onAddTodo: () => void;
 }
@@ -45,11 +53,15 @@ export const DateTodosSheet = ({
   isOpen,
   onClose,
   dateLabel,
+  dateKey = null,
   todos,
+  googleEvents = [],
   onPressTodo,
   onAddTodo,
 }: DateTodosSheetProps) => {
-  const hasTodos = todos.length > 0;
+  // 구글 일정 캡션("전날부터 이어짐" 판정)은 날짜 키가 있어야 정확하다 — 없으면 일정 줄을 그리지 않는다.
+  const visibleGoogleEvents = dateKey ? googleEvents : [];
+  const hasItems = todos.length > 0 || visibleGoogleEvents.length > 0;
 
   return (
     <Modal transparent animationType="slide" visible={isOpen} onRequestClose={onClose}>
@@ -60,11 +72,15 @@ export const DateTodosSheet = ({
             <Text style={styles.title}>{dateLabel}</Text>
           </View>
 
-          {hasTodos ? (
+          {hasItems ? (
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               {todos.map((todo) => (
                 <DateTodoItem key={todo.id} todo={todo} onPress={onPressTodo} />
               ))}
+              {dateKey &&
+                visibleGoogleEvents.map((event) => (
+                  <GoogleEventItem key={`google-${event.id}`} event={event} dateKey={dateKey} />
+                ))}
             </ScrollView>
           ) : (
             <View style={styles.empty}>
@@ -122,6 +138,22 @@ const DateTodoItem = ({ todo, onPress }: { todo: Todo; onPress: (todo: Todo) => 
     </Pressable>
   );
 };
+
+/** 구글 일정은 읽기 전용 — 눌러도 이동하지 않으므로 버튼이 아닌 정적 행(웹 DayDetailStatic과 동일). */
+const GoogleEventItem = ({ event, dateKey }: { event: GoogleCalendarEvent; dateKey: string }) => (
+  <View
+    testID={`date-google-event-${event.id}`}
+    style={[styles.item, { borderLeftColor: colors.text.secondary, backgroundColor: colors.background.primary }]}
+  >
+    <View style={styles.itemTitleRow}>
+      <Text style={styles.itemTitle} numberOfLines={2}>
+        {event.title}
+      </Text>
+      <CalendarDays size={14} color={colors.text.secondary} />
+    </View>
+    <Text style={styles.itemMeta}>{`구글 캘린더 · ${formatGoogleEventTime(event.start, dateKey)}`}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   overlay: {

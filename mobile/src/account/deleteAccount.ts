@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
 
 /** Expo는 process.env.EXPO_PUBLIC_*를 빌드 시 인라인한다. 함수 안에서 읽어 테스트가 값을 바꿀 수 있게 한다. */
 const readProxyUrls = () => {
@@ -26,12 +27,16 @@ const callWorker = async (name: string, baseUrl: string, path: string, init: Req
   if (!res.ok) throw new Error(`${name} ${path} 실패 (${res.status})`);
 };
 
-/** 보관된 할 일까지 포함해 구글 캘린더에 만든 이벤트 id를 모은다. */
+/** 보관된 할 일까지 포함해 구글 캘린더에 만든 이벤트 id를 모은다. 웹과 같이 이 기기 동기화
+ *  스냅샷에만 남은 고아 id(할 일은 지웠는데 구글 삭제가 일시 실패한 경우)도 합친다 — 빠뜨리면
+ *  탈퇴 뒤엔 추적할 길이 없어 구글 캘린더에 영원히 남는다. loadSnapshot은 throw하지 않는다. */
 const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
-  const snapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", uid)));
-  return snapshot.docs
+  const todosSnapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", uid)));
+  const tracked = todosSnapshot.docs
     .map((d) => d.data().googleEventId as unknown)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const orphans = findOrphanGoogleEventIds(await loadSnapshot(uid), tracked);
+  return [...new Set([...tracked, ...orphans])];
 };
 
 /**
@@ -54,4 +59,7 @@ export const deleteAccount = async (): Promise<void> => {
   );
   await callWorker("reminder-proxy", urls.reminder, "/account", { method: "DELETE" }, idToken);
   await callWorker("billing-proxy", urls.billing, "/account/delete", { method: "POST" }, idToken);
+  // 전부 성공한 뒤에만 지운다 — 중간 실패 후 재시도할 때 고아 id가 다시 필요하다.
+  // 호출부는 이 다음에 signOut한다. clearSnapshot은 throw하지 않는다.
+  await clearSnapshot(user.uid);
 };

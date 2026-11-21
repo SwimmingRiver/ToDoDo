@@ -75,3 +75,29 @@ export function buildCalendarMarkedDates(todos: Todo[]): CalendarMarkedDates {
   }
   return result;
 }
+
+/**
+ * 구글 오버레이 이벤트가 걸친 날짜에 회색 점(key "google")을 하나씩 덧붙인다. 같은 날
+ * 이벤트가 여러 개여도 점은 하나다. 할 일 점 정책(overdue 단일 점)과는 별개 신호라
+ * overdue 날짜에도 붙는다. 입력은 바꾸지 않고, 붙일 게 없으면 같은 객체를 돌려준다.
+ */
+export function addGoogleEventDots(
+  marked: CalendarMarkedDates,
+  eventDateKeys: Iterable<string>,
+): CalendarMarkedDates {
+  const keys = new Set(eventDateKeys);
+  if (keys.size === 0) return marked;
+  const result: CalendarMarkedDates = { ...marked };
+  for (const dateKey of keys) {
+    const existing = result[dateKey] ?? { dots: [] };
+    if (existing.dots.some((dot) => dot.key === "google")) continue;
+    result[dateKey] = {
+      ...existing,
+      dots: [
+        ...existing.dots,
+        { key: "google", color: colors.text.tertiary, selectedDotColor: colors.background.primary },
+      ],
+    };
+  }
+  return result;
+}
