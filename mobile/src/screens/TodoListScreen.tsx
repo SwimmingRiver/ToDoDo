@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { AlertCircle, ClipboardList, Plus } from "lucide-react-native";
+import { AlertCircle, ClipboardList, Plus, Sparkles } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
 import type { TodoListStackParamList } from "../navigation/types";
 import { useTodos } from "../hooks/useTodos";
@@ -152,15 +152,26 @@ export const TodoListScreen = () => {
         </ScrollView>
       )}
 
-      <Pressable
-        onPress={() => navigation.navigate("TodoForm")}
-        accessibilityRole="button"
-        accessibilityLabel="할 일 추가"
-        style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-      >
-        <Plus size={16} color={colors.background.primary} />
-        <Text style={styles.addButtonText}>할 일 추가</Text>
-      </Pressable>
+      <View style={styles.footer}>
+        <Pressable
+          onPress={() => navigation.navigate("AiPlan")}
+          accessibilityRole="button"
+          accessibilityLabel="AI로 계획"
+          style={({ pressed }) => [styles.aiButton, pressed && styles.aiButtonPressed]}
+        >
+          <Sparkles size={16} color={colors.brand.strong} />
+          <Text style={styles.aiButtonText}>AI로 계획</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.navigate("TodoForm")}
+          accessibilityRole="button"
+          accessibilityLabel="할 일 추가"
+          style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+        >
+          <Plus size={16} color={colors.background.primary} />
+          <Text style={styles.addButtonText}>할 일 추가</Text>
+        </Pressable>
+      </View>
 
       <BottomSheet
         isOpen={statusSheetTodo !== null}
@@ -188,10 +199,34 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     marginBottom: spacing.xs,
   },
-  addButton: {
-    minHeight: 48,
+  footer: {
+    flexDirection: "row",
+    gap: spacing.sm,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
+  },
+  aiButton: {
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.brand.strong,
+    borderRadius: 10,
+  },
+  aiButtonPressed: {
+    backgroundColor: colors.brand.tint,
+  },
+  aiButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.brand.strong,
+  },
+  addButton: {
+    flex: 1,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

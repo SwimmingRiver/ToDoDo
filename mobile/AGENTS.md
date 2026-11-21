@@ -9,3 +9,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 - `EXPO_PUBLIC_CALENDAR_PROXY_URL`
 - `EXPO_PUBLIC_REMINDER_PROXY_URL`
 - `EXPO_PUBLIC_BILLING_PROXY_URL`
+
+### AI 할 일 플랜
+
+AI 할 일 플랜 화면은 `EXPO_PUBLIC_AI_PROXY_URL`도 `mobile/.env`와 EAS 환경 양쪽에 있어야 한다. 비어 있으면 「계획 만들기」가 항상 일반 오류 문구로 실패한다.

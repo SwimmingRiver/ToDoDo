@@ -13,11 +13,22 @@ jest.mock("../../premium", () => ({ useEntitlementSync: jest.fn() }));
 jest.mock("../../premium/iap/resumePending", () => ({ resumePendingPurchases: jest.fn() }));
 jest.mock("../../auth/useAuthState", () => ({ useAuthState: jest.fn() }));
 jest.mock("@react-navigation/native", () => ({ NavigationContainer: ({ children }: { children: unknown }) => children }));
+// 탭은 각 스택 컴포넌트를 렌더하고, 스택은 등록된 Screen(name/options)을 mockStackScreens에 모은다.
+const mockStackScreens: { name: string; options?: { title?: string } }[] = [];
 jest.mock("@react-navigation/bottom-tabs", () => ({
-  createBottomTabNavigator: () => ({ Navigator: () => null, Screen: () => null }),
+  createBottomTabNavigator: () => ({
+    Navigator: ({ children }: { children: unknown }) => children,
+    Screen: ({ component: C }: { component: () => null }) => <C />,
+  }),
 }));
 jest.mock("@react-navigation/native-stack", () => ({
-  createNativeStackNavigator: () => ({ Navigator: () => null, Screen: () => null }),
+  createNativeStackNavigator: () => ({
+    Navigator: ({ children }: { children: unknown }) => children,
+    Screen: (props: { name: string; options?: { title?: string } }) => {
+      mockStackScreens.push(props);
+      return null;
+    },
+  }),
 }));
 jest.mock("lucide-react-native", () => ({ Sun: () => null, ListTodo: () => null, CalendarDays: () => null, UserRound: () => null }));
 jest.mock("../../screens/LoginScreen", () => ({ LoginScreen: () => null }));
@@ -27,6 +38,7 @@ jest.mock("../../screens/TodoFormScreen", () => ({ TodoFormScreen: () => null })
 jest.mock("../../screens/TodoDetailScreen", () => ({ TodoDetailScreen: () => null }));
 jest.mock("../../screens/CalendarScreen", () => ({ CalendarScreen: () => null }));
 jest.mock("../../screens/AccountScreen", () => ({ AccountScreen: () => null }));
+jest.mock("../../screens/AiPlanScreen", () => ({ AiPlanScreen: () => null }));
 jest.mock("../../shared/ui/iconButton/IconButton", () => ({ IconButton: () => null }));
 
 import { runStartupMaintenance } from "@tododo/core";
@@ -96,5 +108,20 @@ describe("RootNavigator 미처리 거래 재검증", () => {
     await r.rerender(ui());
     await flush();
     expect(resumeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("RootNavigator 라우트", () => {
+  it("목록 스택에만 AiPlan 화면이 있고 제목은 「AI로 계획」", async () => {
+    mockStackScreens.length = 0;
+    authMock.mockReturnValue({ user: { uid: "u1" }, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    const aiPlan = mockStackScreens.filter((s) => s.name === "AiPlan");
+    expect(aiPlan).toHaveLength(1);
+    expect(aiPlan[0].options?.title).toBe("AI로 계획");
   });
 });

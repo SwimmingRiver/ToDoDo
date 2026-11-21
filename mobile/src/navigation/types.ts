@@ -12,6 +12,7 @@ export type TodayStackParamList = {
 
 export type TodoListStackParamList = {
   TodoList: undefined;
+  AiPlan: undefined;
   Account: undefined;
   TodoForm: TodoFormParams;
   TodoDetail: TodoDetailParams;

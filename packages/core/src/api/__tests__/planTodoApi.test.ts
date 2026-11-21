@@ -1,3 +1,4 @@
+import type { Firestore } from "firebase/firestore";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 beforeEach(() => {
@@ -5,12 +6,6 @@ beforeEach(() => {
   vi.setSystemTime(new Date(2026, 8, 25, 10, 0, 0));
 });
 afterEach(() => vi.useRealTimers());
-
-vi.mock("@/shared/lib/firebase", () => ({
-  auth: { currentUser: { uid: "test-user-id" } },
-  googleProvider: {},
-}));
-vi.mock("@/shared/lib/firestore", () => ({ db: {} }));
 
 let autoIdCounter = 0;
 vi.mock("firebase/firestore", () => ({
@@ -33,7 +28,9 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 import { getDocs, writeBatch } from "firebase/firestore";
-import { createPlanTodos } from "../todoApi";
+import { createPlanTodos } from "../planTodoApi";
+
+const fakeDb = {} as Firestore;
 
 const setupBatch = (existingRootOrders: number[] = [4]) => {
   autoIdCounter = 0;
@@ -56,14 +53,14 @@ const submission = {
 describe("createPlanTodos", () => {
   it("상위 1 + 하위 N을 한 batch로 만들고 한 번만 commit한다", async () => {
     const batch = setupBatch();
-    await expect(createPlanTodos(submission)).resolves.toEqual({ parentId: "auto-1", count: 3 });
+    await expect(createPlanTodos(fakeDb, "test-user-id", submission)).resolves.toEqual({ parentId: "auto-1", count: 3 });
     expect(batch.set).toHaveBeenCalledTimes(3);
     expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 
   it("상위는 다음 루트 order, 하위는 parentId와 0부터의 order를 갖는다", async () => {
     const batch = setupBatch([4, 7]);
-    await createPlanTodos(submission);
+    await createPlanTodos(fakeDb, "test-user-id", submission);
     const [[parentRef, parent], [, child0], [, child1]] = batch.set.mock.calls;
     expect(parentRef).toEqual({ id: "auto-1" });
     expect(parent).toMatchObject({ title: "이사 준비", parentId: null, order: 8, priority: "medium" });
@@ -73,7 +70,7 @@ describe("createPlanTodos", () => {
 
   it("공통 필드: todo 상태, 반복 없음, 보관 아님, userId, startAt·doneAt null", async () => {
     const batch = setupBatch();
-    await createPlanTodos(submission);
+    await createPlanTodos(fakeDb, "test-user-id", submission);
     for (const [, data] of batch.set.mock.calls) {
       expect(data).toMatchObject({
         userId: "test-user-id",
@@ -90,7 +87,7 @@ describe("createPlanTodos", () => {
 
   it("날짜 키는 로컬 자정의 UTC ISO로 저장한다", async () => {
     const batch = setupBatch();
-    await createPlanTodos(submission);
+    await createPlanTodos(fakeDb, "test-user-id", submission);
     const [[, parent], [, child0], [, child1]] = batch.set.mock.calls;
     expect(parent.dueAt).toBe(new Date(2026, 9, 31).toISOString());
     expect(child0.dueAt).toBe(new Date(2026, 9, 3).toISOString());
@@ -99,7 +96,7 @@ describe("createPlanTodos", () => {
 
   it("하위가 0개면 아무것도 쓰지 않고 던진다", async () => {
     const batch = setupBatch();
-    await expect(createPlanTodos({ ...submission, children: [] })).rejects.toThrow();
+    await expect(createPlanTodos(fakeDb, "test-user-id", { ...submission, children: [] })).rejects.toThrow();
     expect(batch.commit).not.toHaveBeenCalled();
   });
 });
