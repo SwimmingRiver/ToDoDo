@@ -104,6 +104,19 @@ beforeEach(() => {
 });
 
 describe("useSyncTodosToCalendar", () => {
+  it("세션 중 프리미엄이 만료되면 캐시된 connected:true가 남아 있어도 동기화 요청을 보내지 않는다", async () => {
+    const client = makeClient();
+    // 상태 쿼리는 isPremium=false로 꺼지지만, 프리미엄일 때 받은 connected:true가 캐시에 남는다.
+    client.setQueryData(["calendarIntegration", "uid-1"], { connected: true, status: "active" });
+    mockIsPremium = false;
+    await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(client) });
+    await waitFor(() => expect(mockLoad).toHaveBeenCalled());
+    await flush();
+    await flush();
+    expect(mockGetDoc).not.toHaveBeenCalled();
+    expect(mockSync).not.toHaveBeenCalled();
+  });
+
   it("스냅샷 로드가 끝나기 전에는 동기화하지 않고, 끝나면 한 번 동기화한다", async () => {
     let resolveLoad: (s: SyncSnapshot) => void = () => {};
     mockLoad.mockReturnValue(new Promise<SyncSnapshot>((r) => (resolveLoad = r)));

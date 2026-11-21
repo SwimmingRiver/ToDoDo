@@ -7,6 +7,7 @@ import { useAuthState } from "../auth/useAuthState";
 import { useTodos } from "../hooks/useTodos";
 import { syncTodosToCalendar, CalendarRevokedError, CalendarNotConnectedError } from "./calendarProxyApi";
 import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
+import { useIsPremium } from "../premium";
 import { markCalendarRevoked } from "./markCalendarRevoked";
 import { loadSnapshot, saveSnapshot, clearSnapshot, type SyncSnapshot } from "./snapshotStorage";
 
@@ -37,6 +38,7 @@ export const useSyncTodosToCalendar = (): void => {
   const uid = user?.uid ?? null;
   const { data: todos } = useTodos();
   const { data: integration } = useCalendarIntegrationStatus();
+  const { isPremium } = useIsPremium();
   const queryClient = useQueryClient();
   const snapshotRef = useRef<SyncSnapshot>(new Map());
   // 스냅샷이 로드된 uid. 현재 uid와 같을 때만 ready다 — uid가 바뀐 첫 렌더에서
@@ -79,6 +81,10 @@ export const useSyncTodosToCalendar = (): void => {
       queryClient.removeQueries({ queryKey: ["googleCalendarEvents"] });
       return;
     }
+    // 세션 중 프리미엄이 만료되면 상태 쿼리는 꺼지지만 캐시된 connected:true가 남는다 —
+    // 그대로 돌면 Worker가 403을 주고 매번 토큰을 강제 갱신한다. 스냅샷은 그대로 둬서
+    // 다시 프리미엄이 되면 이어서 동기화한다.
+    if (!isPremium) return;
     if (!integration?.connected || integration.status === "revoked") return;
     if (!todos) return;
     if (isRunningRef.current) {
@@ -154,5 +160,5 @@ export const useSyncTodosToCalendar = (): void => {
         }
       }
     })();
-  }, [uid, snapshotReady, todos, integration, queryClient, runToken]);
+  }, [uid, snapshotReady, todos, integration, isPremium, queryClient, runToken]);
 };

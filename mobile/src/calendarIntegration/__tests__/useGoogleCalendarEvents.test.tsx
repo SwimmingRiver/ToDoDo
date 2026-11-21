@@ -7,6 +7,8 @@ let mockIntegration: { connected: boolean; status: "active" | "revoked" } | unde
 jest.mock("../useCalendarIntegration", () => ({
   useCalendarIntegrationStatus: () => ({ data: mockIntegration }),
 }));
+let mockIsPremium = true;
+jest.mock("../../premium", () => ({ useIsPremium: () => ({ isPremium: mockIsPremium, isLoading: false }) }));
 jest.mock("../markCalendarRevoked", () => ({ markCalendarRevoked: jest.fn() }));
 jest.mock("../calendarProxyApi", () => {
   const core = jest.requireActual("@tododo/core/dist/calendarSync/index.js") as Record<string, unknown>;
@@ -35,6 +37,7 @@ const event = { id: "g1", title: "회의", start: "2026-06-20", end: "2026-06-21
 beforeEach(() => {
   jest.clearAllMocks();
   mockIntegration = { connected: true, status: "active" };
+  mockIsPremium = true;
   mockMarkRevoked.mockResolvedValue(undefined);
 });
 
@@ -59,6 +62,17 @@ describe("useGoogleCalendarEvents", () => {
     mockIntegration = undefined;
     await renderHook(() => useGoogleCalendarEvents(range), { wrapper: wrap(client) });
     expect(mockGetEvents).not.toHaveBeenCalled();
+  });
+
+  it("세션 중 프리미엄이 만료되면 캐시된 connected 상태여도 조회하지 않고 캐시된 이벤트도 내보내지 않는다", async () => {
+    const client = makeClient();
+    // 프리미엄일 때 받아 둔 이벤트가 캐시에 남아 있는 상황.
+    client.setQueryData(["googleCalendarEvents", range.start, range.end], [event]);
+    mockIsPremium = false;
+    const { result } = await renderHook(() => useGoogleCalendarEvents(range), { wrapper: wrap(client) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockGetEvents).not.toHaveBeenCalled();
+    expect(result.current.data).toBeUndefined();
   });
 
   it("revoked 오류면 markCalendarRevoked를 부르고 재시도하지 않는다", async () => {
