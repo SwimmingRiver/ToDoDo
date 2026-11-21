@@ -212,3 +212,38 @@ describe("DateTodosSheet", () => {
     });
   });
 });
+
+describe("DateTodosSheet 애니메이션", () => {
+  it("배경이 같이 미끄러지지 않도록 Modal 자체 애니메이션은 끄고(animationType none) 시트만 움직인다", async () => {
+    const { DateTodosSheet } = await import("../DateTodosSheet");
+    await render(
+      <DateTodosSheet
+        isOpen
+        onClose={jest.fn()}
+        dateLabel="6월 20일, 토요일"
+        todos={[]}
+        onPressTodo={jest.fn()}
+        onAddTodo={jest.fn()}
+      />,
+    );
+    expect(screen.getByTestId("date-todos-sheet-modal", { includeHiddenElements: true }).props.animationType).toBe("none");
+  });
+
+  it("닫으면(내려가는 애니메이션 완료 후) 시트가 사라지고, 다시 열면 보인다", async () => {
+    // jest 환경의 Animated는 즉시 완료되므로 "내려가는 중" 중간 상태는 관찰하지 않고 최종 상태만 본다.
+    const { DateTodosSheet } = await import("../DateTodosSheet");
+    const props = {
+      onClose: jest.fn(),
+      dateLabel: "6월 20일, 토요일",
+      todos: [],
+      onPressTodo: jest.fn(),
+      onAddTodo: jest.fn(),
+    };
+    const { rerender } = await render(<DateTodosSheet isOpen {...props} />);
+    await waitFor(() => expect(screen.getByText("6월 20일, 토요일")).toBeTruthy());
+    await rerender(<DateTodosSheet isOpen={false} {...props} />);
+    await waitFor(() => expect(screen.queryByText("6월 20일, 토요일")).toBeNull());
+    await rerender(<DateTodosSheet isOpen {...props} />);
+    await waitFor(() => expect(screen.getByText("6월 20일, 토요일")).toBeTruthy());
+  });
+});

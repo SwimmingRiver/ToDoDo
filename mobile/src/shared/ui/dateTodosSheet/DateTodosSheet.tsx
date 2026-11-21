@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CalendarDays } from "lucide-react-native";
 import type { Todo } from "@tododo/core";
 import {
@@ -40,6 +41,35 @@ interface DateTodosSheetProps {
   onAddTodo: () => void;
 }
 
+const SLIDE_DURATION_MS = 250;
+
+/** 시트만 아래에서 올라오고 내려가게 한다. 닫을 때는 내려가는 애니메이션이 끝난 뒤 Modal을
+ *  내려야 해서(바로 visible=false면 시트가 툭 사라진다) 마운트 상태를 따로 둔다. */
+const useSheetSlide = (isOpen: boolean) => {
+  const offscreen = Dimensions.get("window").height;
+  const [isMounted, setIsMounted] = useState(isOpen);
+  const translateY = useRef(new Animated.Value(isOpen ? 0 : offscreen)).current;
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsMounted(true);
+      Animated.timing(translateY, { toValue: 0, duration: SLIDE_DURATION_MS, useNativeDriver: true }).start();
+      return;
+    }
+    const animation = Animated.timing(translateY, {
+      toValue: offscreen,
+      duration: SLIDE_DURATION_MS,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) setIsMounted(false);
+    });
+    return () => animation.stop();
+  }, [isOpen, offscreen, translateY]);
+
+  return { isMounted, translateY };
+};
+
 /**
  * 캘린더에서 날짜를 탭했을 때 여는 시트. 기존 shared/ui/bottomSheet/BottomSheet는
  * 옵션 단일 선택 전용(상태 변경 시트)이라 할 일 목록+추가 버튼을 담을 수 없어,
@@ -62,11 +92,15 @@ export const DateTodosSheet = ({
   // 구글 일정 캡션("전날부터 이어짐" 판정)은 날짜 키가 있어야 정확하다 — 없으면 일정 줄을 그리지 않는다.
   const visibleGoogleEvents = dateKey ? googleEvents : [];
   const hasItems = todos.length > 0 || visibleGoogleEvents.length > 0;
+  const { isMounted, translateY } = useSheetSlide(isOpen);
 
+  // Modal의 animationType="slide"는 어두운 배경까지 통째로 밀어 올려 어색하다(11-21 사용자 피드백).
+  // Modal 애니메이션은 끄고 배경은 그 자리에 바로 깔고, 흰 시트만 아래에서 올라오게 한다.
   return (
-    <Modal transparent animationType="slide" visible={isOpen} onRequestClose={onClose}>
+    <Modal testID="date-todos-sheet-modal" transparent animationType="none" visible={isMounted} onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose} accessibilityLabel="닫기">
-        <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+        <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
+        <Pressable onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>{dateLabel}</Text>
@@ -96,6 +130,7 @@ export const DateTodosSheet = ({
             <Button title="할 일 추가" onPress={onAddTodo} variant="primary" />
           </View>
         </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   );
