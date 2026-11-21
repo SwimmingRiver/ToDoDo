@@ -8,6 +8,7 @@ import TodayItemSkeleton from "@/shared/ui/skeleton/todayItemSkeleton";
 import CalendarSkeleton from "@/shared/ui/skeleton/calendarSkeleton";
 import InsightsSkeleton from "@/shared/ui/skeleton/insightsSkeleton";
 import RouteErrorPage from "@/shared/ui/routeError/routeErrorPage";
+import { preloadableLazy } from "@/shared/lib/preloadableLazy";
 
 // 라우트 컴포넌트는 전부 lazy로 둔다. 정적 import 하나만 되살아나도 해당 라우트의
 // 의존성(FullCalendar, dnd-kit, Firestore 등)이 통째로 초기 청크로 딸려온다.
@@ -18,28 +19,44 @@ import RouteErrorPage from "@/shared/ui/routeError/routeErrorPage";
 //
 // ProtectedRoute / RootGate만 eager다. 최초 라우팅 판단에 즉시 필요하고 auth 외
 // 의존성이 없어 비용이 사실상 0이다.
-const loadApp = () => import("@/App");
-const loadTodayPage = () => import("@/features/today/pages/todayPage");
-const loadTodoListPage = () => import("@/features/todo/pages/todoListPage");
-const loadTodoDetail = () =>
-  import("@/features/todo/components/todoDetail/todoDetail");
-const loadCalendarPage = () => import("@/features/dashboard/Pages/calendarPage");
-const loadKanbanPage = () => import("@/features/kanban/pages/kanbanPage");
-const loadInsightsPage = () => import("@/features/insights/pages/insightsPage");
-const loadPremiumPage = () => import("@/features/billing/pages/premiumPage");
+// 셸과 셸 안 페이지는 preloadableLazy로 둔다. preloadSignedInRoute가 미리 받아 둔 모듈을
+// 첫 렌더에서 바로 그려, React.lazy의 첫 suspend → fallback → 300ms 커밋 스로틀을 피한다
+// (자세한 이유는 shared/lib/preloadableLazy.tsx).
+const AppChunk = preloadableLazy(() => import("@/App"));
+const TodayChunk = preloadableLazy(
+  () => import("@/features/today/pages/todayPage"),
+);
+const TodoListChunk = preloadableLazy(
+  () => import("@/features/todo/pages/todoListPage"),
+);
+const TodoDetailChunk = preloadableLazy(
+  () => import("@/features/todo/components/todoDetail/todoDetail"),
+);
+const CalendarChunk = preloadableLazy(
+  () => import("@/features/dashboard/Pages/calendarPage"),
+);
+const KanbanChunk = preloadableLazy(
+  () => import("@/features/kanban/pages/kanbanPage"),
+);
+const InsightsChunk = preloadableLazy(
+  () => import("@/features/insights/pages/insightsPage"),
+);
+const PremiumChunk = preloadableLazy(
+  () => import("@/features/billing/pages/premiumPage"),
+);
 
-const App = lazy(loadApp);
+const App = AppChunk.Component;
 const LoginPage = lazy(() => import("@/features/auth/pages/loginPage"));
 const GuestTodayPage = lazy(
   () => import("@/features/guest/pages/guestTodayPage"),
 );
-const TodayPage = lazy(loadTodayPage);
-const TodoListPage = lazy(loadTodoListPage);
-const TodoDetail = lazy(loadTodoDetail);
-const CalendarPage = lazy(loadCalendarPage);
-const KanbanPage = lazy(loadKanbanPage);
-const InsightsPage = lazy(loadInsightsPage);
-const PremiumPage = lazy(loadPremiumPage);
+const TodayPage = TodayChunk.Component;
+const TodoListPage = TodoListChunk.Component;
+const TodoDetail = TodoDetailChunk.Component;
+const CalendarPage = CalendarChunk.Component;
+const KanbanPage = KanbanChunk.Component;
+const InsightsPage = InsightsChunk.Component;
+const PremiumPage = PremiumChunk.Component;
 // 법적 페이지는 로그인 여부와 무관하게 열려야 한다(Paddle 심사자는 로그인하지 않는다).
 // 그래서 RootGate·ProtectedRoute 밖의 최상위 라우트로 둔다.
 const LegalPage = lazy(() => import("@/features/legal/pages/legalPage"));
@@ -48,20 +65,20 @@ const LegalPage = lazy(() => import("@/features/legal/pages/legalPage"));
 // today로 취급한다. 여기 없는 경로(login·guest·약관 등)는 미리 받지 않는다.
 // 객체 대신 Map인 이유: "/constructor" 같은 주소가 프로토타입 메서드를 꺼내 오지 않게.
 const shellPageLoaders = new Map<string, () => Promise<unknown>>([
-  ["", loadTodayPage],
-  ["today", loadTodayPage],
-  ["todo", loadTodoListPage],
-  ["calendar", loadCalendarPage],
-  ["kanban", loadKanbanPage],
-  ["insights", loadInsightsPage],
-  ["premium", loadPremiumPage],
+  ["", TodayChunk.preload],
+  ["today", TodayChunk.preload],
+  ["todo", TodoListChunk.preload],
+  ["calendar", CalendarChunk.preload],
+  ["kanban", KanbanChunk.preload],
+  ["insights", InsightsChunk.preload],
+  ["premium", PremiumChunk.preload],
 ]);
 
 /**
  * 로그인 사용자로 보이면 인증 확인(accounts:lookup)을 기다리지 않고 셸·페이지 청크를
  * 미리 받기 시작한다. 지금은 Auth 응답 → 청크 → Firestore가 직렬이라 모바일에서
- * FCP·LCP가 그 합만큼 늦어진다. import()는 모듈 캐시를 공유하므로 lazy가 나중에
- * 같은 청크를 요청하면 진행 중이거나 끝난 다운로드를 그대로 쓴다.
+ * FCP·LCP가 그 합만큼 늦어진다. preloadableLazy는 preload와 렌더가 같은 Promise를
+ * 공유하고, 렌더 시점에 이미 받아 둔 모듈은 suspend 없이 바로 그린다.
  *
  * 실패는 삼킨다. 실제로 필요하면 lazy가 다시 import하고, 그때의 실패는 기존 경로
  * (RouteErrorPage·청크 실패 자동 새로고침)가 처리한다. 여기서 던지면 쓰지도 않을
@@ -74,13 +91,13 @@ export const preloadSignedInRoute = async (pathname: string): Promise<void> => {
   const [first = ""] = segments;
   const pageLoader =
     first === "todo" && segments.length === 2
-      ? loadTodoDetail
+      ? TodoDetailChunk.preload
       : segments.length <= 1
         ? shellPageLoaders.get(first)
         : undefined;
   if (!pageLoader) return;
   // allSettled라 어느 쪽이 실패해도 거부되지 않는다(반환값은 완료 시점을 알려 줄 뿐).
-  await Promise.allSettled([loadApp(), pageLoader()]);
+  await Promise.allSettled([AppChunk.preload(), pageLoader()]);
 };
 
 // 청크를 받는 동안 보여줄 것. fallback이 null인 곳은 ProtectedRoute/RootGate가
