@@ -10,3 +10,12 @@ jest.mock("react-native-safe-area-context", () => {
   const mock = require("react-native-safe-area-context/jest/mock");
   return mock.default ?? mock;
 });
+
+// @sentry/react-native는 네이티브 모듈이라 jest에서 그대로 불러오면 초기화가 실패한다.
+// 앱 코드가 쓰는 API만 전역 목으로 둔다. 테스트는 jest.requireMock("@sentry/react-native")로 꺼내 단언한다.
+jest.mock("@sentry/react-native", () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  setUser: jest.fn(),
+  wrap: (component) => component,
+}));

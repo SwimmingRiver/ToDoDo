@@ -10,6 +10,9 @@
       "environment": "preview",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "simulator": {
@@ -17,6 +20,9 @@
       "environment": "preview",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   }
