@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { signOut as firebaseSignOut } from "firebase/auth";
 import type { QueryClient } from "@tanstack/react-query";
 import { auth } from "../firebase";
+import { reportError } from "../shared/lib/sentry";
 
 /**
  * 로그아웃. 실제로 세션을 끊는 건 firebase signOut 하나뿐이라 그것만 실패를 밖으로 던지고,
@@ -18,13 +19,13 @@ export const signOut = async (queryClient: QueryClient) => {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (error) {
-    console.warn("예약 알림 취소 실패:", error);
+    reportError(error, "auth");
   }
 
   try {
     await GoogleSignin.signOut();
   } catch (error) {
-    console.warn("구글 로그아웃 실패:", error);
+    reportError(error, "auth");
   }
 
   await firebaseSignOut(auth);

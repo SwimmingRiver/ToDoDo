@@ -16,6 +16,8 @@ import { runStartupMaintenance } from "@tododo/core";
 import { readLastSuccess, writeLastSuccess } from "../maintenanceSchedule";
 import { useStartupMaintenance, resetStartupMaintenanceState } from "../useStartupMaintenance";
 
+const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+
 const runMock = runStartupMaintenance as unknown as jest.Mock<(...a: unknown[]) => Promise<unknown>>;
 const readMock = readLastSuccess as unknown as jest.Mock<(uid: string) => Promise<number | null>>;
 const writeMock = writeLastSuccess as unknown as jest.Mock<(uid: string, ms: number) => Promise<void>>;
@@ -108,19 +110,21 @@ describe("useStartupMaintenance", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos"] });
   });
 
-  it("reject되어도 throw하지 않고 console.error를 남기며 시각을 갱신하지 않는다", async () => {
+  it("reject되어도 throw하지 않고 Sentry로 보고하며 시각을 갱신하지 않는다", async () => {
+    sentryMock.captureException.mockClear();
     runMock.mockRejectedValue(new Error("boom"));
     await renderHook(() => useStartupMaintenance("a"), { wrapper });
     await flush();
-    expect(errorSpy).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "maintenance" } });
     expect(writeMock).not.toHaveBeenCalled();
   });
 
-  it("writeLastSuccess가 reject되어도 throw하지 않는다", async () => {
+  it("writeLastSuccess가 reject되어도 throw하지 않고 Sentry로 보고한다", async () => {
+    sentryMock.captureException.mockClear();
     writeMock.mockRejectedValue(new Error("storage"));
     await renderHook(() => useStartupMaintenance("a"), { wrapper });
     await flush();
-    expect(errorSpy).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "maintenance" } });
   });
 
   it("같은 세션에서 계정이 바뀌면 새 uid로 실행한다", async () => {

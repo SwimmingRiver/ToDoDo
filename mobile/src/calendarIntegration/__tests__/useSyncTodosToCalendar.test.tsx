@@ -48,6 +48,8 @@ import { clearSnapshot, loadSnapshot, saveSnapshot } from "../snapshotStorage";
 import { markCalendarRevoked } from "../markCalendarRevoked";
 import { useSyncTodosToCalendar } from "../useSyncTodosToCalendar";
 
+const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+
 const mockGetDoc = jest.mocked(getDoc);
 const mockSetDoc = jest.mocked(setDoc);
 const mockSync = jest.mocked(syncTodosToCalendar);
@@ -295,10 +297,12 @@ describe("useSyncTodosToCalendar", () => {
     });
 
     it("요청 자체가 실패해도 그 묶음은 쿨다운에 걸어 즉시 재전송하지 않는다", async () => {
+      sentryMock.captureException.mockClear();
       mockSync.mockRejectedValueOnce(new Error("동기화 실패: 500"));
       const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
       await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(1));
       await flush();
+      expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "calendar" } });
       mockTodos = [makeTodo()];
       await rerender({});
       await flush();

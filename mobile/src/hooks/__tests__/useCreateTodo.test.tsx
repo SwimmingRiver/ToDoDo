@@ -80,6 +80,7 @@ describe("useCreateTodo", () => {
   });
 
   it("알림 예약이 실패해도 할 일 생성 자체는 성공 처리한다", async () => {
+    (jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException.mockClear();
     const { scheduleReminder } = await import("../../notifications/scheduleReminder");
     jest.mocked(scheduleReminder).mockRejectedValueOnce(new Error("permission denied"));
     const { useCreateTodo } = await import("../useCreateTodo");
@@ -107,5 +108,6 @@ describe("useCreateTodo", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBe("new-id");
+    expect((jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
   });
 });

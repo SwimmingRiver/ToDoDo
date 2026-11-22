@@ -1,8 +1,14 @@
+import { isUserCancelledError } from "expo-iap";
 import { refreshClaims } from "../useEntitlementSync";
 import { purchaseClient, type PurchaseClient, type StorePurchase } from "./purchaseClient";
 import { verifyPurchase, type VerifyResult } from "./verifyApi";
+import { reportError } from "../../shared/lib/sentry";
 
-export const reportIapError = (error: unknown) => console.warn("[iap]", error);
+/** 인앱결제 실패 보고. 사용자 취소는 실패가 아니므로 보내지 않는다(스토어 오류 리스너로도 취소가 온다). */
+export const reportIapError = (error: unknown) => {
+  if (isUserCancelledError(error)) return;
+  reportError(error, "iap");
+};
 
 /**
  * 거래 하나를 마무리한다: 서버 검증 → 토큰 갱신(새 premiumUntil 클레임) → 거래 끝내기.

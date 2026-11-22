@@ -1,6 +1,8 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { QueryClient } from "@tanstack/react-query";
 
+const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+
 const calls: string[] = [];
 
 jest.mock("../../firebase", () => ({ auth: { name: "auth" } }));
@@ -54,6 +56,7 @@ describe("signOut", () => {
   });
 
   it("구글 로그아웃이 실패해도 firebase 로그아웃과 캐시 비우기는 진행한다", async () => {
+    sentryMock.captureException.mockClear();
     mockGoogleSignOut.mockRejectedValueOnce(new Error("google down"));
     const { signOut } = await import("../signOut");
     const { client, clear } = makeQueryClient();
@@ -62,6 +65,7 @@ describe("signOut", () => {
 
     expect(mockFirebaseSignOut).toHaveBeenCalled();
     expect(clear).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "auth" } });
   });
 
   it("예약 알림 취소가 실패해도 로그아웃은 진행한다", async () => {

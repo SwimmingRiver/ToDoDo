@@ -3,9 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toClaimSeconds, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
 import { auth } from "../firebase";
 import { entitlementQueryKey, subscribeEntitlement } from "./entitlementApi";
+import { reportError } from "../shared/lib/sentry";
 
-// 앱에는 아직 Sentry가 없어 오류 보고는 이 한 곳에서 console.warn으로 한다.
-const reportError = (error: unknown) => console.warn("[entitlement]", error);
+const reportEntitlementError = (error: unknown) => reportError(error, "entitlement");
 
 /** ID 토큰을 강제 갱신해 서버가 최신 premiumUntil 클레임을 보게 한다. */
 export const refreshClaims = async (): Promise<void> => {
@@ -35,9 +35,9 @@ export const useEntitlementSync = () => {
       uid,
       (entitlement) => {
         queryClient.setQueryData(entitlementQueryKey(uid), entitlement);
-        syncClaimWithEntitlement(entitlement).catch(reportError);
+        syncClaimWithEntitlement(entitlement).catch(reportEntitlementError);
       },
-      reportError,
+      reportEntitlementError,
     );
   }, [uid, queryClient]);
 };
