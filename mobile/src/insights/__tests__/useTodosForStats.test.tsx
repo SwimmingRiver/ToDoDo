@@ -100,7 +100,7 @@ describe("useTodosForStats", () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it("첫 조회 실패 후 포커스하면 다시 읽는다", async () => {
+  it("첫 조회 실패 후 포커스해도 자동으로 다시 읽지 않는다(재조회 반복 방지)", async () => {
     mockIsPremium = true;
     mockFetch.mockRejectedValueOnce(new Error("fail"));
     await setup();
@@ -109,6 +109,6 @@ describe("useTodosForStats", () => {
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     await focus();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });

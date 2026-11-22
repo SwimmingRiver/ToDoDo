@@ -25,19 +25,17 @@ export const useTodosForStats = () => {
     staleTime: STATS_STALE_MS,
   });
 
-  const { refetch, dataUpdatedAt, isError } = query;
+  const { refetch, dataUpdatedAt } = query;
   useFocusEffect(
     useCallback(() => {
       if (!enabled) return;
-      // 첫 조회가 실패한 채 데이터가 없으면 포커스 때 바로 다시 읽는다.
-      if (dataUpdatedAt === 0 && isError) {
-        void refetch();
-        return;
-      }
-      // dataUpdatedAt === 0이면 첫 조회가 진행 중이라 useQuery에 맡긴다.
+      // dataUpdatedAt === 0이면 첫 조회가 진행 중이거나 실패한 상태라 useQuery에 맡긴다.
+      // 실패 시 자동 재조회는 하지 않는다 — isError를 deps에 넣으면 실패할 때마다 콜백이
+      // 바뀌어 useFocusEffect가 다시 돌고, 오프라인이면 재조회가 끝없이 반복된다.
+      // 복구는 에러 화면의 당겨서 새로고침으로 한다.
       if (dataUpdatedAt === 0) return;
       if (Date.now() - dataUpdatedAt > STATS_STALE_MS) void refetch();
-    }, [enabled, dataUpdatedAt, isError, refetch]),
+    }, [enabled, dataUpdatedAt, refetch]),
   );
 
   return query;
