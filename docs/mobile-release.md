@@ -80,3 +80,7 @@ iPhone 전용(`supportsTablet: false`)이라 iPad 스크린샷은 필요 없다.
 4. 캘린더 — 월간 보기 + 구글 캘린더 일정 오버레이 (프리미엄)
 5. 통계 — 연속 달성일·완료율·완료 추이 (프리미엄)
 6. 할 일 상세 — 반복 설정(매주 요일)
+
+## 체험 offer 자격 (Play Console)
+
+Google Play의 7일 무료 체험 offer 자격은 **"신규 고객만"**(이 앱 구독을 처음 사는 Google 계정)으로 설정한다. 약관 4판 제6조가 "탈퇴 후 1년 안에 같은 Google 계정으로 다시 가입하면 체험을 다시 제공하지 않는다"고 하는데, 앱 체험은 서버가 아니라 스토어가 판단하므로 이 설정이 없으면 같은 Google 계정으로 앱 체험이 반복된다. App Store는 같은 Apple ID에 체험을 다시 주지 않아 별도 설정이 필요 없다. 배경: `docs/superpowers/specs/2026-11-22-trial-reuse-after-deletion-design.md`.

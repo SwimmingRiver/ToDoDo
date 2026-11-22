@@ -138,7 +138,8 @@ describe("법적 문서 본문", () => {
     it("4판: 약관 제6조는 탈퇴 후 재가입 1년 제한을 적는다", () => {
       const latest = LEGAL_EDITIONS.terms.at(-1)!;
       expect(latest.effectiveOn).toBe("2026-12-28");
-      expect(allText(latest.document)).toContain("탈퇴한 날부터 1년 동안은 체험을 다시 받을 수 없습니다");
+      expect(allText(latest.document)).toContain("회원 탈퇴 후 1년 안에 같은 Google 또는 Apple 계정으로 다시 가입하면 같은 이용자로 보아 체험을 다시 제공하지 않습니다");
+      expect(allText(latest.document)).toContain("앱 체험은 App Store·Google Play의 체험 제공 기준도 함께 따릅니다");
     });
 
     it("3판 본문(2026-11-27)은 옛 문장 그대로다", () => {
