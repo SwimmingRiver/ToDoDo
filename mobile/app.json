@@ -45,6 +45,14 @@
           "organization": "none-72",
           "project": "tododo-mobile"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#FFFFFF"
+        }
       ]
     ],
     "extra": {

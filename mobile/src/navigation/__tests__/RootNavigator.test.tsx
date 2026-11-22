@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
 jest.mock("../../firebase", () => ({ db: {} }));
+const mockHideSplash = jest.fn();
+jest.mock("../../shared/lib/splash", () => ({ hideSplash: () => mockHideSplash() }));
 jest.mock("@tododo/core", () => ({ runStartupMaintenance: jest.fn() }));
 jest.mock("../../maintenance/maintenanceSchedule", () => ({
   ...(jest.requireActual("../../maintenance/maintenanceSchedule") as object),
@@ -140,4 +142,17 @@ describe("RootNavigator 라우트", () => {
     expect(insights[0].options?.title).toBe("통계");
     expect(mockStackScreens.filter((s) => s.name === "Account")).toHaveLength(4);
   });
+
+  it("인증 상태를 확인하는 동안은 스플래시를 유지하고, 정해지면 숨긴다", async () => {
+    mockHideSplash.mockClear();
+    authMock.mockReturnValue({ user: null, loading: true });
+    const view = await render(<QueryClientProvider client={new QueryClient()}><RootNavigator /></QueryClientProvider>);
+    await flush();
+    expect(mockHideSplash).not.toHaveBeenCalled();
+    authMock.mockReturnValue({ user: null, loading: false });
+    await view.rerender(<QueryClientProvider client={new QueryClient()}><RootNavigator /></QueryClientProvider>);
+    await flush();
+    expect(mockHideSplash).toHaveBeenCalled();
+  });
 });
+
