@@ -24,6 +24,7 @@ import { useEntitlementSync } from "../premium";
 import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 import { resumePendingPurchases } from "../premium/iap/resumePending";
 import { useSyncTodosToCalendar } from "../calendarIntegration/useSyncTodosToCalendar";
+import { hideSplash } from "../shared/lib/splash";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -144,6 +145,11 @@ export const RootNavigator = () => {
   const { user, loading } = useAuthState();
   // MainTabs는 로그인 중에만 마운트되므로, 로그아웃(uid -> null)을 보려면 항상 마운트된 여기서 호출해야 한다.
   useStartupMaintenance(user?.uid ?? null);
+
+  // 로그인 상태가 정해지면(로그인 화면 또는 탭) 네이티브 스플래시를 걷는다.
+  useEffect(() => {
+    if (!loading) hideSplash();
+  }, [loading]);
 
   if (loading) {
     return (
