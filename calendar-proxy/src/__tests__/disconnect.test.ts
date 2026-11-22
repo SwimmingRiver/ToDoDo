@@ -129,6 +129,28 @@ describe("handleDisconnect", () => {
     expect(body.ok).toBe(true);
   });
 
+  it("요청 바디가 JSON null이어도 500 없이 토큰을 지운다", async () => {
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
+    const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
+    const { refreshAccessToken } = await import("../googleOAuth");
+    const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
+
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false, premiumUntil: null });
+    vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
+    vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
+    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([]);
+
+    const nullBodyRequest = new Request("https://proxy.example.com/disconnect", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token", "Content-Type": "application/json" },
+      body: "null",
+    });
+    const response = await handleDisconnect(nullBodyRequest, makeEnv());
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
+  });
+
   it("Authorization 헤더가 없으면 401을 반환하고 아무 것도 호출하지 않는다", async () => {
     const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
     const { getTokenRecord } = await import("../tokenStore");

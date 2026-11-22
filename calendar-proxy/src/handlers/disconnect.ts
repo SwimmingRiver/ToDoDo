@@ -39,7 +39,8 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
   // 지울 수 없다. 클라이언트가 묶음으로 나눠 보내면서 마지막 요청 전까지는
   // keepToken:true로 토큰을 남겨 둔다(다음 묶음도 지울 수 있게). 없거나 false면 예전처럼
   // 마지막에 토큰을 지운다 — 이미 배포된 클라이언트와 호환된다.
-  const { googleEventIds, keepToken } = (await request.json().catch(() => ({}))) as {
+  // JSON null 같은 비객체 바디도 빈 객체로 본다 — 여기서 TypeError가 나면 토큰이 남는다.
+  const { googleEventIds, keepToken } = ((await request.json().catch(() => null)) ?? {}) as {
     googleEventIds?: string[];
     keepToken?: boolean;
   };
