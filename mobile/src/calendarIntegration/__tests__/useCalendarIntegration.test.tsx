@@ -34,6 +34,7 @@ import {
   useDisconnectCalendar,
 } from "../useCalendarIntegration";
 import { markCalendarRevoked } from "../markCalendarRevoked";
+import { DisconnectPartialError } from "@tododo/core/dist/calendarSync/index.js";
 
 const mockGetDoc = jest.mocked(getDoc);
 const mockSetDoc = jest.mocked(setDoc);
@@ -218,6 +219,35 @@ describe("useDisconnectCalendar", () => {
     await expect(result.current.disconnect(todos)).resolves.toEqual({ allDeleted: false });
     expect(mockBatchCommit).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ["todos", "uid-1"] });
+  });
+});
+
+describe("useDisconnectCalendar — 묶음 도중 실패", () => {
+  const todos = [
+    { id: "t1", googleEventId: "g1" },
+    { id: "t2", googleEventId: "g2" },
+  ];
+
+  // 앞 묶음에서 이미 구글에서 지워진 이벤트의 googleEventId는 지우고(이벤트가 없다), 토큰은
+  // 아직 남아 있으니 연동 해제 상태로 바꾸지 않는다(사용자가 다시 시도할 수 있다).
+  it("삭제 확인된 id만 비우고, connected는 그대로 둔 채 에러를 다시 던진다", async () => {
+    const partial = new DisconnectPartialError(new Error("연동 해제 실패"), ["g1", "o1"]);
+    mockDisconnect.mockRejectedValue(partial);
+    const { result } = await renderHook(() => useDisconnectCalendar(), { wrapper: wrap(makeClient()) });
+
+    await expect(result.current.disconnect(todos, ["o1"])).rejects.toBe(partial);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).toHaveBeenCalledWith({ path: "todos/t1" }, { googleEventId: null });
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
+  it("일반 오류면 Firestore를 건드리지 않고 그대로 던진다", async () => {
+    mockDisconnect.mockRejectedValue(new Error("network"));
+    const { result } = await renderHook(() => useDisconnectCalendar(), { wrapper: wrap(makeClient()) });
+    await expect(result.current.disconnect(todos)).rejects.toThrow("network");
+    expect(mockBatchUpdate).not.toHaveBeenCalled();
+    expect(mockSetDoc).not.toHaveBeenCalled();
   });
 });
 
