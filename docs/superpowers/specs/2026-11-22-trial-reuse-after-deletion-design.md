@@ -71,7 +71,7 @@ uid·이메일·원래 `sub`는 넣지 않는다. 문서 id가 해시값이라 �
 
 `firestore.rules`: `match /trialHistory/{key} { allow read, write: if false; }` (서비스 계정만).
 
-TTL: `trialHistory` 컬렉션 그룹의 `expireAt` 필드에 Firestore TTL 정책 — **사용자 1회 설정**(콘솔 또는 `gcloud firestore fields ttls update expireAt --collection-group=trialHistory --enable-ttl`). TTL 삭제는 최대 24시간+ 지연되므로 코드는 읽을 때 `expireAt <= now`면 없는 것으로 본다.
+TTL: `trialHistory` 컬렉션 그룹의 `expireAt` 필드에 Firestore TTL 정책 — `firestore.indexes.json` `fieldOverrides`(`"ttl": true, "indexes": []`)로 코드에 두고 CI deploy job(`firestore:indexes`)이 배포한다(사용자 Mac에 gcloud가 없고, 콘솔 TTL 화면은 아직 없는 컬렉션 그룹을 고를 수 없어서). expireAt으로 조회하지 않으므로 단일 필드 색인은 끈다. TTL 삭제는 최대 24시간+ 지연되므로 코드는 읽을 때 `expireAt <= now`면 없는 것으로 본다.
 
 ### 5. 탈퇴 처리 (`handlers/deleteAccount.ts`)
 
@@ -108,9 +108,8 @@ TTL: `trialHistory` 컬렉션 그룹의 `expireAt` 필드에 Firestore TTL 정�
 ## 사용자가 할 일 (코드 밖)
 
 1. `TRIAL_HMAC_SECRET` 생성·등록 — 본인 터미널에서 `wrangler secret put TRIAL_HMAC_SECRET`(billing-proxy). **운영에만** 등록한다(설계자 판단): 프리뷰 배포(`versions upload`)도 운영 Firestore(`tododo-83576`)를 쓰므로, 프리뷰에 키가 있으면 테스트 탈퇴가 실제 `trialHistory`를 남긴다. 키가 없으면 저장·조회를 건너뛰고(로그만) 기존 동작대로 간다(5·6절). 로컬 `.dev.vars`로 실검증할 때는 테스트 후 생긴 문서를 지운다.
-2. Firestore TTL 정책(`trialHistory.expireAt`) 1회 설정.
-3. 4판 문구 확인.
-4. (스토어 계정 생긴 뒤) Play Console 체험 offer 자격 "신규 고객만".
+2. 4판 문구 확인(완료, 11-22).
+3. (스토어 계정 생긴 뒤) Play Console 체험 offer 자격 "신규 고객만".
 
 ## 알려진 한계
 

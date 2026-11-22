@@ -75,10 +75,7 @@
    openssl rand -hex 32 | npx wrangler secret put TRIAL_HMAC_SECRET
    ```
    **바꾸지 않는다** — 문서 id가 이 키로 만든 값이라 바꾸면 기존 기록을 모두 못 찾는다.
-2. 1년 뒤 자동 삭제 — Firestore TTL 정책을 한 번 켠다(삭제는 최대 하루 이상 늦을 수 있어 코드는 `expireAt`을 직접 비교한다).
-   ```bash
-   gcloud firestore fields ttls update expireAt --collection-group=trialHistory --enable-ttl --project=tododo-83576
-   ```
+2. 1년 뒤 자동 삭제는 **코드로 설정돼 있어 할 일이 없다** — `firestore.indexes.json`의 `fieldOverrides`(`trialHistory.expireAt`, `ttl: true`, 색인 없음)를 CI deploy job(`firestore:indexes`)이 배포한다. TTL 삭제는 최대 하루 이상 늦을 수 있어 코드는 `expireAt`을 직접 비교한다.
 3. 로컬 `.dev.vars`로 실검증했다면 테스트 후 생긴 `trialHistory` 문서를 지운다.
 
 ### 릴리스(develop→main) 전제
