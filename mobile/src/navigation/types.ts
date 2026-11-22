@@ -24,3 +24,8 @@ export type CalendarStackParamList = {
   TodoDetail: TodoDetailParams;
   TodoForm: TodoFormParams;
 };
+
+export type InsightsStackParamList = {
+  Insights: undefined;
+  Account: undefined;
+};

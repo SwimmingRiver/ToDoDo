@@ -6,7 +6,7 @@ import {
 } from "@react-navigation/native-stack";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { Sun, ListTodo, CalendarDays, UserRound } from "lucide-react-native";
+import { Sun, ListTodo, CalendarDays, UserRound, ChartColumn } from "lucide-react-native";
 import { useAuthState } from "../auth/useAuthState";
 import { LoginScreen } from "../screens/LoginScreen";
 import { TodayScreen } from "../screens/TodayScreen";
@@ -14,10 +14,11 @@ import { TodoListScreen } from "../screens/TodoListScreen";
 import { TodoFormScreen } from "../screens/TodoFormScreen";
 import { TodoDetailScreen } from "../screens/TodoDetailScreen";
 import { CalendarScreen } from "../screens/CalendarScreen";
+import { InsightsScreen } from "../screens/InsightsScreen";
 import { AccountScreen } from "../screens/AccountScreen";
 import { AiPlanScreen } from "../screens/AiPlanScreen";
 import { IconButton } from "../shared/ui/iconButton/IconButton";
-import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList } from "./types";
+import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList, InsightsStackParamList } from "./types";
 import { colors } from "../theme/colors";
 import { useEntitlementSync } from "../premium";
 import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
@@ -27,11 +28,12 @@ import { useSyncTodosToCalendar } from "../calendarIntegration/useSyncTodosToCal
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
 const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
+const InsightsStack = createNativeStackNavigator<InsightsStackParamList>();
 const Tab = createBottomTabNavigator();
 
-// 세 스택 모두 Account 라우트를 가지므로 어느 탭에서든 헤더 아이콘으로 계정 화면에 간다.
+// 네 스택 모두 Account 라우트를 가지므로 어느 탭에서든 헤더 아이콘으로 계정 화면에 간다.
 // 계정 화면 자신은 options에서 headerRight를 지운다. navigation 타입을 스택별 ParamList가
-// 아니라 navigate("Account")만 요구하는 모양으로 좁혀야 세 스택에 같은 함수를 넘길 수 있다.
+// 아니라 navigate("Account")만 요구하는 모양으로 좁혀야 네 스택에 같은 함수를 넘길 수 있다.
 const accountHeaderOptions = ({
   navigation,
 }: {
@@ -76,6 +78,13 @@ const CalendarTabStack = () => (
   </CalendarStack.Navigator>
 );
 
+const InsightsTabStack = () => (
+  <InsightsStack.Navigator screenOptions={accountHeaderOptions}>
+    <InsightsStack.Screen name="Insights" component={InsightsScreen} options={{ title: "통계" }} />
+    <InsightsStack.Screen name="Account" component={AccountScreen} options={accountScreenOptions} />
+  </InsightsStack.Navigator>
+);
+
 const MainTabs = () => {
   return (
   <Tab.Navigator
@@ -99,6 +108,11 @@ const MainTabs = () => {
       name="캘린더"
       component={CalendarTabStack}
       options={{ tabBarIcon: ({ color, size }) => <CalendarDays color={color} size={size} /> }}
+    />
+    <Tab.Screen
+      name="통계"
+      component={InsightsTabStack}
+      options={{ tabBarIcon: ({ color, size }) => <ChartColumn color={color} size={size} /> }}
     />
   </Tab.Navigator>
   );
