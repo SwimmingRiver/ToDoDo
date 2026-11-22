@@ -6,6 +6,7 @@ import type { Env } from "../env";
 import { deriveAccountToken } from "../accountToken";
 import { asStored } from "./helpers/storedDoc";
 import { AppleJwsError } from "../apple/jws";
+import { hmacSha256Hex } from "../hmac";
 
 vi.mock("@tododo/worker-auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tododo/worker-auth")>()),
@@ -200,6 +201,58 @@ describe("router", () => {
     const res = await call(post("/trial"), makeDeps({ ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-01-01T00:00:00.000Z" }));
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "TRIAL_ALREADY_USED" });
+  });
+
+  describe("/trial — 체험 사용 확인값", () => {
+    const historyDeps = (hasActive: () => Promise<boolean>) => {
+      const deps = makeDeps();
+      const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(hasActive) };
+      return { deps: { ...deps, trialHistory: { store, secret: "s" } }, store };
+    };
+
+    it("만료 전 기록이 있는 식별자면 409 TRIAL_ALREADY_USED, 체험을 쓰지 않는다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps, store } = historyDeps(async () => true);
+      const res = await call(post("/trial"), deps);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({ error: "TRIAL_ALREADY_USED" });
+      expect(store.hasActive).toHaveBeenCalledWith([await hmacSha256Hex("s", "google.com:g1")], NOW);
+      expect(deps.store.write).not.toHaveBeenCalled();
+    });
+
+    it("apple.com만 일치해도 거절한다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({
+        uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"], "apple.com": ["a1"] },
+      });
+      const { deps, store } = historyDeps(async () => true);
+      expect((await call(post("/trial"), deps)).status).toBe(409);
+      expect(store.hasActive).toHaveBeenCalledWith(
+        [await hmacSha256Hex("s", "google.com:g1"), await hmacSha256Hex("s", "apple.com:a1")],
+        NOW,
+      );
+    });
+
+    it("기록이 없으면 체험을 시작한다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps } = historyDeps(async () => false);
+      expect((await call(post("/trial"), deps)).status).toBe(200);
+    });
+
+    it("기록 조회가 실패하면 기존 로직대로 체험을 시작한다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps } = historyDeps(async () => { throw new Error("firestore down"); });
+      expect((await call(post("/trial"), deps)).status).toBe(200);
+    });
+  });
+
+  it("/account/delete는 토큰의 식별자로 탈퇴 처리에 넘긴다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+    const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(async () => false) };
+    const deps = { ...makeDeps({ ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-12-01T00:00:00.000Z" }), trialHistory: { store, secret: "s" } };
+    const after = new Date("2026-12-28T03:00:00.000Z");
+    const res = await handleRequest(post("/account/delete"), ENV, () => deps, after);
+    expect(res.status).toBe(204);
+    expect(store.record).toHaveBeenCalledWith([{ provider: "google.com", key: await hmacSha256Hex("s", "google.com:g1") }], after);
   });
 
   it("/portal은 고객이 없으면 404 NO_CUSTOMER, 있으면 URL", async () => {

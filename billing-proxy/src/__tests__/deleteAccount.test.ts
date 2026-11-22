@@ -3,6 +3,7 @@ import { handleDeleteAccount } from "../handlers/deleteAccount";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
 import { asStored } from "./helpers/storedDoc";
 import type { AppleRecord, GoogleRecord } from "@tododo/core/dist/entitlement/index.js";
+import { hmacSha256Hex } from "../hmac";
 
 const PADDLE_ACTIVE: EntitlementDoc = {
   ...EMPTY_ENTITLEMENT,
@@ -210,5 +211,79 @@ describe("handleDeleteAccount", () => {
     deps.accountData.deleteUserData.mockRejectedValueOnce(new Error("firestore down"));
     await expect(handleDeleteAccount("u1", deps)).rejects.toThrow("firestore down");
     expect(deps.claims.deleteUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleDeleteAccount — 체험 사용 확인값", () => {
+  const AFTER = new Date("2026-12-28T03:00:00.000Z");
+  const TRIALED: EntitlementDoc = { ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-12-01T00:00:00.000Z" };
+  const IDS = { "google.com": ["g1"], "apple.com": ["a1"] };
+
+  const withHistory = (doc: EntitlementDoc, record = vi.fn(async () => undefined)) => {
+    const deps = makeDeps(doc);
+    const store = {
+      record: vi.fn(async (...args: Parameters<typeof record>) => {
+        deps.calls.push("record");
+        return record(...args);
+      }),
+      hasActive: vi.fn(async () => false),
+    };
+    return { ...deps, trialHistory: { store, secret: "s" }, store_: store };
+  };
+
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  it("시행 후 체험을 쓴 계정이면 데이터 삭제 전에 google·apple 키를 모두 기록한다", async () => {
+    const deps = withHistory(TRIALED);
+    const res = await handleDeleteAccount("u1", deps, IDS, AFTER);
+    expect(res.status).toBe(204);
+    expect(deps.calls).toEqual(["record", "data", "auth"]);
+    expect(deps.store_.record).toHaveBeenCalledWith(
+      [
+        { provider: "google.com", key: await hmacSha256Hex("s", "google.com:g1") },
+        { provider: "apple.com", key: await hmacSha256Hex("s", "apple.com:a1") },
+      ],
+      AFTER,
+    );
+  });
+
+  it("trialUsedAt이 없으면 기록하지 않는다", async () => {
+    const deps = withHistory(EMPTY_ENTITLEMENT);
+    await handleDeleteAccount("u1", deps, IDS, AFTER);
+    expect(deps.store_.record).not.toHaveBeenCalled();
+    expect(deps.calls).toEqual(["data", "auth"]);
+  });
+
+  it("시행 시각 전이면 기록하지 않고, 시행 시각에는 기록한다", async () => {
+    const before = withHistory(TRIALED);
+    await handleDeleteAccount("u1", before, IDS, new Date("2026-12-27T14:59:59.999Z"));
+    expect(before.store_.record).not.toHaveBeenCalled();
+
+    const at = withHistory(TRIALED);
+    await handleDeleteAccount("u1", at, IDS, new Date("2026-12-27T15:00:00.000Z"));
+    expect(at.store_.record).toHaveBeenCalledTimes(1);
+  });
+
+  it("식별자가 없으면 기록하지 않는다", async () => {
+    const deps = withHistory(TRIALED);
+    await handleDeleteAccount("u1", deps, {}, AFTER);
+    expect(deps.store_.record).not.toHaveBeenCalled();
+  });
+
+  it("기록이 실패해도 탈퇴는 204로 끝난다", async () => {
+    const deps = withHistory(TRIALED, vi.fn(async () => { throw new Error("firestore down"); }));
+    const res = await handleDeleteAccount("u1", deps, IDS, AFTER);
+    expect(res.status).toBe(204);
+    expect(deps.accountData.deleteUserData).toHaveBeenCalledWith("u1");
+    expect(deps.claims.deleteUser).toHaveBeenCalledWith("u1");
+  });
+
+  it("시크릿이 없으면(trialHistory null) 기록 없이 탈퇴한다", async () => {
+    const deps = { ...makeDeps(TRIALED), trialHistory: null };
+    const res = await handleDeleteAccount("u1", deps, IDS, AFTER);
+    expect(res.status).toBe(204);
+    expect(deps.calls).toEqual(["data", "auth"]);
   });
 });
