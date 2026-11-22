@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -132,51 +132,171 @@ describe("useSyncTodosToCalendar", () => {
     });
   });
 
-  it("동기화 결과 중 실패한 항목은 스냅샷을 갱신하지 않아 다음 실행에서 재시도된다", async () => {
+  // 11-21 레이트 리밋 폭주: 실패 항목은 스냅샷에 안 들어가 todos 재조회(참조만 바뀜)마다
+  // 즉시 다시 보내졌다. 이제는 쿨다운(5분) 동안 같은 updatedAt이면 다시 보내지 않고,
+  // 쿨다운이 끝나거나 사용자가 수정하면 다시 보낸다.
+  describe("실패 항목 쿨다운", () => {
+    const NOW = 1_800_000_000_000;
+    let nowSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      nowSpy = vi.spyOn(Date, "now").mockReturnValue(NOW);
+    });
+    afterEach(() => {
+      nowSpy.mockRestore();
+    });
+
+    const setup = async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      const todo = baseTodo({});
+      vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+      vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
+        { id: "todo-1", googleEventId: null, error: "403 rateLimitExceeded" },
+      ]);
+      const hook = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+      // 실패한 항목이라 Firestore에 googleEventId를 쓰지 않는다.
+      const { writeBatch } = await import("firebase/firestore");
+      const firstBatch = vi.mocked(writeBatch).mock.results[0]?.value as { update: ReturnType<typeof vi.fn> };
+      expect(firstBatch.update).not.toHaveBeenCalled();
+      return { ...hook, todo, useGetTodos, syncTodosToCalendar };
+    };
+
+    it("실패한 항목은 쿨다운 동안 todos가 다시 와도(updatedAt 그대로) 재전송하지 않는다", async () => {
+      const { rerender, todo, useGetTodos, syncTodosToCalendar } = await setup();
+
+      nowSpy.mockReturnValue(NOW + 60_000);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
+      rerender();
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1);
+    });
+
+    it("쿨다운이 지나면 같은 항목을 다시 보낸다", async () => {
+      const { rerender, todo, useGetTodos, syncTodosToCalendar } = await setup();
+
+      nowSpy.mockReturnValue(NOW + 5 * 60_000);
+      vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([{ id: "todo-1", googleEventId: "event-1" }]);
+      vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
+      rerender();
+
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+        {
+          id: "todo-1",
+          title: "제목",
+          dueAt: toLocalDateKey(todo.dueAt as string),
+          googleEventId: null,
+          action: "upsert",
+        },
+      ]);
+    });
+
+    it("실패 뒤 사용자가 수정하면(updatedAt 변경) 쿨다운 중이어도 바로 다시 보낸다", async () => {
+      const { rerender, todo, useGetTodos, syncTodosToCalendar } = await setup();
+
+      nowSpy.mockReturnValue(NOW + 1000);
+      vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([{ id: "todo-1", googleEventId: "event-1" }]);
+      vi.mocked(useGetTodos).mockReturnValue({
+        data: [{ ...todo, title: "수정됨", updatedAt: "2026-08-02T00:00:00.000Z" }],
+      } as never);
+      rerender();
+
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
+        expect.objectContaining({ id: "todo-1", title: "수정됨", action: "upsert" }),
+      ]);
+    });
+
+    it("요청 자체가 실패(네트워크·5xx)해도 그 묶음은 쿨다운에 걸어 즉시 재전송하지 않는다", async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      const todo = baseTodo({});
+      vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
+      vi.mocked(syncTodosToCalendar).mockRejectedValueOnce(new Error("동기화 실패: 500"));
+
+      const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+
+      vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
+      rerender();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1);
+      consoleError.mockRestore();
+    });
+  });
+
+  it("10건을 넘으면 10건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
     const { useGetTodos } = await import("@/features/todo");
     const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
     const { syncTodosToCalendar } = await import("../../api");
-
+    const { writeBatch } = await import("firebase/firestore");
     vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
       data: { connected: true, status: "active" },
     } as never);
+    const todos = Array.from({ length: 23 }, (_, i) => baseTodo({ id: `todo-${i}` }));
+    vi.mocked(useGetTodos).mockReturnValue({ data: todos } as never);
 
-    const todo = baseTodo({});
-    vi.mocked(useGetTodos).mockReturnValue({ data: [todo] } as never);
-    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
-      { id: "todo-1", googleEventId: null, error: "이벤트 POST 실패 (todo todo-1): 500" },
-    ]);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.mocked(syncTodosToCalendar).mockImplementation(async (batch) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return batch.map((p) => ({ id: p.id, googleEventId: `event-${p.id}` }));
+    });
+    const updateSpy = vi.fn();
+    vi.mocked(writeBatch).mockReturnValue({
+      update: updateSpy,
+      commit: vi.fn().mockResolvedValue(undefined),
+    } as never);
 
-    const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
 
-    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(syncTodosToCalendar).mock.calls.map(([b]) => b.length)).toEqual([10, 10, 3]);
+    expect(maxInFlight).toBe(1);
+    // 각 묶음의 결과가 전부 Firestore에 반영된다.
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(23));
+  });
 
-    // 실패한 항목이라 Firestore에 googleEventId를 쓰지 않는다.
-    const { writeBatch } = await import("firebase/firestore");
-    const firstBatch = vi.mocked(writeBatch).mock.results[0]?.value as {
-      update: ReturnType<typeof vi.fn>;
-    };
-    expect(firstBatch.update).not.toHaveBeenCalled();
+  it("묶음 도중 revoked가 나면 남은 묶음은 보내지 않고, 앞 묶음 결과는 그대로 반영한다", async () => {
+    const { useGetTodos } = await import("@/features/todo");
+    const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+    const { syncTodosToCalendar } = await import("../../api");
+    const { writeBatch, setDoc } = await import("firebase/firestore");
+    vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+      data: { connected: true, status: "active" },
+    } as never);
+    const todos = Array.from({ length: 25 }, (_, i) => baseTodo({ id: `todo-${i}` }));
+    vi.mocked(useGetTodos).mockReturnValue({ data: todos } as never);
+    vi.mocked(syncTodosToCalendar)
+      .mockImplementationOnce(async (batch) => batch.map((p) => ({ id: p.id, googleEventId: `event-${p.id}` })))
+      .mockRejectedValueOnce(new CalendarRevokedError());
+    const updateSpy = vi.fn();
+    vi.mocked(writeBatch).mockReturnValue({
+      update: updateSpy,
+      commit: vi.fn().mockResolvedValue(undefined),
+    } as never);
 
-    // 스냅샷이 갱신되지 않았으므로, updatedAt이 그대로인 같은 Todo로 다시
-    // 렌더링해도(참조만 바뀜) 동일하게 재전송 대상이 되어야 한다 — 이게 이
-    // 훅이 제공하는 재시도 계약이다.
-    vi.mocked(syncTodosToCalendar).mockResolvedValueOnce([
-      { id: "todo-1", googleEventId: "event-1" },
-    ]);
-    vi.mocked(useGetTodos).mockReturnValue({ data: [{ ...todo }] } as never);
-    rerender();
+    renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
 
-    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(syncTodosToCalendar)).toHaveBeenLastCalledWith([
-      {
-        id: "todo-1",
-        title: "제목",
-        dueAt: toLocalDateKey(todo.dueAt as string),
-        googleEventId: null,
-        action: "upsert",
-      },
-    ]);
+    await waitFor(() =>
+      expect(vi.mocked(setDoc)).toHaveBeenCalledWith(expect.anything(), { status: "revoked" }, { merge: true }),
+    );
+    expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2);
+    expect(updateSpy).toHaveBeenCalledTimes(10);
   });
 
   it("변경 없는 Todo는 다시 렌더링돼도 재전송하지 않는다", async () => {

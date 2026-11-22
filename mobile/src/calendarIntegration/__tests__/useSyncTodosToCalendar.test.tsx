@@ -1,6 +1,6 @@
 import { renderHook, waitFor, act } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { ReactNode } from "react";
 import type { Todo } from "@tododo/core";
 import type { SyncSnapshot } from "@tododo/core/dist/calendarSync/index.js";
@@ -244,5 +244,93 @@ describe("useSyncTodosToCalendar", () => {
     await act(async () => resolveSync([{ id: "t1", googleEventId: "evt-1" }]));
     await waitFor(() => expect(mockBatchCommit).toHaveBeenCalled());
     expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  // 11-21 레이트 리밋 폭주: 실패 항목이 스냅샷에 안 들어가 todos 재조회마다 즉시 재전송됐다
+  // (할 일 하나가 최대 7번). 쿨다운(5분) 동안 같은 updatedAt이면 다시 보내지 않는다.
+  describe("실패 항목 쿨다운", () => {
+    const NOW = 1_800_000_000_000;
+    let nowSpy: jest.SpiedFunction<typeof Date.now>;
+    beforeEach(() => {
+      nowSpy = jest.spyOn(Date, "now").mockReturnValue(NOW);
+    });
+    afterEach(() => {
+      nowSpy.mockRestore();
+    });
+
+    const renderWithFailure = async () => {
+      mockSync.mockResolvedValueOnce([{ id: "t1", googleEventId: null, error: "403 rateLimitExceeded" }]);
+      const hook = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
+      await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(1));
+      await flush();
+      return hook;
+    };
+
+    it("실패한 항목은 쿨다운 동안 todos가 다시 와도(updatedAt 그대로) 재전송하지 않는다", async () => {
+      const { rerender } = await renderWithFailure();
+      nowSpy.mockReturnValue(NOW + 60_000);
+      mockTodos = [makeTodo()];
+      await rerender({});
+      await flush();
+      expect(mockSync).toHaveBeenCalledTimes(1);
+    });
+
+    it("실패 뒤 수정되면(updatedAt 변경) 쿨다운 중이어도 바로 다시 보낸다", async () => {
+      const { rerender } = await renderWithFailure();
+      nowSpy.mockReturnValue(NOW + 1000);
+      mockTodos = [makeTodo({ title: "수정됨", updatedAt: "2026-11-21T00:00:00.000Z" })];
+      await rerender({});
+      await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
+      expect(mockSync.mock.calls[1][0]).toEqual([expect.objectContaining({ id: "t1", title: "수정됨" })]);
+    });
+
+    it("쿨다운이 지나면 같은 항목을 다시 보낸다", async () => {
+      const { rerender } = await renderWithFailure();
+      nowSpy.mockReturnValue(NOW + 5 * 60_000);
+      mockTodos = [makeTodo()];
+      await rerender({});
+      await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
+    });
+
+    it("요청 자체가 실패해도 그 묶음은 쿨다운에 걸어 즉시 재전송하지 않는다", async () => {
+      mockSync.mockRejectedValueOnce(new Error("동기화 실패: 500"));
+      const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
+      await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(1));
+      await flush();
+      mockTodos = [makeTodo()];
+      await rerender({});
+      await flush();
+      expect(mockSync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("10건을 넘으면 10건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
+    mockTodos = Array.from({ length: 23 }, (_, i) => makeTodo({ id: `t${i}` }));
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockSync.mockImplementation(async (batch) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` }));
+    });
+    await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(3));
+    expect(mockSync.mock.calls.map(([b]) => b.length)).toEqual([10, 10, 3]);
+    expect(maxInFlight).toBe(1);
+    await waitFor(() => expect(mockBatchUpdate).toHaveBeenCalledTimes(23));
+  });
+
+  it("묶음 도중 revoked가 나면 남은 묶음은 보내지 않고, 앞 묶음 결과는 그대로 반영한다", async () => {
+    mockTodos = Array.from({ length: 25 }, (_, i) => makeTodo({ id: `t${i}` }));
+    mockSync
+      .mockImplementationOnce(async (batch) => batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` })))
+      .mockRejectedValueOnce(new CalendarRevokedError());
+    await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
+    await waitFor(() => expect(mockRevoked).toHaveBeenCalledTimes(1));
+    await flush();
+    expect(mockSync).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(10);
   });
 });

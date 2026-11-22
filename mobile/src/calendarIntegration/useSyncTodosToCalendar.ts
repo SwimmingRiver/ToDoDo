@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { doc, setDoc, writeBatch } from "firebase/firestore";
-import { planCalendarSync, applySyncResults } from "@tododo/core/dist/calendarSync/index.js";
+import {
+  planCalendarSync,
+  applySyncResults,
+  excludeCoolingDown,
+  recordSyncFailures,
+  chunkSyncBatch,
+  type SyncFailureLog,
+} from "@tododo/core/dist/calendarSync/index.js";
 import { db } from "../firebase";
 import { useAuthState } from "../auth/useAuthState";
 import { useTodos } from "../hooks/useTodos";
@@ -41,6 +48,10 @@ export const useSyncTodosToCalendar = (): void => {
   const { isPremium } = useIsPremium();
   const queryClient = useQueryClient();
   const snapshotRef = useRef<SyncSnapshot>(new Map());
+  // 최근 실패 항목의 쿨다운 기록(메모리 전용, 저장 안 함). 11-21 레이트 리밋 폭주 —
+  // 실패 항목은 스냅샷에 안 들어가 todos 재조회(앱은 주기적으로 다시 받는다)마다 즉시
+  // 재전송돼 구글 403이 88건까지 쌓였다. excludeCoolingDown/recordSyncFailures 참고.
+  const failuresRef = useRef<SyncFailureLog>(new Map());
   // 스냅샷이 로드된 uid. 현재 uid와 같을 때만 ready다 — uid가 바뀐 첫 렌더에서
   // 옛 사용자의 스냅샷으로 동기화가 도는 일이 없도록 boolean 대신 uid로 비교한다.
   const [loadedUid, setLoadedUid] = useState<string | null>(null);
@@ -74,6 +85,7 @@ export const useSyncTodosToCalendar = (): void => {
     // 구글 이벤트도 남아 있으므로 해당 없음.)
     if (integration && !integration.connected) {
       snapshotRef.current = new Map();
+      failuresRef.current = new Map();
       void clearSnapshot(uid);
       // 어떤 경로로 해제됐든(버튼, 다른 기기, 409) 이미 삭제된 구글 이벤트가 화면에
       // 유령처럼 남지 않게 이벤트 캐시도 지운다. 조회 훅은 enabled:false가
@@ -102,44 +114,70 @@ export const useSyncTodosToCalendar = (): void => {
     // 같은 이벤트로 수렴한다.
     const { upserts, deletes, eligibleById } = planCalendarSync(todos, snapshot);
 
-    const batch = [...upserts, ...deletes];
+    // 최근 실패했고 그 뒤로 수정되지 않은 항목은 쿨다운 동안 뺀다(수정되면 즉시 재시도).
+    const failures = failuresRef.current;
+    const batch = excludeCoolingDown([...upserts, ...deletes], eligibleById, failures, Date.now());
     if (batch.length === 0) return;
 
     isRunningRef.current = true;
+    // existingTodoIds는 비대상(archived·dueAt 없음) 포함 전체 id여야 한다 —
+    // 삭제 성공 시 아직 존재하는 Todo의 googleEventId를 null로 정리하기 위함.
+    const existingTodoIds = new Set(todos.map((t) => t.id));
 
     (async () => {
       try {
-        const results = await syncTodosToCalendar(batch);
+        // 한 요청에 수십 건을 몰아 보내면 Worker가 구글에 한꺼번에 쏘다 레이트 리밋에
+        // 걸린다(11-21). 10건씩 나눠 앞 요청이 끝난 뒤에 다음 요청을 보낸다.
+        for (const chunk of chunkSyncBatch(batch)) {
+          // 동기화 도중 연동이 해제됐거나 uid가 바뀌어 snapshotRef가 교체됐다면 남은 묶음은
+          // 보내지 않는다.
+          if (snapshotRef.current !== snapshot) break;
 
-        // 여기서부터는 이펙트가 재실행/언마운트됐어도 절대 건너뛰지 않는다 —
-        // 구글에는 이미 이벤트가 만들어졌으므로, 그 결과를 스냅샷/Firestore에
-        // 반영하지 않으면 다음 실행이 googleEventId를 몰라 중복 이벤트를 만든다.
-        const firestoreBatch = writeBatch(db);
+          let results;
+          try {
+            results = await syncTodosToCalendar(chunk);
+          } catch (error) {
+            // 요청 자체가 실패(네트워크·Worker 5xx)한 묶음도 쿨다운에 건다 — 안 그러면
+            // todos 재조회마다 같은 묶음을 즉시 다시 보낸다. revoked/not_connected는
+            // 상태 변화 신호라 쿨다운 대상이 아니다(해제 시 기록도 비워진다).
+            if (!(error instanceof CalendarRevokedError) && !(error instanceof CalendarNotConnectedError)) {
+              const message = error instanceof Error ? error.message : String(error);
+              recordSyncFailures(
+                chunk,
+                chunk.map((p) => ({ id: p.id, googleEventId: p.googleEventId, error: message })),
+                eligibleById,
+                failures,
+                Date.now(),
+              );
+            }
+            // 남은 묶음은 보내지 않는다 — 앞 묶음 결과는 이미 반영됐다.
+            throw error;
+          }
 
-        results.forEach(({ id, error }) => {
-          // 실패 항목은 스냅샷을 갱신하지 않아 다음 실행에서 다시 시도된다.
-          if (error) console.warn(`[calendar] 동기화 실패 (todo ${id})`, error);
-        });
-        // existingTodoIds는 비대상(archived·dueAt 없음) 포함 전체 id여야 한다 —
-        // 삭제 성공 시 아직 존재하는 Todo의 googleEventId를 null로 정리하기 위함.
-        const { firestoreUpdates } = applySyncResults(
-          results,
-          eligibleById,
-          new Set(todos.map((t) => t.id)),
-          snapshot,
-        );
-        firestoreUpdates.forEach(({ todoId, googleEventId }) => {
-          firestoreBatch.update(doc(db, "todos", todoId), { googleEventId });
-        });
+          // 여기서부터는 이펙트가 재실행/언마운트됐어도 절대 건너뛰지 않는다 —
+          // 구글에는 이미 이벤트가 만들어졌으므로, 그 결과를 스냅샷/Firestore에
+          // 반영하지 않으면 다음 실행이 googleEventId를 몰라 중복 이벤트를 만든다.
+          const firestoreBatch = writeBatch(db);
 
-        // 동기화 도중 연동이 해제됐거나 uid가 바뀌어 snapshotRef가 교체됐다면, 이
-        // 클로저의 옛 스냅샷을 되돌려 쓰지 않는다 — 되돌려 쓰면 해제 시점의 clear가
-        // 무효가 되고 재연결 후 stale id가 그대로 복원된다. saveSnapshot은 throw하지 않는다.
-        if (snapshotRef.current === snapshot) await saveSnapshot(uid, snapshot);
+          results.forEach(({ id, error }) => {
+            // 실패 항목은 스냅샷을 갱신하지 않아 쿨다운이 끝난 뒤(또는 수정 시) 다시 시도된다.
+            if (error) console.warn(`[calendar] 동기화 실패 (todo ${id})`, error);
+          });
+          recordSyncFailures(chunk, results, eligibleById, failures, Date.now());
+          const { firestoreUpdates } = applySyncResults(results, eligibleById, existingTodoIds, snapshot);
+          firestoreUpdates.forEach(({ todoId, googleEventId }) => {
+            firestoreBatch.update(doc(db, "todos", todoId), { googleEventId });
+          });
 
-        if (firestoreUpdates.length > 0) {
-          await firestoreBatch.commit();
-          queryClient.invalidateQueries({ queryKey: ["todos"] });
+          // 동기화 도중 연동이 해제됐거나 uid가 바뀌어 snapshotRef가 교체됐다면, 이
+          // 클로저의 옛 스냅샷을 되돌려 쓰지 않는다 — 되돌려 쓰면 해제 시점의 clear가
+          // 무효가 되고 재연결 후 stale id가 그대로 복원된다. saveSnapshot은 throw하지 않는다.
+          if (snapshotRef.current === snapshot) await saveSnapshot(uid, snapshot);
+
+          if (firestoreUpdates.length > 0) {
+            await firestoreBatch.commit();
+            queryClient.invalidateQueries({ queryKey: ["todos"] });
+          }
         }
       } catch (error) {
         if (error instanceof CalendarRevokedError) {
