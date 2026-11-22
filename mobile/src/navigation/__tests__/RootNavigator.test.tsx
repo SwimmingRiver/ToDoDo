@@ -31,7 +31,7 @@ jest.mock("@react-navigation/native-stack", () => ({
     },
   }),
 }));
-jest.mock("lucide-react-native", () => ({ Sun: () => null, ListTodo: () => null, CalendarDays: () => null, UserRound: () => null }));
+jest.mock("lucide-react-native", () => ({ Sun: () => null, ListTodo: () => null, CalendarDays: () => null, UserRound: () => null, ChartColumn: () => null }));
 jest.mock("../../screens/LoginScreen", () => ({ LoginScreen: () => null }));
 jest.mock("../../screens/TodayScreen", () => ({ TodayScreen: () => null }));
 jest.mock("../../screens/TodoListScreen", () => ({ TodoListScreen: () => null }));
@@ -40,6 +40,7 @@ jest.mock("../../screens/TodoDetailScreen", () => ({ TodoDetailScreen: () => nul
 jest.mock("../../screens/CalendarScreen", () => ({ CalendarScreen: () => null }));
 jest.mock("../../screens/AccountScreen", () => ({ AccountScreen: () => null }));
 jest.mock("../../screens/AiPlanScreen", () => ({ AiPlanScreen: () => null }));
+jest.mock("../../screens/InsightsScreen", () => ({ InsightsScreen: () => null }));
 jest.mock("../../shared/ui/iconButton/IconButton", () => ({ IconButton: () => null }));
 
 import { runStartupMaintenance } from "@tododo/core";
@@ -124,5 +125,19 @@ describe("RootNavigator 라우트", () => {
     const aiPlan = mockStackScreens.filter((s) => s.name === "AiPlan");
     expect(aiPlan).toHaveLength(1);
     expect(aiPlan[0].options?.title).toBe("AI로 계획");
+  });
+
+  it("로그인하면 통계 스택에 Insights·Account가 등록된다", async () => {
+    mockStackScreens.length = 0;
+    authMock.mockReturnValue({ user: { uid: "u1" }, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    const insights = mockStackScreens.filter((s) => s.name === "Insights");
+    expect(insights).toHaveLength(1);
+    expect(insights[0].options?.title).toBe("통계");
+    expect(mockStackScreens.filter((s) => s.name === "Account")).toHaveLength(4);
   });
 });
