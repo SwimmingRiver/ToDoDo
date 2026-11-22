@@ -75,7 +75,7 @@
    openssl rand -hex 32 | npx wrangler secret put TRIAL_HMAC_SECRET
    ```
    **바꾸지 않는다** — 문서 id가 이 키로 만든 값이라 바꾸면 기존 기록을 모두 못 찾는다.
-2. 1년 뒤 자동 삭제는 **코드로 설정돼 있어 할 일이 없다** — `firestore.indexes.json`의 `fieldOverrides`(`trialHistory.expireAt`, `ttl: true`, 색인 없음)를 CI deploy job(`firestore:indexes`)이 배포한다. TTL 삭제는 최대 하루 이상 늦을 수 있어 코드는 `expireAt`을 직접 비교한다.
+2. 1년 뒤 만료 — 코드가 조회할 때 `expireAt`을 직접 비교해 지난 기록은 없는 것으로 본다. **Firestore TTL은 쓰지 않는다**: 결제 연결(Blaze) 프로젝트에서만 되는데 이 프로젝트는 무료(Spark)라, `firestore.indexes.json`에 넣었더니 CI 배포가 `403 billing disabled`로 실패했다(2026-11-22). 만료 문서의 실제 삭제는 **2027-12-28(첫 기록 만료) 전까지** 별도 정리 작업(예: billing-proxy 예약 실행)으로 만든다.
 3. 로컬 `.dev.vars`로 실검증했다면 테스트 후 생긴 `trialHistory` 문서를 지운다.
 
 ### 릴리스(develop→main) 전제
