@@ -1,12 +1,8 @@
-import { collection, doc, getDocs, query, where, writeBatch, } from "firebase/firestore";
+import { collection, doc, writeBatch, } from "firebase/firestore";
 import { parseDateKey } from "../insights/date.js";
+import { getNextRootOrder } from "./todoDocs.js";
 const dateKeyToISO = (key) => (key ? parseDateKey(key).toISOString() : null);
 /** 사용자의 루트(parentId === null) 할 일 중 다음에 쓸 order 값을 계산한다. */
-const getNextRootOrder = async (db, userId) => {
-    const rootTodosSnapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId), where("parentId", "==", null)));
-    const maxOrder = rootTodosSnapshot.docs.reduce((max, d) => Math.max(max, d.data().order ?? 0), -1);
-    return maxOrder + 1;
-};
 /**
  * AI 플랜 미리보기에서 사용자가 편집을 마친 초안을 저장한다. 상위 1개와 하위 N개를
  * writeBatch 한 번으로 만든다. createTodo 후 createChildTodo를 N번 부르면 중간 실패 시

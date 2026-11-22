@@ -1634,13 +1634,11 @@ describe("deleteRecurringSeries", () => {
     const doingInstance = makeTodo({ id: "doing-1", status: "doing", recurrenceId: "series-1", recurrence: dailyRule });
     const todoInstance = makeTodo({ id: "todo-1", status: "todo", recurrenceId: "series-1", recurrence: dailyRule });
 
-    vi.mocked(getDocs).mockResolvedValueOnce(
-      toDocSnapshot([doneInstance, doingInstance, todoInstance]) as ReturnType<
-        typeof getDocs
-      > extends Promise<infer T>
-        ? T
-        : never,
-    );
+    type Snap = ReturnType<typeof getDocs> extends Promise<infer T> ? T : never;
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(toDocSnapshot([doneInstance, doingInstance, todoInstance]) as Snap)
+      // 하위 할 일 조회 — 없음
+      .mockResolvedValueOnce(emptyDocsSnapshot as Snap);
     const batch = makeBatch();
     vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
 
@@ -1667,6 +1665,55 @@ describe("deleteRecurringSeries", () => {
 
     expect(batch.delete).not.toHaveBeenCalled();
     expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  // 반복을 끈 회차(recurrenceId는 남고 recurrence는 null)에는 하위 할 일을 추가할 수 있다.
+  // 그 회차를 지우면 이 경로를 타므로, 하위 할 일도 함께 지워야 고아 문서가 남지 않는다
+  // (일반 할 일 삭제 deleteTodo와 같은 원칙).
+  it("회차에 달린 하위 할 일도 함께 삭제한다", async () => {
+    const { getDocs, writeBatch, where } = await import("firebase/firestore");
+    vi.mocked(where).mockClear();
+    const offInstance = makeTodo({ id: "off-1", status: "todo", recurrenceId: "series-1", recurrence: null });
+    const doneInstance = makeTodo({ id: "done-1", status: "done", recurrenceId: "series-1", recurrence: null });
+    const child = makeTodo({ id: "child-1", parentId: "off-1", recurrenceId: null, recurrence: null });
+
+    type Snap = ReturnType<typeof getDocs> extends Promise<infer T> ? T : never;
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(toDocSnapshot([offInstance, doneInstance]) as Snap)
+      .mockResolvedValueOnce(toDocSnapshot([child]) as Snap);
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { deleteRecurringSeries } = await import("../seriesApi");
+    await deleteRecurringSeries(fakeDb, UID, "series-1");
+
+    expect(where).toHaveBeenCalledWith("parentId", "in", ["off-1", "done-1"]);
+    expect(batch.delete).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(batch.delete).mock.calls.map(([ref]) => (ref as { id: string }).id)).toContain("child-1");
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("회차가 30개를 넘으면 하위 할 일 조회를 in 연산자 한도(30)씩 나눠 한다", async () => {
+    const { getDocs, writeBatch, where } = await import("firebase/firestore");
+    vi.mocked(where).mockClear();
+    const instances = Array.from({ length: 31 }, (_, i) =>
+      makeTodo({ id: `occ-${i}`, recurrenceId: "series-1", recurrence: dailyRule }),
+    );
+
+    type Snap = ReturnType<typeof getDocs> extends Promise<infer T> ? T : never;
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce(toDocSnapshot(instances) as Snap)
+      .mockResolvedValueOnce(emptyDocsSnapshot as Snap)
+      .mockResolvedValueOnce(emptyDocsSnapshot as Snap);
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+
+    const { deleteRecurringSeries } = await import("../seriesApi");
+    await deleteRecurringSeries(fakeDb, UID, "series-1");
+
+    const inCalls = vi.mocked(where).mock.calls.filter(([field, op]) => field === "parentId" && op === "in");
+    expect(inCalls.map(([, , ids]) => (ids as string[]).length)).toEqual([30, 1]);
+    expect(batch.delete).toHaveBeenCalledTimes(31);
   });
 });
 
@@ -1714,6 +1761,10 @@ describe("반복 시리즈 쓰기 함수 직렬화(withRecurringSeriesLock)", ()
         toDocSnapshot([futureInstance]) as ReturnType<typeof getDocs> extends Promise<infer T>
           ? T
           : never,
+      )
+      // 4) delete의 하위 할 일 조회
+      .mockResolvedValueOnce(
+        emptyDocsSnapshot as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never,
       );
 
     const editBatch = makeBatch();
@@ -1753,7 +1804,8 @@ describe("반복 시리즈 쓰기 함수 직렬화(withRecurringSeriesLock)", ()
 
     expect(editBatch.commit).toHaveBeenCalledTimes(1);
     expect(deleteBatch.commit).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(getDocs).mock.calls.length).toBe(3);
+    // edit 시리즈 조회·getNextRootOrder + delete 시리즈 조회·하위 할 일 조회
+    expect(vi.mocked(getDocs).mock.calls.length).toBe(4);
     // delete의 조회(3번째 getDocs)는 edit의 batch.commit 이후에 호출되어야 한다.
     const deleteReadOrder = vi.mocked(getDocs).mock.invocationCallOrder[2];
     const editCommitOrder = editBatch.commit.mock.invocationCallOrder[0];

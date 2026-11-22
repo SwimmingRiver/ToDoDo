@@ -1,6 +1,6 @@
 import { collection, addDoc, getDocs, doc, query, where, writeBatch, } from "firebase/firestore";
+import { mapDocToTodo } from "./todoDocs";
 const normalizeOrder = (order) => typeof order === "number" && !Number.isNaN(order) ? order : Infinity;
-const mapDocToTodo = (id, data) => ({ id, ...data });
 export const getTodos = async (db, userId) => {
     const q = query(collection(db, "todos"), where("userId", "==", userId), where("archived", "==", false));
     const snapshot = await getDocs(q);

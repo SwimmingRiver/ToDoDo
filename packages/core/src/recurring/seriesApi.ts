@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { parseDateKey, toDateKeyFromISO } from "../insights/date";
 import type { RecurrenceRule, Todo } from "../types/todo";
+import { getNextRootOrder, mapDocToTodo } from "../api/todoDocs";
 import {
   buildRecurringInstanceId,
   buildRecurringOccurrenceDoc,
@@ -48,25 +49,6 @@ const isSameRecurrenceRule = (
     (a.endType === "untilDate" ? (a.endDate ?? null) === (b.endDate ?? null) : true) &&
     weekdaysKey(a) === weekdaysKey(b)
   );
-};
-
-const mapDocToTodo = (id: string, data: Record<string, unknown>): Todo =>
-  ({ id, ...data }) as Todo;
-
-/** 인증된 사용자의 루트(parentId === null) 할 일 중 다음에 쓸 order 값을 계산한다. */
-const getNextRootOrder = async (db: Firestore, userId: string): Promise<number> => {
-  const rootTodosSnapshot = await getDocs(
-    query(
-      collection(db, "todos"),
-      where("userId", "==", userId),
-      where("parentId", "==", null),
-    ),
-  );
-  const maxOrder = rootTodosSnapshot.docs.reduce(
-    (max, d) => Math.max(max, (d.data().order as number) ?? 0),
-    -1,
-  );
-  return maxOrder + 1;
 };
 
 /**
@@ -462,5 +444,26 @@ const deleteRecurringSeriesImpl = async (
   seriesSnapshot.docs.forEach((d) => {
     batch.delete(d.ref);
   });
+
+  // 회차에 달린 하위 할 일도 함께 지운다. 반복을 끈 회차(recurrence: null)에는 하위 할 일을
+  // 추가할 수 있는데, 여기서 회차만 지우면 parentId가 사라진 문서를 가리키는 고아가 남는다
+  // (일반 할 일 삭제 deleteTodo와 같은 원칙). in 연산자는 값 30개 한도라 나눠서 조회한다.
+  const occurrenceIds = seriesSnapshot.docs.map((d) => d.id);
+  for (let i = 0; i < occurrenceIds.length; i += PARENT_ID_IN_LIMIT) {
+    const childrenSnapshot = await getDocs(
+      query(
+        collection(db, "todos"),
+        where("userId", "==", userId),
+        where("parentId", "in", occurrenceIds.slice(i, i + PARENT_ID_IN_LIMIT)),
+      ),
+    );
+    childrenSnapshot.docs.forEach((d) => {
+      batch.delete(d.ref);
+    });
+  }
+
   await batch.commit();
 };
+
+/** Firestore `in` 연산자가 한 번에 받는 값의 최대 개수. */
+const PARENT_ID_IN_LIMIT = 30;
