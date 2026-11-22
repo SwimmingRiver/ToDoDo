@@ -71,7 +71,7 @@ uid·이메일·원래 `sub`는 넣지 않는다. 문서 id가 해시값이라 �
 
 `firestore.rules`: `match /trialHistory/{key} { allow read, write: if false; }` (서비스 계정만).
 
-TTL: `trialHistory` 컬렉션 그룹의 `expireAt` 필드에 Firestore TTL 정책 — `firestore.indexes.json` `fieldOverrides`(`"ttl": true, "indexes": []`)로 코드에 두고 CI deploy job(`firestore:indexes`)이 배포한다(사용자 Mac에 gcloud가 없고, 콘솔 TTL 화면은 아직 없는 컬렉션 그룹을 고를 수 없어서). expireAt으로 조회하지 않으므로 단일 필드 색인은 끈다. TTL 삭제는 최대 24시간+ 지연되므로 코드는 읽을 때 `expireAt <= now`면 없는 것으로 본다.
+만료: 코드는 읽을 때 `expireAt <= now`면 없는 것으로 본다. **Firestore TTL은 쓰지 않는다**(2026-11-22 개정) — 결제 연결(Blaze) 프로젝트 전용이라 무료(Spark)인 이 프로젝트에서는 `firestore.indexes.json` 배포가 `403 billing disabled`로 실패했다. 만료 문서의 실제 삭제는 첫 기록 만료(2027-12-28) 전까지 별도 정리 작업으로 구현한다(후속).
 
 ### 5. 탈퇴 처리 (`handlers/deleteAccount.ts`)
 
