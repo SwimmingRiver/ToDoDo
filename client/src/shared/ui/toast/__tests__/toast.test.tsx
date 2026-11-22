@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderHook, act } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { StrictMode, useEffect, type ReactNode } from 'react'
 import Toast from '../toast'
 import Modal from '../../modal/modal'
 import ConfirmModal from '../../confirmModal/confirmModal'
@@ -161,3 +161,96 @@ describe('Toast 스태킹', () => {
     for (const layer of overlayLayers) expect(toastLayer).toBeGreaterThan(layer)
   })
 })
+
+// Provider가 사라진 뒤 자동 닫힘 타이머가 남아 있으면, 테스트 환경(jsdom)이 정리된 뒤
+// setState가 실행돼 'window is not defined' unhandled error로 CI가 실패했다(11-22 main CI).
+describe('ToastProvider 타이머 정리', () => {
+  const wrapper = ({ children }: { children: ReactNode }) => <ToastProvider>{children}</ToastProvider>
+
+  it('언마운트하면 자동 닫힘 타이머가 남지 않는다', () => {
+    vi.useFakeTimers()
+    try {
+      const { result, unmount } = renderHook(() => useToast(), { wrapper })
+      act(() => result.current.success('저장 완료'))
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      unmount()
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('닫히는 중(퇴장 애니메이션 타이머)에 언마운트해도 타이머가 남지 않는다', () => {
+    vi.useFakeTimers()
+    try {
+      const { result, unmount } = renderHook(() => useToast(), { wrapper })
+      act(() => result.current.success('저장 완료'))
+      // duration(3000) 경과 → removeToast가 퇴장용 300ms 타이머를 건다
+      act(() => vi.advanceTimersByTime(3000))
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      unmount()
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // StrictMode(개발 모드)는 첫 마운트 뒤 effect 정리를 한 번 재생한다. 그 정리에서 타이머를
+  // 지우기만 하면, 자식이 첫 마운트 effect로 띄운 토스트(예: 캘린더 연동 완료)가 영영 안 닫힌다.
+  it('StrictMode에서 자식이 마운트 effect로 띄운 토스트도 duration 뒤 닫힌다', () => {
+    vi.useFakeTimers()
+    try {
+      const ShowOnMount = () => {
+        const toast = useToast()
+        useEffect(() => {
+          toast.success('연동 완료')
+          // 첫 마운트 1회만 — 실제 calendar.tsx도 ref 가드로 재실행 시 다시 띄우지 않는다
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [])
+        return null
+      }
+      render(
+        <StrictMode>
+          <ToastProvider>
+            <ShowOnMount />
+          </ToastProvider>
+        </StrictMode>,
+      )
+      expect(screen.getAllByText('연동 완료').length).toBeGreaterThan(0)
+
+      act(() => vi.advanceTimersByTime(3300))
+
+      expect(screen.queryByText('연동 완료')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('직접 닫으면 자동 닫힘 타이머도 취소돼 퇴장 뒤 남은 타이머가 없다', () => {
+    vi.useFakeTimers()
+    try {
+      render(
+        <ToastProvider>
+          <ShowButton />
+        </ToastProvider>,
+      )
+      act(() => screen.getByRole('button', { name: '띄우기' }).click())
+      act(() => screen.getByRole('button', { name: /닫기/ }).click())
+      act(() => vi.advanceTimersByTime(300))
+
+      expect(screen.queryByText('저장 완료')).not.toBeInTheDocument()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+const ShowButton = () => {
+  const toast = useToast()
+  return <button onClick={() => toast.success('저장 완료')}>띄우기</button>
+}
