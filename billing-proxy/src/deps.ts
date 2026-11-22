@@ -11,6 +11,7 @@ import { GoogleTokenProvider, parseServiceAccount } from "./googleAuth";
 import { PaddleClient } from "./paddle";
 import type { BillingDeps } from "./router";
 import { StoreLinkStore } from "./storeLinks";
+import { TrialHistoryStore } from "./trialHistory";
 
 const ANDROID_PUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher";
 
@@ -74,6 +75,9 @@ export const buildDeps = (env: Env): BillingDeps => {
         email: requireStoreSecret(env.GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL, "GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL"),
         now: new Date(),
       }),
+    trialHistory: env.TRIAL_HMAC_SECRET
+      ? { store: new TrialHistoryStore(env.FIREBASE_PROJECT_ID, getToken), secret: env.TRIAL_HMAC_SECRET }
+      : null,
   };
   return deps;
 };

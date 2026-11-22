@@ -14,6 +14,7 @@ import type { AppleServerApi } from "./apple/serverApi";
 import type { PlayApi } from "./google/playApi";
 import type { PaddleClient } from "./paddle";
 import type { StoreLinkStore } from "./storeLinks";
+import type { TrialHistoryStore } from "./trialHistory";
 
 export interface BillingDeps extends CommitDeps {
   claims: Pick<ClaimsClient, "setPremiumUntil" | "deleteUser">;
@@ -26,6 +27,8 @@ export interface BillingDeps extends CommitDeps {
   /** 탈퇴 시 Google 구독 해지. play와 같은 인스턴스다 — Play 토큰은 처음 호출할 때 만들어진다. */
   google: Pick<PlayApi, "cancelSubscription">;
   verifyPubSub: (authHeader: string | null) => Promise<boolean>;
+  /** 체험 사용 확인값 저장소와 HMAC 키. TRIAL_HMAC_SECRET이 없는 환경(프리뷰·로컬)에서는 null — 기록·조회를 건너뛴다. */
+  trialHistory: { store: Pick<TrialHistoryStore, "record" | "hasActive">; secret: string } | null;
 }
 
 type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env, request: Request) => Promise<Response>;

@@ -86,6 +86,7 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   },
   google: { cancelSubscription: vi.fn(async (_token: string): Promise<"canceled" | "already_inactive"> => "canceled") },
   verifyPubSub: vi.fn(async (_authHeader: string | null) => false),
+  trialHistory: null as BillingDeps["trialHistory"],
 });
 
 const post = (path: string, body?: unknown) =>

@@ -33,4 +33,9 @@ export interface Env {
   /** Pub/Sub 푸시 구독의 OIDC 토큰 audience(푸시 엔드포인트 URL)와 토큰을 서명하는 서비스 계정 이메일. */
   GOOGLE_PUBSUB_AUDIENCE: string;
   GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL: string;
+  /**
+   * 탈퇴 후 재가입 체험 재지급 방지용 HMAC 키(trialHistory.ts). **운영에만** 둔다 — 프리뷰도 운영 Firestore를 쓰므로
+   * 프리뷰에 있으면 테스트 탈퇴가 실제 기록을 남긴다. 없으면 기록·조회를 건너뛴다. 바꾸면 기존 기록을 못 찾으므로 회전하지 않는다.
+   */
+  TRIAL_HMAC_SECRET?: string;
 }
