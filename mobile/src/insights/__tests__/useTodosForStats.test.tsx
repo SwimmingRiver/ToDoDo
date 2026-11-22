@@ -144,12 +144,51 @@ describe("useTodosForStats", () => {
 
   it("통계 탭이 안 보이면 앱이 활성화돼도 다시 읽지 않는다", async () => {
     mockIsPremium = true;
+    const { rerender } = await setup();
+    await act(async () => {});
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     mockIsFocused = false;
-    await setup();
+    await rerender({});
     await act(async () => {
       await jest.advanceTimersByTimeAsync(61_000);
       appStateHandler?.("active");
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  // 할 일을 바꾸는 앱 동작은 모두 ["todos", uid]를 무효화한다. 통계도 그 키 아래에 둬서
+  // 따로 배선하지 않아도 할 일이 바뀌면 다시 읽게 한다.
+  it("통계 탭이 보이는 중 할 일 캐시(['todos', uid])를 무효화하면 다시 읽는다", async () => {
+    mockIsPremium = true;
+    await setup();
+    await act(async () => {});
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ["todos", "user-1"] });
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  // 탭은 마운트된 채 남아 있어 쿼리가 계속 '사용 중'이다. 다른 탭에서 할 일을 바꿀 때마다
+  // 전체 이력을 읽지 않도록, 안 보일 때는 무효화만 표시하고 다시 보일 때 한 번 읽는다.
+  it("통계 탭이 안 보일 때 무효화되면 바로 읽지 않고, 다시 보이면 읽는다", async () => {
+    mockIsPremium = true;
+    const { rerender } = await setup();
+    await act(async () => {});
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    mockIsFocused = false;
+    await rerender({});
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ["todos", "user-1"] });
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    mockIsFocused = true;
+    await rerender({});
+    await act(async () => {});
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });

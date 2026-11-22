@@ -18,7 +18,8 @@ jest.mock("../../premium", () => ({
 }));
 jest.mock("@react-navigation/native", () => ({
   useFocusEffect: () => {},
-  useIsFocused: () => false,
+  // 통계 탭이 보이는 상태 — 안 보이면 조회를 끈다(useTodosForStats). 탭은 처음 보일 때 마운트된다.
+  useIsFocused: () => true,
 }));
 
 import { useInsightsMetrics } from "../useInsightsMetrics";

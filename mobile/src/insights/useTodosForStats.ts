@@ -18,12 +18,17 @@ export const useTodosForStats = () => {
   const { user } = useAuthState();
   const uid = user?.uid;
   const { isPremium } = useIsPremium();
+  const isFocused = useIsFocused();
   const enabled = !!uid && isPremium;
 
   const query = useQuery({
-    queryKey: ["todosForStats", uid],
+    // ["todos", uid] 아래에 둔다 — 할 일을 바꾸는 동작은 모두 ["todos", uid]를 무효화하므로
+    // (앞부분 일치) 따로 배선하지 않아도 할 일이 바뀌면 통계도 다시 읽는다.
+    queryKey: ["todos", uid, "stats"],
     queryFn: () => fetchAllUserTodos(db, uid!),
-    enabled,
+    // 탭은 마운트된 채 남아 쿼리가 계속 '사용 중'이라, 안 보일 때도 켜 두면 다른 탭에서 할 일을
+    // 바꿀 때마다 전체 이력을 읽는다. 안 보일 때는 끄고(무효화는 표시만 됨) 다시 보일 때 오래됐으면 읽는다.
+    enabled: enabled && isFocused,
     staleTime: STATS_STALE_MS,
   });
 
@@ -44,7 +49,6 @@ export const useTodosForStats = () => {
 
   useFocusEffect(refetchIfStale);
 
-  const isFocused = useIsFocused();
   useEffect(() => {
     if (!isFocused) return;
     const sub = AppState.addEventListener("change", (state) => {
