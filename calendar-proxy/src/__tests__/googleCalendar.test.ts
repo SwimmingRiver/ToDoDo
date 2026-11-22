@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { syncTodosToGoogleCalendar, fetchGoogleWithRetry, type SyncTodoItem } from "../googleCalendar";
+import {
+  syncTodosToGoogleCalendar,
+  fetchGoogleWithRetry,
+  createGoogleFetchBudget,
+  GOOGLE_FETCH_BUDGET,
+  type SyncTodoItem,
+} from "../googleCalendar";
 import { deriveGoogleCalendarEventId } from "../googleEventId";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -523,5 +529,103 @@ describe("syncTodosToGoogleCalendar 레이트 리밋", () => {
     await syncTodosToGoogleCalendar(todos, "access-token");
 
     expect(maxInFlight).toBe(3);
+  });
+});
+
+// Cloudflare 무료 플랜은 들어온 요청 하나당 서브리퀘스트 50개(JWKS·토큰 갱신 포함)가 한도다.
+// 재시도까지 합쳐도 구글 호출이 예산(44)을 넘지 않게 한다.
+describe("구글 호출 예산", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("예산 기본값은 44다(JWKS 2 + 토큰 갱신 1 여유를 두고 50 미만)", () => {
+    expect(GOOGLE_FETCH_BUDGET).toBe(44);
+    expect(createGoogleFetchBudget()).toEqual({ used: 0, limit: 44 });
+  });
+
+  it("예산이 바닥나면 레이트 리밋 응답을 재시도하지 않고 그대로 돌려준다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("slow down", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const budget = { used: 43, limit: 44 };
+    const sleep = vi.fn(async () => {});
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep, budget });
+
+    expect(res.status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(budget.used).toBe(44);
+  });
+
+  it("예산이 이미 바닥났으면 호출하지 않고 에러를 던진다", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { budget: { used: 44, limit: 44 } }),
+    ).rejects.toThrow(/예산/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("항목이 많아도 구글 호출은 예산을 넘지 않고, 시도조차 못 한 항목은 에러 결과로 돌려준다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => ({ ok: true, json: async () => ({ id: "e" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const todos: SyncTodoItem[] = Array.from({ length: 50 }, (_, i) => ({
+      id: `todo-${i}`,
+      title: "",
+      dueAt: "",
+      googleEventId: `event-${i}`,
+      action: "delete" as const,
+    }));
+
+    const results = await syncTodosToGoogleCalendar(todos, "access-token", 3, {
+      budget: createGoogleFetchBudget(),
+      sleep: async () => {},
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(44);
+    expect(results.filter((r) => !r.error)).toHaveLength(44);
+    const skipped = results.filter((r) => r.error);
+    expect(skipped).toHaveLength(6);
+    expect(skipped[0].error).toMatch(/예산/);
+    expect(skipped[0].googleEventId).toBe(skipped[0].id.replace("todo", "event"));
+  });
+
+  it("계속 레이트 리밋이 나도 재시도 포함 총 구글 호출이 예산을 넘지 않는다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("slow down", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const todos: SyncTodoItem[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `todo-${i}`,
+      title: "t",
+      dueAt: "2026-09-01",
+      googleEventId: `event-${i}`,
+      action: "upsert" as const,
+    }));
+
+    const results = await syncTodosToGoogleCalendar(todos, "access-token", 3, {
+      budget: createGoogleFetchBudget(),
+      sleep: async () => {},
+    });
+
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(44);
+    expect(results.every((r) => r.error)).toBe(true);
+  });
+
+  it("예산을 넘기지 않으면 syncTodosToGoogleCalendar 호출마다 새 예산을 쓴다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => ({ ok: true, json: async () => ({ id: "e" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const todos: SyncTodoItem[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `todo-${i}`,
+      title: "",
+      dueAt: "",
+      googleEventId: `event-${i}`,
+      action: "delete" as const,
+    }));
+
+    await syncTodosToGoogleCalendar(todos, "access-token");
+    await syncTodosToGoogleCalendar(todos, "access-token");
+
+    expect(fetchMock).toHaveBeenCalledTimes(60);
   });
 });

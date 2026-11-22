@@ -2,7 +2,7 @@ import type { Env } from "../env";
 import { verifyFirebaseIdToken } from "@tododo/worker-auth";
 import { getTokenRecord, deleteTokenRecord } from "../tokenStore";
 import { refreshAccessToken } from "../googleOAuth";
-import { syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";
+import { createGoogleFetchBudget, syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -31,14 +31,20 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
   // id가 다음 연동 해제 때도 계속 다시 삭제 대상에 끼어드는 걸 막을 수 있다.
   let deletedGoogleEventIds: string[] = [];
 
-  // 요청 바디 파싱(빈 바디, 잘못된 JSON, googleEventIds 누락)까지 이 try 안에
-  // 넣는다 — "연동 해제는 반드시 끝까지 진행된다"는 불변식이 구글 API 실패뿐
-  // 아니라 바디 파싱 실패에도 깨지면 안 되기 때문이다. 파싱에 실패하면 삭제할
-  // 이벤트가 없다고 보고 빈 배열로 진행한다.
+  // 요청 바디 파싱(빈 바디, 잘못된 JSON, googleEventIds 누락)은 throw하지 않는다 —
+  // "연동 해제는 반드시 끝까지 진행된다"는 불변식이 바디 파싱 실패에도 깨지면 안 되기
+  // 때문이다. 파싱에 실패하면 삭제할 이벤트가 없다고 보고 빈 배열로 진행한다.
+  //
+  // keepToken: 무료 플랜은 요청당 서브리퀘스트가 50개라 이벤트가 많으면 한 요청으로 다
+  // 지울 수 없다. 클라이언트가 묶음으로 나눠 보내면서 마지막 요청 전까지는
+  // keepToken:true로 토큰을 남겨 둔다(다음 묶음도 지울 수 있게). 없거나 false면 예전처럼
+  // 마지막에 토큰을 지운다 — 이미 배포된 클라이언트와 호환된다.
+  const { googleEventIds, keepToken } = (await request.json().catch(() => ({}))) as {
+    googleEventIds?: string[];
+    keepToken?: boolean;
+  };
+
   try {
-    const { googleEventIds } = (await request.json().catch(() => ({}))) as {
-      googleEventIds?: string[];
-    };
     const refreshed = await refreshAccessToken(
       tokenRecord.refreshToken,
       env.GOOGLE_CLIENT_ID,
@@ -51,7 +57,9 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
       googleEventId,
       action: "delete" as const,
     }));
-    const results = await syncTodosToGoogleCalendar(deleteItems, refreshed.access_token);
+    const results = await syncTodosToGoogleCalendar(deleteItems, refreshed.access_token, undefined, {
+      budget: createGoogleFetchBudget(),
+    });
     // id 필드는 disconnect가 만든 deleteItems에서 googleEventId 그 자체로
     // 채웠으므로(별도 todo id가 없다), 에러 없는 결과의 id가 곧 삭제 확인된
     // googleEventId다.
@@ -63,6 +71,6 @@ export const handleDisconnect = async (request: Request, env: Env): Promise<Resp
     console.error("연동 해제 중 이벤트 삭제 실패:", error);
   }
 
-  await deleteTokenRecord(env.CALENDAR_TOKENS, uid);
+  if (keepToken !== true) await deleteTokenRecord(env.CALENDAR_TOKENS, uid);
   return jsonResponse({ ok: true, deletedGoogleEventIds });
 };

@@ -71,6 +71,26 @@ const drainBody = async (res: Response): Promise<void> => {
   await res.body?.cancel();
 };
 
+// Cloudflare Workers 무료 플랜은 들어온 요청 하나당 서브리퀘스트가 50개까지다(JWKS 조회
+// 최대 2회·구글 토큰 갱신 1회 포함). 재시도까지 합친 구글 캘린더 호출이 이 예산을 넘지
+// 않게 요청마다 새 예산을 만들어 넘긴다 — 넘으면 런타임이 남은 fetch를 전부 실패시켜,
+// 구글엔 반영됐는데 응답을 못 받은 항목이 생길 수 있다.
+export const GOOGLE_FETCH_BUDGET = 44;
+
+export interface GoogleFetchBudget {
+  used: number;
+  limit: number;
+}
+
+export const createGoogleFetchBudget = (limit = GOOGLE_FETCH_BUDGET): GoogleFetchBudget => ({ used: 0, limit });
+
+export class GoogleFetchBudgetExhaustedError extends Error {
+  constructor() {
+    super("구글 호출 예산 소진(요청당 서브리퀘스트 한도) — 다음 동기화에서 다시 시도");
+    this.name = "GoogleFetchBudgetExhaustedError";
+  }
+}
+
 export interface GoogleRetryOptions {
   /** 첫 시도 이후 추가 재시도 횟수. Workers는 요청당 서브리퀘스트 수가 제한돼 있어
    *  항목당 최대 (1 + maxRetries)배로만 늘어나도록 작게 둔다. */
@@ -79,6 +99,8 @@ export interface GoogleRetryOptions {
   /** 테스트에서 실제로 기다리지 않도록 주입한다. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
+  /** 요청 단위 구글 호출 예산. 주면 이 호출(재시도 포함)의 fetch 수를 여기에 센다. */
+  budget?: GoogleFetchBudget;
 }
 
 const RATE_LIMIT_REASONS = new Set(["rateLimitExceeded", "userRateLimitExceeded"]);
@@ -107,8 +129,14 @@ export const fetchGoogleWithRetry = async (
   init: RequestInit,
   opts: GoogleRetryOptions = {},
 ): Promise<Response> => {
-  const { maxRetries = 2, baseDelayMs = 500, sleep = defaultSleep, random = Math.random } = opts;
+  const { maxRetries = 2, baseDelayMs = 500, sleep = defaultSleep, random = Math.random, budget } = opts;
+  const hasBudget = () => !budget || budget.used < budget.limit;
   for (let attempt = 0; ; attempt += 1) {
+    // 첫 시도조차 못 하면 throw — 호출부(syncOne)가 이 항목을 에러 결과로 돌려주고,
+    // 클라이언트 쿨다운 뒤 다음 요청에서 다시 시도된다. 확인과 증가는 await 없이 붙어
+    // 있어 동시 워커끼리도 예산을 넘지 않는다.
+    if (!hasBudget()) throw new GoogleFetchBudgetExhaustedError();
+    if (budget) budget.used += 1;
     const res = await fetch(url, init);
     let rateLimited = false;
     let bodyText: string | null = null;
@@ -119,7 +147,8 @@ export const fetchGoogleWithRetry = async (
       rateLimited = isRateLimitBody(bodyText);
     }
 
-    if (!rateLimited || attempt >= maxRetries) {
+    // 예산이 바닥났으면 재시도하지 않고 레이트 리밋 응답을 평범한 실패로 돌려준다.
+    if (!rateLimited || attempt >= maxRetries || !hasBudget()) {
       if (bodyText === null) return res;
       return new Response(bodyText, { status: res.status, statusText: res.statusText, headers: res.headers });
     }
@@ -295,12 +324,15 @@ const syncOne = async (todo: SyncTodoItem, accessToken: string, googleFetch: Goo
 
 // 기본 동시 요청 수는 3이다 — 10으로 두었을 때 첫 동기화(~30건)만으로도 구글 사용자별
 // 레이트 리밋에 걸렸다(11-21). 연동 해제(disconnect.ts)도 이 기본값을 그대로 쓴다.
+// 예산(retryOptions.budget)을 안 주면 호출마다 새 예산을 만든다 — 핸들러는 요청마다
+// 명시적으로 만들어 넘긴다.
 export const syncTodosToGoogleCalendar = async (
   todos: SyncTodoItem[],
   accessToken: string,
   concurrency = 3,
   retryOptions?: GoogleRetryOptions,
 ): Promise<SyncResult[]> => {
-  const googleFetch: GoogleFetch = (url, init) => fetchGoogleWithRetry(url, init, retryOptions);
+  const options: GoogleRetryOptions = { ...retryOptions, budget: retryOptions?.budget ?? createGoogleFetchBudget() };
+  const googleFetch: GoogleFetch = (url, init) => fetchGoogleWithRetry(url, init, options);
   return runWithConcurrencyLimit(todos, concurrency, (todo) => syncOne(todo, accessToken, googleFetch));
 };
