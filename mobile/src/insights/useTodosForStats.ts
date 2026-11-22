@@ -25,13 +25,19 @@ export const useTodosForStats = () => {
     staleTime: STATS_STALE_MS,
   });
 
-  const { refetch, dataUpdatedAt } = query;
+  const { refetch, dataUpdatedAt, isError } = query;
   useFocusEffect(
     useCallback(() => {
+      if (!enabled) return;
+      // 첫 조회가 실패한 채 데이터가 없으면 포커스 때 바로 다시 읽는다.
+      if (dataUpdatedAt === 0 && isError) {
+        void refetch();
+        return;
+      }
       // dataUpdatedAt === 0이면 첫 조회가 진행 중이라 useQuery에 맡긴다.
-      if (!enabled || dataUpdatedAt === 0) return;
+      if (dataUpdatedAt === 0) return;
       if (Date.now() - dataUpdatedAt > STATS_STALE_MS) void refetch();
-    }, [enabled, dataUpdatedAt, refetch]),
+    }, [enabled, dataUpdatedAt, isError, refetch]),
   );
 
   return query;

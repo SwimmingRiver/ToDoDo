@@ -99,4 +99,16 @@ describe("useTodosForStats", () => {
     await focus();
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
+
+  it("첫 조회 실패 후 포커스하면 다시 읽는다", async () => {
+    mockIsPremium = true;
+    mockFetch.mockRejectedValueOnce(new Error("fail"));
+    await setup();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    await focus();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
 });

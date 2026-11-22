@@ -31,7 +31,7 @@ export const InsightsScreen = () => {
 
   // 선택한 프로젝트가 삭제되는 등 옵션에서 사라지면 전체로 되돌린다.
   const { projectId } = filter;
-  const { projects } = metrics;
+  const { projects, refetch } = metrics;
   useEffect(() => {
     if (projectId !== null && !projects.some((project) => project.id === projectId)) {
       setFilter((prev) => ({ ...prev, projectId: null }));
@@ -41,32 +41,39 @@ export const InsightsScreen = () => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await metrics.refetch();
+      await refetch();
     } catch {
       // 실패해도 기존 데이터를 유지하고 스피너만 해제한다.
     } finally {
       setRefreshing(false);
     }
-  }, [metrics]);
+  }, [refetch]);
 
   const renderBody = () => {
     if (isEntitlementLoading) return <InsightsSkeleton />;
     if (!isPremium) return <InsightsLockedNotice onSubscribe={() => navigation.navigate("Account")} />;
     if (metrics.isLoading) return <InsightsSkeleton />;
+    const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
     if (metrics.isError && !metrics.hasData) {
       return (
-        <EmptyState
-          icon={AlertCircle}
-          title="통계를 불러오지 못했습니다"
-          description="네트워크 연결을 확인하고 다시 시도해주세요"
-        />
+        <ScrollView
+          testID="insights-scroll"
+          contentContainerStyle={styles.errorContent}
+          refreshControl={refreshControl}
+        >
+          <EmptyState
+            icon={AlertCircle}
+            title="통계를 불러오지 못했습니다"
+            description="네트워크 연결을 확인하고 다시 시도해주세요"
+          />
+        </ScrollView>
       );
     }
     return (
       <ScrollView
         testID="insights-scroll"
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={refreshControl}
       >
         <InsightsFilterBar filter={filter} projects={metrics.projects} onChange={setFilter} />
         <StreakCard streak={metrics.streak} />
@@ -95,5 +102,6 @@ export const InsightsScreen = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background.primary, padding: spacing.lg },
+  errorContent: { flexGrow: 1 },
   content: { gap: spacing.md, paddingBottom: spacing.xl },
 });

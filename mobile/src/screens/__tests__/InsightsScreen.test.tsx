@@ -74,6 +74,17 @@ describe("InsightsScreen", () => {
     expect(screen.getByText("네트워크 연결을 확인하고 다시 시도해주세요")).toBeTruthy();
   });
 
+  it("에러 화면에서도 당겨서 새로고침", async () => {
+    mockOverrides = { isError: true, hasData: false };
+    await render(<InsightsScreen />);
+    const control = screen.getByTestId("insights-scroll").props.refreshControl as ReactElement<{ onRefresh: () => Promise<void> }>;
+    expect(screen.getByText("통계를 불러오지 못했습니다")).toBeTruthy();
+    await act(async () => {
+      await control.props.onRefresh();
+    });
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
   it("새로고침 실패 시 기존 데이터 유지", async () => {
     mockOverrides = { isError: true, hasData: true };
     await render(<InsightsScreen />);
