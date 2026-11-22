@@ -1,6 +1,9 @@
 import { type Firestore } from "firebase/firestore";
 import type { Todo, TodoFields } from "../types/todo";
 export declare const getTodos: (db: Firestore, userId: string) => Promise<Todo[]>;
+/** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
+ *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
+export declare const fetchAllUserTodos: (db: Firestore, userId: string) => Promise<Todo[]>;
 export declare const createTodo: (db: Firestore, userId: string, fields: TodoFields) => Promise<string>;
 type TodoUpdateFields = Partial<TodoFields> & {
     status?: Todo["status"];

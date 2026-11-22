@@ -8,6 +8,12 @@ export const getTodos = async (db, userId) => {
         .map((d) => mapDocToTodo(d.id, d.data()))
         .sort((a, b) => normalizeOrder(a.order) - normalizeOrder(b.order));
 };
+/** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
+ *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
+export const fetchAllUserTodos = async (db, userId) => {
+    const snapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId)));
+    return snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
+};
 export const createTodo = async (db, userId, fields) => {
     const now = new Date().toISOString();
     const docRef = await addDoc(collection(db, "todos"), {

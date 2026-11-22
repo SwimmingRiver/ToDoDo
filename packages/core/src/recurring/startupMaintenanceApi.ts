@@ -1,14 +1,6 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  where,
-  writeBatch,
-  type Firestore,
-} from "firebase/firestore";
+import { doc, writeBatch, type Firestore } from "firebase/firestore";
 import type { Todo } from "../types/todo";
-import { mapDocToTodo } from "../api/todoDocs";
+import { fetchAllUserTodos } from "../api/todoApi";
 import { getDefaultHorizonEnd } from "./recurrence";
 import { withRecurringSeriesLock } from "./seriesLock";
 import {
@@ -34,13 +26,6 @@ export type StartupMaintenanceOptions = {
   horizonEnd?: Date;
   /** 스윕이 실패해 삼켜질 때 호출된다. 로깅·Sentry는 호출부(웹/앱)가 주입한다. */
   onSweepError?: (error: unknown, sweep: SweepName) => void;
-};
-
-/** 사용자의 Todo 전체를 한 번 읽는다. archived 문서도 포함한다 — 반복 시리즈의 마지막
- *  인스턴스가 archived된 경우 그걸 빼고 계산하면 이미 지난 날짜를 다시 만들어낸다. */
-const fetchAllUserTodos = async (db: Firestore, userId: string): Promise<Todo[]> => {
-  const snapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId)));
-  return snapshot.docs.map((d) => mapDocToTodo(d.id, d.data()));
 };
 
 /** 평평한 업데이트 목록을 SWEEP_BATCH_SIZE 단위로 나눠 커밋한다.
