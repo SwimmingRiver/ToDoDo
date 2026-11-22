@@ -4,3 +4,4 @@ export * from "./metrics";
 export * from "./trend";
 export * from "./labels";
 export * from "./chart";
+export * from "./summary";

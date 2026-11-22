@@ -1,18 +1,5 @@
 import { useMemo } from "react";
-import {
-  bucketCompletions,
-  computeCompletionRate,
-  computeDueAdherence,
-  computePriorityDistribution,
-  computeRecurringVsOneOffRate,
-  computeStatusBreakdown,
-  computeStreak,
-  listProjectOptions,
-  resolvePeriodRange,
-  resolveTrendGranularity,
-  scopeTodosByProject,
-  type InsightsFilter,
-} from "@tododo/core";
+import { computeInsightsMetrics, type InsightsFilter } from "@tododo/core";
 import { useTodosForStats } from "./useTodosForStats";
 
 /**
@@ -24,24 +11,10 @@ import { useTodosForStats } from "./useTodosForStats";
 export const useProductivityMetrics = (filter: InsightsFilter) => {
   const { data: todos, isLoading, isError } = useTodosForStats();
 
-  const metrics = useMemo(() => {
-    const all = todos ?? [];
-    const now = new Date();
-    const range = resolvePeriodRange(filter.period, now);
-    const granularity = resolveTrendGranularity(filter.period);
-    const scoped = scopeTodosByProject(all, filter.projectId);
-
-    return {
-      completionRate: computeCompletionRate(scoped, range),
-      dueAdherence: computeDueAdherence(scoped, range),
-      recurringVsOneOff: computeRecurringVsOneOffRate(scoped, range),
-      priorityDistribution: computePriorityDistribution(scoped, range),
-      trend: bucketCompletions(scoped, range, granularity, now),
-      streak: computeStreak(all, now),
-      statusBreakdown: filter.projectId === null ? null : computeStatusBreakdown(scoped, filter.projectId),
-      projects: listProjectOptions(all),
-    };
-  }, [todos, filter.period, filter.projectId]);
+  const metrics = useMemo(
+    () => computeInsightsMetrics(todos ?? [], filter, new Date()),
+    [todos, filter.period, filter.projectId],
+  );
 
   return { ...metrics, isLoading, isError };
 };
