@@ -146,6 +146,7 @@ export const RecurrenceSection = ({
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                       accessibilityLabel={`${label}요일`}
+                      hitSlop={DAY_CHIP_HIT_SLOP}
                       style={[
                         styles.chip,
                         styles.dayChip,
@@ -223,6 +224,10 @@ export const RecurrenceSection = ({
     </View>
   );
 };
+
+// 360dp 폰에서 요일 칩 7개는 폭이 약 40(360 - 여백 16×2 - 간격 8×6 = 280 ÷ 7)이라 터치 영역 44에
+// 못 미친다. 겉모습은 그대로 두고 칩 사이 간격(8)의 절반씩 가로로 넓혀 48로 만든다(이웃과 겹치지 않음).
+const DAY_CHIP_HIT_SLOP = { left: spacing.sm / 2, right: spacing.sm / 2 };
 
 const styles = StyleSheet.create({
   container: { gap: spacing.sm },

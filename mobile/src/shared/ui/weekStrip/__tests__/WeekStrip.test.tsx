@@ -71,4 +71,13 @@ describe("WeekStrip", () => {
     fireEvent.press(screen.getByLabelText("오늘로 이동"));
     expect(onGoToToday).toHaveBeenCalledTimes(1);
   });
+
+  it("날짜 칸은 폭 40에 가로 hitSlop을 더해 터치 영역이 44 이상이다(칸 사이 간격 안에서)", async () => {
+    await render(<WeekStrip {...defaultProps} />);
+    const cell = screen.getByLabelText("6월 16일 화요일");
+    const { left = 0, right = 0 } = cell.props.hitSlop ?? {};
+    expect(40 + left + right).toBeGreaterThanOrEqual(44);
+    expect(left + right).toBeLessThanOrEqual(4);
+  });
 });
+

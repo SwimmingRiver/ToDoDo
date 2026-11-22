@@ -58,6 +58,7 @@ export const WeekStrip = ({
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={`${date.getMonth() + 1}월 ${date.getDate()}일 ${weekdayFull}`}
+              hitSlop={DAY_CELL_HIT_SLOP}
               style={[styles.dayCell, isSelected && styles.dayCellSelected]}
             >
               <Text style={[styles.dayLabel, isSelected && styles.dayLabelSelected]}>{weekdayShort}</Text>
@@ -81,6 +82,9 @@ export const WeekStrip = ({
     </View>
   );
 };
+
+// 날짜 칸 폭은 40이라 칸 사이 간격(4)의 절반씩 가로로 넓혀 터치 영역을 44로 맞춘다(이웃과 겹치지 않음).
+const DAY_CELL_HIT_SLOP = { left: spacing.xs / 2, right: spacing.xs / 2 };
 
 const styles = StyleSheet.create({
   container: {
