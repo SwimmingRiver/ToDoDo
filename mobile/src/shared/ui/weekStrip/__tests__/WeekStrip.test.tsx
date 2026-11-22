@@ -1,6 +1,8 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { StyleSheet } from "react-native";
 import { WeekStrip } from "../WeekStrip";
+import { MIN_TOUCH_TARGET } from "../../../../theme/spacing";
 import { colors } from "../../../../theme/colors";
 
 describe("WeekStrip", () => {
@@ -71,4 +73,13 @@ describe("WeekStrip", () => {
     fireEvent.press(screen.getByLabelText("오늘로 이동"));
     expect(onGoToToday).toHaveBeenCalledTimes(1);
   });
+
+  it("날짜 칸은 고정 폭이 아니라 화살표 사이 폭을 고르게 나눠 갖는다(상한 있음)", async () => {
+    await render(<WeekStrip {...defaultProps} />);
+    const style = StyleSheet.flatten(screen.getByLabelText("6월 16일 화요일").props.style);
+    expect(style.flex).toBe(1);
+    expect(style.width).toBeUndefined();
+    expect(style.maxWidth).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+  });
 });
+
