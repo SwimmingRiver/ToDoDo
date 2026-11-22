@@ -93,4 +93,35 @@ describe("calendarProxyApi", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://cal.example.com/disconnect");
     expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBe(JSON.stringify({ googleEventIds: ["g1", "g2"] }));
   });
+
+  // 무료 플랜 Worker는 요청당 서브리퀘스트 50개 — 이벤트가 많으면 한 요청으로 다 못 지운다.
+  it("disconnectCalendar는 10개씩 순서대로 keepToken:true로 보내고, 마지막 요청만 토큰을 지우며 결과를 합친다", async () => {
+    const fetchMock = jest.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      const { googleEventIds } = JSON.parse((init as RequestInit).body as string) as { googleEventIds: string[] };
+      return ok({ deletedGoogleEventIds: googleEventIds });
+    });
+    global.fetch = fetchMock;
+    const { disconnectCalendar } = await import("../calendarProxyApi");
+    const ids = Array.from({ length: 23 }, (_, i) => `g${i}`);
+
+    await expect(disconnectCalendar(ids)).resolves.toEqual({ deletedGoogleEventIds: ids });
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string));
+    expect(bodies.map((b) => [b.googleEventIds.length, b.keepToken])).toEqual([
+      [10, true],
+      [10, true],
+      [3, undefined],
+    ]);
+  });
+
+  it("disconnectCalendar는 중간 요청이 실패하면 멈추고 던진다", async () => {
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(ok({ deletedGoogleEventIds: [] }))
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) } as Response);
+    global.fetch = fetchMock;
+    const { disconnectCalendar } = await import("../calendarProxyApi");
+
+    await expect(disconnectCalendar(Array.from({ length: 30 }, (_, i) => `g${i}`))).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
