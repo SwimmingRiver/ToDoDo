@@ -16,7 +16,7 @@
  * 하나만 있으면 각각 auth/insufficient-permission, 7 PERMISSION_DENIED로 실패한다.
  *
  * 사용법:
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run grant:entitlement -- --uid <uid> --plan premium [--until 2027-01-01T00:00:00.000Z]
+ *   GOOGLE_APPLICATION_CREDENTIALS=~/keys/tododo-sa.json npm run grant:entitlement -- --uid <uid> --plan premium [--until 2027-01-01T00:00:00.000Z]
  */
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";

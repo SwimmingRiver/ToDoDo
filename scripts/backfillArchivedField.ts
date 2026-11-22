@@ -6,8 +6,8 @@
  * (Firebase 콘솔 > 프로젝트 설정 > 서비스 계정 > 새 비공개 키 생성)
  *
  * 사용법:
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run backfill:archived -- --dry-run
- *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npm run backfill:archived
+ *   GOOGLE_APPLICATION_CREDENTIALS=~/keys/tododo-sa.json npm run backfill:archived -- --dry-run
+ *   GOOGLE_APPLICATION_CREDENTIALS=~/keys/tododo-sa.json npm run backfill:archived
  */
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
