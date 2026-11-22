@@ -390,6 +390,46 @@ describe("useSyncTodosToCalendar", () => {
     await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
   });
 
+  // 리뷰: 뒤 묶음은 루프 시작 때 잡은 todos로 보내서, 도중에 지워진 할 일도 upsert하고 그
+  // Firestore update가 batch 전체를 실패시켜 다른 항목의 googleEventId까지 잃었다.
+  describe("묶음 도중 할 일이 지워지면", () => {
+    const setupCache = () => {
+      const base = Array.from({ length: 12 }, (_, i) => makeTodo({ id: `t${i}` }));
+      mockTodos = base;
+      const client = makeClient();
+      client.setQueryData(["todos", "uid-1"], base);
+      const removeFromCache = (id: string) =>
+        client.setQueryData<Todo[]>(["todos", "uid-1"], (prev) => (prev ?? []).filter((t) => t.id !== id));
+      return { client, removeFromCache };
+    };
+
+    it("다음 묶음을 보내기 전에 최신 todos 캐시를 다시 읽어, 지워진 할 일은 보내지 않는다", async () => {
+      const { client, removeFromCache } = setupCache();
+      mockSync.mockImplementation(async (batch) => {
+        if (batch.some((p) => p.id === "t0")) removeFromCache("t7");
+        return batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` }));
+      });
+      await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(client) });
+      await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(3));
+      const sentIds = mockSync.mock.calls.flatMap(([b]) => b.map((p) => p.id));
+      expect(sentIds).not.toContain("t7");
+      expect(sentIds).toHaveLength(11);
+      await waitFor(() => expect(mockBatchUpdate).toHaveBeenCalledTimes(11));
+    });
+
+    it("요청 중에 지워진 할 일의 Firestore 업데이트는 batch에 넣지 않는다(batch 전체 실패 방지)", async () => {
+      const { client, removeFromCache } = setupCache();
+      mockSync.mockImplementation(async (batch) => {
+        if (batch.some((p) => p.id === "t0")) removeFromCache("t2");
+        return batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` }));
+      });
+      await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(client) });
+      await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(mockBatchUpdate).toHaveBeenCalledTimes(11));
+      expect(mockBatchUpdate).not.toHaveBeenCalledWith({ path: "todos/t2" }, expect.anything());
+    });
+  });
+
   it("5건을 넘으면 5건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
     mockTodos = Array.from({ length: 23 }, (_, i) => makeTodo({ id: `t${i}` }));
     let inFlight = 0;

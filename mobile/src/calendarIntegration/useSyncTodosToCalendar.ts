@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type { Todo } from "@tododo/core";
 import { doc, setDoc, writeBatch } from "firebase/firestore";
 import {
   planCalendarSync,
   applySyncResults,
+  isSyncEligible,
   excludeCoolingDown,
   recordSyncFailures,
   chunkSyncBatch,
@@ -129,24 +131,37 @@ export const useSyncTodosToCalendar = (): void => {
     if (batch.length === 0) return;
 
     isRunningRef.current = true;
-    // existingTodoIds는 비대상(archived·dueAt 없음) 포함 전체 id여야 한다 —
-    // 삭제 성공 시 아직 존재하는 Todo의 googleEventId를 null로 정리하기 위함.
-    const existingTodoIds = new Set(todos.map((t) => t.id));
+    // 묶음마다 최신 todos 캐시를 다시 읽는다 — 루프 시작 때 잡은 todos는 묶음을 보내는
+    // 동안 낡는다. 도중에 지워진 할 일을 upsert하면 구글에 이벤트가 생기고, 그 문서의
+    // Firestore update가 batch 전체를 실패시켜 같은 묶음의 다른 항목 googleEventId까지
+    // 잃는다(리뷰). 캐시가 비어 있으면(테스트 등) 시작 때 todos로 대신한다.
+    const readLatestTodos = (): Todo[] => queryClient.getQueryData<Todo[]>(["todos", uid]) ?? todos;
 
     (async () => {
       let wroteAny = false;
       try {
         // 한 요청에 수십 건을 몰아 보내면 Worker가 구글에 한꺼번에 쏘다 레이트 리밋에
-        // 걸린다(11-21). SYNC_CHUNK_SIZE(5)건씩 나눠 앞 요청이 끝난 뒤에 다음 요청을 보낸다(무료 플랜 요청당 서브리퀘스트 50 한도).
+        // 걸린다(11-21). SYNC_CHUNK_SIZE(5)건씩 나눠 앞 요청이 끝난 뒤에 다음 요청을
+        // 보낸다(무료 플랜 요청당 서브리퀘스트 50 한도).
         const chunks = chunkSyncBatch(batch);
         for (const [index, chunk] of chunks.entries()) {
           // 동기화 도중 연동이 해제됐거나 uid가 바뀌어 snapshotRef가 교체됐다면 남은 묶음은
           // 보내지 않는다.
           if (snapshotRef.current !== snapshot) break;
 
+          // 지워졌거나 더 이상 대상이 아닌 할 일의 upsert는 뺀다(삭제는 스냅샷 기준이라 그대로).
+          // 빠진 항목은 다음 실행의 planCalendarSync가 최신 상태로 다시 판단한다.
+          const latestById = new Map(readLatestTodos().map((t) => [t.id, t]));
+          const sendable = chunk.filter((p) => {
+            if (p.action === "delete") return true;
+            const latest = latestById.get(p.id);
+            return !!latest && isSyncEligible(latest);
+          });
+          if (sendable.length === 0) continue;
+
           let results;
           try {
-            results = await syncTodosToCalendar(chunk);
+            results = await syncTodosToCalendar(sendable);
           } catch (error) {
             // 요청 자체가 실패(네트워크·Worker 5xx)하면 이 묶음과 아직 안 보낸 남은 묶음을
             // 모두 쿨다운에 건다 — 안 그러면 todos 재조회마다 같은(또는 다음) 묶음을 즉시
@@ -154,7 +169,7 @@ export const useSyncTodosToCalendar = (): void => {
             // (해제 시 기록도 비워진다).
             if (!(error instanceof CalendarRevokedError) && !(error instanceof CalendarNotConnectedError)) {
               const message = error instanceof Error ? error.message : String(error);
-              const unsent = chunks.slice(index).flat();
+              const unsent = [...sendable, ...chunks.slice(index + 1).flat()];
               recordSyncFailures(
                 unsent,
                 unsent.map((p) => ({ id: p.id, googleEventId: p.googleEventId, error: message })),
@@ -176,8 +191,14 @@ export const useSyncTodosToCalendar = (): void => {
             // 실패 항목은 스냅샷을 갱신하지 않아 쿨다운이 끝난 뒤(또는 수정 시) 다시 시도된다.
             if (error) console.warn(`[calendar] 동기화 실패 (todo ${id})`, error);
           });
-          recordSyncFailures(chunk, results, eligibleById, failures, Date.now());
-          const { firestoreUpdates } = applySyncResults(results, eligibleById, existingTodoIds, snapshot);
+          recordSyncFailures(sendable, results, eligibleById, failures, Date.now());
+          // existingTodoIds는 비대상(archived·dueAt 없음) 포함 전체 id여야 한다 — 삭제 성공 시
+          // 아직 존재하는 Todo의 googleEventId를 null로 정리하기 위함. 요청 중에 지워진 할 일은
+          // 빼서 없는 문서의 update가 batch 전체를 실패시키지 않게 한다(스냅샷에는 남으므로
+          // 다음 실행이 그 이벤트를 지운다).
+          const existingTodoIds = new Set(readLatestTodos().map((t) => t.id));
+          const { firestoreUpdates: allUpdates } = applySyncResults(results, eligibleById, existingTodoIds, snapshot);
+          const firestoreUpdates = allUpdates.filter(({ todoId }) => existingTodoIds.has(todoId));
           firestoreUpdates.forEach(({ todoId, googleEventId }) => {
             firestoreBatch.update(doc(db, "todos", todoId), { googleEventId });
           });

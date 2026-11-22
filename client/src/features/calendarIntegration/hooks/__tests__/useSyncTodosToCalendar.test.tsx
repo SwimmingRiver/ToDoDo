@@ -381,6 +381,72 @@ describe("useSyncTodosToCalendar", () => {
     }
   });
 
+  // 리뷰: 뒤 묶음은 루프 시작 때 잡은 todos로 보내서, 도중에 지워진 할 일도 upsert하고 그
+  // Firestore update가 batch 전체를 실패시켜 다른 항목의 googleEventId까지 잃었다.
+  describe("묶음 도중 할 일이 지워지면", () => {
+    const setupCache = async () => {
+      const { useGetTodos } = await import("@/features/todo");
+      const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
+      const { syncTodosToCalendar } = await import("../../api");
+      const { writeBatch, doc } = await import("firebase/firestore");
+      vi.mocked(useCalendarIntegrationStatus).mockReturnValue({
+        data: { connected: true, status: "active" },
+      } as never);
+      vi.mocked(doc).mockImplementation(((_db: unknown, _col: string, id: string) => ({ id })) as never);
+      const todos = Array.from({ length: 12 }, (_, i) => baseTodo({ id: `todo-${i}` }));
+      vi.mocked(useGetTodos).mockReturnValue({ data: todos } as never);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      queryClient.setQueryData(["todos"], todos);
+      const updateSpy = vi.fn();
+      vi.mocked(writeBatch).mockReturnValue({
+        update: updateSpy,
+        commit: vi.fn().mockResolvedValue(undefined),
+      } as never);
+      const Wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+      const removeFromCache = (id: string) =>
+        queryClient.setQueryData<Todo[]>(["todos"], (prev) => (prev ?? []).filter((t) => t.id !== id));
+      return { todos, queryClient, updateSpy, Wrapper, removeFromCache, syncTodosToCalendar };
+    };
+    afterEach(async () => {
+      const { doc } = await import("firebase/firestore");
+      vi.mocked(doc).mockImplementation((() => ({})) as never);
+    });
+
+    it("다음 묶음을 보내기 전에 최신 todos 캐시를 다시 읽어, 지워진 할 일은 보내지 않는다", async () => {
+      const { Wrapper, removeFromCache, syncTodosToCalendar, updateSpy } = await setupCache();
+      vi.mocked(syncTodosToCalendar).mockImplementation(async (batch) => {
+        // 첫 묶음 요청 중에 todo-7(두 번째 묶음)이 지워졌다.
+        if (batch.some((p) => p.id === "todo-0")) removeFromCache("todo-7");
+        return batch.map((p) => ({ id: p.id, googleEventId: `event-${p.id}` }));
+      });
+
+      renderHook(() => useSyncTodosToCalendar(), { wrapper: Wrapper });
+
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(3));
+      const sentIds = vi.mocked(syncTodosToCalendar).mock.calls.flatMap(([b]) => b.map((p) => p.id));
+      expect(sentIds).not.toContain("todo-7");
+      expect(sentIds).toHaveLength(11);
+      await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(11));
+    });
+
+    it("요청 중에 지워진 할 일의 Firestore 업데이트는 batch에 넣지 않는다(batch 전체 실패 방지)", async () => {
+      const { Wrapper, removeFromCache, syncTodosToCalendar, updateSpy } = await setupCache();
+      vi.mocked(syncTodosToCalendar).mockImplementation(async (batch) => {
+        if (batch.some((p) => p.id === "todo-0")) removeFromCache("todo-2");
+        return batch.map((p) => ({ id: p.id, googleEventId: `event-${p.id}` }));
+      });
+
+      renderHook(() => useSyncTodosToCalendar(), { wrapper: Wrapper });
+
+      await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(11));
+      const updatedIds = updateSpy.mock.calls.map(([ref]) => (ref as { id: string }).id);
+      expect(updatedIds).not.toContain("todo-2");
+    });
+  });
+
   it("5건을 넘으면 5건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
     const { useGetTodos } = await import("@/features/todo");
     const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
