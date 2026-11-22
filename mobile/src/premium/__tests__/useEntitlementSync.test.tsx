@@ -27,6 +27,8 @@ jest.mock("../entitlementApi", () => ({
 
 import { useEntitlementSync, syncClaimWithEntitlement, refreshClaims } from "../useEntitlementSync";
 
+const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+
 const UNTIL = "2026-11-13T00:00:00.000Z";
 const UNTIL_SEC = Math.floor(Date.parse(UNTIL) / 1000);
 
@@ -83,6 +85,7 @@ describe("useEntitlementSync", () => {
   });
 
   it("logs subscription errors with console.warn", async () => {
+    sentryMock.captureException.mockClear();
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     const queryClient = new QueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => (
@@ -91,6 +94,7 @@ describe("useEntitlementSync", () => {
     await renderHook(() => useEntitlementSync(), { wrapper });
     emitter.error?.(new Error("boom"));
     expect(warn).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "entitlement" } });
     warn.mockRestore();
   });
 });

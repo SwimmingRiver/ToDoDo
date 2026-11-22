@@ -6,6 +6,7 @@ import { db } from "../firebase";
 import { useAuthState } from "../auth/useAuthState";
 import { useIsPremium } from "../premium";
 import { disconnectCalendar, getOAuthStartUrl } from "./calendarProxyApi";
+import { reportError } from "../shared/lib/sentry";
 
 /** Worker 콜백이 302로 돌려보내는 앱 딥링크(app.json scheme "tododo"). */
 export const CALENDAR_REDIRECT_URL = "tododo://calendar";
@@ -76,7 +77,8 @@ export const useConnectCalendar = () => {
           { merge: true },
         );
       } catch (error) {
-        console.warn("[calendar] 연동 상태 저장 실패", error);
+        // 웹과 같이 보고한다 — 토큰은 저장됐는데 상태만 미연동으로 보이는 불일치라 원인 파악이 필요하다.
+        reportError(error, "calendar");
         return "saveFailed";
       }
       await queryClient.invalidateQueries({ queryKey: ["calendarIntegration", uid] });

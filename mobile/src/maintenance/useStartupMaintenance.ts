@@ -9,6 +9,7 @@ import {
   shouldRunOnForeground,
   writeLastSuccess,
 } from "./maintenanceSchedule";
+import { reportError } from "../shared/lib/sentry";
 
 // 앱이 며칠씩 백그라운드에 머물 수 있어 웹처럼 "페이지 수명당 1회"로는 부족하다.
 // 콜드 스타트/로그인 때 uid당 1회 + 포그라운드 복귀 시 마지막 성공 후 24시간 경과하면 재실행한다.
@@ -32,20 +33,20 @@ async function run(uid: string, queryClient: QueryClient): Promise<void> {
   lastAttempt.set(uid, Date.now());
   try {
     const { written, failedSweeps } = await runStartupMaintenance(db, uid, {
-      onSweepError: (e, s) => console.error(`앱 진입 유지보수 실패 (${s}):`, e),
+      onSweepError: (e, sweep) => reportError(e, "maintenance", { sweep }),
     });
     if (failedSweeps.length === 0) {
       try {
         await writeLastSuccess(uid, Date.now());
       } catch (e) {
-        console.error("앱 진입 유지보수 시각 기록 실패:", e);
+        reportError(e, "maintenance");
       }
     }
     if (written > 0) {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
     }
   } catch (e) {
-    console.error("앱 진입 유지보수 실패:", e);
+    reportError(e, "maintenance");
   } finally {
     inFlight.delete(uid);
   }

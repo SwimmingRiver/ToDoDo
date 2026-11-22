@@ -3,6 +3,7 @@ import { createPlanTodos } from "@tododo/core";
 import type { PlanSubmission } from "@tododo/core/dist/aiPlan/index.js";
 import { db } from "../firebase";
 import { useAuthState } from "../auth/useAuthState";
+import { reportError } from "../shared/lib/sentry";
 
 /** 플랜 부모+하위를 한 번에 저장한다. 알림은 예약하지 않는다(웹과 동일). */
 export const useCreatePlanTodos = () => {
@@ -15,7 +16,7 @@ export const useCreatePlanTodos = () => {
       queryClient.invalidateQueries({ queryKey: ["todos", user?.uid] });
     },
     onError: (e) => {
-      console.warn("[aiPlan] 저장 실패", e);
+      reportError(e, "aiPlan");
     },
   });
 };

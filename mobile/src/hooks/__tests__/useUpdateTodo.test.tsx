@@ -175,6 +175,7 @@ describe("useUpdateTodo", () => {
   });
 
   it("알림 재예약이 실패해도 수정 자체는 성공 처리한다", async () => {
+    (jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException.mockClear();
     const { scheduleReminder } = await import("../../notifications/scheduleReminder");
     jest.mocked(scheduleReminder).mockRejectedValueOnce(new Error("permission denied"));
     const { updateTodo } = await import("@tododo/core");
@@ -196,5 +197,6 @@ describe("useUpdateTodo", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(updateTodo).toHaveBeenCalled();
+    expect((jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
   });
 });

@@ -1,5 +1,6 @@
 import { auth } from "../../firebase";
 import type { StorePurchase } from "./purchaseClient";
+import { reportError } from "../../shared/lib/sentry";
 
 export type VerifyFailure = "LINKED_TO_OTHER_ACCOUNT" | "ALREADY_SUBSCRIBED" | "PENDING" | "INVALID" | "NETWORK";
 export type VerifyResult = { ok: true } | { ok: false; reason: VerifyFailure };
@@ -53,7 +54,7 @@ export const verifyPurchase = async (p: StorePurchase): Promise<VerifyResult> =>
   try {
     res = await postWithIdToken(path, body);
   } catch (error) {
-    console.warn("[iap] verify 요청 실패", error);
+    reportError(error, "iap");
     return { ok: false, reason: "NETWORK" };
   }
 

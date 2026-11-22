@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { getStripDates, isSameLocalDay, toDateKey, type DayMarker } from "../../utils/dateRange";
 import { colors } from "../../../theme/colors";
@@ -41,7 +41,7 @@ export const WeekStrip = ({
       <Pressable onPress={onShiftLeft} accessibilityRole="button" accessibilityLabel="이전 날짜" hitSlop={13}>
         <ChevronLeft size={18} color={colors.text.secondary} />
       </Pressable>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <View style={styles.days}>
         {stripDates.map((date) => {
           const dateKey = toDateKey(date);
           const isSelected = dateKey === selectedDate;
@@ -69,7 +69,7 @@ export const WeekStrip = ({
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
       <Pressable onPress={onShiftRight} accessibilityRole="button" accessibilityLabel="다음 날짜" hitSlop={13}>
         <ChevronRight size={18} color={colors.text.secondary} />
       </Pressable>
@@ -82,6 +82,8 @@ export const WeekStrip = ({
   );
 };
 
+const DAY_CELL_MAX_WIDTH = 52;
+
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
@@ -90,12 +92,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.background.primary,
   },
-  scroll: {
-    gap: spacing.xs,
+  // 날짜 7칸이 화살표 사이 폭을 고르게 나눠 갖는다. 고정 폭(40)이면 작은 폰에서 칸이 왼쪽에
+  // 몰려 빽빽하고 오른쪽만 비었다. 넓은 폰에서 칸이 과하게 커지지 않게 maxWidth로 막고 남는 폭은
+  // 칸 사이로 고르게 나눈다(space-around). 360dp 폰에서도 칸이 약 44가 돼 터치 영역을 따로 넓히지 않는다.
+  days: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-around",
     paddingHorizontal: spacing.xs,
   },
   dayCell: {
-    width: 40,
+    flex: 1,
+    maxWidth: DAY_CELL_MAX_WIDTH,
     minHeight: MIN_TOUCH_TARGET,
     alignItems: "center",
     justifyContent: "center",

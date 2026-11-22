@@ -143,6 +143,7 @@ export const purchaseClient: PurchaseClient = {
       try {
         await finishTransaction({ purchase, isConsumable: false });
       } catch (error) {
+        // 서버가 이미 승인했으므로 무해하다 — 예상된 실패라 Sentry로 보내지 않는다.
         console.warn("[iap] Android 승인 실패(서버가 승인함):", error);
       }
       return;

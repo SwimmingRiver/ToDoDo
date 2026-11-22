@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 17.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -10,6 +10,9 @@
       "environment": "preview",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "simulator": {
@@ -17,7 +20,14 @@
       "environment": "preview",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
+    },
+    "production": {
+      "environment": "production",
+      "autoIncrement": true
     }
   }
 }

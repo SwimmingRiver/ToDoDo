@@ -3,6 +3,7 @@ import { createTodo, type TodoFields } from "@tododo/core";
 import { db } from "../firebase";
 import { useAuthState } from "../auth/useAuthState";
 import { scheduleReminder } from "../notifications/scheduleReminder";
+import { reportError } from "../shared/lib/sentry";
 
 export const useCreateTodo = () => {
   const { user } = useAuthState();
@@ -14,7 +15,7 @@ export const useCreateTodo = () => {
       try {
         await scheduleReminder({ id, title: fields.title, dueAt: fields.dueAt });
       } catch (error) {
-        console.warn("알림 예약 실패:", error);
+        reportError(error, "reminder");
       }
       return id;
     },

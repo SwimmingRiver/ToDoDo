@@ -204,4 +204,14 @@ describe("RecurrenceSection", () => {
     );
     expect(screen.getByText("요일을 하나 이상 선택해주세요")).toBeTruthy();
   });
+
+  it("요일 칩은 360dp 폰(칩 폭 약 40)에서도 터치 영역이 44 이상이 되도록 칩 사이 간격만큼 가로 hitSlop을 둔다", async () => {
+    await render(
+      <RecurrenceSection disabled={false} startAt={START} value={{ type: "weekly", weekdays: [], endType: "indefinite", endDate: null }} onChange={jest.fn()} />,
+    );
+    // 360 - 화면 여백 16×2 - 칩 간격 8×6 = 280 → 칩 1개 40. 좌우 4씩 더해 48(이웃 칩과 겹치지 않음).
+    const chip = screen.getByLabelText("월요일");
+    expect(chip.props.hitSlop).toEqual(expect.objectContaining({ left: 4, right: 4 }));
+  });
 });
+
