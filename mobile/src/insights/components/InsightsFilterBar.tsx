@@ -17,7 +17,7 @@ const ALL_PROJECTS_LABEL = "전체 프로젝트";
 
 const projectLabel = (project: ProjectOption) => (project.isDone ? `${project.title} (완료)` : project.title);
 
-const InsightsFilterBar = ({ filter, projects, onChange }: InsightsFilterBarProps) => {
+export const InsightsFilterBar = ({ filter, projects, onChange }: InsightsFilterBarProps) => {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const selectedProject = projects.find((project) => project.id === filter.projectId);
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   },
   tabSelected: { backgroundColor: colors.brand.strong },
   tabText: { fontSize: 14, fontWeight: "500", color: colors.text.secondary },
-  tabTextSelected: { color: "#FFFFFF", fontWeight: "600" },
+  tabTextSelected: { color: colors.background.primary, fontWeight: "600" },
   projectButton: {
     minHeight: MIN_TOUCH_TARGET,
     flexDirection: "row",
@@ -101,5 +101,4 @@ const styles = StyleSheet.create({
   projectText: { flex: 1, fontSize: 14, color: colors.text.primary },
 });
 
-export default InsightsFilterBar;
 export type { InsightsFilterBarProps };

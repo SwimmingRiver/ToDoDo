@@ -1,8 +1,8 @@
 import { describe, it, expect } from "@jest/globals";
 import { render } from "@testing-library/react-native";
-import BarChart from "../BarChart";
-import HorizontalBars from "../HorizontalBars";
-import StackedBar from "../StackedBar";
+import { BarChart } from "../BarChart";
+import { HorizontalBars } from "../HorizontalBars";
+import { StackedBar } from "../StackedBar";
 
 interface JsonNode {
   type: string;

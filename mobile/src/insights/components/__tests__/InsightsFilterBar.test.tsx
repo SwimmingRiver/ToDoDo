@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { InsightsFilter, ProjectOption } from "@tododo/core";
-import InsightsFilterBar from "../InsightsFilterBar";
+import { InsightsFilterBar } from "../InsightsFilterBar";
 import { describe, it, expect, jest } from "@jest/globals";
 
 const projects: ProjectOption[] = [
@@ -19,6 +19,13 @@ describe("InsightsFilterBar", () => {
     const onChange = await setup({ period: "thisWeek", projectId: "p1" });
     fireEvent.press(screen.getByText("최근 90일"));
     expect(onChange).toHaveBeenCalledWith({ period: "last90Days", projectId: "p1" });
+  });
+
+  it("현재 기간 탭만 selected 상태다", async () => {
+    await setup({ period: "thisWeek", projectId: null });
+    const selected = screen.getAllByRole("tab").filter((t) => t.props.accessibilityState?.selected === true);
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toHaveTextContent("이번 주");
   });
 
   it("프로젝트 버튼은 현재 값을 보여준다", async () => {

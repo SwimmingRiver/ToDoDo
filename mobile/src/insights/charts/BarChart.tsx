@@ -14,7 +14,7 @@ interface BarChartProps {
 const DEFAULT_HEIGHT = 160;
 
 /** 세로 막대 차트. 기하는 core의 layoutBarChart가 계산하고 여기서는 그리기만 한다. */
-const BarChart = ({ points, width, height = DEFAULT_HEIGHT, accessibilityLabel }: BarChartProps) => {
+export const BarChart = ({ points, width, height = DEFAULT_HEIGHT, accessibilityLabel }: BarChartProps) => {
   const layout = layoutBarChart({ points, width, height });
   if (width === 0 || layout.bars.length === 0) return null;
 
@@ -44,5 +44,4 @@ const BarChart = ({ points, width, height = DEFAULT_HEIGHT, accessibilityLabel }
   );
 };
 
-export default BarChart;
 export type { BarChartProps };

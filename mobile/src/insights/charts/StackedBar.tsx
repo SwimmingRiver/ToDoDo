@@ -15,7 +15,7 @@ const HEIGHT = 24;
 const RADIUS = 6;
 
 /** 한 줄짜리 누적 막대. 색만으로 구분하지 않도록 호출부가 범례 텍스트를 함께 둔다. */
-const StackedBar = ({ segments, colorOf, width, accessibilityLabel }: StackedBarProps) => {
+export const StackedBar = ({ segments, colorOf, width, accessibilityLabel }: StackedBarProps) => {
   // 훅은 이른 반환보다 먼저 호출한다. 인스턴스마다 고유한 clipPath id가 필요하다.
   const clipId = `stacked-bar-clip-${useId()}`;
   const layout = layoutStackedBar({ segments, width });
@@ -39,5 +39,4 @@ const StackedBar = ({ segments, colorOf, width, accessibilityLabel }: StackedBar
   );
 };
 
-export default StackedBar;
 export type { StackedBarProps };

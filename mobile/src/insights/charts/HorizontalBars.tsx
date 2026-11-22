@@ -18,7 +18,7 @@ const GAP = 8;
 const TRACK_HEIGHT = 8;
 
 /** 가로 막대 목록. 텍스트가 범주를, 막대는 크기만 인코딩한다(단일 색). */
-const HorizontalBars = ({ rows, width, accessibilityLabel }: HorizontalBarsProps) => {
+export const HorizontalBars = ({ rows, width, accessibilityLabel }: HorizontalBarsProps) => {
   const trackX = LABEL_WIDTH + GAP;
   const trackWidth = width - trackX - GAP - VALUE_WIDTH;
   const layout = layoutHorizontalBars({ rows, width: trackWidth });
@@ -51,5 +51,4 @@ const HorizontalBars = ({ rows, width, accessibilityLabel }: HorizontalBarsProps
   );
 };
 
-export default HorizontalBars;
 export type { HorizontalBarsProps };
