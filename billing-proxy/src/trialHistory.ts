@@ -67,7 +67,7 @@ export class TrialHistoryStore {
 
   /**
    * 한 번의 commit으로 원자적으로 쓴다 — 연결된 구글·Apple 키 중 하나만 남는 부분 기록을 막는다.
-   * 같은 키는 덮어쓴다(마지막 기록 기준으로 1년). expireAt은 Firestore TTL 정책 대상 필드다.
+   * 같은 키는 덮어쓴다(마지막 기록 기준으로 1년). 만료 문서 삭제는 별도 정리 작업(후속) — Firestore TTL은 무료 요금제에서 못 쓴다.
    */
   async record(entries: readonly TrialIdentityKey[], now: Date): Promise<void> {
     if (entries.length === 0) return;
@@ -91,7 +91,7 @@ export class TrialHistoryStore {
     if (!res.ok) throw new Error(`Firestore 체험 사용 확인값 기록 실패 (${res.status})`);
   }
 
-  /** 만료 전 기록이 하나라도 있으면 true. 키(최대 2개)는 동시에 조회한다. TTL 삭제는 지연될 수 있어 expireAt을 직접 비교한다. */
+  /** 만료 전 기록이 하나라도 있으면 true. 키(최대 2개)는 동시에 조회한다. 만료 문서가 남아 있을 수 있어 expireAt을 직접 비교한다. */
   async hasActive(keys: readonly string[], now: Date): Promise<boolean> {
     const found = await Promise.all(
       keys.map(async (key) => {
