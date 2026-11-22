@@ -32,29 +32,33 @@ eas build --platform android --profile production
 
 | 변수 | 쓰는 곳 | `preview` | `production` |
 |---|---|---|---|
-| `EXPO_PUBLIC_FIREBASE_API_KEY` | 로그인·Firestore | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | 〃 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | 〃 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | 〃 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | 〃 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_APP_ID` | 〃 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID` | 〃 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID` | 구글 로그인 | 등록됨 | **필요** |
-| `EXPO_PUBLIC_BILLING_PROXY_URL` | 인앱결제 검증, 탈퇴 | **필요** | **필요** |
-| `EXPO_PUBLIC_CALENDAR_PROXY_URL` | 구글 캘린더 연동, 탈퇴 | **필요** | **필요** |
-| `EXPO_PUBLIC_AI_PROXY_URL` | AI 할 일 플랜 | **필요** | **필요** |
-| `EXPO_PUBLIC_REMINDER_PROXY_URL` | 탈퇴 시 알림 정리 | **필요** | **필요** |
+| `EXPO_PUBLIC_FIREBASE_API_KEY` | 로그인·Firestore | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | 〃 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | 〃 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | 〃 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | 〃 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_APP_ID` | 〃 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID` | 〃 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID` | 구글 로그인 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_BILLING_PROXY_URL` | 인앱결제 검증, 탈퇴 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_CALENDAR_PROXY_URL` | 구글 캘린더 연동, 탈퇴 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_AI_PROXY_URL` | AI 할 일 플랜 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_REMINDER_PROXY_URL` | 탈퇴 시 알림 정리 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_SENTRY_DSN` | Sentry | — | 등록됨 |
 | `SENTRY_AUTH_TOKEN` (secret) | Sentry 소스맵 업로드 | — | 등록됨 |
 
-(2026-11-22 `eas env:list`로 이름만 확인한 상태.) Firebase가 비면 로그인부터 실패하고, 프록시 URL이 비면 결제·캘린더·AI 플랜·탈퇴가 실패한다(`mobile/AGENTS.md` 참고). 프록시 URL은 운영 Worker 주소로, 로컬 `mobile/.env`의 값과 같다.
+2026-11-22 두 환경 모두 등록 완료(`eas env:list`로 이름과 값이 비어 있지 않음만 확인). Firebase가 비면 로그인부터 실패하고, 프록시 URL이 비면 결제·캘린더·AI 플랜·탈퇴가 실패한다(`mobile/AGENTS.md` 참고). 프록시 URL은 운영 Worker 주소로, 로컬 `mobile/.env`의 값과 같다.
+
+값을 바꾸거나 새로 추가할 때:
 
 ```bash
-cd mobile
-eas env:create --environment production --visibility plaintext --name EXPO_PUBLIC_FIREBASE_API_KEY --value <값>
-# 나머지도 같은 형식. preview에는 프록시 URL 4개만 추가.
-eas env:list --environment production   # 등록 후 이름 확인
+cd mobile   # node_modules가 최신인 체크아웃에서 실행(아래 주의)
+eas env:set --environment production --visibility plaintext --name EXPO_PUBLIC_AI_PROXY_URL --value <값>
+eas env:list --environment production   # 이름 확인
 ```
+
+- `eas env:create`는 eas-cli 22부터 deprecated — 있으면 갱신까지 하는 `env:set`을 쓴다.
+- eas는 등록·빌드 전에 `expo config`로 앱 설정을 읽는다. `node_modules`가 낡아 `app.json`의 플러그인(`expo-build-properties` 등)을 못 찾는 폴더에서 실행하면 `expo config --json exited with non-zero code: 1`로 실패한다. 먼저 `npm ci`.
 
 ## 스플래시
 
