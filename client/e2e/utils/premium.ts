@@ -13,6 +13,9 @@ export async function grantPremiumInEmulator(page: Page, request: APIRequestCont
   const uid = await page.evaluate(async () => {
     // @ts-expect-error 브라우저에서만 resolve되는 dev 서버 경로
     const mod = await import('/src/shared/lib/firebase.ts')
+    // loginAsTestUser는 로그인 뒤 페이지를 새로 연다(goto). 새 페이지에서 Auth는 IndexedDB에서
+    // 세션을 비동기로 복원하므로, 복원 전에 읽으면 currentUser가 null이다(느린 CI 러너에서 실패).
+    await mod.auth.authStateReady()
     return mod.auth.currentUser?.uid as string | undefined
   })
   if (!uid) throw new Error('로그인된 사용자가 없습니다')
