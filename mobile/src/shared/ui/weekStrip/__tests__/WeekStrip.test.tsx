@@ -1,6 +1,8 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { StyleSheet } from "react-native";
 import { WeekStrip } from "../WeekStrip";
+import { MIN_TOUCH_TARGET } from "../../../../theme/spacing";
 import { colors } from "../../../../theme/colors";
 
 describe("WeekStrip", () => {
@@ -72,12 +74,12 @@ describe("WeekStrip", () => {
     expect(onGoToToday).toHaveBeenCalledTimes(1);
   });
 
-  it("날짜 칸은 폭 40에 가로 hitSlop을 더해 터치 영역이 44 이상이다(칸 사이 간격 안에서)", async () => {
+  it("날짜 칸은 고정 폭이 아니라 화살표 사이 폭을 고르게 나눠 갖는다(상한 있음)", async () => {
     await render(<WeekStrip {...defaultProps} />);
-    const cell = screen.getByLabelText("6월 16일 화요일");
-    const { left = 0, right = 0 } = cell.props.hitSlop ?? {};
-    expect(40 + left + right).toBeGreaterThanOrEqual(44);
-    expect(left + right).toBeLessThanOrEqual(4);
+    const style = StyleSheet.flatten(screen.getByLabelText("6월 16일 화요일").props.style);
+    expect(style.flex).toBe(1);
+    expect(style.width).toBeUndefined();
+    expect(style.maxWidth).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
   });
 });
 
