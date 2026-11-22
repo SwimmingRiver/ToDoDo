@@ -1,6 +1,8 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { QueryClient } from "@tanstack/react-query";
 
+const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+
 const calls: string[] = [];
 
 jest.mock("../../firebase", () => ({ auth: { name: "auth" } }));
@@ -54,6 +56,7 @@ describe("signOut", () => {
   });
 
   it("구글 로그아웃이 실패해도 firebase 로그아웃과 캐시 비우기는 진행한다", async () => {
+    sentryMock.captureException.mockClear();
     mockGoogleSignOut.mockRejectedValueOnce(new Error("google down"));
     const { signOut } = await import("../signOut");
     const { client, clear } = makeQueryClient();
@@ -62,9 +65,12 @@ describe("signOut", () => {
 
     expect(mockFirebaseSignOut).toHaveBeenCalled();
     expect(clear).toHaveBeenCalled();
+    // 구글 세션이 이미 없을 때도 나는 무해한 실패라 Sentry로 보내지 않는다.
+    expect(sentryMock.captureException).not.toHaveBeenCalled();
   });
 
   it("예약 알림 취소가 실패해도 로그아웃은 진행한다", async () => {
+    sentryMock.captureException.mockClear();
     mockCancelAll.mockRejectedValueOnce(new Error("notifications unavailable"));
     const { signOut } = await import("../signOut");
     const { client, clear } = makeQueryClient();
@@ -73,6 +79,7 @@ describe("signOut", () => {
 
     expect(mockFirebaseSignOut).toHaveBeenCalled();
     expect(clear).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "auth" } });
   });
 
   it("firebase 로그아웃이 실패하면 오류를 던지고 캐시는 비우지 않는다", async () => {

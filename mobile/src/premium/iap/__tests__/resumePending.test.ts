@@ -22,6 +22,8 @@ jest.mock("../../useEntitlementSync", () => ({ refreshClaims: () => mockRefreshC
 
 import { resumePendingPurchases } from "../resumePending";
 
+const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+
 const purchase = (proof: string): StorePurchase => ({ platform: "ios", productId: "premium_monthly", proof, raw: { proof } });
 
 describe("resumePendingPurchases", () => {
@@ -45,11 +47,13 @@ describe("resumePendingPurchases", () => {
   });
 
   it("목록 조회가 실패해도 던지지 않고 [iap] 경고만 남긴다", async () => {
+    sentryMock.captureException.mockClear();
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     mockClient.listUnfinished.mockRejectedValue(new Error("not connected"));
 
     await expect(resumePendingPurchases()).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith("[iap]", expect.any(Error));
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "iap" } });
     warn.mockRestore();
   });
 

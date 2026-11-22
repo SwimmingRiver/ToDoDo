@@ -1,7 +1,8 @@
-const { getDefaultConfig } = require("expo/metro-config");
+// getSentryExpoConfig는 expo/metro-config의 기본 설정에 Sentry 소스맵용 debug id 주입을 더한 것이다.
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 const path = require("path");
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // packages/core(@tododo/core)는 file: 의존성(심볼릭 링크)으로 연결되는데, Metro가
 // 심볼릭 링크를 실제 경로 기준으로 해석하기 때문에 packages/core 자체에 별도의

@@ -3,6 +3,7 @@ import { updateTodo, type Todo, type TodoFields } from "@tododo/core";
 import { db } from "../firebase";
 import { useAuthState } from "../auth/useAuthState";
 import { scheduleReminder } from "../notifications/scheduleReminder";
+import { reportError } from "../shared/lib/sentry";
 
 type UpdatePayload = {
   id: string;
@@ -29,7 +30,7 @@ export const useUpdateTodo = () => {
         try {
           await scheduleReminder({ id, title, dueAt: fields.dueAt });
         } catch (error) {
-          console.warn("알림 재예약 실패:", error);
+          reportError(error, "reminder");
         }
       }
     },

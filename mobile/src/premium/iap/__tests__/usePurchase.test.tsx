@@ -186,6 +186,26 @@ describe("usePurchase", () => {
     warn.mockRestore();
   });
 
+  it("사용자 취소는 Sentry로 보고하지 않고, 다른 스토어 오류는 iap 태그로 보고한다", async () => {
+    const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+    sentryMock.captureException.mockClear();
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await renderHook(() => usePurchase());
+    await act(async () => {
+      listeners.error?.({ code: "user-cancelled" });
+    });
+    expect(sentryMock.captureException).not.toHaveBeenCalled();
+
+    await act(async () => {
+      listeners.error?.({ code: "network-error", message: "offline" });
+    });
+    expect(sentryMock.captureException).toHaveBeenCalledWith(
+      { code: "network-error", message: "offline" },
+      { tags: { feature: "iap" } },
+    );
+    warn.mockRestore();
+  });
+
   it("restore = listUnfinished + available purchases re-verify", async () => {
     mockClient.listUnfinished.mockResolvedValue([purchase("a")]);
     // a는 양쪽에 다 나온다 — proof 기준으로 한 번만 검증한다.

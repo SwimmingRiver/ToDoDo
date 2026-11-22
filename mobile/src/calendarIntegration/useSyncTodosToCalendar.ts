@@ -19,6 +19,7 @@ import { useCalendarIntegrationStatus } from "./useCalendarIntegration";
 import { useIsPremium } from "../premium";
 import { markCalendarRevoked } from "./markCalendarRevoked";
 import { loadSnapshot, saveSnapshot, clearSnapshot, type SyncSnapshot } from "./snapshotStorage";
+import { reportError } from "../shared/lib/sentry";
 
 /** Worker가 409 not_connected를 줬을 때 연동 상태를 다시 읽고, 그래도 Firestore가
  *  connected:true라면(해제가 Worker 단계 뒤 Firestore 단계에서 실패한 경우) Worker를
@@ -34,14 +35,16 @@ const reconcileNotConnected = async (queryClient: QueryClient, uid: string): Pro
     await setDoc(doc(db, "calendarIntegrations", uid), { connected: false, status: "active" }, { merge: true });
     queryClient.invalidateQueries({ queryKey: key });
   } catch (error) {
-    console.warn("[calendar] 연동 상태 재조정 실패", error);
+    reportError(error, "calendar");
   }
 };
 
 /** 할 일을 구글 캘린더에 단방향 동기화한다(웹 useSyncTodosToCalendar와 같은 동작).
  *  웹과 달리 AsyncStorage가 비동기라, 스냅샷 로드가 끝나기 전에는 절대 동기화하지 않는다 —
  *  빈 스냅샷으로 먼저 돌면 스냅샷에만 남은 삭제 대상을 놓치고, 변경 없는 할 일까지 전부
- *  다시 올린다. 앱에는 Sentry가 없어 실패는 console.warn으로만 남긴다. */
+ *  다시 올린다.
+ *  실패 보고는 웹과 같다 — 묶음 요청 실패·재조정 실패만 Sentry로 보내고, 항목별 실패와
+ *  todos 재조회 실패는 다음 실행이 다시 시도하므로 console.warn으로만 남긴다. */
 export const useSyncTodosToCalendar = (): void => {
   const { user } = useAuthState();
   const uid = user?.uid ?? null;
@@ -222,7 +225,7 @@ export const useSyncTodosToCalendar = (): void => {
           // 이 훅이 스냅샷을 비우고 멈춘다.
           await reconcileNotConnected(queryClient, uid);
         } else {
-          console.warn("[calendar] 동기화 실패", error);
+          reportError(error, "calendar");
         }
       } finally {
         // todos 무효화는 묶음마다가 아니라 루프가 끝난 뒤 한 번만, isRunning을 풀기 전에
