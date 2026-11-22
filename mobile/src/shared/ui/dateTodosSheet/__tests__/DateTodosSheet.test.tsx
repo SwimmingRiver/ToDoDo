@@ -358,3 +358,27 @@ describe("DateTodosSheet 레이아웃·닫기", () => {
     timing.mockRestore();
   });
 });
+
+describe("DateTodosSheet 하단 여백", () => {
+  it("홈 인디케이터에 버튼이 붙지 않도록 하단 안전 영역만큼 여백을 더한다", async () => {
+    const safeArea = await import("react-native-safe-area-context");
+    const spy = jest
+      .spyOn(safeArea, "useSafeAreaInsets")
+      .mockReturnValue({ top: 0, right: 0, bottom: 34, left: 0 });
+    const { DateTodosSheet } = await import("../DateTodosSheet");
+    await render(
+      <DateTodosSheet
+        isOpen
+        onClose={jest.fn()}
+        dateLabel="6월 20일, 토요일"
+        todos={[]}
+        onPressTodo={jest.fn()}
+        onAddTodo={jest.fn()}
+      />,
+    );
+    const footer = await screen.findByTestId("date-todos-sheet-footer");
+    const style = Object.assign({}, ...[footer.props.style].flat(Infinity).filter(Boolean));
+    expect(style.paddingBottom).toBe(16 + 34);
+    spy.mockRestore();
+  });
+});

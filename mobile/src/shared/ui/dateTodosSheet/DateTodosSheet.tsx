@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CalendarDays } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Todo } from "@tododo/core";
 import {
   formatGoogleEventTime,
@@ -119,6 +120,7 @@ export const DateTodosSheet = ({
   const visibleGoogleEvents = dateKey ? googleEvents : [];
   const hasItems = todos.length > 0 || visibleGoogleEvents.length > 0;
   const { isVisible, translateY, closeImmediately } = useSheetSlide(isOpen);
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const handlePressTodo = (todo: Todo) => {
     closeImmediately();
     onPressTodo(todo);
@@ -162,7 +164,8 @@ export const DateTodosSheet = ({
             </View>
           )}
 
-          <View style={styles.footer}>
+          {/* 홈 인디케이터 영역만큼 띄워 버튼이 화면 맨 아래에 붙어 보이지 않게 한다(11-22 실기 피드백). */}
+          <View testID="date-todos-sheet-footer" style={[styles.footer, { paddingBottom: spacing.lg + bottomInset }]}>
             <Button title="할 일 추가" onPress={handleAddTodo} variant="primary" />
           </View>
         </Pressable>
