@@ -4,7 +4,6 @@ import { db } from "@/shared/lib/firestore";
 import { auth } from "@/shared/lib/firebase";
 import { useIsPremium } from "@/features/entitlement";
 import { getOAuthStartUrl, disconnectCalendar } from "../api";
-import { DisconnectPartialError } from "@tododo/core/dist/calendarSync/index.js";
 
 interface CalendarIntegrationStatus {
   connected: boolean;
@@ -56,38 +55,24 @@ export const useDisconnectCalendar = () => {
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error("Not authenticated");
       const googleEventIds = [...todosWithEvent.map((t) => t.googleEventId), ...orphanGoogleEventIds];
-      // 실제로 삭제 확인된 것만 Firestore에서 googleEventId를 지운다 — 실패한(구글에 여전히
-      // 남아있는) 이벤트의 id까지 지우면 다음 연동부터는 그 이벤트를 추적할 방법이 없어진다.
-      const clearConfirmed = async (deletedGoogleEventIds: string[]) => {
-        const deletedSet = new Set(deletedGoogleEventIds);
-        const toClear = todosWithEvent.filter((t) => deletedSet.has(t.googleEventId));
-        if (toClear.length > 0) {
-          const batch = writeBatch(db);
-          toClear.forEach((t) => batch.update(doc(db, "todos", t.id), { googleEventId: null }));
-          await batch.commit();
-        }
-        return toClear;
-      };
+      // 묶음 연동 해제 도중 실패(DisconnectPartialError 포함)하면 여기서 그대로 던진다 — 토큰이
+      // 아직 남아 있으니 연동 해제 상태로 바꾸지 않고, 앞 묶음에서 이미 지워진 이벤트의
+      // googleEventId도 일부러 남긴다. 연동이 유지된 채 id를 지우면 동기화 훅이 그 할 일 전부를
+      // 미동기화(!googleEventId)로 보고 바로 POST→409→tombstone 되살리기로 삭제를 되돌린다.
+      // 남긴 stale id는 사용자가 수정한 할 일만 되살리고, 재시도한 연동 해제가 다시 지운다
+      // (404/410은 성공으로 처리).
+      const { deletedGoogleEventIds } = await disconnectCalendar(googleEventIds);
 
-      let deletedGoogleEventIds: string[];
-      try {
-        ({ deletedGoogleEventIds } = await disconnectCalendar(googleEventIds));
-      } catch (error) {
-        // 묶음 연동 해제 도중 실패: 앞 묶음에서 이미 구글에서 지워진 이벤트의 id는 지운다(이벤트가
-        // 없다). 토큰은 마지막 요청에서만 지우므로 아직 남아 있다 — connected:false로 바꾸지 않고
-        // 그대로 던져 사용자가 다시 시도하게 한다. 재시도 때 남은 이벤트를 다시 지운다.
-        if (error instanceof DisconnectPartialError && error.deletedGoogleEventIds.length > 0) {
-          // 정리 실패가 원래 오류를 가리지 않게 한다 — 남은 stale id는 재시도 때 404로 수렴한다.
-          try {
-            await clearConfirmed(error.deletedGoogleEventIds);
-          } catch (clearError) {
-            console.error("부분 연동 해제 결과 정리 실패:", clearError);
-          }
-        }
-        throw error;
+      // 실제로 삭제 확인된 것만 Firestore에서 googleEventId를 지운다 — 실패한
+      // (구글에 여전히 남아있는) 이벤트의 id까지 지우면 다음 연동부터는 그
+      // 이벤트를 추적할 방법이 없어져 영원히 고아로 남는다.
+      const deletedSet = new Set(deletedGoogleEventIds);
+      const toClear = todosWithEvent.filter((t) => deletedSet.has(t.googleEventId));
+      if (toClear.length > 0) {
+        const batch = writeBatch(db);
+        toClear.forEach((t) => batch.update(doc(db, "todos", t.id), { googleEventId: null }));
+        await batch.commit();
       }
-
-      const toClear = await clearConfirmed(deletedGoogleEventIds);
 
       await setDoc(
         getIntegrationDocRef(uid),

@@ -228,17 +228,17 @@ describe("useDisconnectCalendar — 묶음 도중 실패", () => {
     { id: "t2", googleEventId: "g2" },
   ];
 
-  // 앞 묶음에서 이미 구글에서 지워진 이벤트의 googleEventId는 지우고(이벤트가 없다), 토큰은
-  // 아직 남아 있으니 연동 해제 상태로 바꾸지 않는다(사용자가 다시 시도할 수 있다).
-  it("삭제 확인된 id만 비우고, connected는 그대로 둔 채 에러를 다시 던진다", async () => {
+  // 토큰이 아직 남아(연동 유지) 있으니 연동 해제 상태로 바꾸지 않고, 앞 묶음에서 지워진 이벤트의
+  // googleEventId도 일부러 남긴다 — 지우면 동기화 훅이 그 할 일 전부를 미동기화로 보고 바로
+  // POST→409→tombstone 되살리기로 삭제를 되돌린다. 재시도하면 404/410이 성공으로 처리돼 정리된다.
+  it("Firestore를 건드리지 않고(삭제 확인 id도 남김) connected도 그대로 둔 채 에러를 다시 던진다", async () => {
     const partial = new DisconnectPartialError(new Error("연동 해제 실패"), ["g1", "o1"]);
     mockDisconnect.mockRejectedValue(partial);
     const { result } = await renderHook(() => useDisconnectCalendar(), { wrapper: wrap(makeClient()) });
 
     await expect(result.current.disconnect(todos, ["o1"])).rejects.toBe(partial);
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
-    expect(mockBatchUpdate).toHaveBeenCalledWith({ path: "todos/t1" }, { googleEventId: null });
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    expect(mockBatchUpdate).not.toHaveBeenCalled();
+    expect(mockBatchCommit).not.toHaveBeenCalled();
     expect(mockSetDoc).not.toHaveBeenCalled();
   });
 
