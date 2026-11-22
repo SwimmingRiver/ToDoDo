@@ -109,8 +109,9 @@ export const useDisconnectCalendar = () => {
       // 아직 남아 있으니 연동 해제 상태로 바꾸지 않고, 앞 묶음에서 이미 지워진 이벤트의
       // googleEventId도 일부러 남긴다. 연동이 유지된 채 id를 지우면 동기화 훅이 그 할 일 전부를
       // 미동기화(!googleEventId)로 보고 바로 POST→409→tombstone 되살리기로 삭제를 되돌린다.
-      // 남긴 stale id는 사용자가 수정한 할 일만 되살리고, 재시도한 연동 해제가 다시 지운다
-      // (404/410은 성공으로 처리).
+      // id를 남기면 수정하지 않은 할 일의 이벤트는 지워진 채로 있고, 사용자가 수정한 할 일만
+      // upsert PATCH(Worker toGoogleEventBody가 항상 status:"confirmed"를 실음)로 그 tombstone이
+      // 되살아난다. 재시도한 연동 해제가 남은 이벤트를 다시 지운다(이미 지워진 404/410은 성공).
       const { deletedGoogleEventIds } = await disconnectCalendar(googleEventIds);
 
       // 실제로 삭제 확인된 것만 Firestore에서 googleEventId를 지운다 — 실패한(구글에 여전히

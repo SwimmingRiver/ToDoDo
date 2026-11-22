@@ -2,10 +2,12 @@ import type { DisconnectResult } from "./types.js";
 /** /disconnect 한 요청에 담는 이벤트 수. 삭제는 이벤트당 구글 호출 1회(레이트 리밋 시 최대
  *  3회)라 10 × 3 + JWKS·토큰 갱신으로 무료 플랜 서브리퀘스트 50 한도 안에 든다. */
 export declare const DISCONNECT_CHUNK_SIZE = 10;
-/** 묶음 연동 해제 도중 요청이 실패했다. 그때까지 구글에서 삭제 확인된 id를 담는다 — 호출부는
- *  이 id들의 googleEventId를 Firestore에서 지워야 한다(이벤트는 이미 없다). 토큰은 마지막
- *  요청에서만 지우므로 아직 남아 있다 → 연동 해제 상태로 바꾸지 말고 다시 시도하게 한다.
- *  message는 원래 오류 그대로라 기존 오류 문구가 바뀌지 않는다. */
+/** 묶음 연동 해제 도중 요청이 실패했다. 그때까지 구글에서 삭제 확인된 id를 담는다(진단·로그용).
+ *  호출부는 부분 실패 시 Firestore를 건드리지 않아야 한다 — 토큰은 마지막 요청에서만 지우므로
+ *  연동이 아직 유지 중인데, 이때 googleEventId를 지우면 다음 동기화가 그 할 일 전부를 미동기화로
+ *  보고 POST→409→tombstone 되살리기로 삭제를 되돌린다. 연동 해제 상태로도 바꾸지 말고 그대로
+ *  던져 사용자가 다시 시도하게 한다 — 재시도한 연동 해제는 이미 지워진 이벤트의 404/410을
+ *  성공으로 처리해 정리한다. message는 원래 오류 그대로라 기존 오류 문구가 바뀌지 않는다. */
 export declare class DisconnectPartialError extends Error {
     readonly deletedGoogleEventIds: string[];
     readonly cause: unknown;
