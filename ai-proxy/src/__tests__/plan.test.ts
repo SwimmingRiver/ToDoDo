@@ -55,7 +55,7 @@ describe("handlePlan", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-25T03:00:00Z")); // 서울 2026-09-25 12:00
-    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "user-1", premium: true, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "user-1", premium: true, premiumUntil: null, identities: {} });
     vi.mocked(generatePlan).mockReset().mockResolvedValue(rawPlan);
   });
   afterEach(() => vi.useRealTimers());
@@ -69,7 +69,7 @@ describe("handlePlan", () => {
   });
 
   it("무료 사용자는 403 PREMIUM_REQUIRED", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValueOnce({ uid: "user-1", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValueOnce({ uid: "user-1", premium: false, premiumUntil: null, identities: {} });
     const res = await handlePlan(request(), makeEnv());
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "PREMIUM_REQUIRED" });

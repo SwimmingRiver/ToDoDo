@@ -102,7 +102,7 @@ describe("router", () => {
 
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: {} });
   });
 
   it("OPTIONS는 204 + 허용 origin CORS", async () => {
@@ -117,7 +117,7 @@ describe("router", () => {
   });
 
   it("허용 목록 밖이면 403 NOT_ALLOWED이고 Paddle을 부르지 않는다", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
     const deps = makeDeps();
     for (const path of ["/checkout", "/trial", "/portal"]) {
       const res = await call(post(path), deps);
@@ -132,7 +132,7 @@ describe("router", () => {
     vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
     expect((await call(post("/iap/account-token"), makeDeps())).status).toBe(401);
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: {} });
     const res = await call(post("/iap/account-token"), makeDeps());
     expect(res.status).toBe(200);
     const body = (await res.json()) as { appAccountToken: string };
@@ -242,7 +242,7 @@ describe("router", () => {
   });
 
   it("not allowed uid → 403 on /iap/apple/verify", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
     const deps = makeDeps();
     const res = await call(post("/iap/apple/verify", { jws: "a.b.c" }), deps);
     expect(res.status).toBe(403);
@@ -275,7 +275,7 @@ describe("router", () => {
   });
 
   it("not allowed uid → 403 on /iap/google/verify", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
     const deps = makeDeps();
     const res = await call(post("/iap/google/verify", { purchaseToken: "t", productId: "premium_monthly" }), deps);
     expect(res.status).toBe(403);
@@ -318,7 +318,7 @@ describe("router", () => {
 
   describe("/account/delete", () => {
     it("허용 목록 밖 사용자도 탈퇴할 수 있다(204 + CORS)", async () => {
-      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
       const deps = makeDeps();
       const res = await call(post("/account/delete"), deps);
       expect(res.status).toBe(204);

@@ -61,7 +61,7 @@ const realDepsWithFakeBackends = () => {
 describe("스토어 시크릿이 없을 때의 의존성", () => {
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: {} });
   });
   afterEach(() => vi.restoreAllMocks());
 

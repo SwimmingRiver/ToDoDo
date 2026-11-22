@@ -38,7 +38,7 @@ const req = (method: string, path: string, body?: unknown, origin = "https://app
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+  vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: {} });
 });
 
 describe("handleRequest", () => {
