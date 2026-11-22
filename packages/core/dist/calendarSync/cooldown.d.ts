@@ -9,7 +9,12 @@ export type SyncFailureLog = Map<string, {
 }>;
 export declare const DEFAULT_SYNC_FAILURE_COOLDOWN_MS: number;
 export declare const excludeCoolingDown: (payloads: SyncTodoPayload[], eligibleById: Map<string, Todo>, failures: SyncFailureLog, now: number) => SyncTodoPayload[];
-/** 요청한 batch의 결과로 실패 기록을 제자리 갱신한다. 실패는 쿨다운을 걸고, 성공은 지운다. */
+/** Worker가 요청당 서브리퀘스트 예산이 바닥나 구글에 시도조차 안 한 항목의 오류 접두어
+ *  (calendar-proxy GoogleFetchBudgetExhaustedError와의 계약). */
+export declare const BUDGET_EXHAUSTED_ERROR_PREFIX = "budget_exhausted";
+/** 요청한 batch의 결과로 실패 기록을 제자리 갱신한다. 실패는 쿨다운을 걸고, 성공은 지운다.
+ *  예산 소진(구글에 시도 안 함)은 레이트 리밋과 무관하므로 쿨다운 없이 다음 실행에서 바로
+ *  다시 보낸다. */
 export declare const recordSyncFailures: (batch: SyncTodoPayload[], results: SyncTodoResult[], eligibleById: Map<string, Todo>, failures: SyncFailureLog, now: number, cooldownMs?: number) => void;
 /** /sync-todos 한 요청에 담는 항목 수. Cloudflare Workers 무료 플랜은 요청당 서브리퀘스트가
  *  50개다. 항목당 구글 호출은 보통 1~4회지만, 레이트 리밋 재시도가 겹치면 PATCH→404→생성

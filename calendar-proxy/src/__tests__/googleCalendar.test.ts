@@ -589,6 +589,8 @@ describe("구글 호출 예산", () => {
     const skipped = results.filter((r) => r.error);
     expect(skipped).toHaveLength(6);
     expect(skipped[0].error).toMatch(/예산/);
+    // 구글에 시도조차 안 한 항목은 클라이언트가 쿨다운 없이 다시 보내도록 고정 접두어로 표시한다.
+    expect(skipped.every((r) => r.error!.startsWith("budget_exhausted"))).toBe(true);
     expect(skipped[0].googleEventId).toBe(skipped[0].id.replace("todo", "event"));
   });
 

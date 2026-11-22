@@ -27,7 +27,13 @@ export const excludeCoolingDown = (
     return failure.updatedAt !== updatedAtOf(p.id, eligibleById);
   });
 
-/** 요청한 batch의 결과로 실패 기록을 제자리 갱신한다. 실패는 쿨다운을 걸고, 성공은 지운다. */
+/** Worker가 요청당 서브리퀘스트 예산이 바닥나 구글에 시도조차 안 한 항목의 오류 접두어
+ *  (calendar-proxy GoogleFetchBudgetExhaustedError와의 계약). */
+export const BUDGET_EXHAUSTED_ERROR_PREFIX = "budget_exhausted";
+
+/** 요청한 batch의 결과로 실패 기록을 제자리 갱신한다. 실패는 쿨다운을 걸고, 성공은 지운다.
+ *  예산 소진(구글에 시도 안 함)은 레이트 리밋과 무관하므로 쿨다운 없이 다음 실행에서 바로
+ *  다시 보낸다. */
 export const recordSyncFailures = (
   batch: SyncTodoPayload[],
   results: SyncTodoResult[],
@@ -39,8 +45,11 @@ export const recordSyncFailures = (
   const requested = new Set(batch.map((p) => p.id));
   for (const { id, error } of results) {
     if (!requested.has(id)) continue;
-    if (error) failures.set(id, { updatedAt: updatedAtOf(id, eligibleById), retryAfter: now + cooldownMs });
-    else failures.delete(id);
+    if (error && !error.startsWith(BUDGET_EXHAUSTED_ERROR_PREFIX)) {
+      failures.set(id, { updatedAt: updatedAtOf(id, eligibleById), retryAfter: now + cooldownMs });
+    } else {
+      failures.delete(id);
+    }
   }
 };
 

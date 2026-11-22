@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DISCONNECT_CHUNK_SIZE, disconnectInChunks } from "../disconnectChunks";
+import { DISCONNECT_CHUNK_SIZE, DisconnectPartialError, disconnectInChunks } from "../disconnectChunks";
 import type { DisconnectResult } from "../types";
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `e${i}`);
@@ -49,6 +49,26 @@ describe("disconnectInChunks", () => {
     await expect(disconnectInChunks(ids(25), send)).rejects.toThrow("연동 해제 실패");
     expect(calls).toHaveLength(2);
     expect(calls.every((c) => c.keepToken)).toBe(true);
+  });
+
+  // 리뷰: 중간 묶음이 실패하면 앞 묶음에서 이미 삭제 확인된 id까지 버려져, 호출부가
+  // Firestore의 googleEventId를 정리할 수 없었다.
+  it("중간 묶음이 실패하면 그때까지 삭제 확인된 id를 담은 DisconnectPartialError를 던진다", async () => {
+    const cause = new Error("연동 해제 실패");
+    const { send } = recorder((n) => (n === 3 ? cause : undefined));
+    const error = await disconnectInChunks(ids(30), send).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DisconnectPartialError);
+    const partial = error as DisconnectPartialError;
+    expect(partial.message).toBe("연동 해제 실패");
+    expect(partial.cause).toBe(cause);
+    expect(partial.deletedGoogleEventIds).toEqual(ids(20).filter((id) => id !== "e3"));
+  });
+
+  it("첫 묶음부터 실패하면 삭제 확인 id는 빈 목록이다", async () => {
+    const { send } = recorder(() => new Error("연동 해제 실패"));
+    const error = (await disconnectInChunks(ids(5), send).catch((e: unknown) => e)) as DisconnectPartialError;
+    expect(error).toBeInstanceOf(DisconnectPartialError);
+    expect(error.deletedGoogleEventIds).toEqual([]);
   });
 
   it("앞 요청이 끝난 뒤에 다음 요청을 보낸다", async () => {

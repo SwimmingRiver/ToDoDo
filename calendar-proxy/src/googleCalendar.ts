@@ -86,7 +86,9 @@ export const createGoogleFetchBudget = (limit = GOOGLE_FETCH_BUDGET): GoogleFetc
 
 export class GoogleFetchBudgetExhaustedError extends Error {
   constructor() {
-    super("구글 호출 예산 소진(요청당 서브리퀘스트 한도) — 다음 동기화에서 다시 시도");
+    // "budget_exhausted" 접두어는 클라이언트(core recordSyncFailures)와의 계약이다 — 구글에
+    // 시도조차 안 한 항목이라 쿨다운 없이 다음 요청에서 바로 다시 보내게 한다. 바꾸지 말 것.
+    super("budget_exhausted: 구글 호출 예산 소진(요청당 서브리퀘스트 한도) — 다음 동기화에서 다시 시도");
     this.name = "GoogleFetchBudgetExhaustedError";
   }
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Todo } from "../../types/todo";
 import {
+  BUDGET_EXHAUSTED_ERROR_PREFIX,
   SYNC_CHUNK_SIZE,
   chunkSyncBatch,
   excludeCoolingDown,
@@ -58,6 +59,30 @@ describe("recordSyncFailures", () => {
     const failures: SyncFailureLog = new Map();
     recordSyncFailures([del("x")], [{ id: "x", googleEventId: "g-x", error: "boom" }], new Map(), failures, NOW, 1000);
     expect(failures.get("x")).toEqual({ updatedAt: "", retryAfter: NOW + 1000 });
+  });
+});
+
+describe("recordSyncFailures — 예산 소진", () => {
+  // Worker가 요청당 서브리퀘스트 예산이 바닥나 구글에 시도조차 안 한 항목. 레이트 리밋과
+  // 무관하므로 쿨다운에 걸지 않고 다음 실행에서 바로 다시 보낸다.
+  it("budget_exhausted 오류는 쿨다운을 기록하지 않고, 남아 있던 기록도 지운다", () => {
+    expect(BUDGET_EXHAUSTED_ERROR_PREFIX).toBe("budget_exhausted");
+    const eligibleById = new Map([
+      ["a", todo({ id: "a", updatedAt: "u-a" })],
+      ["b", todo({ id: "b", updatedAt: "u-b" })],
+    ]);
+    const failures: SyncFailureLog = new Map([["b", { updatedAt: "u-b", retryAfter: NOW + 1 }]]);
+    recordSyncFailures(
+      [upsert("a"), upsert("b")],
+      [
+        { id: "a", googleEventId: null, error: "budget_exhausted: 구글 호출 예산 소진" },
+        { id: "b", googleEventId: null, error: "budget_exhausted: 구글 호출 예산 소진" },
+      ],
+      eligibleById,
+      failures,
+      NOW,
+    );
+    expect(failures.size).toBe(0);
   });
 });
 
