@@ -49,6 +49,25 @@ describe("todoApi", () => {
     expect(result.map((t) => t.id)).toEqual(["todo-1", "todo-2"]);
   });
 
+  it("fetchAllUserTodos는 archived 조건 없이 userId로만 조회한다", async () => {
+    const { getDocs, where } = await import("firebase/firestore");
+    const { fetchAllUserTodos } = await import("../todoApi");
+    vi.mocked(where).mockClear();
+
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: [
+        { id: "todo-1", data: () => ({ userId: "u1", title: "a", archived: true }) },
+        { id: "todo-2", data: () => ({ userId: "u1", title: "b", archived: false }) },
+      ],
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+
+    const result = await fetchAllUserTodos(fakeDb, "u1");
+
+    expect(result).toHaveLength(2);
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledWith("userId", "==", "u1");
+  });
+
   it("createTodo는 status/doneAt/timestamps를 채워서 저장하고 생성된 id를 반환한다", async () => {
     const { addDoc } = await import("firebase/firestore");
     const { createTodo } = await import("../todoApi");

@@ -1,4 +1,4 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { colors } from "../../../theme/colors";
 import { MIN_TOUCH_TARGET, spacing } from "../../../theme/spacing";
@@ -45,7 +45,8 @@ export const BottomSheet = <T extends string>({
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
           </View>
-          <View style={styles.content}>
+          {/* 옵션이 많으면(통계 프로젝트 목록 등) 80% 높이 안에서 스크롤되게 한다. 짧은 목록은 그대로 보인다. */}
+          <ScrollView testID="bottom-sheet-options" style={styles.scroll} contentContainerStyle={styles.content}>
             {options.map((option) => {
               const selected = option.value === selectedValue;
               return (
@@ -70,7 +71,7 @@ export const BottomSheet = <T extends string>({
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
@@ -116,6 +117,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.text.primary,
     textAlign: "center",
+  },
+  // flexShrink: 컨테이너 maxHeight(80%)를 넘으면 목록 영역만 줄어들고 취소 버튼은 남는다.
+  scroll: {
+    flexShrink: 1,
   },
   content: {
     paddingVertical: spacing.sm,
