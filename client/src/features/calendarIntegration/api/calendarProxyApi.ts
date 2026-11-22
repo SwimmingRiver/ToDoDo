@@ -5,6 +5,7 @@ import {
   parseSyncResponse,
   parseEventsResponse,
   parseDisconnectResponse,
+  disconnectInChunks,
   type SyncTodoPayload,
   type SyncTodoResult,
   type GoogleCalendarEvent,
@@ -47,11 +48,17 @@ export const getGoogleCalendarEvents = async (
   return parseEventsResponse(await authorizedFetch(`/events?${params.toString()}`));
 };
 
+/** 연동 해제. Worker(무료 플랜)는 요청당 서브리퀘스트가 50개라 이벤트를 10개씩 나눠 순서대로
+ *  보낸다 — 마지막 요청 전까지는 keepToken:true로 토큰을 남기고, 마지막 요청에서만 토큰을
+ *  지운다. 중간 요청이 실패하면 throw(토큰이 남아 있어 다시 시도할 수 있다). 연동 해제
+ *  훅과 탈퇴(deleteAccount) 모두 이 함수를 쓴다. */
 export const disconnectCalendar = async (googleEventIds: string[]): Promise<DisconnectResult> =>
-  parseDisconnectResponse(
-    await authorizedFetch("/disconnect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ googleEventIds }),
-    }),
+  disconnectInChunks(googleEventIds, async (chunk, keepToken) =>
+    parseDisconnectResponse(
+      await authorizedFetch("/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(keepToken ? { googleEventIds: chunk, keepToken: true } : { googleEventIds: chunk }),
+      }),
+    ),
   );

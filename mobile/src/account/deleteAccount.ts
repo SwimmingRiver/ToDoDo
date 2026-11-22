@@ -1,6 +1,7 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
+import { disconnectInChunks } from "@tododo/core/dist/calendarSync/index.js";
 
 /** Expo는 process.env.EXPO_PUBLIC_*를 빌드 시 인라인한다. 함수 안에서 읽어 테스트가 값을 바꿀 수 있게 한다. */
 const readProxyUrls = () => {
@@ -50,13 +51,24 @@ export const deleteAccount = async (): Promise<void> => {
   const idToken = await user.getIdToken();
 
   const googleEventIds = await collectGoogleEventIds(user.uid);
-  await callWorker(
-    "calendar-proxy",
-    urls.calendar,
-    "/disconnect",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ googleEventIds }) },
-    idToken,
-  );
+  // Worker(무료 플랜)는 요청당 서브리퀘스트가 50개라 10개씩 나눠 지운다. 마지막 요청 전까지는
+  // keepToken:true로 토큰을 남기고 마지막 요청에서 토큰까지 지운다 — 중간에 실패하면 여기서
+  // throw해 다음 단계로 가지 않는다(토큰이 남아 있어 처음부터 다시 시도할 수 있다).
+  await disconnectInChunks(googleEventIds, async (chunk, keepToken) => {
+    await callWorker(
+      "calendar-proxy",
+      urls.calendar,
+      "/disconnect",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(keepToken ? { googleEventIds: chunk, keepToken: true } : { googleEventIds: chunk }),
+      },
+      idToken,
+    );
+    // 탈퇴는 삭제 확인 id로 Firestore를 정리하지 않는다(계정 데이터가 통째로 지워진다).
+    return { deletedGoogleEventIds: [] };
+  });
   await callWorker("reminder-proxy", urls.reminder, "/account", { method: "DELETE" }, idToken);
   await callWorker("billing-proxy", urls.billing, "/account/delete", { method: "POST" }, idToken);
   // 전부 성공한 뒤에만 지운다 — 중간 실패 후 재시도할 때 고아 id가 다시 필요하다.

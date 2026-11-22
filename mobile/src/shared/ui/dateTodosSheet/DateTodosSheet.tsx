@@ -1,5 +1,7 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CalendarDays } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Todo } from "@tododo/core";
 import {
   formatGoogleEventTime,
@@ -40,6 +42,61 @@ interface DateTodosSheetProps {
   onAddTodo: () => void;
 }
 
+const SLIDE_DURATION_MS = 250;
+
+/** 시트만 아래에서 올라오고 내려가게 한다. 닫을 때는 내려가는 애니메이션이 끝난 뒤 Modal을
+ *  내려야 해서(바로 visible=false면 시트가 툭 사라진다) 마운트 상태를 따로 둔다.
+ *
+ *  항목·"할 일 추가"를 누르면 부모(CalendarScreen)가 같은 틱에 닫고 화면을 이동한다. 이때는
+ *  내려가는 250ms 동안 투명 Modal 오버레이가 새 화면의 탭을 삼키므로 애니메이션 없이 바로
+ *  내린다(closeImmediately). 배경 탭·뒤로가기(onRequestClose)는 그대로 내려가는 애니메이션. */
+const useSheetSlide = (isOpen: boolean) => {
+  const offscreen = Dimensions.get("window").height;
+  const [isMounted, setIsMounted] = useState(isOpen);
+  // closeImmediately가 부모의 isOpen=false와 같은 이벤트 배치로 반영되도록 state로 둔다 —
+  // 그래야 같은 렌더에서 Modal visible이 false가 된다.
+  const [skipSlideDown, setSkipSlideDown] = useState(false);
+  const translateY = useRef(new Animated.Value(isOpen ? 0 : offscreen)).current;
+
+  useEffect(() => {
+    if (isOpen) {
+      // 부모가 닫지 않았으면(또는 다시 열면) 바로 닫기 표시를 거둔다.
+      setSkipSlideDown(false);
+      setIsMounted(true);
+      return;
+    }
+    if (skipSlideDown) {
+      translateY.setValue(offscreen);
+      setIsMounted(false);
+      return;
+    }
+    const animation = Animated.timing(translateY, {
+      toValue: offscreen,
+      duration: SLIDE_DURATION_MS,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) setIsMounted(false);
+    });
+    return () => animation.stop();
+  }, [isOpen, skipSlideDown, offscreen, translateY]);
+
+  // 올라오는 애니메이션은 Modal·시트가 마운트된 뒤(isMounted가 반영된 커밋 이후)에 시작한다 —
+  // setIsMounted와 같은 이펙트에서 시작하면 아직 없는 뷰에 걸려 첫 프레임이 빠진다.
+  useEffect(() => {
+    if (!isOpen || !isMounted) return;
+    const animation = Animated.timing(translateY, { toValue: 0, duration: SLIDE_DURATION_MS, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [isOpen, isMounted, translateY]);
+
+  return {
+    isVisible: isMounted && !skipSlideDown,
+    translateY,
+    closeImmediately: () => setSkipSlideDown(true),
+  };
+};
+
 /**
  * 캘린더에서 날짜를 탭했을 때 여는 시트. 기존 shared/ui/bottomSheet/BottomSheet는
  * 옵션 단일 선택 전용(상태 변경 시트)이라 할 일 목록+추가 버튼을 담을 수 없어,
@@ -62,11 +119,26 @@ export const DateTodosSheet = ({
   // 구글 일정 캡션("전날부터 이어짐" 판정)은 날짜 키가 있어야 정확하다 — 없으면 일정 줄을 그리지 않는다.
   const visibleGoogleEvents = dateKey ? googleEvents : [];
   const hasItems = todos.length > 0 || visibleGoogleEvents.length > 0;
+  const { isVisible, translateY, closeImmediately } = useSheetSlide(isOpen);
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const handlePressTodo = (todo: Todo) => {
+    closeImmediately();
+    onPressTodo(todo);
+  };
+  const handleAddTodo = () => {
+    closeImmediately();
+    onAddTodo();
+  };
 
+  // Modal의 animationType="slide"는 어두운 배경까지 통째로 밀어 올려 어색하다(11-21 사용자 피드백).
+  // Modal 애니메이션은 끄고 배경은 그 자리에 바로 깔고, 흰 시트만 아래에서 올라오게 한다.
   return (
-    <Modal transparent animationType="slide" visible={isOpen} onRequestClose={onClose}>
+    <Modal testID="date-todos-sheet-modal" transparent animationType="none" visible={isVisible} onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose} accessibilityLabel="닫기">
-        <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+        <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
+        {/* flexShrink: maxHeight(80%)는 Animated.View에 있다 — 이 래퍼가 줄어들어야 안쪽 ScrollView도
+            줄어 하단 "할 일 추가"가 작은 화면·큰 글꼴에서 잘리지 않는다. */}
+        <Pressable testID="date-todos-sheet-content" style={styles.content} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>{dateLabel}</Text>
@@ -75,7 +147,7 @@ export const DateTodosSheet = ({
           {hasItems ? (
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               {todos.map((todo) => (
-                <DateTodoItem key={todo.id} todo={todo} onPress={onPressTodo} />
+                <DateTodoItem key={todo.id} todo={todo} onPress={handlePressTodo} />
               ))}
               {dateKey &&
                 visibleGoogleEvents.map((event) => (
@@ -92,10 +164,12 @@ export const DateTodosSheet = ({
             </View>
           )}
 
-          <View style={styles.footer}>
-            <Button title="할 일 추가" onPress={onAddTodo} variant="primary" />
+          {/* 홈 인디케이터 영역만큼 띄워 버튼이 화면 맨 아래에 붙어 보이지 않게 한다(11-22 실기 피드백). */}
+          <View testID="date-todos-sheet-footer" style={[styles.footer, { paddingBottom: spacing.lg + bottomInset }]}>
+            <Button title="할 일 추가" onPress={handleAddTodo} variant="primary" />
           </View>
         </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   );
@@ -166,6 +240,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     maxHeight: "80%",
+  },
+  content: {
+    flexShrink: 1,
   },
   handle: {
     width: 36,

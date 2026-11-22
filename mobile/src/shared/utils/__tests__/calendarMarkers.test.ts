@@ -35,9 +35,26 @@ describe("buildCalendarMarkedDates", () => {
     jest.useRealTimers();
   });
 
-  it("완료 항목만 있는 날짜는 마커에 포함하지 않는다", () => {
+  it("완료 항목만 있는 날짜도 완료 색 점을 남긴다(웹 캘린더처럼 일정이 있는 날은 표시)", () => {
     const todos = [makeTodo({ dueAt: localISO(2026, 6, 20), status: "done" })];
-    expect(buildCalendarMarkedDates(todos)).toEqual({});
+    expect(buildCalendarMarkedDates(todos)).toEqual({
+      "2026-06-20": {
+        dots: [{ key: "done", color: statusColors.done.main, selectedDotColor: colors.background.primary }],
+      },
+    });
+  });
+
+  it("마감이 지났어도 완료된 항목은 danger가 아니라 완료 색으로 표시하고, 상태 순서는 todo→doing→done이다", () => {
+    const todos = [
+      // 오늘(06-15)보다 이전 마감이지만 완료 — overdue가 아니다.
+      makeTodo({ id: "d", dueAt: localISO(2026, 6, 10), status: "done" }),
+      makeTodo({ id: "t", dueAt: localISO(2026, 6, 20), status: "todo" }),
+      makeTodo({ id: "dd", dueAt: localISO(2026, 6, 20), status: "done" }),
+      makeTodo({ id: "g", dueAt: localISO(2026, 6, 20), status: "doing" }),
+    ];
+    const marked = buildCalendarMarkedDates(todos);
+    expect(marked["2026-06-10"].dots.map((d) => d.key)).toEqual(["done"]);
+    expect(marked["2026-06-20"].dots.map((d) => d.key)).toEqual(["todo", "doing", "done"]);
   });
 
   it("dueAt만 있는 항목은 그 날짜 하루에만 상태색 점을 남긴다", () => {

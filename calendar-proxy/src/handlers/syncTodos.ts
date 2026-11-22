@@ -2,7 +2,7 @@ import type { Env } from "../env";
 import { verifyFirebaseIdToken } from "@tododo/worker-auth";
 import { getTokenRecord, deleteTokenRecord } from "../tokenStore";
 import { refreshAccessToken } from "../googleOAuth";
-import { syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";
+import { createGoogleFetchBudget, syncTodosToGoogleCalendar, type SyncTodoItem } from "../googleCalendar";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -50,6 +50,9 @@ export const handleSyncTodos = async (request: Request, env: Env): Promise<Respo
     return jsonResponse({ error: "google_api_error" }, 502);
   }
 
-  const results = await syncTodosToGoogleCalendar(todos, accessToken);
+  // 요청 하나당 서브리퀘스트 한도(무료 플랜 50) 안에서만 구글을 호출한다.
+  const results = await syncTodosToGoogleCalendar(todos, accessToken, undefined, {
+    budget: createGoogleFetchBudget(),
+  });
   return jsonResponse({ results });
 };

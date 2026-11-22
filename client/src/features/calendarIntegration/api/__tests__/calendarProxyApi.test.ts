@@ -186,4 +186,36 @@ describe("calendarProxyApi", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     await expect(disconnectCalendar([])).rejects.toThrow("연동 해제 실패");
   });
+
+  // 무료 플랜 Worker는 요청당 서브리퀘스트 50개 — 이벤트가 많으면 한 요청으로 다 못 지운다.
+  it("disconnectCalendar는 10개씩 순서대로 keepToken:true로 보내고, 마지막 요청만 keepToken 없이(토큰 삭제) 보내며 결과를 합친다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: { body: string }) => {
+      const { googleEventIds } = JSON.parse(init.body) as { googleEventIds: string[] };
+      return { ok: true, json: async () => ({ ok: true, deletedGoogleEventIds: googleEventIds }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const ids = Array.from({ length: 23 }, (_, i) => `event-${i}`);
+
+    const result = await disconnectCalendar(ids);
+
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body));
+    expect(bodies.map((b) => [b.googleEventIds.length, b.keepToken])).toEqual([
+      [10, true],
+      [10, true],
+      [3, undefined],
+    ]);
+    expect(result).toEqual({ deletedGoogleEventIds: ids });
+  });
+
+  it("disconnectCalendar는 중간 요청이 실패하면 멈추고 에러를 던진다(토큰이 남아 재시도 가능)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, deletedGoogleEventIds: [] }) })
+      .mockResolvedValueOnce({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(disconnectCalendar(Array.from({ length: 30 }, (_, i) => `e${i}`))).rejects.toThrow("연동 해제 실패");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).keepToken).toBe(true);
+  });
 });

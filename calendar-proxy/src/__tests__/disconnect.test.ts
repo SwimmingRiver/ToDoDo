@@ -13,7 +13,8 @@ vi.mock("../tokenStore", () => ({
 vi.mock("../googleOAuth", () => ({
   refreshAccessToken: vi.fn(),
 }));
-vi.mock("../googleCalendar", () => ({
+vi.mock("../googleCalendar", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../googleCalendar")>()),
   syncTodosToGoogleCalendar: vi.fn(),
 }));
 
@@ -25,11 +26,11 @@ const makeEnv = (): Env => ({
   CLIENT_APP_URL: "https://app.example.com",
 });
 
-const makeRequest = (googleEventIds: string[]) =>
+const makeRequest = (googleEventIds: string[], extra: Record<string, unknown> = {}) =>
   new Request("https://proxy.example.com/disconnect", {
     method: "POST",
     headers: { Authorization: "Bearer valid-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ googleEventIds }),
+    body: JSON.stringify({ googleEventIds, ...extra }),
   });
 
 describe("handleDisconnect", () => {
@@ -59,6 +60,8 @@ describe("handleDisconnect", () => {
         { id: "event-2", title: "", dueAt: "", googleEventId: "event-2", action: "delete" },
       ],
       "at",
+      undefined,
+      { budget: expect.objectContaining({ used: 0, limit: 44 }) },
     );
     expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
     const body = (await response.json()) as { ok: boolean; deletedGoogleEventIds: string[] };
@@ -121,9 +124,31 @@ describe("handleDisconnect", () => {
     const response = await handleDisconnect(emptyBodyRequest, makeEnv());
 
     expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
-    expect(vi.mocked(syncTodosToGoogleCalendar)).toHaveBeenCalledWith([], "at");
+    expect(vi.mocked(syncTodosToGoogleCalendar)).toHaveBeenCalledWith([], "at", undefined, expect.anything());
     const body = (await response.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
+  });
+
+  it("요청 바디가 JSON null이어도 500 없이 토큰을 지운다", async () => {
+    const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
+    const { getTokenRecord, deleteTokenRecord } = await import("../tokenStore");
+    const { refreshAccessToken } = await import("../googleOAuth");
+    const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
+
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false, premiumUntil: null });
+    vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
+    vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
+    vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([]);
+
+    const nullBodyRequest = new Request("https://proxy.example.com/disconnect", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token", "Content-Type": "application/json" },
+      body: "null",
+    });
+    const response = await handleDisconnect(nullBodyRequest, makeEnv());
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
   });
 
   it("Authorization 헤더가 없으면 401을 반환하고 아무 것도 호출하지 않는다", async () => {
@@ -160,5 +185,52 @@ describe("handleDisconnect", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
+  });
+
+  // 무료 플랜은 요청당 서브리퀘스트 50개 — 이벤트가 많으면 클라이언트가 묶음으로 나눠
+  // 보내고, 마지막 요청 전까지는 keepToken:true로 토큰을 남겨 둔다.
+  describe("keepToken", () => {
+    const setupConnected = async () => {
+      const { verifyFirebaseIdToken } = await import("@tododo/worker-auth");
+      const { getTokenRecord } = await import("../tokenStore");
+      const { refreshAccessToken } = await import("../googleOAuth");
+      const { syncTodosToGoogleCalendar } = await import("../googleCalendar");
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "user-1", premium: false, premiumUntil: null });
+      vi.mocked(getTokenRecord).mockResolvedValue({ refreshToken: "rt" });
+      vi.mocked(refreshAccessToken).mockResolvedValue({ access_token: "at", expires_in: 3600 });
+      vi.mocked(syncTodosToGoogleCalendar).mockResolvedValue([{ id: "event-1", googleEventId: null }]);
+    };
+
+    it("keepToken:true면 이벤트만 지우고 토큰은 지우지 않는다", async () => {
+      await setupConnected();
+      const { deleteTokenRecord } = await import("../tokenStore");
+
+      const response = await handleDisconnect(makeRequest(["event-1"], { keepToken: true }), makeEnv());
+
+      expect(vi.mocked(deleteTokenRecord)).not.toHaveBeenCalled();
+      const body = (await response.json()) as { ok: boolean; deletedGoogleEventIds: string[] };
+      expect(body).toEqual({ ok: true, deletedGoogleEventIds: ["event-1"] });
+    });
+
+    it("keepToken:false면 기존처럼 토큰을 지운다", async () => {
+      await setupConnected();
+      const { deleteTokenRecord } = await import("../tokenStore");
+
+      await handleDisconnect(makeRequest(["event-1"], { keepToken: false }), makeEnv());
+
+      expect(vi.mocked(deleteTokenRecord)).toHaveBeenCalledWith(expect.anything(), "user-1");
+    });
+
+    it("keepToken:true여도 구글 토큰 갱신이 실패하면 토큰은 남기고 삭제 확인 id 없이 성공 응답한다", async () => {
+      await setupConnected();
+      const { deleteTokenRecord } = await import("../tokenStore");
+      const { refreshAccessToken } = await import("../googleOAuth");
+      vi.mocked(refreshAccessToken).mockRejectedValue(new Error("google down"));
+
+      const response = await handleDisconnect(makeRequest(["event-1"], { keepToken: true }), makeEnv());
+
+      expect(vi.mocked(deleteTokenRecord)).not.toHaveBeenCalled();
+      expect(((await response.json()) as { deletedGoogleEventIds: string[] }).deletedGoogleEventIds).toEqual([]);
+    });
   });
 });
