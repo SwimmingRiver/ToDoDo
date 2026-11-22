@@ -121,7 +121,7 @@ export const useSyncTodosToCalendar = (): void => {
       let wroteAny = false;
       try {
         // 한 요청에 수십 건을 몰아 보내면 Worker가 구글에 한꺼번에 쏘다 레이트 리밋에
-        // 걸린다(11-21). 10건씩 나눠 앞 요청이 끝난 뒤에 다음 요청을 보낸다.
+        // 걸린다(11-21). SYNC_CHUNK_SIZE(5)건씩 나눠 앞 요청이 끝난 뒤에 다음 요청을 보낸다(무료 플랜 요청당 서브리퀘스트 50 한도).
         const chunks = chunkSyncBatch(batch);
         for (const [index, chunk] of chunks.entries()) {
           // 동기화 도중 연동이 해제돼 snapshotRef가 교체됐다면 남은 묶음은 보내지 않는다.

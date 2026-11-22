@@ -44,8 +44,13 @@ export const recordSyncFailures = (
   }
 };
 
+/** /sync-todos 한 요청에 담는 항목 수. Cloudflare Workers 무료 플랜은 요청당 서브리퀘스트가
+ *  50개라, 항목당 최악 9회(POST·409·GET·되살리기 PATCH와 레이트 리밋 재시도) × 5 + JWKS·토큰
+ *  갱신 ≈ 47로 한도 안에 들게 한다. (Worker도 요청당 구글 호출 예산 44로 한 번 더 막는다.) */
+export const SYNC_CHUNK_SIZE = 5;
+
 /** 한 요청에 수십 건을 몰아 보내지 않도록 batch를 나눈다. 호출부는 순서대로 await한다. */
-export const chunkSyncBatch = <T>(items: T[], size = 10): T[][] => {
+export const chunkSyncBatch = <T>(items: T[], size = SYNC_CHUNK_SIZE): T[][] => {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
   return chunks;

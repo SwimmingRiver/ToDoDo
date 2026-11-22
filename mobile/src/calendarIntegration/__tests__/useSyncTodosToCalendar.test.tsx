@@ -332,7 +332,7 @@ describe("useSyncTodosToCalendar", () => {
     const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(client) });
     rerenderHook = () => void rerender({});
 
-    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(5));
     await act(async () => {
       await new Promise((r) => setTimeout(r, 30));
     });
@@ -352,7 +352,7 @@ describe("useSyncTodosToCalendar", () => {
     await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
     await flush();
 
-    mockTodos = base.map((t, i) => (i < 10 ? { ...t, googleEventId: `evt-${t.id}` } : t));
+    mockTodos = base.map((t, i) => (i < 5 ? { ...t, googleEventId: `evt-${t.id}` } : t));
     await rerender({});
     await flush();
     expect(mockSync).toHaveBeenCalledTimes(2);
@@ -390,7 +390,7 @@ describe("useSyncTodosToCalendar", () => {
     await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
   });
 
-  it("10건을 넘으면 10건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
+  it("5건을 넘으면 5건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
     mockTodos = Array.from({ length: 23 }, (_, i) => makeTodo({ id: `t${i}` }));
     let inFlight = 0;
     let maxInFlight = 0;
@@ -402,8 +402,8 @@ describe("useSyncTodosToCalendar", () => {
       return batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` }));
     });
     await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
-    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(3));
-    expect(mockSync.mock.calls.map(([b]) => b.length)).toEqual([10, 10, 3]);
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(5));
+    expect(mockSync.mock.calls.map(([b]) => b.length)).toEqual([5, 5, 5, 5, 3]);
     expect(maxInFlight).toBe(1);
     await waitFor(() => expect(mockBatchUpdate).toHaveBeenCalledTimes(23));
   });
@@ -417,6 +417,6 @@ describe("useSyncTodosToCalendar", () => {
     await waitFor(() => expect(mockRevoked).toHaveBeenCalledTimes(1));
     await flush();
     expect(mockSync).toHaveBeenCalledTimes(2);
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(10);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(5);
   });
 });

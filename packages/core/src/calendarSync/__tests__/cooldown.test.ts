@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { Todo } from "../../types/todo";
-import { chunkSyncBatch, excludeCoolingDown, recordSyncFailures, type SyncFailureLog } from "../cooldown";
+import {
+  SYNC_CHUNK_SIZE,
+  chunkSyncBatch,
+  excludeCoolingDown,
+  recordSyncFailures,
+  type SyncFailureLog,
+} from "../cooldown";
 import type { SyncTodoPayload, SyncTodoResult } from "../types";
 
 const todo = (over: Partial<Todo> = {}): Todo => ({
@@ -90,9 +96,12 @@ describe("excludeCoolingDown", () => {
 });
 
 describe("chunkSyncBatch", () => {
-  it("기본 10개씩 나눈다", () => {
-    const items = Array.from({ length: 23 }, (_, i) => i);
-    expect(chunkSyncBatch(items).map((c) => c.length)).toEqual([10, 10, 3]);
+  // Worker 무료 플랜 서브리퀘스트 50 한도: 항목당 최악 9회(POST·409·GET·PATCH × 재시도) ×
+  // 5 + JWKS·토큰 갱신 ≈ 47.
+  it("기본 5개씩 나눈다", () => {
+    expect(SYNC_CHUNK_SIZE).toBe(5);
+    const items = Array.from({ length: 12 }, (_, i) => i);
+    expect(chunkSyncBatch(items).map((c) => c.length)).toEqual([5, 5, 2]);
   });
   it("크기 지정, 빈 배열은 빈 결과", () => {
     expect(chunkSyncBatch([1, 2, 3], 2)).toEqual([[1, 2], [3]]);

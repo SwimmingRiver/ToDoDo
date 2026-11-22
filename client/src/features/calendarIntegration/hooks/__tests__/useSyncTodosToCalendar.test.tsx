@@ -278,7 +278,7 @@ describe("useSyncTodosToCalendar", () => {
     const { rerender } = renderHook(() => useSyncTodosToCalendar(), { wrapper: Wrapper });
     rerenderHook = () => rerender();
 
-    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(5));
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     const sentIds = vi.mocked(syncTodosToCalendar).mock.calls.flatMap(([b]) => b.map((p) => p.id));
@@ -306,9 +306,9 @@ describe("useSyncTodosToCalendar", () => {
     await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2));
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // 재조회: 첫 묶음은 Firestore에 반영됐다.
+    // 재조회: 첫 묶음(5건)은 Firestore에 반영됐다.
     vi.mocked(useGetTodos).mockReturnValue({
-      data: todos.map((t, i) => (i < 10 ? { ...t, googleEventId: `event-${t.id}` } : t)),
+      data: todos.map((t, i) => (i < 5 ? { ...t, googleEventId: `event-${t.id}` } : t)),
     } as never);
     rerender();
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -381,7 +381,7 @@ describe("useSyncTodosToCalendar", () => {
     }
   });
 
-  it("10건을 넘으면 10건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
+  it("5건을 넘으면 5건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {
     const { useGetTodos } = await import("@/features/todo");
     const { useCalendarIntegrationStatus } = await import("../useCalendarIntegration");
     const { syncTodosToCalendar } = await import("../../api");
@@ -409,8 +409,8 @@ describe("useSyncTodosToCalendar", () => {
 
     renderHook(() => useSyncTodosToCalendar(), { wrapper: createWrapper() });
 
-    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(3));
-    expect(vi.mocked(syncTodosToCalendar).mock.calls.map(([b]) => b.length)).toEqual([10, 10, 3]);
+    await waitFor(() => expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(5));
+    expect(vi.mocked(syncTodosToCalendar).mock.calls.map(([b]) => b.length)).toEqual([5, 5, 5, 5, 3]);
     expect(maxInFlight).toBe(1);
     // 각 묶음의 결과가 전부 Firestore에 반영된다.
     await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(23));
@@ -441,7 +441,7 @@ describe("useSyncTodosToCalendar", () => {
       expect(vi.mocked(setDoc)).toHaveBeenCalledWith(expect.anything(), { status: "revoked" }, { merge: true }),
     );
     expect(vi.mocked(syncTodosToCalendar)).toHaveBeenCalledTimes(2);
-    expect(updateSpy).toHaveBeenCalledTimes(10);
+    expect(updateSpy).toHaveBeenCalledTimes(5);
   });
 
   it("변경 없는 Todo는 다시 렌더링돼도 재전송하지 않는다", async () => {
