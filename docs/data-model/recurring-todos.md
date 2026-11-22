@@ -98,7 +98,7 @@ todos/{recurrenceId}_{2026-11-23}  { recurrenceId: "S1", recurrence: {규칙}, s
 
 ## 7. 알려진 구멍
 
-- **G1 — core `deleteTodo`의 하위 조회에 `userId` 조건이 없다**(`packages/core/src/api/todoApi.ts`, I10 위반). `firestore.rules`의 read 조건을 쿼리가 보장하지 못해 권한 거부가 날 수 있다. 앱의 일반 할 일 삭제(`mobile/src/hooks/useDeleteTodo.ts`)가 이 함수를 쓴다. **실제 동작 확인 필요**(2026-11-21 발견).
+- ~~**G1 — core `deleteTodo`의 하위 조회에 `userId` 조건이 없다**~~(`packages/core/src/api/todoApi.ts`, I10 위반). `firestore.rules`의 read 조건을 쿼리가 보장하지 못해 권한 거부가 날 수 있다. 앱의 일반 할 일 삭제(`mobile/src/hooks/useDeleteTodo.ts`)가 이 함수를 쓴다. **해결(2026-11-22)**: 에뮬레이터에서 실제 규칙으로 확인한 결과, 하위 할 일이 없는 삭제까지 `permission-denied`로 실패했다(규칙은 결과가 0건이어도 쿼리 자체를 거부한다). `deleteTodo(db, userId, id)`로 바꿔 `userId` 조건을 추가했다. core의 다른 조회는 모두 `userId` 조건이 있다.
 - **G2 — 타입 이중 정의**: 웹과 core에 `Todo`가 따로 있다. 지금은 필드가 같지만 기준이 강제되지 않는다.
 - **G3 — I2는 UI에서만 막는다.** 다른 경로(스크립트, 새 화면)가 반복 회차에 하위 할 일을 달 수 있다.
 - **G4 — 과거 데이터**: #161 이전에 반복을 끈 시리즈(규칙이 남아 되살아남), #167 이전에 복사된 `googleEventId`, #200 이전에 생긴 고아 하위 할 일이 운영 데이터에 남아 있을 수 있다. 앞의 것은 **데이터로 정상 시리즈와 구별할 수 없어** 정리하지 않는다(사용자가 다시 끄면 이후로는 유지됨). 뒤의 두 개는 판별 가능하다. 판별 가능한 두 개는 `npm run audit:recurring`(읽기 전용, `scripts/auditRecurringData.ts`)으로 센다. **2026-11-22 운영 점검: 문서 154개 중 고아 하위 할 일 1건(마감 없음·구글 미연결), 공유 `googleEventId` 0건 → 고아 1건을 콘솔에서 삭제, 재점검 둘 다 0건.**
