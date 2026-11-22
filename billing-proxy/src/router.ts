@@ -1,4 +1,4 @@
-import { isAllowedOrigin, verifyFirebaseIdToken } from "@tododo/worker-auth";
+import { isAllowedOrigin, verifyFirebaseIdToken, type VerifiedToken } from "@tododo/worker-auth";
 import type { AccountDataStore } from "./accountDataStore";
 import { isBillingAllowed } from "./allowlist";
 import type { ClaimsClient } from "./claims";
@@ -14,6 +14,7 @@ import type { AppleServerApi } from "./apple/serverApi";
 import type { PlayApi } from "./google/playApi";
 import type { PaddleClient } from "./paddle";
 import type { StoreLinkStore } from "./storeLinks";
+import type { TrialHistoryStore } from "./trialHistory";
 
 export interface BillingDeps extends CommitDeps {
   claims: Pick<ClaimsClient, "setPremiumUntil" | "deleteUser">;
@@ -26,13 +27,22 @@ export interface BillingDeps extends CommitDeps {
   /** 탈퇴 시 Google 구독 해지. play와 같은 인스턴스다 — Play 토큰은 처음 호출할 때 만들어진다. */
   google: Pick<PlayApi, "cancelSubscription">;
   verifyPubSub: (authHeader: string | null) => Promise<boolean>;
+  /** 체험 사용 확인값 저장소와 HMAC 키. TRIAL_HMAC_SECRET이 없는 환경(프리뷰·로컬)에서는 null — 기록·조회를 건너뛴다. */
+  trialHistory: { store: Pick<TrialHistoryStore, "record" | "hasActive">; secret: string } | null;
 }
 
-type AccountRoute = (uid: string, deps: BillingDeps, now: Date, env: Env, request: Request) => Promise<Response>;
+type AccountRoute = (
+  uid: string,
+  deps: BillingDeps,
+  now: Date,
+  env: Env,
+  request: Request,
+  token: VerifiedToken,
+) => Promise<Response>;
 
 const ACCOUNT_ROUTES = new Map<string, AccountRoute>([
   ["/checkout", handleCheckout],
-  ["/trial", handleTrial],
+  ["/trial", (uid, deps, now, _env, _request, token) => handleTrial(uid, deps, now, token.identities)],
   ["/portal", (uid, deps) => handlePortal(uid, deps)],
   ["/iap/account-token", (uid, _deps, _now, env) => handleAccountToken(uid, env)],
   ["/iap/apple/verify", handleAppleVerify],
@@ -48,10 +58,10 @@ const withCors = (response: Response, origin: string | null, env: Env): Response
   return new Response(response.body, { status: response.status, headers });
 };
 
-const authenticate = async (request: Request, env: Env): Promise<string | null> => {
+const authenticate = async (request: Request, env: Env): Promise<VerifiedToken | null> => {
   const idToken = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   try {
-    return (await verifyFirebaseIdToken(idToken, env.FIREBASE_PROJECT_ID)).uid;
+    return await verifyFirebaseIdToken(idToken, env.FIREBASE_PROJECT_ID);
   } catch {
     return null;
   }
@@ -89,20 +99,20 @@ export const handleRequest = async (
 
     // 탈퇴는 결제 허용 목록과 무관하게 누구나 할 수 있어야 한다 — ACCOUNT_ROUTES(허용 목록 적용)와 분리한다.
     if (url.pathname === "/account/delete" && request.method === "POST") {
-      const uid = await authenticate(request, env);
-      if (!uid) return withCors(json({ error: "UNAUTHORIZED" }, 401), origin, env);
-      return withCors(await handleDeleteAccount(uid, getDeps()), origin, env);
+      const token = await authenticate(request, env);
+      if (!token) return withCors(json({ error: "UNAUTHORIZED" }, 401), origin, env);
+      return withCors(await handleDeleteAccount(token.uid, getDeps(), token.identities, now), origin, env);
     }
 
     const route = request.method === "POST" ? ACCOUNT_ROUTES.get(url.pathname) : undefined;
     if (!route) return withCors(new Response("Not Found", { status: 404 }), origin, env);
 
-    const uid = await authenticate(request, env);
-    if (!uid) return withCors(json({ error: "UNAUTHORIZED" }, 401), origin, env);
-    if (!isBillingAllowed(uid, env.BILLING_ALLOWED_UIDS)) {
+    const token = await authenticate(request, env);
+    if (!token) return withCors(json({ error: "UNAUTHORIZED" }, 401), origin, env);
+    if (!isBillingAllowed(token.uid, env.BILLING_ALLOWED_UIDS)) {
       return withCors(json({ error: "NOT_ALLOWED" }, 403), origin, env);
     }
-    return withCors(await route(uid, getDeps(), now, env, request), origin, env);
+    return withCors(await route(token.uid, getDeps(), now, env, request, token), origin, env);
   } catch (error) {
     console.error(`처리되지 않은 예외 (${url.pathname}):`, error);
     return withCors(new Response("Internal Server Error", { status: 500 }), origin, env);

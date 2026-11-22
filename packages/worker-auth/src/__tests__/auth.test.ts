@@ -125,13 +125,38 @@ describe("verifyFirebaseIdToken", () => {
     );
   });
 
+  it("firebase.identities의 google.com·apple.com 값을 identities로 돌려준다", async () => {
+    const { token, jwk } = await makeSignedToken({
+      firebase: {
+        identities: { "google.com": ["g1"], "apple.com": ["a1"], email: ["x@y.com"] },
+        sign_in_provider: "google.com",
+      },
+    });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.identities).toEqual({ "google.com": ["g1"], "apple.com": ["a1"] });
+  });
+
+  it("identities가 없거나 형태가 이상하면 버린다", async () => {
+    const noFirebase = await makeSignedToken();
+    stubJwksFetch(noFirebase.jwk);
+    expect((await verifyFirebaseIdToken(noFirebase.token, FIREBASE_PROJECT_ID)).identities).toEqual({});
+
+    const odd = await makeSignedToken({
+      firebase: { identities: { "google.com": "g1", "apple.com": ["a1", 7, ""] } },
+    });
+    stubJwksFetch(odd.jwk);
+    expect((await verifyFirebaseIdToken(odd.token, FIREBASE_PROJECT_ID)).identities).toEqual({ "apple.com": ["a1"] });
+  });
+
   it("premiumUntil이 미래면 premium:true와 그 값을 반환한다", async () => {
     const until = Math.floor(Date.now() / 1000) + 3600;
     const { token, jwk } = await makeSignedToken({ premiumUntil: until });
     stubJwksFetch(jwk);
 
     const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
-    expect(result).toEqual({ uid: "user-123", premium: true, premiumUntil: until });
+    expect(result).toEqual({ uid: "user-123", premium: true, premiumUntil: until, identities: {} });
   });
 
   it("premiumUntil이 과거면 premium:false다", async () => {

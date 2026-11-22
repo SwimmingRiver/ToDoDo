@@ -82,5 +82,10 @@ service cloud.firestore {
       // 스토어 영수증 ↔ 계정 연결. 서버(billing-proxy, 서비스 계정)만 읽고 쓴다.
       allow read, write: if false;
     }
+
+    match /trialHistory/{key} {
+      // 탈퇴 후 재가입 체험 재지급 방지용 체험 사용 확인값(HMAC). 서버(billing-proxy, 서비스 계정)만 읽고 쓴다.
+      allow read, write: if false;
+    }
   }
 }

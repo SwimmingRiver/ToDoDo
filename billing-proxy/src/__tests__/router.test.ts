@@ -6,6 +6,7 @@ import type { Env } from "../env";
 import { deriveAccountToken } from "../accountToken";
 import { asStored } from "./helpers/storedDoc";
 import { AppleJwsError } from "../apple/jws";
+import { hmacSha256Hex } from "../hmac";
 
 vi.mock("@tododo/worker-auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tododo/worker-auth")>()),
@@ -86,6 +87,7 @@ const makeDeps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT) => ({
   },
   google: { cancelSubscription: vi.fn(async (_token: string): Promise<"canceled" | "already_inactive"> => "canceled") },
   verifyPubSub: vi.fn(async (_authHeader: string | null) => false),
+  trialHistory: null as BillingDeps["trialHistory"],
 });
 
 const post = (path: string, body?: unknown) =>
@@ -102,7 +104,7 @@ describe("router", () => {
 
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockReset().mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: {} });
   });
 
   it("OPTIONS는 204 + 허용 origin CORS", async () => {
@@ -117,7 +119,7 @@ describe("router", () => {
   });
 
   it("허용 목록 밖이면 403 NOT_ALLOWED이고 Paddle을 부르지 않는다", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
     const deps = makeDeps();
     for (const path of ["/checkout", "/trial", "/portal"]) {
       const res = await call(post(path), deps);
@@ -132,7 +134,7 @@ describe("router", () => {
     vi.mocked(verifyFirebaseIdToken).mockRejectedValue(new Error("bad"));
     expect((await call(post("/iap/account-token"), makeDeps())).status).toBe(401);
 
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: {} });
     const res = await call(post("/iap/account-token"), makeDeps());
     expect(res.status).toBe(200);
     const body = (await res.json()) as { appAccountToken: string };
@@ -201,6 +203,75 @@ describe("router", () => {
     expect(await res.json()).toEqual({ error: "TRIAL_ALREADY_USED" });
   });
 
+  describe("/trial — 체험 사용 확인값", () => {
+    const historyDeps = (hasActive: () => Promise<boolean>) => {
+      const deps = makeDeps();
+      const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(hasActive) };
+      return { deps: { ...deps, trialHistory: { store, secret: "s" } }, store };
+    };
+
+    it("만료 전 기록이 있는 식별자면 409 TRIAL_ALREADY_USED, 체험을 쓰지 않는다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps, store } = historyDeps(async () => true);
+      const res = await call(post("/trial"), deps);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({ error: "TRIAL_ALREADY_USED" });
+      expect(store.hasActive).toHaveBeenCalledWith([await hmacSha256Hex("s", "google.com:g1")], NOW);
+      expect(deps.store.write).not.toHaveBeenCalled();
+    });
+
+    it("apple.com만 일치해도 거절한다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({
+        uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"], "apple.com": ["a1"] },
+      });
+      const { deps, store } = historyDeps(async () => true);
+      expect((await call(post("/trial"), deps)).status).toBe(409);
+      expect(store.hasActive).toHaveBeenCalledWith(
+        [await hmacSha256Hex("s", "google.com:g1"), await hmacSha256Hex("s", "apple.com:a1")],
+        NOW,
+      );
+    });
+
+    it("기록이 없으면 체험을 시작한다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps } = historyDeps(async () => false);
+      expect((await call(post("/trial"), deps)).status).toBe(200);
+    });
+
+    it("이미 체험을 쓴 계정은 기록을 조회하지 않고 TRIAL_ALREADY_USED", async () => {
+      const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(async () => true) };
+      const deps = { ...makeDeps({ ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-01-01T00:00:00.000Z" }), trialHistory: { store, secret: "s" } };
+      const res = await call(post("/trial"), deps);
+      expect(await res.json()).toEqual({ error: "TRIAL_ALREADY_USED" });
+      expect(store.hasActive).not.toHaveBeenCalled();
+    });
+
+    it("구독 중이면 기록이 있어도 ALREADY_PREMIUM(기록 조회 안 함)", async () => {
+      const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(async () => true) };
+      const premium = { ...EMPTY_ENTITLEMENT, plan: "premium" as const, status: "active" as const, premiumUntil: "2026-12-01T00:00:00.000Z" };
+      const deps = { ...makeDeps(premium), trialHistory: { store, secret: "s" } };
+      const res = await call(post("/trial"), deps);
+      expect(await res.json()).toEqual({ error: "ALREADY_PREMIUM" });
+      expect(store.hasActive).not.toHaveBeenCalled();
+    });
+
+    it("기록 조회가 실패하면 기존 로직대로 체험을 시작한다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps } = historyDeps(async () => { throw new Error("firestore down"); });
+      expect((await call(post("/trial"), deps)).status).toBe(200);
+    });
+  });
+
+  it("/account/delete는 토큰의 식별자로 탈퇴 처리에 넘긴다", async () => {
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+    const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(async () => false) };
+    const deps = { ...makeDeps({ ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-12-01T00:00:00.000Z" }), trialHistory: { store, secret: "s" } };
+    const after = new Date("2026-12-28T03:00:00.000Z");
+    const res = await handleRequest(post("/account/delete"), ENV, () => deps, after);
+    expect(res.status).toBe(204);
+    expect(store.record).toHaveBeenCalledWith([{ provider: "google.com", key: await hmacSha256Hex("s", "google.com:g1") }], after);
+  });
+
   it("/portal은 고객이 없으면 404 NO_CUSTOMER, 있으면 URL", async () => {
     expect((await call(post("/portal"), makeDeps())).status).toBe(404);
     const res = await call(post("/portal"), makeDeps({ ...EMPTY_ENTITLEMENT, customerId: "ctm_1", subscriptionId: "sub_1" }));
@@ -242,7 +313,7 @@ describe("router", () => {
   });
 
   it("not allowed uid → 403 on /iap/apple/verify", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
     const deps = makeDeps();
     const res = await call(post("/iap/apple/verify", { jws: "a.b.c" }), deps);
     expect(res.status).toBe(403);
@@ -275,7 +346,7 @@ describe("router", () => {
   });
 
   it("not allowed uid → 403 on /iap/google/verify", async () => {
-    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+    vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
     const deps = makeDeps();
     const res = await call(post("/iap/google/verify", { purchaseToken: "t", productId: "premium_monthly" }), deps);
     expect(res.status).toBe(403);
@@ -318,7 +389,7 @@ describe("router", () => {
 
   describe("/account/delete", () => {
     it("허용 목록 밖 사용자도 탈퇴할 수 있다(204 + CORS)", async () => {
-      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null });
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "stranger", premium: false, premiumUntil: null, identities: {} });
       const deps = makeDeps();
       const res = await call(post("/account/delete"), deps);
       expect(res.status).toBe(204);

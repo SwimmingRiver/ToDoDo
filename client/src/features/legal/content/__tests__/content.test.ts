@@ -126,6 +126,31 @@ describe("법적 문서 본문", () => {
       expect(firstRefund).not.toContain("App Store");
     });
 
+    it("4판(2026-12-28): 방침은 체험 사용 확인값과 1년 보관, Apple 로그인 정보를 적는다", () => {
+      const latest = LEGAL_EDITIONS.privacy.at(-1)!;
+      expect(latest.effectiveOn).toBe("2026-12-28");
+      const text = allText(latest.document);
+      expect(text).toContain("체험 사용 확인값");
+      expect(text).toContain("탈퇴한 날부터 1년");
+      expect(text).toContain("Apple 로그인 시 Apple로부터");
+    });
+
+    it("4판: 약관 제6조는 탈퇴 후 재가입 1년 제한을 적는다", () => {
+      const latest = LEGAL_EDITIONS.terms.at(-1)!;
+      expect(latest.effectiveOn).toBe("2026-12-28");
+      expect(allText(latest.document)).toContain("회원 탈퇴 후 1년 안에 같은 Google 또는 Apple 계정으로 다시 가입하면 같은 이용자로 보아 체험을 다시 제공하지 않습니다");
+      expect(allText(latest.document)).toContain("앱 체험은 App Store·Google Play의 체험 제공 기준도 함께 따릅니다");
+    });
+
+    it("3판 본문(2026-11-27)은 옛 문장 그대로다", () => {
+      const third = LEGAL_EDITIONS.privacy.find((e) => e.effectiveOn === "2026-11-27")!;
+      const text = allText(third.document);
+      expect(text).not.toContain("체험 사용 확인값");
+      expect(text).toContain("Google 로그인 시 Google로부터");
+      const thirdTerms = LEGAL_EDITIONS.terms.find((e) => e.effectiveOn === "2026-11-27")!;
+      expect(allText(thirdTerms.document)).not.toContain("탈퇴한 날부터 1년");
+    });
+
     it("모든 판 본문이 정의된 변수 토큰만 쓴다", () => {
       for (const editions of Object.values(LEGAL_EDITIONS)) {
         for (const { document } of editions) {
