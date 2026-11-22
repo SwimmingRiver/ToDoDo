@@ -219,7 +219,7 @@ describe("todoApi", () => {
       commit: batchCommit,
     } as unknown as ReturnType<typeof writeBatch>);
 
-    await deleteTodo(fakeDb, "todo-1");
+    await deleteTodo(fakeDb, "u1", "todo-1");
 
     expect(doc).toHaveBeenCalledWith(fakeDb, "todos", "todo-1");
     expect(batchDelete).toHaveBeenCalledTimes(1);
@@ -242,13 +242,35 @@ describe("todoApi", () => {
       commit: batchCommit,
     } as unknown as ReturnType<typeof writeBatch>);
 
-    await deleteTodo(fakeDb, "root-1");
+    await deleteTodo(fakeDb, "u1", "root-1");
 
     // 대상 문서 1개 + 하위 할 일 2개 = 총 3번의 batch.delete 호출
     expect(batchDelete).toHaveBeenCalledTimes(3);
     expect(batchDelete).toHaveBeenCalledWith(childRefs[0]);
     expect(batchDelete).toHaveBeenCalledWith(childRefs[1]);
     expect(batchCommit).toHaveBeenCalled();
+  });
+
+  // firestore.rules의 read는 resource.data.userId == auth.uid라서, userId 조건이 없는
+  // 쿼리는 결과가 0건이어도 규칙이 통째로 거부한다(permission-denied). 에뮬레이터에서
+  // userId 조건 없이 parentId만으로 조회하면 하위 할 일이 없는 삭제까지 실패했다.
+  it("deleteTodo는 하위 할 일을 userId 조건과 함께 조회해 보안 규칙을 통과한다", async () => {
+    const { getDocs, writeBatch, where } = await import("firebase/firestore");
+    const { deleteTodo } = await import("../todoApi");
+
+    vi.mocked(where).mockClear();
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: [],
+    } as unknown as Awaited<ReturnType<typeof getDocs>>);
+    vi.mocked(writeBatch).mockReturnValue({
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReturnType<typeof writeBatch>);
+
+    await deleteTodo(fakeDb, "u1", "root-1");
+
+    expect(where).toHaveBeenCalledWith("userId", "==", "u1");
+    expect(where).toHaveBeenCalledWith("parentId", "==", "root-1");
   });
 });
 

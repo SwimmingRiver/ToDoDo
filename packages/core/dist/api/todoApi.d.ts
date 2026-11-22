@@ -17,5 +17,5 @@ export declare const calcParentStatus: (siblings: Todo[]) => {
  * 문제가 생긴다.
  */
 export declare const updateTodo: (db: Firestore, id: string, fields: TodoUpdateFields, allTodos: Todo[]) => Promise<void>;
-export declare const deleteTodo: (db: Firestore, id: string) => Promise<void>;
+export declare const deleteTodo: (db: Firestore, userId: string, id: string) => Promise<void>;
 export {};

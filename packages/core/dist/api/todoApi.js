@@ -71,10 +71,12 @@ export const updateTodo = async (db, id, fields, allTodos) => {
     });
     await batch.commit();
 };
-export const deleteTodo = async (db, id) => {
+export const deleteTodo = async (db, userId, id) => {
     // 대상이 루트 할 일이면 하위 할 일도 함께 지워야 parentId가 존재하지 않는
     // 문서를 가리키는 고아 문서가 남지 않는다.
-    const childrenSnapshot = await getDocs(query(collection(db, "todos"), where("parentId", "==", id)));
+    // userId 조건은 필수다: firestore.rules의 read가 resource.data.userId == auth.uid라
+    // 이 조건이 없는 쿼리는 결과와 무관하게 permission-denied로 거부된다.
+    const childrenSnapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId), where("parentId", "==", id)));
     const batch = writeBatch(db);
     batch.delete(doc(db, "todos", id));
     childrenSnapshot.docs.forEach((childDoc) => {
