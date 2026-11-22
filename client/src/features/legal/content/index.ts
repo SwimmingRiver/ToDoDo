@@ -2,6 +2,8 @@ import type { LegalDocument, LegalSlug } from "../types/legal.type";
 import { PRIVACY_2026_11_04 } from "./editions/2026-11-04/privacy";
 import { REFUND_2026_11_04 } from "./editions/2026-11-04/refund";
 import { TERMS_2026_11_04 } from "./editions/2026-11-04/terms";
+import { PRIVACY_2026_11_27 } from "./editions/2026-11-27/privacy";
+import { TERMS_2026_11_27 } from "./editions/2026-11-27/terms";
 import { PRIVACY } from "./privacy";
 import { REFUND } from "./refund";
 import { TERMS } from "./terms";
@@ -20,11 +22,13 @@ export interface LegalEdition {
 export const LEGAL_EDITIONS: Record<LegalSlug, LegalEdition[]> = {
   terms: [
     { effectiveOn: "2026-11-04", document: TERMS_2026_11_04 },
-    { effectiveOn: "2026-11-27", document: TERMS },
+    { effectiveOn: "2026-11-27", document: TERMS_2026_11_27 },
+    { effectiveOn: "2026-12-28", document: TERMS },
   ],
   privacy: [
     { effectiveOn: "2026-11-04", document: PRIVACY_2026_11_04 },
-    { effectiveOn: "2026-11-27", document: PRIVACY },
+    { effectiveOn: "2026-11-27", document: PRIVACY_2026_11_27 },
+    { effectiveOn: "2026-12-28", document: PRIVACY },
   ],
   refund: [
     { effectiveOn: "2026-11-04", document: REFUND_2026_11_04 },

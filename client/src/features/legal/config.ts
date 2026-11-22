@@ -60,6 +60,18 @@ export const LEGAL_REVISIONS: LegalRevision[] = [
       privacyOfficer: "강수영",
     },
   },
+  {
+    // 본문이 바뀌는 판(약관·방침) — 본문은 content/index.ts LEGAL_EDITIONS의 같은 시행일 항목이다.
+    // 이용자에게 불리한 변경(탈퇴 후 보관 항목 추가)이라 약관 제11조에 따라 30일 전부터 공지한다 → main 배포는 11-28 전.
+    effectiveOn: "2026-12-28",
+    change:
+      "회원 탈퇴 후 같은 계정으로 다시 가입해 7일 무료 체험을 반복해서 받지 못하도록, 체험을 사용한 계정은 탈퇴 후 1년 동안 체험 사용 확인값(로그인 계정 식별자를 원래 값으로 되돌릴 수 없게 변환한 값)을 보관합니다. Apple 로그인으로 받는 정보를 추가합니다.",
+    config: {
+      sellerName: "TODODO",
+      contactEmail: "dodonriver@gmail.com",
+      privacyOfficer: "강수영",
+    },
+  },
 ];
 
 /**

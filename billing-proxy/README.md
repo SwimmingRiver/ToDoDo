@@ -66,6 +66,18 @@
 
 승인(acknowledge)은 반영(`sources.google` 기록)이 끝난 구매에만 한다 — 승인하지 않은 구매는 3일 뒤 Google이 자동 환불한다. 앱의 `/iap/google/verify`가 기본으로 승인하고, 결제 대기였다가 완료된 구매처럼 앱이 다시 verify하지 않는 경우를 위해 RTDN도 연결된 구매를 반영한 뒤 미승인이면 승인한다(실패는 500 → Pub/Sub 재전송). 다른 Google 구독이 계속 갱신 중이면(이중 구독) verify는 `409 ALREADY_SUBSCRIBED`로 승인하지 않아 새 구매가 자동 환불되게 둔다. 기존 구독이 해지 예약·자동 갱신 꺼짐이면 새 구매가 후속 구독으로 기록을 교체한다.
 
+## 탈퇴 후 재가입 체험 재지급 방지 (사용자 작업)
+
+체험을 쓴 계정이 탈퇴하면 로그인 계정 식별자(google.com·apple.com)를 HMAC한 값을 Firestore `trialHistory`에 1년 남기고, 같은 계정으로 다시 가입하면 웹 `/trial`이 `409 TRIAL_ALREADY_USED`로 거절한다. 약관·방침 4판(2026-12-28 시행) 이후 탈퇴부터 기록한다. 설계: `docs/superpowers/specs/2026-11-22-trial-reuse-after-deletion-design.md`.
+
+1. 비밀키 — **운영 Worker에만** 등록한다(프리뷰 버전도 운영 Firestore를 쓰므로 프리뷰에 넣으면 테스트 탈퇴가 실제 기록을 남긴다). 없으면 기록·조회를 건너뛴다.
+   ```bash
+   openssl rand -hex 32 | npx wrangler secret put TRIAL_HMAC_SECRET
+   ```
+   **바꾸지 않는다** — 문서 id가 이 키로 만든 값이라 바꾸면 기존 기록을 모두 못 찾는다.
+2. 1년 뒤 자동 삭제는 **코드로 설정돼 있어 할 일이 없다** — `firestore.indexes.json`의 `fieldOverrides`(`trialHistory.expireAt`, `ttl: true`, 색인 없음)를 CI deploy job(`firestore:indexes`)이 배포한다. TTL 삭제는 최대 하루 이상 늦을 수 있어 코드는 `expireAt`을 직접 비교한다.
+3. 로컬 `.dev.vars`로 실검증했다면 테스트 후 생긴 `trialHistory` 문서를 지운다.
+
 ### 릴리스(develop→main) 전제
 
 - `PADDLE_PRICE_ID` placeholder 교체 완료 + 샌드박스 실측(Task 11) 완료 **후에만** 릴리스 PR을 연다. main CI의 `billing-proxy` job은 placeholder면 실패하는데, `deploy` job(rules·클라이언트)은 이 job을 기다리지 않아 rules·클라이언트만 먼저 나가 버린다.

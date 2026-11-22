@@ -2,9 +2,8 @@ import { PREMIUM_MONTHLY_PRICE_LABEL } from "@/features/billing/config";
 import type { LegalDocument } from "../types/legal.type";
 
 /**
- * 2026-11-27 시행 판. 앱 결제(App Store·Google Play)에 맞춰 제2·4·5·6·9조를 보완했다.
- * Apple은 개발자가 구독을 해지·환불할 수 없어 App Store 결제만 예외 문장을 둔다
- * (docs/superpowers/specs/2026-11-18-mobile-iap-design.md 7·11절).
+ * 2026-12-28 시행 판. 제6조에 탈퇴 후 같은 Google·Apple 계정 재가입 시 1년 동안 체험 재지급 제한을 명시했다
+ * (docs/superpowers/specs/2026-11-22-trial-reuse-after-deletion-design.md). 직전 판 원문은 editions/2026-11-27/terms.ts.
  */
 
 export const TERMS: LegalDocument = {
@@ -56,7 +55,7 @@ export const TERMS: LegalDocument = {
     {
       heading: "제6조 (7일 무료 체험)",
       items: [
-        "이용자는 프리미엄을 7일 동안 무료로 체험할 수 있으며, 체험은 웹과 앱을 합쳐 계정당 한 번입니다.",
+        "이용자는 프리미엄을 7일 동안 무료로 체험할 수 있으며, 체험은 웹과 앱을 합쳐 계정당 한 번입니다. 회원 탈퇴 후 1년 안에 같은 Google 또는 Apple 계정으로 다시 가입하면 같은 이용자로 보아 체험을 다시 제공하지 않습니다. 앱 체험은 App Store·Google Play의 체험 제공 기준도 함께 따릅니다.",
         "웹 체험은 카드 등록 없이 시작하며, 체험이 끝나면 자동으로 무료 서비스로 돌아가고 이용자의 동의 없이 결제되지 않습니다.",
         "앱 체험은 App Store 또는 Google Play의 무료 체험으로 제공됩니다. 체험을 시작할 때 스토어에 결제 수단이 등록되며, 체험이 끝나기 전에 해지하지 않으면 스토어 화면에서 안내한 대로 월 구독 결제가 시작됩니다.",
       ],

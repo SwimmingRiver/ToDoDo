@@ -3,8 +3,15 @@ const JWKS_URL =
 
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1시간
 
+/** 체험 재사용 방지 등에 쓰는 로그인 제공자. 이 둘만 꺼낸다(email 등 다른 식별자는 버린다). */
+export type LoginProvider = "google.com" | "apple.com";
+
+const LOGIN_PROVIDERS: readonly LoginProvider[] = ["google.com", "apple.com"];
+
 export interface VerifiedToken {
   uid: string;
+  /** ID 토큰 firebase.identities 중 google.com·apple.com의 계정 식별자(sub). 계정 연결 시 둘 다 있을 수 있다. */
+  identities: Partial<Record<LoginProvider, string[]>>;
   /** premiumUntil > 검증 시각. 소비처(ai-proxy, calendar-proxy)는 이 값만 본다. */
   premium: boolean;
   /** 커스텀 클레임 premiumUntil(epoch 초). 없거나 숫자가 아니면 null. */
@@ -54,6 +61,19 @@ const findJwk = async (kid: string): Promise<JsonWebKey> => {
   return match;
 };
 
+/** 형태가 이상한 값은 던지지 않고 버린다 — 식별자가 없을 뿐 인증 자체는 유효하다. */
+const parseIdentities = (raw: unknown): VerifiedToken["identities"] => {
+  const result: VerifiedToken["identities"] = {};
+  if (!raw || typeof raw !== "object") return result;
+  for (const provider of LOGIN_PROVIDERS) {
+    const value = (raw as Record<string, unknown>)[provider];
+    if (!Array.isArray(value)) continue;
+    const ids = value.filter((v): v is string => typeof v === "string" && v.length > 0);
+    if (ids.length > 0) result[provider] = ids;
+  }
+  return result;
+};
+
 export const verifyFirebaseIdToken = async (
   idToken: string,
   firebaseProjectId: string,
@@ -73,6 +93,7 @@ export const verifyFirebaseIdToken = async (
     exp?: number;
     sub?: string;
     premiumUntil?: unknown;
+    firebase?: { identities?: unknown };
   };
 
   if (payload.aud !== firebaseProjectId) throw new Error("Invalid audience");
@@ -117,6 +138,7 @@ export const verifyFirebaseIdToken = async (
       : null;
   return {
     uid: payload.sub,
+    identities: parseIdentities(payload.firebase?.identities),
     premium: premiumUntil !== null && premiumUntil > Date.now() / 1000,
     premiumUntil,
   };
