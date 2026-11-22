@@ -238,6 +238,23 @@ describe("router", () => {
       expect((await call(post("/trial"), deps)).status).toBe(200);
     });
 
+    it("이미 체험을 쓴 계정은 기록을 조회하지 않고 TRIAL_ALREADY_USED", async () => {
+      const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(async () => true) };
+      const deps = { ...makeDeps({ ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-01-01T00:00:00.000Z" }), trialHistory: { store, secret: "s" } };
+      const res = await call(post("/trial"), deps);
+      expect(await res.json()).toEqual({ error: "TRIAL_ALREADY_USED" });
+      expect(store.hasActive).not.toHaveBeenCalled();
+    });
+
+    it("구독 중이면 기록이 있어도 ALREADY_PREMIUM(기록 조회 안 함)", async () => {
+      const store = { record: vi.fn(async () => undefined), hasActive: vi.fn(async () => true) };
+      const premium = { ...EMPTY_ENTITLEMENT, plan: "premium" as const, status: "active" as const, premiumUntil: "2026-12-01T00:00:00.000Z" };
+      const deps = { ...makeDeps(premium), trialHistory: { store, secret: "s" } };
+      const res = await call(post("/trial"), deps);
+      expect(await res.json()).toEqual({ error: "ALREADY_PREMIUM" });
+      expect(store.hasActive).not.toHaveBeenCalled();
+    });
+
     it("기록 조회가 실패하면 기존 로직대로 체험을 시작한다", async () => {
       vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
       const { deps } = historyDeps(async () => { throw new Error("firestore down"); });

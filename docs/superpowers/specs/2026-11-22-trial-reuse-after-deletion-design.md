@@ -62,7 +62,7 @@
 ### 4. 저장 문서 `trialHistory/{key}`
 
 ```
-{ provider: "google.com" | "apple.com", recordedAt: <ISO>, expireAt: <Firestore timestamp, recordedAt + 365일> }
+{ provider: "google.com" | "apple.com", recordedAt: <ISO>, expireAt: <Firestore timestamp, recordedAt + 달력 기준 1년(윤일 포함)> }
 ```
 
 uid·이메일·원래 `sub`는 넣지 않는다. 문서 id가 해시값이라 같은 식별자는 같은 문서 하나다.

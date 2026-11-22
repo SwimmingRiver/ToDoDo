@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { hmacSha256Hex } from "../hmac";
-import { TRIAL_HISTORY_TTL_MS, TrialHistoryStore, trialIdentityKeys } from "../trialHistory";
+import { TrialHistoryStore, trialHistoryExpireAt, trialIdentityKeys } from "../trialHistory";
 
 const BASE = "https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents";
 const getToken = async () => "tok";
@@ -34,21 +34,49 @@ describe("trialIdentityKeys", () => {
 });
 
 describe("TrialHistoryStore", () => {
-  it("record는 trialHistory/{key}에 provider·recordedAt·expireAt(+365일)만 쓴다", async () => {
+  it("record는 모든 키를 한 번의 commit으로 원자적으로 쓰고, provider·recordedAt·expireAt만 담는다", async () => {
     const fetchFn = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-    await new TrialHistoryStore("p", getToken, fetchFn).record([{ provider: "apple.com", key: "k1" }], now);
+    await new TrialHistoryStore("p", getToken, fetchFn).record(
+      [
+        { provider: "google.com", key: "k1" },
+        { provider: "apple.com", key: "k2" },
+      ],
+      now,
+    );
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
     const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(`${BASE}/trialHistory/k1`);
-    expect(init.method).toBe("PATCH");
-    const body = JSON.parse(init.body as string) as { fields: Record<string, unknown> };
-    expect(body.fields).toEqual({
-      provider: { stringValue: "apple.com" },
-      recordedAt: { stringValue: now.toISOString() },
-      expireAt: { timestampValue: new Date(now.getTime() + TRIAL_HISTORY_TTL_MS).toISOString() },
-    });
-    expect(TRIAL_HISTORY_TTL_MS).toBe(365 * 24 * 60 * 60 * 1000);
+    expect(url).toBe(`${BASE}:commit`);
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body as string) as { writes: { update: { name: string; fields: unknown } }[] };
+    const expireAt = trialHistoryExpireAt(now).toISOString();
+    expect(body.writes).toEqual([
+      {
+        update: {
+          name: "projects/p/databases/(default)/documents/trialHistory/k1",
+          fields: {
+            provider: { stringValue: "google.com" },
+            recordedAt: { stringValue: now.toISOString() },
+            expireAt: { timestampValue: expireAt },
+          },
+        },
+      },
+      {
+        update: {
+          name: "projects/p/databases/(default)/documents/trialHistory/k2",
+          fields: {
+            provider: { stringValue: "apple.com" },
+            recordedAt: { stringValue: now.toISOString() },
+            expireAt: { timestampValue: expireAt },
+          },
+        },
+      },
+    ]);
+  });
+
+  it("만료는 달력 기준 1년 뒤다(윤일이 끼어도 하루 짧아지지 않는다)", () => {
+    expect(trialHistoryExpireAt(new Date("2027-12-27T15:00:00.000Z")).toISOString()).toBe("2028-12-27T15:00:00.000Z");
+    expect(trialHistoryExpireAt(new Date("2027-01-10T00:00:00.000Z")).toISOString()).toBe("2028-01-10T00:00:00.000Z");
   });
 
   it("record는 실패 응답이면 던진다", async () => {

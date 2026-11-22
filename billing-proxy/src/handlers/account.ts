@@ -46,7 +46,12 @@ export const handleTrial = async (
   now: Date,
   identities: VerifiedToken["identities"] = {},
 ): Promise<Response> => {
-  if (await usedTrialBeforeDeletion(uid, deps, identities, now)) return json({ error: "TRIAL_ALREADY_USED" }, 409);
+  // 기록 조회는 기존 판정으로 체험이 가능한 계정에만 한다 — 이미 체험했거나 구독 중이면 원래 거절 사유를
+  // 그대로 돌려주고, 대부분의 요청에서 Firestore 조회를 아낀다.
+  const { doc } = await deps.store.get(uid);
+  if (!("skip" in applyTrial(doc, now)) && (await usedTrialBeforeDeletion(uid, deps, identities, now))) {
+    return json({ error: "TRIAL_ALREADY_USED" }, 409);
+  }
   const outcome = await commitEntitlement(deps, uid, (existing) => applyTrial(existing, now));
   if (outcome.kind === "skipped") return json({ error: outcome.reason }, 409);
   return json({ premiumUntil: outcome.doc.premiumUntil });

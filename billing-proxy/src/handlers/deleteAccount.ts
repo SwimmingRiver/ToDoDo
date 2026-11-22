@@ -20,13 +20,6 @@ const json = (body: unknown, status: number): Response =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 /**
- * 탈퇴. 순서가 곧 안전장치다:
- * 1) 구독 해지(Paddle → Google) — 실패하면 아무것도 지우지 않는다. 구독이 살아 있는 채 계정만 사라지면 청구가 계속되고,
- *    Google 구매 토큰은 2)에서 지워지므로 그 뒤에는 다시 해지할 방법이 없다.
- * 2) Firestore 데이터 — 실패하면 던져 500. Auth가 남아 있어 클라이언트가 같은 토큰으로 재시도할 수 있다.
- * 3) Auth 계정 — 마지막. 이후 도착하는 Paddle 해지 웹훅은 UserNotFoundError로 200 처리되어 문서를 되살리지 않는다.
- */
-/**
  * 체험을 쓴 계정이면 데이터 삭제 전에 체험 사용 확인값을 남긴다(재가입 체험 재지급 방지, 4판 시행 후부터).
  * 실패해도 탈퇴는 막지 않는다 — 탈퇴는 이용자 권리다. 로그에는 uid만 남긴다(식별자·해시 금지).
  */
@@ -46,6 +39,14 @@ const recordTrialHistory = async (
   }
 };
 
+/**
+ * 탈퇴. 순서가 곧 안전장치다:
+ * 1) 구독 해지(Paddle → Google) — 실패하면 아무것도 지우지 않는다. 구독이 살아 있는 채 계정만 사라지면 청구가 계속되고,
+ *    Google 구매 토큰은 2)에서 지워지므로 그 뒤에는 다시 해지할 방법이 없다.
+ * 1.5) 체험 사용 확인값 — 체험을 쓴 계정이면 데이터 삭제 전에 남긴다(실패해도 계속, recordTrialHistory).
+ * 2) Firestore 데이터 — 실패하면 던져 500. Auth가 남아 있어 클라이언트가 같은 토큰으로 재시도할 수 있다.
+ * 3) Auth 계정 — 마지막. 이후 도착하는 Paddle 해지 웹훅은 UserNotFoundError로 200 처리되어 문서를 되살리지 않는다.
+ */
 export const handleDeleteAccount = async (
   uid: string,
   deps: AccountDeletionDeps,
