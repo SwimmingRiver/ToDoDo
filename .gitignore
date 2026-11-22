@@ -10,3 +10,8 @@ node_modules
 CLAUDE.md
 # SDD(subagent-driven-development) 작업용 스크래치. 커밋 대상 아님.
 .superpowers/
+
+# 서비스 계정 키(운영 스크립트용). 저장소 밖에 두는 게 원칙이지만 실수로 넣어도 커밋되지 않게.
+service-account*.json
+*-sa.json
+*firebase-adminsdk*.json
