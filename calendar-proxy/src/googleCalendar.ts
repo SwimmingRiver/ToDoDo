@@ -86,8 +86,9 @@ export const createGoogleFetchBudget = (limit = GOOGLE_FETCH_BUDGET): GoogleFetc
 
 export class GoogleFetchBudgetExhaustedError extends Error {
   constructor() {
-    // "budget_exhausted" 접두어는 클라이언트(core recordSyncFailures)와의 계약이다 — 구글에
-    // 시도조차 안 한 항목이라 쿨다운 없이 다음 요청에서 바로 다시 보내게 한다. 바꾸지 말 것.
+    // "budget_exhausted" 접두어는 클라이언트(core recordSyncFailures)와의 계약이다 — 쿨다운 없이
+    // 다음 요청에서 바로 다시 보내게 한다. 결과에 이 메시지가 그대로 실리는 건 그 항목이 구글을
+    // 한 번도 부르지 못했을 때뿐이다(syncOne이 이미 호출한 항목은 일반 실패로 바꾼다). 바꾸지 말 것.
     super("budget_exhausted: 구글 호출 예산 소진(요청당 서브리퀘스트 한도) — 다음 동기화에서 다시 시도");
     this.name = "GoogleFetchBudgetExhaustedError";
   }
@@ -133,30 +134,41 @@ export const fetchGoogleWithRetry = async (
 ): Promise<Response> => {
   const { maxRetries = 2, baseDelayMs = 500, sleep = defaultSleep, random = Math.random, budget } = opts;
   const hasBudget = () => !budget || budget.used < budget.limit;
+  // 직전 시도의 레이트 리밋 응답(바디는 이미 읽어 다시 만든 것). 재시도 대기 중 다른 워커가
+  // 예산을 다 써버리면 이걸 평범한 실패로 돌려준다 — 레이트 리밋에 걸린 항목이므로
+  // budget_exhausted(쿨다운 없이 즉시 재전송)가 아니라 일반 실패(쿨다운)여야 한다(리뷰 M-1).
+  let lastRateLimited: Response | null = null;
   for (let attempt = 0; ; attempt += 1) {
-    // 첫 시도조차 못 하면 throw — 호출부(syncOne)가 이 항목을 에러 결과로 돌려주고,
-    // 클라이언트 쿨다운 뒤 다음 요청에서 다시 시도된다. 확인과 증가는 await 없이 붙어
-    // 있어 동시 워커끼리도 예산을 넘지 않는다.
-    if (!hasBudget()) throw new GoogleFetchBudgetExhaustedError();
+    if (!hasBudget()) {
+      if (lastRateLimited) return lastRateLimited;
+      // 이 호출이 구글을 한 번도 못 불렀다 — 호출부(syncOne)가 항목의 앞선 호출 여부로
+      // budget_exhausted인지 일반 실패인지 가른다.
+      throw new GoogleFetchBudgetExhaustedError();
+    }
+    // 확인과 증가는 await 없이 붙어 있어 동시 워커끼리도 예산을 넘지 않는다.
     if (budget) budget.used += 1;
     const res = await fetch(url, init);
     let rateLimited = false;
     let bodyText: string | null = null;
     if (res.status === 429) {
       rateLimited = true;
+      // 재시도할 때 버리는 응답도 바디를 반드시 소비해야 한다(drainBody 참고) — 나중에 마지막
+      // 레이트 리밋 응답으로 돌려줄 수 있게 cancel 대신 text()로 읽어 둔다.
+      bodyText = await res.text().catch(() => "");
     } else if (res.status === 403) {
       bodyText = await res.text().catch(() => "");
       rateLimited = isRateLimitBody(bodyText);
     }
 
-    // 예산이 바닥났으면 재시도하지 않고 레이트 리밋 응답을 평범한 실패로 돌려준다.
-    if (!rateLimited || attempt >= maxRetries || !hasBudget()) {
-      if (bodyText === null) return res;
-      return new Response(bodyText, { status: res.status, statusText: res.statusText, headers: res.headers });
-    }
+    const replay =
+      bodyText === null
+        ? res
+        : new Response(bodyText, { status: res.status, statusText: res.statusText, headers: res.headers });
 
-    // 버리는 응답도 바디를 반드시 정리한다(drainBody 참고). 403은 이미 text()로 읽었다.
-    if (bodyText === null) await drainBody(res);
+    // 예산이 바닥났으면 재시도하지 않고 레이트 리밋 응답을 평범한 실패로 돌려준다.
+    if (!rateLimited || attempt >= maxRetries || !hasBudget()) return replay;
+
+    lastRateLimited = replay;
     const delay = baseDelayMs * 2 ** attempt + random() * baseDelayMs;
     console.warn(`구글 캘린더 레이트 리밋 (${res.status}), ${Math.round(delay)}ms 후 재시도 (${attempt + 1}/${maxRetries})`);
     await sleep(delay);
@@ -309,9 +321,28 @@ const syncOneOrThrow = async (
 // 결과까지 지워버리면(Promise.all 전체 reject) 이미 구글에 반영된 항목의
 // googleEventId를 호출부가 영영 못 받아 다음 실행에서 중복 이벤트를 만든다.
 const syncOne = async (todo: SyncTodoItem, accessToken: string, googleFetch: GoogleFetch): Promise<SyncResult> => {
+  // 이 항목이 구글을 한 번이라도 불렀는지. googleFetch는 fetch 없이 끝나면 반드시 throw하므로
+  // (GoogleFetchBudgetExhaustedError), 값을 돌려받았다면 최소 1회 호출된 것이다.
+  let calledGoogle = false;
+  const trackedFetch: GoogleFetch = async (url, init) => {
+    const res = await googleFetch(url, init);
+    calledGoogle = true;
+    return res;
+  };
   try {
-    return await syncOneOrThrow(todo, accessToken, googleFetch);
+    return await syncOneOrThrow(todo, accessToken, trackedFetch);
   } catch (error) {
+    // budget_exhausted는 "구글에 한 번도 시도하지 않은 항목"에만 붙인다(클라이언트가 쿨다운
+    // 없이 바로 다시 보낸다). 이미 구글을 부른 뒤(예: POST 409 → GET 직전) 예산이 바닥났으면
+    // 일반 실패로 돌려 쿨다운을 건다 — 레이트 리밋 상황에서 즉시 재전송되지 않게(리뷰 M-1).
+    if (error instanceof GoogleFetchBudgetExhaustedError && calledGoogle) {
+      console.error(`캘린더 이벤트 처리 중 예산 소진 (todo ${todo.id}, action ${todo.action})`);
+      return {
+        id: todo.id,
+        googleEventId: todo.googleEventId,
+        error: "구글 호출 예산 소진(처리 도중) — 쿨다운 뒤 다시 시도",
+      };
+    }
     // 항목별 실패는 결과 배열의 error 필드에만 담겨 호출부(disconnect.ts 등)로
     // 조용히 전달되던 것을 여기서도 로그로 남긴다 — 그러지 않으면 어떤 이벤트가
     // 왜 실패했는지 wrangler tail로도 확인할 방법이 없다.

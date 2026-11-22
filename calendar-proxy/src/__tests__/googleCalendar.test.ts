@@ -462,9 +462,8 @@ describe("fetchGoogleWithRetry", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("재시도 전에 버리는 429 응답 본문은 반드시 취소한다(drainBody 규칙)", async () => {
+  it("재시도 전에 버리는 429 응답 본문은 반드시 소비한다(drainBody 규칙)", async () => {
     const first = new Response("Too Many Requests", { status: 429 });
-    const cancelSpy = vi.spyOn(first.body!, "cancel");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(new Response("{}", { status: 200 })),
@@ -473,7 +472,8 @@ describe("fetchGoogleWithRetry", () => {
 
     await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep });
 
-    expect(cancelSpy).toHaveBeenCalled();
+    // 마지막 레이트 리밋 응답을 되돌려줄 수 있게 cancel 대신 text()로 읽어 둔다 — 어느 쪽이든 소비됨.
+    expect(first.bodyUsed).toBe(true);
   });
 });
 
@@ -629,5 +629,39 @@ describe("구글 호출 예산", () => {
     await syncTodosToGoogleCalendar(todos, "access-token");
 
     expect(fetchMock).toHaveBeenCalledTimes(60);
+  });
+
+  // 리뷰 M-1: 레이트 리밋 응답 뒤 기다리는 동안 다른 워커가 예산을 다 쓰면, 다음 시도에서
+  // budget_exhausted를 던졌다 — 실제로는 레이트 리밋에 걸린 항목인데 쿨다운 없이 바로 재전송됐다.
+  it("재시도 대기 중에 예산이 바닥나면 budget_exhausted가 아니라 마지막 레이트 리밋 응답을 돌려준다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("slow down", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const budget = createGoogleFetchBudget(10);
+    const sleep = vi.fn(async () => {
+      budget.used = budget.limit; // 대기 중 다른 워커가 예산을 다 씀
+    });
+
+    const res = await fetchGoogleWithRetry(CALENDAR_API_BASE, {}, { sleep, budget });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(429);
+    expect(await res.text()).toBe("slow down");
+  });
+
+  it("항목이 구글을 이미 호출한 뒤(409→GET 전) 예산이 바닥나면 budget_exhausted가 아닌 일반 실패다", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 409, text: async () => "Conflict" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [result] = await syncTodosToGoogleCalendar(
+      [{ id: "todo-1", title: "t", dueAt: "2026-09-01", googleEventId: null, action: "upsert" }],
+      "access-token",
+      1,
+      { budget: createGoogleFetchBudget(1), sleep: async () => {} },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.error).toBeDefined();
+    expect(result.error!.startsWith("budget_exhausted")).toBe(false);
+    expect(result.error).toMatch(/예산/);
   });
 });
