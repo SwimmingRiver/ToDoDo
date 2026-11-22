@@ -18,6 +18,7 @@ jest.mock("../../premium", () => ({
 }));
 jest.mock("@react-navigation/native", () => ({
   useFocusEffect: () => {},
+  useIsFocused: () => false,
 }));
 
 import { useInsightsMetrics } from "../useInsightsMetrics";

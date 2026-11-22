@@ -2,10 +2,13 @@ import { renderHook, act } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
 
 const mockFetch = jest.fn<(...args: unknown[]) => Promise<unknown[]>>();
 let mockIsPremium = false;
 let focusCallback: (() => void) | undefined;
+let mockIsFocused = true;
+let appStateHandler: ((state: AppStateStatus) => void) | undefined;
 
 jest.mock("@tododo/core", () => ({
   ...(jest.requireActual("@tododo/core") as object),
@@ -22,6 +25,7 @@ jest.mock("@react-navigation/native", () => ({
   useFocusEffect: (cb: () => void) => {
     focusCallback = cb;
   },
+  useIsFocused: () => mockIsFocused,
 }));
 
 import { useTodosForStats } from "../useTodosForStats";
@@ -48,10 +52,17 @@ describe("useTodosForStats", () => {
     mockFetch.mockResolvedValue([]);
     mockIsPremium = false;
     focusCallback = undefined;
+    mockIsFocused = true;
+    appStateHandler = undefined;
+    jest.spyOn(AppState, "addEventListener").mockImplementation((_type, handler) => {
+      appStateHandler = handler as (state: AppStateStatus) => void;
+      return { remove: () => { appStateHandler = undefined; } } as NativeEventSubscription;
+    });
   });
   afterEach(() => {
     queryClient.clear();
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   it("무료면 조회하지 않는다", async () => {
@@ -109,6 +120,36 @@ describe("useTodosForStats", () => {
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     await focus();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("통계 탭이 보이는 채 앱이 다시 활성화되면 1분 지났을 때 다시 읽는다", async () => {
+    mockIsPremium = true;
+    await setup();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+      appStateHandler?.("active");
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(31_000);
+      appStateHandler?.("active");
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("통계 탭이 안 보이면 앱이 활성화돼도 다시 읽지 않는다", async () => {
+    mockIsPremium = true;
+    mockIsFocused = false;
+    await setup();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(61_000);
+      appStateHandler?.("active");
+    });
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
