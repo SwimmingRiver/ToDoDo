@@ -33,7 +33,7 @@ async function run(uid: string, queryClient: QueryClient): Promise<void> {
   lastAttempt.set(uid, Date.now());
   try {
     const { written, failedSweeps } = await runStartupMaintenance(db, uid, {
-      onSweepError: (e) => reportError(e, "maintenance"),
+      onSweepError: (e, sweep) => reportError(e, "maintenance", { sweep }),
     });
     if (failedSweeps.length === 0) {
       try {

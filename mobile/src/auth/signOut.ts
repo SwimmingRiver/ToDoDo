@@ -25,7 +25,8 @@ export const signOut = async (queryClient: QueryClient) => {
   try {
     await GoogleSignin.signOut();
   } catch (error) {
-    reportError(error, "auth");
+    // 구글 세션이 이미 없을 때도 나는 무해한 실패라 Sentry로 보내지 않는다.
+    console.warn("구글 로그아웃 실패:", error);
   }
 
   await firebaseSignOut(auth);

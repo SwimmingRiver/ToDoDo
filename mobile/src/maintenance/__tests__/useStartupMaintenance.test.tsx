@@ -119,6 +119,20 @@ describe("useStartupMaintenance", () => {
     expect(writeMock).not.toHaveBeenCalled();
   });
 
+  it("스윕 하나가 실패하면 스윕 이름을 태그로 보고한다", async () => {
+    sentryMock.captureException.mockClear();
+    runMock.mockImplementation(async (...args: unknown[]) => {
+      const opts = args[2] as { onSweepError: (e: unknown, s: string) => void };
+      opts.onSweepError(new Error("sweep"), "archive");
+      return { written: 0, failedSweeps: ["archive"] };
+    });
+    await renderHook(() => useStartupMaintenance("a"), { wrapper });
+    await flush();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), {
+      tags: { feature: "maintenance", sweep: "archive" },
+    });
+  });
+
   it("writeLastSuccess가 reject되어도 throw하지 않고 Sentry로 보고한다", async () => {
     sentryMock.captureException.mockClear();
     writeMock.mockRejectedValue(new Error("storage"));

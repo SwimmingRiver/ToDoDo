@@ -57,6 +57,20 @@ describe("scrubEvent", () => {
     expect(out.breadcrumbs?.[1]).toMatchObject({ category: "navigation", data: { from: "Home", to: "TodoDetail" } });
   });
 
+  it("소스맵 매칭용 debug_meta는 그대로 둔다", () => {
+    const debugMeta = { images: [{ type: "sourcemap", code_file: "app:///index.bundle", debug_id: "abc" }] };
+    const out = scrubEvent({ type: undefined, debug_meta: debugMeta } as ErrorEvent);
+    expect(out.debug_meta).toEqual(debugMeta);
+  });
+
+  it("url의 #fragment도 제거한다", () => {
+    const out = scrubEvent({
+      type: undefined,
+      breadcrumbs: [{ category: "navigation", data: { from: "tododo://calendar#code=secret", to: "Home" } }],
+    } as ErrorEvent);
+    expect(out.breadcrumbs?.[0].data).toEqual({ from: "tododo://calendar", to: "Home" });
+  });
+
   it("request는 보내지 않는다", () => {
     const out = scrubEvent({ type: undefined, request: { url: "x", data: "비밀" } } as ErrorEvent);
     expect(out.request).toBeUndefined();
@@ -107,6 +121,20 @@ describe("initSentry", () => {
     expect(sent.extra).toBeUndefined();
     expect(sent.message).toBe("m");
   });
+
+  it("beforeBreadcrumb로 네이티브에 동기화되기 전에 breadcrumb을 거른다", () => {
+    g.__DEV__ = false;
+    process.env.EXPO_PUBLIC_SENTRY_DSN = "https://k@o0.ingest.sentry.io/0";
+    initSentry();
+    const { beforeBreadcrumb } = sentry.init.mock.calls[0][0] as {
+      beforeBreadcrumb: (b: Record<string, unknown>) => Record<string, unknown> | null;
+    };
+    expect(beforeBreadcrumb({ category: "touch", message: "할 일 제목" })).toBeNull();
+    expect(beforeBreadcrumb({ category: "console", message: "비밀" })).toBeNull();
+    const kept = beforeBreadcrumb({ category: "fetch", message: "x", data: { url: "https://a.dev/p?t=1", body: "비밀" } });
+    expect(kept).toMatchObject({ category: "fetch", data: { url: "https://a.dev/p" } });
+    expect(kept?.message).toBeUndefined();
+  });
 });
 
 describe("reportError", () => {
@@ -122,6 +150,12 @@ describe("reportError", () => {
     reportError(error, "iap");
     expect(warn).toHaveBeenCalledWith("[iap]", error);
     expect(sentry.captureException).toHaveBeenCalledWith(error, { tags: { feature: "iap" } });
+  });
+
+  it("추가 태그를 feature와 함께 보낸다", () => {
+    const error = new Error("x");
+    reportError(error, "maintenance", { sweep: "archive" });
+    expect(sentry.captureException).toHaveBeenCalledWith(error, { tags: { feature: "maintenance", sweep: "archive" } });
   });
 
   it("feature가 없으면 태그 없이 보고한다", () => {

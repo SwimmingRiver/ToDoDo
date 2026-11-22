@@ -16,7 +16,6 @@ import {
   type PurchaseAndroid,
 } from "expo-iap";
 import { APPLE_PRODUCTS, GOOGLE_PRODUCT, isOurProduct, pickGoogleOffer } from "./products";
-import { reportError } from "../../shared/lib/sentry";
 
 /** 스토어 거래를 서버 검증에 필요한 만큼만 추린 모양. raw는 finish 때 라이브러리에 그대로 돌려준다. */
 export interface StorePurchase {
@@ -144,7 +143,8 @@ export const purchaseClient: PurchaseClient = {
       try {
         await finishTransaction({ purchase, isConsumable: false });
       } catch (error) {
-        reportError(error, "iap");
+        // 서버가 이미 승인했으므로 무해하다 — 예상된 실패라 Sentry로 보내지 않는다.
+        console.warn("[iap] Android 승인 실패(서버가 승인함):", error);
       }
       return;
     }
