@@ -161,3 +161,41 @@ describe('Toast 스태킹', () => {
     for (const layer of overlayLayers) expect(toastLayer).toBeGreaterThan(layer)
   })
 })
+
+// Provider가 사라진 뒤 자동 닫힘 타이머가 남아 있으면, 테스트 환경(jsdom)이 정리된 뒤
+// setState가 실행돼 'window is not defined' unhandled error로 CI가 실패했다(11-22 main CI).
+describe('ToastProvider 타이머 정리', () => {
+  const wrapper = ({ children }: { children: ReactNode }) => <ToastProvider>{children}</ToastProvider>
+
+  it('언마운트하면 자동 닫힘 타이머가 남지 않는다', () => {
+    vi.useFakeTimers()
+    try {
+      const { result, unmount } = renderHook(() => useToast(), { wrapper })
+      act(() => result.current.success('저장 완료'))
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      unmount()
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('닫히는 중(퇴장 애니메이션 타이머)에 언마운트해도 타이머가 남지 않는다', () => {
+    vi.useFakeTimers()
+    try {
+      const { result, unmount } = renderHook(() => useToast(), { wrapper })
+      act(() => result.current.success('저장 완료'))
+      // duration(3000) 경과 → removeToast가 퇴장용 300ms 타이머를 건다
+      act(() => vi.advanceTimersByTime(3000))
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      unmount()
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
