@@ -13,8 +13,8 @@ export interface CalendarDot {
 
 export type CalendarMarkedDates = Record<string, { dots: CalendarDot[]; selected?: boolean }>;
 
-// "완료"는 애초에 마커 대상에서 제외되므로 todo/doing만 순서를 정의한다.
-const DOT_ORDER = ["todo", "doing"] as const;
+// 웹 캘린더처럼 완료 항목도 "그날 일정이 있었다"는 표시로 남긴다(완료 색, 맨 뒤).
+const DOT_ORDER = ["todo", "doing", "done"] as const;
 
 function getTodoDateKeys(todo: Todo): string[] {
   const startKey = todo.startAt ? toDateKeyFromISO(todo.startAt) : null;
@@ -29,14 +29,14 @@ function getTodoDateKeys(todo: Todo): string[] {
  * 날짜별 캘린더 마커(react-native-calendars의 markingType="multi-dot" 입력)를 계산한다.
  * 정책(스펙 5절): overdue(마감 지났고 미완료)가 하나라도 있으면 그 날짜는 danger 점
  * 하나만 표시("위험 신호" 우선, 다른 상태는 그 날짜에서 숨겨진다). overdue가 없으면
- * 그 날짜에 걸친 미완료 상태들의 색을 todo→doing 순서로 각각 표시한다. 완료만 있는
- * 날짜는 마커를 아예 남기지 않는다.
+ * 그 날짜에 걸친 상태들의 색을 todo→doing→done 순서로 각각 표시한다. 완료 항목은 마감이
+ * 지났어도 overdue가 아니므로(isTodoOverdue) 완료 색으로만 표시된다 — 웹 캘린더가 완료 일정도
+ * 보여주는 것과 맞추려고 11-21 사용자 요청으로 "완료만 있는 날은 표시 안 함" 정책을 바꿨다.
  */
 export function buildCalendarMarkedDates(todos: Todo[]): CalendarMarkedDates {
   const byDate = new Map<string, Map<string, string>>();
 
   for (const todo of todos) {
-    if (todo.status === "done") continue;
     const overdue = isTodoOverdue(todo);
     const dueKey = todo.dueAt ? toDateKeyFromISO(todo.dueAt) : null;
 

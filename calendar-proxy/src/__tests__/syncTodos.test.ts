@@ -13,7 +13,8 @@ vi.mock("../tokenStore", () => ({
 vi.mock("../googleOAuth", () => ({
   refreshAccessToken: vi.fn(),
 }));
-vi.mock("../googleCalendar", () => ({
+vi.mock("../googleCalendar", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../googleCalendar")>()),
   syncTodosToGoogleCalendar: vi.fn(),
 }));
 
@@ -76,6 +77,10 @@ describe("handleSyncTodos", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { results: unknown[] };
     expect(body.results).toEqual([{ id: "todo-1", googleEventId: "event-1" }]);
+    // 무료 플랜 서브리퀘스트 50개 한도 — 요청마다 새 구글 호출 예산(44)을 넘긴다.
+    expect(vi.mocked(syncTodosToGoogleCalendar)).toHaveBeenCalledWith(todos, "at", undefined, {
+      budget: expect.objectContaining({ used: 0, limit: 44 }),
+    });
   });
 
   it("리프레시 토큰이 철회됐으면(invalid_grant) 토큰을 지우고 401을 반환한다", async () => {

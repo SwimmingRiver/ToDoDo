@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, query, where, writeBatch, } from "firebase/firestore";
 import { parseDateKey, toDateKeyFromISO } from "../insights/date";
+import { getNextRootOrder, mapDocToTodo } from "../api/todoDocs";
 import { buildRecurringInstanceId, buildRecurringOccurrenceDoc, generateRecurringDueDates, getDefaultHorizonEnd, } from "./recurrence";
 import { withRecurringSeriesLock } from "./seriesLock";
 /** 두 반복 규칙이 같은지. 저장 문서엔 endDate/weekdays 키가 없을 수 있어 없음을 null/[]로 맞춘다. */
@@ -11,13 +12,6 @@ const isSameRecurrenceRule = (a, b) => {
         a.endType === b.endType &&
         (a.endType === "untilDate" ? (a.endDate ?? null) === (b.endDate ?? null) : true) &&
         weekdaysKey(a) === weekdaysKey(b));
-};
-const mapDocToTodo = (id, data) => ({ id, ...data });
-/** 인증된 사용자의 루트(parentId === null) 할 일 중 다음에 쓸 order 값을 계산한다. */
-const getNextRootOrder = async (db, userId) => {
-    const rootTodosSnapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId), where("parentId", "==", null)));
-    const maxOrder = rootTodosSnapshot.docs.reduce((max, d) => Math.max(max, d.data().order ?? 0), -1);
-    return maxOrder + 1;
 };
 /**
  * 반복 규칙이 설정된 할 일을 저장한다. generateRecurringDueDates로 계산한 dueAt마다
@@ -296,5 +290,17 @@ const deleteRecurringSeriesImpl = async (db, userId, recurrenceId) => {
     seriesSnapshot.docs.forEach((d) => {
         batch.delete(d.ref);
     });
+    // 회차에 달린 하위 할 일도 함께 지운다. 반복을 끈 회차(recurrence: null)에는 하위 할 일을
+    // 추가할 수 있는데, 여기서 회차만 지우면 parentId가 사라진 문서를 가리키는 고아가 남는다
+    // (일반 할 일 삭제 deleteTodo와 같은 원칙). in 연산자는 값 30개 한도라 나눠서 조회한다.
+    const occurrenceIds = seriesSnapshot.docs.map((d) => d.id);
+    for (let i = 0; i < occurrenceIds.length; i += PARENT_ID_IN_LIMIT) {
+        const childrenSnapshot = await getDocs(query(collection(db, "todos"), where("userId", "==", userId), where("parentId", "in", occurrenceIds.slice(i, i + PARENT_ID_IN_LIMIT))));
+        childrenSnapshot.docs.forEach((d) => {
+            batch.delete(d.ref);
+        });
+    }
     await batch.commit();
 };
+/** Firestore `in` 연산자가 한 번에 받는 값의 최대 개수. */
+const PARENT_ID_IN_LIMIT = 30;

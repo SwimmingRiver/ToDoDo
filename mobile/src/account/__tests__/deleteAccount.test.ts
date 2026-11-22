@@ -103,4 +103,40 @@ describe("deleteAccount", () => {
     await expect(deleteAccount()).rejects.toThrow("EXPO_PUBLIC_BILLING_PROXY_URL");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  // 무료 플랜 Worker는 요청당 서브리퀘스트 50개 — 이벤트를 10개씩 나눠 지우고, 탈퇴는 반드시
+  // 마지막 요청에서 토큰까지 지운 뒤 다음 단계로 간다.
+  it("캘린더 이벤트가 많으면 10개씩 keepToken:true로 나눠 보내고 마지막 요청에서 토큰을 지운다", async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: Array.from({ length: 23 }, (_, i) => ({ data: () => ({ googleEventId: `ev_${i}` }) })),
+    });
+    const { deleteAccount } = await import("../deleteAccount");
+    await deleteAccount();
+
+    const calendarCalls = fetchMock.mock.calls.filter(([url]) => url === "https://cal.example/disconnect");
+    const bodies = calendarCalls.map(([, init]) => JSON.parse(init?.body as string));
+    expect(bodies.map((b) => [b.googleEventIds.length, b.keepToken])).toEqual([
+      [10, true],
+      [10, true],
+      [3, undefined],
+    ]);
+    expect(fetchMock.mock.calls.map(([url]) => url).slice(3)).toEqual([
+      "https://rem.example/account",
+      "https://bill.example/account/delete",
+    ]);
+  });
+
+  it("캘린더 묶음 중간이 실패하면 멈추고(토큰 남음) 다음 단계로 가지 않는다", async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: Array.from({ length: 23 }, (_, i) => ({ data: () => ({ googleEventId: `ev_${i}` }) })),
+    });
+    fetchMock
+      .mockImplementationOnce(async () => new Response(null, { status: 204 }))
+      .mockImplementationOnce(async () => new Response(null, { status: 500 }));
+    const { deleteAccount } = await import("../deleteAccount");
+
+    await expect(deleteAccount()).rejects.toThrow(/calendar-proxy/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockClearSnapshot).not.toHaveBeenCalled();
+  });
 });

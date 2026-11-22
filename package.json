@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky",
     "backfill:archived": "tsx scripts/backfillArchivedField.ts",
-    "grant:entitlement": "tsx scripts/grantEntitlement.ts"
+    "grant:entitlement": "tsx scripts/grantEntitlement.ts",
+    "audit:recurring": "tsx scripts/auditRecurringData.ts",
+    "test:scripts": "tsx --test scripts/lib/*.test.ts"
   },
   "repository": {
     "type": "git",

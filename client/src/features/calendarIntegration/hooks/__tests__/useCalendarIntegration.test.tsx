@@ -9,6 +9,8 @@ import {
   useMarkCalendarConnected,
 } from "../useCalendarIntegration";
 
+import { DisconnectPartialError } from "@tododo/core/dist/calendarSync/index.js";
+
 vi.mock("@/shared/lib/firebase", () => ({
   auth: { currentUser: { uid: "user-1" } },
   googleProvider: {},
@@ -139,6 +141,48 @@ describe("useDisconnectCalendar / useMarkCalendarConnected", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["calendarIntegration", "user-1"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos"] });
     expect(outcome).toEqual({ allDeleted: false });
+  });
+
+  // 묶음 연동 해제 도중 실패: 토큰이 아직 남아(연동 유지) 있으니 연동 해제 상태로 바꾸지 않고,
+  // 앞 묶음에서 지워진 이벤트의 googleEventId도 일부러 남긴다 — 지우면 동기화 훅이 그 할 일 전부를
+  // 미동기화로 보고 바로 POST→409→tombstone 되살리기로 삭제를 되돌린다. 재시도하면 404/410이
+  // 성공으로 처리돼 정리된다.
+  it("묶음 도중 실패하면 Firestore를 건드리지 않고(삭제 확인 id도 남김) connected도 그대로 둔 채 에러를 다시 던진다", async () => {
+    const { disconnectCalendar } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+    vi.mocked(setDoc).mockClear();
+    const partial = new DisconnectPartialError(new Error("연동 해제 실패"), ["event-1", "orphan-9"]);
+    vi.mocked(disconnectCalendar).mockRejectedValue(partial);
+
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
+
+    await expect(
+      result.current.disconnect(
+        [
+          { id: "todo-1", googleEventId: "event-1" },
+          { id: "todo-2", googleEventId: "event-2" },
+        ],
+        ["orphan-9"],
+      ),
+    ).rejects.toBe(partial);
+
+    expect(batchUpdateMock).not.toHaveBeenCalled();
+    expect(batchCommitMock).not.toHaveBeenCalled();
+    expect(vi.mocked(setDoc)).not.toHaveBeenCalled();
+  });
+
+  it("일반 오류(부분 결과 없음)면 Firestore를 건드리지 않고 그대로 던진다", async () => {
+    const { disconnectCalendar } = await import("../../api");
+    const { setDoc } = await import("firebase/firestore");
+    vi.mocked(setDoc).mockClear();
+    vi.mocked(disconnectCalendar).mockRejectedValue(new Error("network"));
+
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useDisconnectCalendar(), { wrapper: Wrapper });
+    await expect(result.current.disconnect([{ id: "todo-1", googleEventId: "event-1" }])).rejects.toThrow("network");
+    expect(batchUpdateMock).not.toHaveBeenCalled();
+    expect(vi.mocked(setDoc)).not.toHaveBeenCalled();
   });
 
   // todos 재조회가 연동 상태 재조회보다 먼저 끝나면, 동기화 훅이 캐시된
