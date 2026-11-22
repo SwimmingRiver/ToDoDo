@@ -99,6 +99,8 @@ beforeEach(() => {
   mockSave.mockResolvedValue(undefined);
   mockClear.mockResolvedValue(undefined);
   mockRevoked.mockResolvedValue(undefined);
+  // clearAllMocks는 mockResolvedValueOnce 큐를 안 비운다 — 앞 테스트의 남은 값이 새지 않게 한다.
+  mockSync.mockReset();
   mockSync.mockResolvedValue([{ id: "t1", googleEventId: "evt-1" }]);
   jest.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -302,6 +304,90 @@ describe("useSyncTodosToCalendar", () => {
       await flush();
       expect(mockSync).toHaveBeenCalledTimes(1);
     });
+  });
+
+  // 리뷰 I-1: 묶음마다 todos를 무효화하면 루프 도중 재조회된 todos(뒤 묶음은 아직
+  // googleEventId null)로 끝난 뒤 재실행이 돌아 뒤 묶음을 다시 upsert했다.
+  it("묶음 전송 중 todos가 재조회돼도 같은 항목을 두 번 보내지 않는다", async () => {
+    const base = Array.from({ length: 23 }, (_, i) => makeTodo({ id: `t${i}` }));
+    mockTodos = base;
+    const synced = new Set<string>();
+    mockSync.mockImplementation(async (batch) => {
+      await new Promise((r) => setTimeout(r, 1));
+      batch.forEach((p) => synced.add(p.id));
+      return batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` }));
+    });
+    const client = makeClient();
+    const original = client.invalidateQueries.bind(client);
+    let rerenderHook: () => void = () => {};
+    jest.spyOn(client, "invalidateQueries").mockImplementation(async (filters) => {
+      const key = (filters as { queryKey?: unknown[] } | undefined)?.queryKey;
+      if (key?.[0] !== "todos") return original(filters);
+      // 재조회 흉내(getDocs라 비동기): 조회 시점까지 Firestore에 쓰인 값으로 조금 뒤에 온다.
+      const snapshotOfSynced = new Set(synced);
+      await new Promise((r) => setTimeout(r, 5));
+      mockTodos = base.map((t) => (snapshotOfSynced.has(t.id) ? { ...t, googleEventId: `evt-${t.id}` } : t));
+      rerenderHook();
+    });
+    const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(client) });
+    rerenderHook = () => void rerender({});
+
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    const sentIds = mockSync.mock.calls.flatMap(([b]) => b.map((p) => p.id));
+    expect(sentIds).toHaveLength(23);
+    expect(new Set(sentIds).size).toBe(23);
+  });
+
+  // 리뷰 I-2: 요청 자체가 실패하면 남은(아직 안 보낸) 묶음도 쿨다운에 건다.
+  it("묶음 요청이 일반 오류로 실패하면 실패 묶음과 남은 묶음 모두 쿨다운에 건다", async () => {
+    const base = Array.from({ length: 25 }, (_, i) => makeTodo({ id: `t${i}` }));
+    mockTodos = base;
+    mockSync
+      .mockImplementationOnce(async (batch) => batch.map((p) => ({ id: p.id, googleEventId: `evt-${p.id}` })))
+      .mockRejectedValueOnce(new Error("동기화 실패: 500"));
+    const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
+    await flush();
+
+    mockTodos = base.map((t, i) => (i < 10 ? { ...t, googleEventId: `evt-${t.id}` } : t));
+    await rerender({});
+    await flush();
+    expect(mockSync).toHaveBeenCalledTimes(2);
+  });
+
+  // 리뷰 M-3: revoked→재연결·사용자 변경이면 예전 실패 기록은 근거가 없다.
+  it("revoked 뒤 재연결하면 쿨다운 기록을 비워 실패 항목을 바로 다시 보낸다", async () => {
+    mockSync.mockResolvedValueOnce([{ id: "t1", googleEventId: null, error: "403 rateLimitExceeded" }]);
+    const client = makeClient();
+    const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(client) });
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(1));
+    await flush();
+
+    await act(async () => {
+      client.setQueryData(["calendarIntegration", "uid-1"], { connected: true, status: "revoked" });
+    });
+    await flush();
+    await act(async () => {
+      client.setQueryData(["calendarIntegration", "uid-1"], { connected: true, status: "active" });
+    });
+    mockTodos = [makeTodo()];
+    await rerender({});
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
+  });
+
+  it("로그인 사용자가 바뀌면 쿨다운 기록을 비운다", async () => {
+    mockSync.mockResolvedValueOnce([{ id: "t1", googleEventId: null, error: "403 rateLimitExceeded" }]);
+    const { rerender } = await renderHook(() => useSyncTodosToCalendar(), { wrapper: wrap(makeClient()) });
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(1));
+    await flush();
+
+    mockAuth.currentUser = { uid: "uid-2" };
+    mockTodos = [makeTodo()];
+    await rerender({});
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
   });
 
   it("10건을 넘으면 10건씩 나눠 순서대로(앞 요청이 끝난 뒤) 보낸다", async () => {

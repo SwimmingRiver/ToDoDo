@@ -52,6 +52,9 @@ export const useSyncTodosToCalendar = (): void => {
   // 실패 항목은 스냅샷에 안 들어가 todos 재조회(앱은 주기적으로 다시 받는다)마다 즉시
   // 재전송돼 구글 403이 88건까지 쌓였다. excludeCoolingDown/recordSyncFailures 참고.
   const failuresRef = useRef<SyncFailureLog>(new Map());
+  // 실패 기록이 유효한 범위(사용자·연동 상태). 바뀌면 기록을 비운다 — 다른 사용자거나
+  // revoked→재연결로 토큰이 바뀌었으면 예전 실패는 더 이상 근거가 없다.
+  const failureScopeRef = useRef<string | null>(null);
   // 스냅샷이 로드된 uid. 현재 uid와 같을 때만 ready다 — uid가 바뀐 첫 렌더에서
   // 옛 사용자의 스냅샷으로 동기화가 도는 일이 없도록 boolean 대신 uid로 비교한다.
   const [loadedUid, setLoadedUid] = useState<string | null>(null);
@@ -76,6 +79,12 @@ export const useSyncTodosToCalendar = (): void => {
   }, [uid]);
 
   useEffect(() => {
+    const failureScope = `${uid ?? ""}|${integration?.connected ?? ""}|${integration?.status ?? ""}`;
+    if (failureScopeRef.current !== failureScope) {
+      failuresRef.current = new Map();
+      failureScopeRef.current = failureScope;
+    }
+
     if (!uid || !snapshotReady) return;
 
     // 연동 해제는 구글 이벤트를 지우고 Firestore googleEventId만 null로 만들 뿐
@@ -125,10 +134,12 @@ export const useSyncTodosToCalendar = (): void => {
     const existingTodoIds = new Set(todos.map((t) => t.id));
 
     (async () => {
+      let wroteAny = false;
       try {
         // 한 요청에 수십 건을 몰아 보내면 Worker가 구글에 한꺼번에 쏘다 레이트 리밋에
         // 걸린다(11-21). 10건씩 나눠 앞 요청이 끝난 뒤에 다음 요청을 보낸다.
-        for (const chunk of chunkSyncBatch(batch)) {
+        const chunks = chunkSyncBatch(batch);
+        for (const [index, chunk] of chunks.entries()) {
           // 동기화 도중 연동이 해제됐거나 uid가 바뀌어 snapshotRef가 교체됐다면 남은 묶음은
           // 보내지 않는다.
           if (snapshotRef.current !== snapshot) break;
@@ -137,14 +148,16 @@ export const useSyncTodosToCalendar = (): void => {
           try {
             results = await syncTodosToCalendar(chunk);
           } catch (error) {
-            // 요청 자체가 실패(네트워크·Worker 5xx)한 묶음도 쿨다운에 건다 — 안 그러면
-            // todos 재조회마다 같은 묶음을 즉시 다시 보낸다. revoked/not_connected는
-            // 상태 변화 신호라 쿨다운 대상이 아니다(해제 시 기록도 비워진다).
+            // 요청 자체가 실패(네트워크·Worker 5xx)하면 이 묶음과 아직 안 보낸 남은 묶음을
+            // 모두 쿨다운에 건다 — 안 그러면 todos 재조회마다 같은(또는 다음) 묶음을 즉시
+            // 다시 보낸다. revoked/not_connected는 상태 변화 신호라 쿨다운 대상이 아니다
+            // (해제 시 기록도 비워진다).
             if (!(error instanceof CalendarRevokedError) && !(error instanceof CalendarNotConnectedError)) {
               const message = error instanceof Error ? error.message : String(error);
+              const unsent = chunks.slice(index).flat();
               recordSyncFailures(
-                chunk,
-                chunk.map((p) => ({ id: p.id, googleEventId: p.googleEventId, error: message })),
+                unsent,
+                unsent.map((p) => ({ id: p.id, googleEventId: p.googleEventId, error: message })),
                 eligibleById,
                 failures,
                 Date.now(),
@@ -176,7 +189,7 @@ export const useSyncTodosToCalendar = (): void => {
 
           if (firestoreUpdates.length > 0) {
             await firestoreBatch.commit();
-            queryClient.invalidateQueries({ queryKey: ["todos"] });
+            wroteAny = true;
           }
         }
       } catch (error) {
@@ -191,6 +204,17 @@ export const useSyncTodosToCalendar = (): void => {
           console.warn("[calendar] 동기화 실패", error);
         }
       } finally {
+        // todos 무효화는 묶음마다가 아니라 루프가 끝난 뒤 한 번만, isRunning을 풀기 전에
+        // 기다린다. 묶음마다 하면 루프 도중 재조회된 todos(뒤 묶음은 아직 googleEventId
+        // null)로 끝난 뒤 재실행이 돌아 뒤 묶음을 다시 upsert했다(리뷰 I-1). 기다린 뒤에는
+        // 재조회 결과가 pendingRerun으로 이어져 최신 todos로 한 번만 다시 돈다.
+        if (wroteAny) {
+          try {
+            await queryClient.invalidateQueries({ queryKey: ["todos"] });
+          } catch (error) {
+            console.warn("[calendar] todos 재조회 실패", error);
+          }
+        }
         isRunningRef.current = false;
         if (pendingRerunRef.current) {
           pendingRerunRef.current = false;
