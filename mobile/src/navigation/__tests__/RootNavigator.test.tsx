@@ -52,6 +52,7 @@ jest.mock("../../screens/TodoFormScreen", () => ({ TodoFormScreen: () => null })
 jest.mock("../../screens/TodoDetailScreen", () => ({ TodoDetailScreen: () => null }));
 jest.mock("../../screens/CalendarScreen", () => ({ CalendarScreen: () => null }));
 jest.mock("../../screens/AccountScreen", () => ({ AccountScreen: () => null }));
+jest.mock("../../screens/NotificationsScreen", () => ({ NotificationsScreen: () => null }));
 jest.mock("../../screens/AiPlanScreen", () => ({ AiPlanScreen: () => null }));
 jest.mock("../../screens/InsightsScreen", () => ({ InsightsScreen: () => null }));
 jest.mock("../../shared/ui/iconButton/IconButton", () => ({ IconButton: () => null }));
@@ -152,6 +153,7 @@ describe("RootNavigator 라우트", () => {
     expect(insights).toHaveLength(1);
     expect(insights[0].options?.title).toBe("통계");
     expect(mockStackScreens.filter((s) => s.name === "Account")).toHaveLength(4);
+    expect(mockStackScreens.filter((s) => s.name === "Notifications")).toHaveLength(4);
   });
 
   it("인증 상태를 확인하는 동안은 스플래시를 유지하고, 정해지면 숨긴다", async () => {

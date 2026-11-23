@@ -6,7 +6,7 @@ import {
 } from "@react-navigation/native-stack";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { Sun, ListTodo, CalendarDays, UserRound, ChartColumn } from "lucide-react-native";
+import { Sun, ListTodo, CalendarDays, ChartColumn } from "lucide-react-native";
 import { useAuthState } from "../auth/useAuthState";
 import { LoginScreen } from "../screens/LoginScreen";
 import { TodayScreen } from "../screens/TodayScreen";
@@ -17,7 +17,8 @@ import { CalendarScreen } from "../screens/CalendarScreen";
 import { InsightsScreen } from "../screens/InsightsScreen";
 import { AccountScreen } from "../screens/AccountScreen";
 import { AiPlanScreen } from "../screens/AiPlanScreen";
-import { IconButton } from "../shared/ui/iconButton/IconButton";
+import { HeaderActions } from "./HeaderActions";
+import { NotificationsScreen } from "../screens/NotificationsScreen";
 import type { TodayStackParamList, TodoListStackParamList, CalendarStackParamList, InsightsStackParamList } from "./types";
 import { colors } from "../theme/colors";
 import { useEntitlementSync } from "../premium";
@@ -42,24 +43,22 @@ const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
 const InsightsStack = createNativeStackNavigator<InsightsStackParamList>();
 const Tab = createBottomTabNavigator();
 
-// 네 스택 모두 Account 라우트를 가지므로 어느 탭에서든 헤더 아이콘으로 계정 화면에 간다.
-// 계정 화면 자신은 options에서 headerRight를 지운다. navigation 타입을 스택별 ParamList가
-// 아니라 navigate("Account")만 요구하는 모양으로 좁혀야 네 스택에 같은 함수를 넘길 수 있다.
-const accountHeaderOptions = ({
-  navigation,
-}: {
-  navigation: { navigate: (name: "Account") => void };
-}): NativeStackNavigationOptions => ({
-  headerRight: () => (
-    <IconButton
-      icon={UserRound}
-      accessibilityLabel="계정"
-      onPress={() => navigation.navigate("Account")}
-    />
-  ),
+// 네 스택 모두 Account·Notifications 라우트를 가지므로 어느 탭에서든 헤더 아이콘으로 두 화면에 간다.
+// 각 화면 자신은 options에서 자기 아이콘을 지운다. navigation 타입을 스택별 ParamList가
+// 아니라 navigate만 요구하는 모양으로 좁혀야 네 스택에 같은 함수를 넘길 수 있다.
+type HeaderNavigation = { navigate: (name: "Notifications" | "Account") => void };
+
+const accountHeaderOptions = ({ navigation }: { navigation: HeaderNavigation }): NativeStackNavigationOptions => ({
+  headerRight: () => <HeaderActions navigate={navigation.navigate} />,
 });
 
 const accountScreenOptions: NativeStackNavigationOptions = { title: "계정", headerRight: undefined };
+
+// 알림 화면에서는 벨만 숨기고 계정 아이콘은 그대로 둔다.
+const notificationsScreenOptions = ({ navigation }: { navigation: HeaderNavigation }): NativeStackNavigationOptions => ({
+  title: "알림",
+  headerRight: () => <HeaderActions navigate={navigation.navigate} showBell={false} />,
+});
 
 const TodayTabStack = () => (
   <TodayStack.Navigator screenOptions={accountHeaderOptions}>
@@ -67,6 +66,7 @@ const TodayTabStack = () => (
     <TodayStack.Screen name="TodoForm" component={TodoFormScreen} options={{ title: "할 일 추가" }} />
     <TodayStack.Screen name="TodoDetail" component={TodoDetailScreen} options={{ title: "할 일 상세" }} />
     <TodayStack.Screen name="Account" component={AccountScreen} options={accountScreenOptions} />
+    <TodayStack.Screen name="Notifications" component={NotificationsScreen} options={notificationsScreenOptions} />
   </TodayStack.Navigator>
 );
 
@@ -77,6 +77,7 @@ const TodoListTabStack = () => (
     <TodoListStack.Screen name="TodoDetail" component={TodoDetailScreen} options={{ title: "할 일 상세" }} />
     <TodoListStack.Screen name="AiPlan" component={AiPlanScreen} options={{ title: "AI로 계획" }} />
     <TodoListStack.Screen name="Account" component={AccountScreen} options={accountScreenOptions} />
+    <TodoListStack.Screen name="Notifications" component={NotificationsScreen} options={notificationsScreenOptions} />
   </TodoListStack.Navigator>
 );
 
@@ -86,6 +87,7 @@ const CalendarTabStack = () => (
     <CalendarStack.Screen name="TodoForm" component={TodoFormScreen} options={{ title: "할 일 추가" }} />
     <CalendarStack.Screen name="TodoDetail" component={TodoDetailScreen} options={{ title: "할 일 상세" }} />
     <CalendarStack.Screen name="Account" component={AccountScreen} options={accountScreenOptions} />
+    <CalendarStack.Screen name="Notifications" component={NotificationsScreen} options={notificationsScreenOptions} />
   </CalendarStack.Navigator>
 );
 
@@ -93,6 +95,7 @@ const InsightsTabStack = () => (
   <InsightsStack.Navigator screenOptions={accountHeaderOptions}>
     <InsightsStack.Screen name="Insights" component={InsightsScreen} options={{ title: "통계" }} />
     <InsightsStack.Screen name="Account" component={AccountScreen} options={accountScreenOptions} />
+    <InsightsStack.Screen name="Notifications" component={NotificationsScreen} options={notificationsScreenOptions} />
   </InsightsStack.Navigator>
 );
 

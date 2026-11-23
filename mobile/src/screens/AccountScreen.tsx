@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Alert, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react-native";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
 import { AppleRevokeError, deleteAccount } from "../account/deleteAccount";
@@ -14,7 +16,7 @@ import { purchaseClient } from "../premium/iap/purchaseClient";
 import { reportError } from "../shared/lib/sentry";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
-import { radius, spacing } from "../theme/spacing";
+import { MIN_TOUCH_TARGET, radius, spacing } from "../theme/spacing";
 
 // 기본 문구는 항상 보인다. 아래 안내들은 해당 구독이 있을 때만 덧붙인다.
 const DELETE_MESSAGE = "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.";
@@ -29,6 +31,7 @@ const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
 const APPLE_SIGN_IN_NOTICE = "Apple 계정 확인 창이 한 번 더 열려요.";
 
 export const AccountScreen = () => {
+  const navigation = useNavigation<{ navigate: (name: "Notifications") => void }>();
   const { user } = useAuthState();
   const { data: entitlement } = useEntitlement();
   const queryClient = useQueryClient();
@@ -111,6 +114,15 @@ export const AccountScreen = () => {
         <Text style={styles.email}>{user?.email ?? ""}</Text>
       </View>
       <PremiumSection />
+      <Pressable
+        onPress={() => navigation.navigate("Notifications")}
+        accessibilityRole="button"
+        accessibilityLabel="알림 설정"
+        style={styles.linkRow}
+      >
+        <Text style={styles.linkLabel}>알림 설정</Text>
+        <ChevronRight size={18} color={colors.text.tertiary} />
+      </Pressable>
       <Button
         title="로그아웃"
         variant="outline"
@@ -139,6 +151,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.xs,
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: MIN_TOUCH_TARGET,
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  linkLabel: {
+    fontSize: 16,
+    color: colors.text.primary,
   },
   label: {
     fontSize: 13,

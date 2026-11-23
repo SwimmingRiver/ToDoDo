@@ -6,6 +6,7 @@ export type TodoFormParams = { parentId?: string; dueAt?: string } | undefined;
 export type TodayStackParamList = {
   Today: undefined;
   Account: undefined;
+  Notifications: undefined;
   TodoDetail: TodoDetailParams;
   TodoForm: TodoFormParams;
 };
@@ -14,6 +15,7 @@ export type TodoListStackParamList = {
   TodoList: undefined;
   AiPlan: undefined;
   Account: undefined;
+  Notifications: undefined;
   TodoForm: TodoFormParams;
   TodoDetail: TodoDetailParams;
 };
@@ -21,6 +23,7 @@ export type TodoListStackParamList = {
 export type CalendarStackParamList = {
   Calendar: undefined;
   Account: undefined;
+  Notifications: undefined;
   TodoDetail: TodoDetailParams;
   TodoForm: TodoFormParams;
 };
@@ -28,4 +31,5 @@ export type CalendarStackParamList = {
 export type InsightsStackParamList = {
   Insights: undefined;
   Account: undefined;
+  Notifications: undefined;
 };

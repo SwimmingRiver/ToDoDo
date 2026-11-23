@@ -3,6 +3,9 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { Alert, Platform, type AlertButton } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+const mockNavigate = jest.fn();
+jest.mock("@react-navigation/native", () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+
 let mockProviderIds: string[] = ["google.com"];
 jest.mock("../../auth/useAuthState", () => ({
   useAuthState: () => ({
@@ -78,6 +81,12 @@ describe("AccountScreen", () => {
     mockDeleteAccount.mockReset().mockResolvedValue(undefined);
     mockReportError.mockReset();
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  });
+
+  it("account has link to notifications", async () => {
+    await renderScreen();
+    fireEvent.press(screen.getByText("알림 설정"));
+    expect(mockNavigate).toHaveBeenCalledWith("Notifications");
   });
 
   it("로그인한 계정의 이메일을 보여준다", async () => {
