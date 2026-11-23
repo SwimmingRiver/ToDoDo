@@ -1,9 +1,11 @@
+import { deleteToken, getMessaging } from "@react-native-firebase/messaging";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { needsAppleRevoke, revokeAppleSignIn } from "../auth/appleSignIn";
 import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
 import { disconnectInChunks } from "@tododo/core/dist/calendarSync/index.js";
 import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
+import { reportError } from "../shared/lib/sentry";
 
 /** Apple 토큰 해지 단계에서 실패했다 — 아직 아무것도 지우지 않았다는 뜻이라 화면이 다른 문구를 띄운다. */
 export class AppleRevokeError extends Error {
@@ -61,7 +63,7 @@ const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
 };
 
 /**
- * 탈퇴. 웹과 같은 순서: (Apple 사용자면 토큰 해지) → 캘린더 연동 해제 → 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
+ * 탈퇴. 웹과 같은 순서: (Apple 사용자면 토큰 해지) → 캘린더 연동 해제 → 알림 저장소 삭제(+기기 FCM 토큰 삭제) → 결제 서버(구독 해지·데이터·계정 삭제).
  * 각 단계는 멱등이라 실패하면 처음부터 다시 부르면 된다.
  */
 export const deleteAccount = async (): Promise<void> => {
@@ -92,6 +94,13 @@ export const deleteAccount = async (): Promise<void> => {
     return { deletedGoogleEventIds: [] };
   });
   await callWorker("reminder-proxy", urls.reminder, "/account", { method: "DELETE" }, idToken);
+  // 서버 쪽 토큰은 위에서 계정째 지웠다. 기기 FCM 토큰도 무효화해 다음 계정이 같은 토큰을 받지 않게 한다.
+  // 실패해도 탈퇴는 진행한다(지워진 계정에는 더 보낼 알림이 없다).
+  try {
+    await deleteToken(getMessaging());
+  } catch (error) {
+    reportError(error, "reminder");
+  }
   await callWorker("billing-proxy", urls.billing, "/account/delete", { method: "POST" }, idToken);
   // 전부 성공한 뒤에만 지운다 — 중간 실패 후 재시도할 때 고아 id가 다시 필요하다.
   // 호출부는 이 다음에 signOut한다. clearSnapshot은 throw하지 않는다.

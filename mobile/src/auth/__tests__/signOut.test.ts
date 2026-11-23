@@ -5,7 +5,13 @@ const sentryMock = jest.requireMock("@sentry/react-native") as { captureExceptio
 
 const calls: string[] = [];
 
-jest.mock("../../firebase", () => ({ auth: { name: "auth" } }));
+const mockAuth: { name: string; currentUser: { uid: string } | null } = { name: "auth", currentUser: { uid: "u1" } };
+jest.mock("../../firebase", () => ({ auth: mockAuth }));
+
+const mockDisablePush = jest.fn<(uid: string) => Promise<void>>();
+jest.mock("../../reminders/push/pushClient", () => ({
+  disablePushOnThisDevice: (uid: string) => mockDisablePush(uid),
+}));
 
 const mockFirebaseSignOut = jest.fn<(auth: unknown) => Promise<void>>();
 jest.mock("firebase/auth", () => ({
@@ -43,16 +49,55 @@ describe("signOut", () => {
     mockFirebaseSignOut.mockReset().mockImplementation(async () => {
       calls.push("firebaseSignOut");
     });
+    mockDisablePush.mockReset().mockImplementation(async () => {
+      calls.push("releasePush");
+    });
+    mockAuth.currentUser = { uid: "u1" };
   });
 
-  it("예약 알림 취소 → 구글 로그아웃 → firebase 로그아웃 → 캐시 비우기 순서로 실행한다", async () => {
+  it("signOut releases push token before firebase signOut", async () => {
     const { signOut } = await import("../signOut");
     const { client } = makeQueryClient();
 
     await signOut(client);
 
-    expect(calls).toEqual(["cancelNotifications", "googleSignOut", "firebaseSignOut", "clear"]);
-    expect(mockFirebaseSignOut).toHaveBeenCalledWith({ name: "auth" });
+    expect(mockDisablePush).toHaveBeenCalledWith("u1");
+    expect(calls.indexOf("releasePush")).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf("releasePush")).toBeLessThan(calls.indexOf("firebaseSignOut"));
+  });
+
+  it("signOut proceeds when release fails", async () => {
+    sentryMock.captureException.mockClear();
+    mockDisablePush.mockRejectedValueOnce(new Error("offline"));
+    const { signOut } = await import("../signOut");
+    const { client, clear } = makeQueryClient();
+
+    await signOut(client);
+
+    expect(mockFirebaseSignOut).toHaveBeenCalled();
+    expect(clear).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+  });
+
+  it("로그인 사용자가 없으면 푸시 해제를 건너뛴다", async () => {
+    mockAuth.currentUser = null;
+    const { signOut } = await import("../signOut");
+    const { client } = makeQueryClient();
+
+    await signOut(client);
+
+    expect(mockDisablePush).not.toHaveBeenCalled();
+    expect(mockFirebaseSignOut).toHaveBeenCalled();
+  });
+
+  it("예약 알림 취소 → 푸시 해제 → 구글 로그아웃 → firebase 로그아웃 → 캐시 비우기 순서로 실행한다", async () => {
+    const { signOut } = await import("../signOut");
+    const { client } = makeQueryClient();
+
+    await signOut(client);
+
+    expect(calls).toEqual(["cancelNotifications", "releasePush", "googleSignOut", "firebaseSignOut", "clear"]);
+    expect(mockFirebaseSignOut).toHaveBeenCalledWith(mockAuth);
   });
 
   it("구글 로그아웃이 실패해도 firebase 로그아웃과 캐시 비우기는 진행한다", async () => {

@@ -47,6 +47,7 @@ jest.mock("../../calendarIntegration/snapshotStorage", () => {
 const ENV_KEYS = ["EXPO_PUBLIC_CALENDAR_PROXY_URL", "EXPO_PUBLIC_REMINDER_PROXY_URL", "EXPO_PUBLIC_BILLING_PROXY_URL"] as const;
 
 const fetchMock = jest.fn<typeof fetch>();
+const messagingMock = jest.requireMock("@react-native-firebase/messaging") as { deleteToken: jest.Mock<() => Promise<void>> };
 
 describe("deleteAccount", () => {
   beforeEach(() => {
@@ -61,6 +62,7 @@ describe("deleteAccount", () => {
     global.fetch = fetchMock;
     mockProviderIds = ["google.com"];
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    messagingMock.deleteToken.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -81,6 +83,32 @@ describe("deleteAccount", () => {
     for (const [, init] of fetchMock.mock.calls) {
       expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer id-token");
     }
+  });
+
+  it("deleteAccount deletes device token", async () => {
+    const order: string[] = [];
+    fetchMock.mockImplementation(async (url) => {
+      order.push(String(url));
+      return new Response(null, { status: 204 });
+    });
+    messagingMock.deleteToken.mockImplementation(async () => {
+      order.push("deleteToken");
+    });
+    const { deleteAccount } = await import("../deleteAccount");
+    await deleteAccount();
+
+    // 알림 저장소(DELETE /account)를 지운 다음에 기기 토큰을 지운다.
+    expect(order.indexOf("deleteToken")).toBeGreaterThan(order.indexOf("https://rem.example/account"));
+  });
+
+  it("기기 토큰 삭제가 실패해도 탈퇴는 계속 진행한다", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+    messagingMock.deleteToken.mockRejectedValue(new Error("device"));
+    const { deleteAccount } = await import("../deleteAccount");
+    await deleteAccount();
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toContain("https://bill.example/account/delete");
+    expect(mockClearSnapshot).toHaveBeenCalledWith("u1");
   });
 
   it("앱 스냅샷에만 남은 고아 이벤트 id도 함께 보내고(중복 없이), 성공하면 스냅샷을 지운다", async () => {
