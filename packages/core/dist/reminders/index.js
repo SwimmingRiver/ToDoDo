@@ -39,3 +39,39 @@ export const reminderSettingLabel = (setting) => {
         return "하루 전";
     return `${setting}분 전`;
 };
+/** 설정 select 옵션(기본값 선택지 없음). 할 일 폼은 앞에 "default"를 따로 붙인다. */
+export const REMINDER_SETTING_OPTIONS = [
+    { value: "off", label: reminderSettingLabel("off") },
+    ...REMINDER_OFFSETS.map((offset) => ({ value: String(offset), label: reminderSettingLabel(offset) })),
+];
+/** 저장된 값 → select 값. 없음/null/이상한 값은 "default". */
+export const toReminderChoice = (value) => isReminderSetting(value) ? String(value) : "default";
+/** select 값 → 저장할 값. "default"와 이상한 값은 null(= 사용자 기본값을 따름). */
+export const parseReminderSetting = (value) => {
+    if (value === "off")
+        return "off";
+    if (value === undefined || value === "" || value === "default")
+        return null;
+    const n = Number(value);
+    return isReminderSetting(n) ? n : null;
+};
+const MINUTE = 60000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+/** 알림 기록용 상대 시각. 기록은 최대 7일이라 주·월 단위는 필요 없다. */
+export const formatTimeAgo = (sentAt, now) => {
+    const ago = now - sentAt;
+    if (ago < MINUTE)
+        return "방금";
+    if (ago < HOUR)
+        return `${Math.floor(ago / MINUTE)}분 전`;
+    if (ago < DAY)
+        return `${Math.floor(ago / HOUR)}시간 전`;
+    return `${Math.floor(ago / DAY)}일 전`;
+};
+/** 알림 예약에 영향을 주는 값만 담은 지문. 제목 변경 같은 무관한 수정은 신호를 보내지 않는다. */
+export const buildReminderFingerprint = (todos) => todos
+    .filter((t) => !!t.dueAt)
+    .map((t) => [t.id, t.dueAt, t.status, t.archived ? 1 : 0, t.reminderOffsetMinutes ?? "default"].join("|"))
+    .sort()
+    .join(";");

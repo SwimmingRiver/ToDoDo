@@ -16,3 +16,23 @@ export declare const resolveReminderOffset: (todoValue: unknown, userDefault: un
 export declare const computeFireAt: (dueAtIso: string, offset: ReminderOffsetMinutes) => number;
 export declare const reminderBody: (offset: ReminderOffsetMinutes) => string;
 export declare const reminderSettingLabel: (setting: ReminderSetting) => string;
+/** 설정 select 옵션(기본값 선택지 없음). 할 일 폼은 앞에 "default"를 따로 붙인다. */
+export declare const REMINDER_SETTING_OPTIONS: {
+    value: string;
+    label: string;
+}[];
+/** 저장된 값 → select 값. 없음/null/이상한 값은 "default". */
+export declare const toReminderChoice: (value: unknown) => string;
+/** select 값 → 저장할 값. "default"와 이상한 값은 null(= 사용자 기본값을 따름). */
+export declare const parseReminderSetting: (value: string | undefined) => ReminderSetting | null;
+/** 알림 기록용 상대 시각. 기록은 최대 7일이라 주·월 단위는 필요 없다. */
+export declare const formatTimeAgo: (sentAt: number, now: number) => string;
+export type ReminderFingerprintTodo = {
+    id: string;
+    dueAt: string | null;
+    status: string;
+    archived?: boolean;
+    reminderOffsetMinutes?: unknown;
+};
+/** 알림 예약에 영향을 주는 값만 담은 지문. 제목 변경 같은 무관한 수정은 신호를 보내지 않는다. */
+export declare const buildReminderFingerprint: (todos: ReminderFingerprintTodo[]) => string;
