@@ -7,6 +7,7 @@ export {
   type ReminderHistory,
   type ReminderHistoryItem,
 } from "./api/reminderProxyApi";
+export { cancelLegacyLocalRemindersOnce } from "./legacyLocalReminders";
 export { getReminderDefault, setReminderDefault } from "./api/reminderSettingsApi";
 export { useReminderDefault, useSetReminderDefault } from "./hooks/useReminderSettings";
 export {

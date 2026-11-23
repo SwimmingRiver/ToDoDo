@@ -25,8 +25,10 @@ import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 import { resumePendingPurchases } from "../premium/iap/resumePending";
 import { useSyncTodosToCalendar } from "../calendarIntegration/useSyncTodosToCalendar";
 import { hideSplash } from "../shared/lib/splash";
+import { reportError } from "../shared/lib/sentry";
 import {
   ReminderBannerProvider,
+  cancelLegacyLocalRemindersOnce,
   useForegroundReminders,
   useNotificationNavigation,
   usePushTokenSync,
@@ -142,6 +144,10 @@ const CalendarSync = () => {
 
 // 서버 푸시 알림: 토큰 동기화, 예약 갱신 신호, 포그라운드 배너, 알림 탭 이동. 로그인 중에만 돈다.
 const ReminderSync = () => {
+  // 푸시로 옮기기 전 예약해 둔 로컬 알림이 푸시와 겹쳐 울리지 않도록 첫 실행에 한 번 취소한다.
+  useEffect(() => {
+    cancelLegacyLocalRemindersOnce().catch((error) => reportError(error, "reminder"));
+  }, []);
   usePushTokenSync();
   useReminderRefresh();
   useForegroundReminders();

@@ -23,11 +23,6 @@ jest.mock("@react-native-google-signin/google-signin", () => ({
   GoogleSignin: { signOut: () => mockGoogleSignOut() },
 }));
 
-const mockCancelAll = jest.fn<() => Promise<void>>();
-jest.mock("expo-notifications", () => ({
-  cancelAllScheduledNotificationsAsync: () => mockCancelAll(),
-}));
-
 const makeQueryClient = () => {
   const clear = jest.fn(() => {
     calls.push("clear");
@@ -39,9 +34,6 @@ describe("signOut", () => {
   beforeEach(() => {
     calls.length = 0;
     jest.spyOn(console, "warn").mockImplementation(() => {});
-    mockCancelAll.mockReset().mockImplementation(async () => {
-      calls.push("cancelNotifications");
-    });
     mockGoogleSignOut.mockReset().mockImplementation(async () => {
       calls.push("googleSignOut");
       return null;
@@ -126,13 +118,13 @@ describe("signOut", () => {
     expect(mockFirebaseSignOut).toHaveBeenCalled();
   });
 
-  it("예약 알림 취소 → 푸시 해제 → 구글 로그아웃 → firebase 로그아웃 → 캐시 비우기 순서로 실행한다", async () => {
+  it("푸시 해제 → 구글 로그아웃 → firebase 로그아웃 → 캐시 비우기 순서로 실행한다", async () => {
     const { signOut } = await import("../signOut");
     const { client } = makeQueryClient();
 
     await signOut(client);
 
-    expect(calls).toEqual(["cancelNotifications", "releasePush", "googleSignOut", "firebaseSignOut", "clear"]);
+    expect(calls).toEqual(["releasePush", "googleSignOut", "firebaseSignOut", "clear"]);
     expect(mockFirebaseSignOut).toHaveBeenCalledWith(mockAuth);
   });
 
@@ -148,19 +140,6 @@ describe("signOut", () => {
     expect(clear).toHaveBeenCalled();
     // 구글 세션이 이미 없을 때도 나는 무해한 실패라 Sentry로 보내지 않는다.
     expect(sentryMock.captureException).not.toHaveBeenCalled();
-  });
-
-  it("예약 알림 취소가 실패해도 로그아웃은 진행한다", async () => {
-    sentryMock.captureException.mockClear();
-    mockCancelAll.mockRejectedValueOnce(new Error("notifications unavailable"));
-    const { signOut } = await import("../signOut");
-    const { client, clear } = makeQueryClient();
-
-    await signOut(client);
-
-    expect(mockFirebaseSignOut).toHaveBeenCalled();
-    expect(clear).toHaveBeenCalled();
-    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "auth" } });
   });
 
   it("firebase 로그아웃이 실패하면 오류를 던지고 캐시는 비우지 않는다", async () => {

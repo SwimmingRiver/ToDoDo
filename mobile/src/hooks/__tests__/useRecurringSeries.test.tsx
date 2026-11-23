@@ -12,8 +12,8 @@ jest.mock("@tododo/core", () => ({
   editRecurringSeries: jest.fn(() => Promise.resolve()),
   deleteRecurringSeries: jest.fn(() => Promise.resolve()),
 }));
-jest.mock("../../notifications/scheduleReminder", () => ({
-  scheduleReminder: jest.fn(() => Promise.resolve(null)),
+jest.mock("expo-notifications", () => ({
+  scheduleNotificationAsync: jest.fn(),
 }));
 
 const setup = () => {
@@ -43,7 +43,7 @@ const input = {
 describe("반복 시리즈 훅", () => {
   it("useCreateRecurringTodo: core 호출 + 무효화 + 알림 미예약", async () => {
     const { createRecurringTodo } = await import("@tododo/core");
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
+    const Notifications = await import("expo-notifications");
     const { useCreateRecurringTodo } = await import("../useCreateRecurringTodo");
     const { invalidateSpy, wrapper } = setup();
     const { result } = await renderHook(() => useCreateRecurringTodo(), { wrapper });
@@ -51,7 +51,7 @@ describe("반복 시리즈 훅", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(createRecurringTodo).toHaveBeenCalledWith({}, "u1", input);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos", "u1"] });
-    expect(scheduleReminder).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 
   it("useEditRecurringSeries: core 호출 + 무효화", async () => {

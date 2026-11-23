@@ -25,6 +25,7 @@ jest.mock("../../reminders", () => ({
   useReminderRefresh: jest.fn(),
   useForegroundReminders: jest.fn(),
   useNotificationNavigation: jest.fn(),
+  cancelLegacyLocalRemindersOnce: jest.fn(() => Promise.resolve()),
 }));
 // 탭은 각 스택 컴포넌트를 렌더하고, 스택은 등록된 Screen(name/options)을 mockStackScreens에 모은다.
 const mockStackScreens: { name: string; options?: { title?: string } }[] = [];
