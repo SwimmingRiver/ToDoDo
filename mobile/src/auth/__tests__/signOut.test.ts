@@ -13,6 +13,11 @@ jest.mock("../../reminders/push/pushClient", () => ({
   disablePushOnThisDevice: (uid: string) => mockDisablePush(uid),
 }));
 
+const mockDismissAll = jest.fn<() => Promise<void>>();
+jest.mock("expo-notifications", () => ({
+  dismissAllNotificationsAsync: () => mockDismissAll(),
+}));
+
 const mockFirebaseSignOut = jest.fn<(auth: unknown) => Promise<void>>();
 jest.mock("firebase/auth", () => ({
   signOut: (auth: unknown) => mockFirebaseSignOut(auth),
@@ -44,7 +49,44 @@ describe("signOut", () => {
     mockDisablePush.mockReset().mockImplementation(async () => {
       calls.push("releasePush");
     });
+    mockDismissAll.mockReset().mockImplementation(async () => {
+      calls.push("dismissNotifications");
+    });
     mockAuth.currentUser = { uid: "u1" };
+  });
+
+  it("signOut dismisses delivered notifications so the next account cannot open them", async () => {
+    const { signOut } = await import("../signOut");
+    const { client } = makeQueryClient();
+
+    await signOut(client);
+
+    expect(mockDismissAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("signOut proceeds and reports when dismissing notifications fails", async () => {
+    sentryMock.captureException.mockClear();
+    mockDismissAll.mockRejectedValueOnce(new Error("native"));
+    const { signOut } = await import("../signOut");
+    const { client, clear } = makeQueryClient();
+
+    await signOut(client);
+
+    expect(mockFirebaseSignOut).toHaveBeenCalled();
+    expect(clear).toHaveBeenCalled();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+  });
+
+  it("skipPushRelease skips push release (account deletion already deleted the device token)", async () => {
+    const { signOut } = await import("../signOut");
+    const { client, clear } = makeQueryClient();
+
+    await signOut(client, { skipPushRelease: true });
+
+    expect(mockDisablePush).not.toHaveBeenCalled();
+    expect(mockDismissAll).toHaveBeenCalled();
+    expect(mockFirebaseSignOut).toHaveBeenCalled();
+    expect(clear).toHaveBeenCalled();
   });
 
   it("signOut releases push token before firebase signOut", async () => {
@@ -124,7 +166,7 @@ describe("signOut", () => {
 
     await signOut(client);
 
-    expect(calls).toEqual(["releasePush", "googleSignOut", "firebaseSignOut", "clear"]);
+    expect(calls).toEqual(["releasePush", "dismissNotifications", "googleSignOut", "firebaseSignOut", "clear"]);
     expect(mockFirebaseSignOut).toHaveBeenCalledWith(mockAuth);
   });
 

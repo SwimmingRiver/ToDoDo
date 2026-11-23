@@ -20,9 +20,9 @@ jest.mock("expo-crypto", () => ({}));
 jest.mock("firebase/auth", () => ({}));
 jest.mock("../../firebase", () => ({ auth: {} }));
 
-const mockSignOut = jest.fn<(client: QueryClient) => Promise<void>>();
+const mockSignOut = jest.fn<(client: QueryClient, options?: { skipPushRelease?: boolean }) => Promise<void>>();
 jest.mock("../../auth/signOut", () => ({
-  signOut: (client: QueryClient) => mockSignOut(client),
+  signOut: (...args: [QueryClient, { skipPushRelease?: boolean }?]) => mockSignOut(...args),
 }));
 
 const mockReportError = jest.fn();
@@ -156,7 +156,8 @@ describe("AccountScreen", () => {
       await pressAlertButton(alertSpy, "탈퇴하기");
 
       expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
-      expect(mockSignOut).toHaveBeenCalledWith(queryClient);
+      // 탈퇴가 이미 기기 토큰을 지웠다 — 삭제된 uid로 푸시 해제를 다시 하지 않는다.
+      expect(mockSignOut).toHaveBeenCalledWith(queryClient, { skipPushRelease: true });
     });
 
     it("자동 갱신 스토어 구독이 있으면 경고를 덧붙이고 구독 관리 버튼을 낸다", async () => {

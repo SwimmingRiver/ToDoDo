@@ -76,7 +76,8 @@ export const AccountScreen = () => {
       return;
     }
     try {
-      await signOut(queryClient);
+      // 탈퇴가 이미 기기 토큰을 지웠으니 푸시 해제는 건너뛴다(삭제된 uid로 다시 요청하지 않는다).
+      await signOut(queryClient, { skipPushRelease: true });
     } catch {
       // 계정은 이미 삭제됐다. 세션만 남은 상태라 재실행하면 토큰 갱신에서 끊긴다.
       Alert.alert("탈퇴 완료", "앱을 다시 실행해 주세요.");
