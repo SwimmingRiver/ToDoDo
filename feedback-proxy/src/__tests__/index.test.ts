@@ -26,6 +26,7 @@ describe("feedback-proxy fetch", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
     expect(res.headers.get("Access-Control-Allow-Headers")).toBe("Authorization, Content-Type");
     expect(res.headers.get("Access-Control-Allow-Methods")).toBe("POST, OPTIONS");
+    expect(res.headers.get("Access-Control-Max-Age")).toBe("86400");
   });
 
   it("POST /feedback을 핸들러로 보내고 CORS를 붙인다", async () => {

@@ -9,6 +9,7 @@ const withCors = (response: Response, requestOrigin: string | null, env: Env): R
   }
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
   headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  headers.set("Access-Control-Max-Age", "86400");
   return new Response(response.body, { status: response.status, headers });
 };
 
