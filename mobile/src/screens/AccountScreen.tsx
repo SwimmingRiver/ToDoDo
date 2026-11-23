@@ -12,6 +12,7 @@ import { PremiumSection } from "../premium/PremiumSection";
 import { useEntitlement } from "../premium/useEntitlement";
 import { purchaseClient } from "../premium/iap/purchaseClient";
 import { reportError } from "../shared/lib/sentry";
+import { FeedbackModal } from "../feedback";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
@@ -34,6 +35,7 @@ export const AccountScreen = () => {
   const queryClient = useQueryClient();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // 성공하면 RootNavigator가 user=null을 받아 로그인 화면으로 바꾸므로 여기서 이동하지 않는다.
   const runSignOut = async () => {
@@ -111,6 +113,7 @@ export const AccountScreen = () => {
         <Text style={styles.email}>{user?.email ?? ""}</Text>
       </View>
       <PremiumSection />
+      <Button title="의견 보내기" variant="outline" onPress={() => setFeedbackOpen(true)} />
       <Button
         title="로그아웃"
         variant="outline"
@@ -123,6 +126,7 @@ export const AccountScreen = () => {
         onPress={handleDeletePress}
         disabled={isSigningOut || isDeleting}
       />
+      <FeedbackModal visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </SafeAreaView>
   );
 };

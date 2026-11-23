@@ -43,6 +43,7 @@ eas build --platform android --profile production
 | `EXPO_PUBLIC_BILLING_PROXY_URL` | 인앱결제 검증, 탈퇴 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_CALENDAR_PROXY_URL` | 구글 캘린더 연동, 탈퇴 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_AI_PROXY_URL` | AI 할 일 플랜 | 등록됨 | 등록됨 |
+| `EXPO_PUBLIC_FEEDBACK_PROXY_URL` | 의견 보내기 | 미등록 | 미등록 |
 | `EXPO_PUBLIC_REMINDER_PROXY_URL` | 탈퇴 시 알림 정리 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_SENTRY_DSN` | Sentry | — | 등록됨 |
 | `SENTRY_AUTH_TOKEN` (secret) | Sentry 소스맵 업로드 | — | 등록됨 |
