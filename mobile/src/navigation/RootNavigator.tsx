@@ -25,6 +25,14 @@ import { useStartupMaintenance } from "../maintenance/useStartupMaintenance";
 import { resumePendingPurchases } from "../premium/iap/resumePending";
 import { useSyncTodosToCalendar } from "../calendarIntegration/useSyncTodosToCalendar";
 import { hideSplash } from "../shared/lib/splash";
+import {
+  ReminderBannerProvider,
+  useForegroundReminders,
+  useNotificationNavigation,
+  usePushTokenSync,
+  useReminderRefresh,
+} from "../reminders";
+import { flushPendingTodoDetail, navigationRef } from "./navigationRef";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -132,6 +140,15 @@ const CalendarSync = () => {
   return null;
 };
 
+// 서버 푸시 알림: 토큰 동기화, 예약 갱신 신호, 포그라운드 배너, 알림 탭 이동. 로그인 중에만 돈다.
+const ReminderSync = () => {
+  usePushTokenSync();
+  useReminderRefresh();
+  useForegroundReminders();
+  useNotificationNavigation();
+  return null;
+};
+
 // 지난 실행에서 끝내지 못한 스토어 거래(검증 실패·앱 종료)를 로그인 직후 한 번 다시 검증한다.
 // 서버 검증에 ID 토큰이 필요해 로그인 분기 안에서 마운트한다. resumePendingPurchases는 던지지 않는다.
 const PendingPurchaseResume = () => {
@@ -159,14 +176,19 @@ export const RootNavigator = () => {
     );
   }
 
-  return <NavigationContainer>{user ? (
-        <>
+  return (
+    <NavigationContainer ref={navigationRef} onReady={flushPendingTodoDetail}>
+      {user ? (
+        <ReminderBannerProvider>
           <EntitlementSync />
           <CalendarSync />
+          <ReminderSync />
           <PendingPurchaseResume />
           <MainTabs />
-        </>
+        </ReminderBannerProvider>
       ) : (
         <LoginScreen />
-      )}</NavigationContainer>;
+      )}
+    </NavigationContainer>
+  );
 };
