@@ -4,6 +4,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   GoogleAuthProvider,
+  OAuthProvider,
   connectAuthEmulator,
 } from "firebase/auth";
 import { app, isEmulator } from "./firebaseApp";
@@ -30,6 +31,9 @@ export const auth = initializeAuth(app, {
   ],
 });
 export const googleProvider = new GoogleAuthProvider();
+export const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
 
 if (isEmulator) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
