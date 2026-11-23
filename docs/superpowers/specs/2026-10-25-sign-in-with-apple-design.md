@@ -25,7 +25,8 @@
 | --- | --- |
 | 플랫폼 | 웹 + iOS. Android는 다음 단계(넣기로 함) — 진입점을 분리해 나중에 웹 방식으로 붙일 수 있게 둔다 |
 | 기존 로그인 | 구글 로그인 유지 |
-| 같은 이메일 충돌 | **자동 연결에 맡긴다.** Firebase 계정 연결 설정("동일한 이메일을 사용하는 계정 연결")에서 Apple·구글 둘 다 인증된 이메일을 넘기므로 양방향 모두 오류 없이 같은 uid에 붙는다(실측). 연결 안내 창·`linkWithCredential` 흐름은 만들지 않는다. 혹시 `account-exists-with-different-credential`이 오면(설정 변경 등) "이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요" 안내만 띄운다(사용자 결정 2026-11-23). 이메일 가리기(대리 주소) 사용자는 별도 계정이 되는 것을 받아들인다 |
+| 같은 이메일 충돌 | **자동 연결에 맡긴다.** Firebase 계정 연결 설정("동일한 이메일을 사용하는 계정 연결")에서 Apple·구글 둘 다 인증된 이메일을 넘기므로 양방향 모두 오류 없이 같은 uid에 붙는다(실측). 연결 안내 창·`linkWithCredential` 흐름은 만들지 않는다. 막기(연결 후 `unlink`)는 연결이 이미 서버에서 끝난 뒤라 불안정하고, 설정을 "제공자별 계정"으로 바꾸면 계정이 갈라지므로 택하지 않는다. 대신 **연결된 사실을 한 번 알린다**(아래 "연결 안내 토스트", 사용자 결정 2026-11-23). 혹시 `account-exists-with-different-credential`이 오면(설정 변경 등) "이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요" 안내만 띄운다(사용자 결정 2026-11-23). 이메일 가리기(대리 주소) 사용자는 별도 계정이 되는 것을 받아들인다 |
+| 이메일 가리기 안내 | 로그인 버튼 아래 한 줄: "전에 Google로 가입했다면 Google로 로그인해 주세요"(문구는 구현 때 다듬음). 구글 가입자가 Apple "이메일 가리기"로 새 빈 계정을 만드는 사고 예방(사용자 결정 2026-11-23). 웹·앱 공통 |
 | 이름 순서 | Apple이 성·이름을 준 로그인에서는 우리가 직접 이름을 만들어 `updateProfile`로 저장한다. 한글이 들어 있으면 "성이름"(공백 없음), 아니면 "이름 성". Firebase가 만든 값("이름 성")을 그대로 두지 않는다(사용자 결정 2026-11-23) |
 | 탈퇴 시 Apple 해지 | 탈퇴할 때 Apple 재인증을 한 번 더 받아 `revokeAccessToken`. 서버에 Apple 토큰·비밀키를 저장하지 않는다 |
 | iOS 로그인 방식 | `expo-apple-authentication`(네이티브 창). 앱 안 웹 팝업은 쓰지 않음 |
@@ -51,6 +52,7 @@
 
 - `formatAppleDisplayName(givenName, familyName)`: 둘 중 하나에 한글이 있으면 `familyName + givenName`, 아니면 `"givenName familyName"`. 한쪽만 있으면 그 값, 둘 다 비면 `null`(이름을 바꾸지 않음). 앞뒤 공백 정리.
 - `isAccountExistsError(code)`: `auth/account-exists-with-different-credential` 판정(웹·앱 오류 문구 분기용).
+- `shouldShowLinkedNotice(providerIds, seenKey)`: 로그인 제공자가 2개 이상이고 이 조합(정렬한 제공자 목록)을 아직 안내하지 않았으면 true. 저장소는 웹 localStorage / 앱 AsyncStorage를 각자 주입.
 
 ### 웹 (`client`)
 
@@ -58,7 +60,8 @@
 | --- | --- |
 | `src/shared/lib/firebase.ts` | `appleProvider = new OAuthProvider("apple.com")`, scope `email`·`name`. `initializeAuth`(팝업 처리기 없이 초기화)는 그대로 둔다 |
 | `src/features/auth/api/` (신규) | 로그인 처리. 지금 `loginPage.tsx` 안에 있는 `signInWithPopup` 호출을 옮긴다. Apple 로그인 뒤 이름 보정(아래 "이름·프로필 사진") |
-| `src/features/auth/pages/loginPage.tsx` | 구글 버튼 아래 "Apple로 로그인" 버튼. `account-exists` 오류면 전용 안내 문구 |
+| `src/features/auth/pages/loginPage.tsx` | 구글 버튼 아래 "Apple로 로그인" 버튼과 이메일 가리기 안내 한 줄. `account-exists` 오류면 전용 안내 문구 |
+| 연결 안내 토스트 | 로그인 직후 `shouldShowLinkedNotice`가 true면 기존 토스트로 "이제 Google·Apple 둘 다로 로그인할 수 있어요" 한 번. 키는 uid별 |
 | `src/features/account/api/deleteAccount.ts` | 0단계(Apple 해지) 추가 |
 | 탈퇴 창(`accountDeletionDialog`) | Apple 사용자에게 "Apple 확인 창이 한 번 더 뜬다" 안내. 기존 App Store 구독 경고와 함께 |
 | 헤더(`layouts/header/header.tsx`)·모바일 헤더(`layouts/mobileHeader/mobileHeader.tsx`)·드로어(`layouts/snb/mobileDrawer.tsx`) | 이름·사진 대체 표시. 지금은 셋 다 `photoURL \|\| ""`라 사진 없으면 깨진 이미지 |
@@ -76,7 +79,8 @@ Apple 버튼은 Apple 디자인 가이드를 따른다: 검정 바탕 + 흰 Appl
 | `package.json` | `expo-apple-authentication`, `expo-crypto`(nonce SHA-256) 추가 — `npx expo install`로 Expo 57 호환 버전 |
 | `app.json` | `ios.usesAppleSignIn: true`, plugins에 `expo-apple-authentication`. Sentry(#208)·출시 빌드 설정(#211)은 이미 병합됨 |
 | `src/auth/appleSignIn.ts` (신규) | 네이티브 로그인 → `OAuthProvider("apple.com").credential({ idToken, rawNonce })` → `signInWithCredential`. 기존 `googleSignIn.ts`와 같은 모양. 네이티브 결과의 `fullName.givenName`·`familyName`이 있으면 `formatAppleDisplayName`으로 만들어 `updateProfile` |
-| 로그인 화면 | Apple 버튼(iOS에서만, `AppleAuthentication.isAvailableAsync()`로 확인). `account-exists` 오류면 웹과 같은 안내 문구 |
+| 로그인 화면 | Apple 버튼(iOS에서만, `AppleAuthentication.isAvailableAsync()`로 확인)과 이메일 가리기 안내 한 줄. `account-exists` 오류면 웹과 같은 안내 문구 |
+| 연결 안내 | 웹과 같은 조건·문구, 앱 토스트(없으면 Alert)로 한 번 |
 | `src/account/deleteAccount.ts` | 0단계(Apple 해지) 추가. 지금 흐름(캘린더 묶음 해제 → reminder-proxy → billing-proxy `/account/delete`(Google Play 구독 해지 포함)) 앞에 둔다 |
 | 계정 화면 탈퇴 확인 | Apple 사용자 안내 문구(웹과 같은 내용) |
 
@@ -120,7 +124,10 @@ nonce: 재생 공격 방지를 위해 무작위 nonce를 만들어 SHA-256 해�
 
 전제: Firebase 콘솔 Authentication → 설정 → 사용자 계정 연결이 "동일한 이메일을 사용하는 계정 연결"이어야 한다. 이 설정을 바꾸면 이 설계의 전제가 깨진다.
 
-우리 코드가 할 일은 `account-exists-with-different-credential`을 받았을 때 전용 안내 문구를 띄우는 것뿐이다(웹·앱 같음). 이 오류는 지금 설정에서는 실측상 나오지 않는다.
+우리 코드가 할 일:
+
+1. **연결 안내 토스트.** 로그인 직후 `providerData`의 제공자가 2개 이상이고, 이 기기에서 이 uid의 그 조합을 아직 안내하지 않았으면 "이제 Google·Apple 둘 다로 로그인할 수 있어요"를 한 번 보여 주고 기록한다. 기기별 기록이라 다른 기기에서도 한 번씩 뜰 수 있으므로 문구는 사건("연결됐어요")이 아니라 상태("둘 다로 로그인할 수 있어요")로 쓴다. 이유: 사용자가 다른 버튼으로 들어왔는데 기존 할 일이 보이는 까닭을 알고, 탈퇴 때 Apple 확인 창이 뜨는 것도 덜 놀랍다.
+2. **`account-exists-with-different-credential` 방어 문구.** 지금 설정에서는 실측상 나오지 않는다(웹·앱 같음).
 
 ### 탈퇴
 
@@ -149,8 +156,8 @@ nonce: 재생 공격 방지를 위해 무작위 nonce를 만들어 SHA-256 해�
 
 | 대상 | 위치 | 확인 |
 | --- | --- | --- |
-| 이름 만들기·오류 판정 | `packages/core` | 한글 → 성이름(공백 없음), 영문 → 이름 성, 한쪽만, 둘 다 빔 → null, 공백 정리. `account-exists` 판정 |
-| 웹 로그인 | client vitest | Apple 버튼 → 팝업 처리기 전달, `_tokenResponse`에 이름 있으면 `updateProfile`(한글 순서), 없으면 호출 안 함. `account-exists` 오류 → 전용 문구. 팝업 닫기 시 오류 메시지 없음 |
+| 이름 만들기·오류 판정·연결 안내 | `packages/core` | 한글 → 성이름(공백 없음), 영문 → 이름 성, 한쪽만, 둘 다 빔 → null, 공백 정리. `account-exists` 판정. 연결 안내: 제공자 1개 → false, 2개 처음 → true, 같은 조합 두 번째 → false, 순서만 다른 조합 → false |
+| 웹 로그인 | client vitest | Apple 버튼 → 팝업 처리기 전달, `_tokenResponse`에 이름 있으면 `updateProfile`(한글 순서), 없으면 호출 안 함. `account-exists` 오류 → 전용 문구. 팝업 닫기 시 오류 메시지 없음. 제공자 2개 첫 로그인 → 토스트 1번, 재로그인 → 없음 |
 | 웹 탈퇴 | client vitest(기존 `deleteAccount` 테스트 확장) | Apple 사용자만 0단계, 해지 실패 시 1~3단계 미호출, 구글 사용자는 기존과 동일 |
 | 앱 로그인·탈퇴 | mobile jest | 웹과 같은 경우 + Apple 버튼이 iOS에서만 보임 + `fullName`으로 이름 저장 |
 | 이름·사진 대체 | client vitest | 이니셜 아바타, 이메일 앞부분 → "사용자" |
@@ -160,7 +167,7 @@ nonce: 재생 공격 방지를 위해 무작위 nonce를 만들어 SHA-256 해�
 ### 실기 확인
 
 - [ ] 웹: Apple로 새로 가입 → 로그인 → 헤더에 "성이름" 표시
-- [ ] 웹: 구글 계정에 Apple 처음 연결 → 이름이 뒤집히지 않음
+- [ ] 웹: 구글 계정에 Apple 처음 연결 → 이름이 뒤집히지 않음 + 연결 안내 토스트 1번, 다시 로그인하면 안 뜸
 - [ ] iOS: Apple로 새로 가입 → 이름 저장 → 같은 Apple 계정으로 웹 로그인 시 같은 데이터
 - [x] 구글로 가입된 이메일로 Apple 로그인 → 같은 계정에 연결(2026-11-23 웹, 임시 코드)
 - [x] 반대 방향: Apple 먼저 가입 → 같은 Gmail로 구글 로그인 → 덮어쓰기 없이 연결(2026-11-23 웹)
@@ -203,3 +210,4 @@ nonce: 재생 공격 방지를 위해 무작위 nonce를 만들어 SHA-256 해�
 - 웹에서도 이름이 채워지지만 한국어 순서가 뒤집히고, Apple 첫 연결 시 구글 이름을 덮어씀 → `formatAppleDisplayName` + `updateProfile` 추가
 - 웹 탈퇴 해지 토큰은 `credentialFromResult(...).accessToken`으로 받음을 확인. iOS 토큰 형태만 남음
 - 체험 재지급 방지·4판은 #214·#217로 끝나 범위 밖 목록에서 뺌
+- 자동 연결을 조용히 두지 않고 한 번 안내(토스트), 막기는 기각(서버에서 이미 연결된 뒤라 unlink가 불안정, 설정 변경은 계정 분리). 이메일 가리기로 인한 빈 계정 사고 예방 안내 한 줄 추가
