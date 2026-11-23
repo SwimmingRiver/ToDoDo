@@ -40,4 +40,9 @@ const StatusSelect = styled.select`
   border-radius: ${radius.md};
 `;
 
-export { Card, Meta, Content, StatusSelect };
+const ErrorText = styled.span`
+  font-size: 12px;
+  color: ${colors.danger.text};
+`;
+
+export { Card, Meta, Content, StatusSelect, ErrorText };

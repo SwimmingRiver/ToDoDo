@@ -98,4 +98,23 @@ describe("FeedbackAdminPage", () => {
     renderPage();
     expect(await screen.findByText("의견이 없습니다")).toBeTruthy();
   });
+
+  it("목록 조회가 실패하면 오류 안내를 표시하고 빈 목록 문구는 숨긴다", async () => {
+    m.listFeedback.mockRejectedValue(new Error("permission-denied"));
+    renderPage();
+    expect(
+      await screen.findByText("의견을 불러오지 못했습니다. 다시 로그인하거나 잠시 후 새로고침해 주세요."),
+    ).toBeTruthy();
+    expect(screen.queryByText("의견이 없습니다")).toBeNull();
+  });
+
+  it("상태 변경이 실패하면 항목 아래에 안내를 표시하고 다음 시도 때 지운다", async () => {
+    m.updateFeedbackStatus.mockRejectedValueOnce(new Error("fail"));
+    renderPage();
+    await screen.findByText("새 내용입니다");
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "planned" } });
+    expect(await screen.findByText("상태를 바꾸지 못했습니다")).toBeTruthy();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "done" } });
+    await waitFor(() => expect(screen.queryByText("상태를 바꾸지 못했습니다")).toBeNull());
+  });
 });

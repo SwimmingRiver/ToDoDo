@@ -1,6 +1,6 @@
 import { FEEDBACK_STATUS_LABEL, type FeedbackItem, type FeedbackStatus } from "../api";
 import { useUpdateFeedbackStatus } from "../hooks/useUpdateFeedbackStatus";
-import { Card, Meta, Content, StatusSelect } from "./feedbackAdminItem.styles";
+import { Card, Meta, Content, StatusSelect, ErrorText } from "./feedbackAdminItem.styles";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -14,7 +14,7 @@ const formatCreatedAt = (iso: string) => {
 const STATUSES = Object.keys(FEEDBACK_STATUS_LABEL) as FeedbackStatus[];
 
 const FeedbackAdminItem = ({ item }: { item: FeedbackItem }) => {
-  const { mutate, isPending } = useUpdateFeedbackStatus();
+  const { mutate, isPending, isError } = useUpdateFeedbackStatus();
   return (
     <Card>
       <Meta>
@@ -35,6 +35,7 @@ const FeedbackAdminItem = ({ item }: { item: FeedbackItem }) => {
           </option>
         ))}
       </StatusSelect>
+      {isError && <ErrorText role="alert">상태를 바꾸지 못했습니다</ErrorText>}
     </Card>
   );
 };
