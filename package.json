@@ -10,7 +10,8 @@
     "grant:entitlement": "tsx scripts/grantEntitlement.ts",
     "audit:recurring": "tsx scripts/auditRecurringData.ts",
     "test:scripts": "tsx --test scripts/lib/*.test.ts",
-    "audit:done-at": "tsx scripts/auditDoneAtData.ts"
+    "audit:done-at": "tsx scripts/auditDoneAtData.ts",
+    "backfill:done-at": "tsx scripts/backfillDoneAt.ts"
   },
   "repository": {
     "type": "git",

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { auditDoneAt, toAuditTodo } from "./doneAtAudit";
+import { auditDoneAt, planDoneAtBackfill, toAuditTodo } from "./doneAtAudit";
 
 const base = {
   userId: "u1",
@@ -78,4 +78,19 @@ test("영향받은 사용자 수와, done 전부/절반 이상이 깨진 사용�
   assert.equal(report.users.affected, 3);
   assert.equal(report.users.allDoneBroken, 1);
   assert.equal(report.users.halfOrMoreBroken, 1);
+});
+
+test("백필 계획: done인데 doneAt이 깨진 문서만 doneAt=updatedAt으로 채우고, updatedAt도 없으면 건너뛴다", () => {
+  const { writes, skipped } = planDoneAtBackfill([
+    make("ok"), // 정상 → 대상 아님
+    make("todo-null", { status: "todo", doneAt: null }), // done 아님 → 대상 아님
+    make("fix-1", { doneAt: null, updatedAt: "2026-09-01T00:00:00.000Z" }),
+    make("fix-2", { doneAt: "", updatedAt: "2026-10-01T00:00:00.000Z" }),
+    make("no-updated", { doneAt: null, updatedAt: null }),
+  ]);
+  assert.deepEqual(writes, [
+    { id: "fix-1", doneAt: "2026-09-01T00:00:00.000Z" },
+    { id: "fix-2", doneAt: "2026-10-01T00:00:00.000Z" },
+  ]);
+  assert.deepEqual(skipped, ["no-updated"]);
 });

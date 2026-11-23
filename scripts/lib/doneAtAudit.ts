@@ -115,3 +115,17 @@ export const auditDoneAt = (todos: DoneAtAuditTodo[]) => {
     },
   };
 };
+
+/**
+ * 백필 계획: done인데 doneAt이 정상이 아닌 문서에 doneAt=updatedAt을 채운다.
+ * updatedAt은 완료 이후 수정이 있었다면 실제 완료보다 늦지만, 남아 있는 값 중 가장 가깝다.
+ * updatedAt도 깨진 문서는 지어낼 값이 없어 건너뛴다(skipped로 보고).
+ */
+export const planDoneAtBackfill = (todos: DoneAtAuditTodo[]) => {
+  const targets = todos.filter((t) => t.status === "done" && t.doneAtState !== "ok");
+  const writes = targets
+    .filter((t) => isIsoDate(t.updatedAt))
+    .map((t) => ({ id: t.id, doneAt: t.updatedAt as string }));
+  const skipped = targets.filter((t) => !isIsoDate(t.updatedAt)).map((t) => t.id);
+  return { writes, skipped };
+};
