@@ -1,6 +1,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { isAppleUser, revokeAppleSignIn } from "../auth/appleSignIn";
+import { needsAppleRevoke, revokeAppleSignIn } from "../auth/appleSignIn";
 import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
 import { disconnectInChunks } from "@tododo/core/dist/calendarSync/index.js";
 
@@ -50,7 +50,7 @@ export const deleteAccount = async (): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
   // Apple 토큰부터 해지한다 — 실패하거나 창을 닫으면 아무것도 지우지 않고 멈춘다.
-  if (isAppleUser(user)) await revokeAppleSignIn();
+  if (needsAppleRevoke(user)) await revokeAppleSignIn();
   const idToken = await user.getIdToken();
 
   const googleEventIds = await collectGoogleEventIds(user.uid);

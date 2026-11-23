@@ -6,8 +6,14 @@ import { Platform } from "react-native";
 import { formatAppleDisplayName } from "@tododo/core/dist/auth/index.js";
 import { auth } from "../firebase";
 
-export const isAppleUser = (user: Pick<User, "providerData">): boolean =>
+const isAppleUser = (user: Pick<User, "providerData">): boolean =>
   user.providerData.some((p) => p.providerId === "apple.com");
+
+// 탈퇴 때 Apple 토큰 해지(확인 창)가 필요한지. 탈퇴 로직과 확인 창 안내가 같은 조건을 쓴다.
+// Android는 Apple 창을 띄울 수 없어 해지를 건너뛴다 — Apple ID의 'Apple로 로그인' 목록에는 남을 수 있음
+// (웹에서 탈퇴하면 해지됨), 스펙상 Android Apple 로그인은 범위 밖.
+export const needsAppleRevoke = (user: Pick<User, "providerData">): boolean =>
+  Platform.OS === "ios" && isAppleUser(user);
 
 // Apple 로그인은 iOS에서만 제공한다.
 export const isAppleSignInAvailable = async (): Promise<boolean> =>

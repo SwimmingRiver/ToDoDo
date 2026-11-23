@@ -343,6 +343,18 @@ describe("AccountScreen", () => {
       );
     });
 
+    it("Android에서는 Apple 연결 계정이어도 확인 창 안내를 붙이지 않는다", async () => {
+      mockProviderIds = ["apple.com", "google.com"];
+      const restore = jest.replaceProperty(Platform, "OS", "android");
+      try {
+        await renderScreen();
+        await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+        expect(alertSpy).toHaveBeenLastCalledWith("회원 탈퇴", DELETE_MESSAGE, expect.any(Array));
+      } finally {
+        restore.restore();
+      }
+    });
+
     it("Apple 확인 창을 닫으면 실패 안내 없이 원래 상태로 돌아간다", async () => {
       mockProviderIds = ["apple.com"];
       mockDeleteAccount.mockRejectedValueOnce(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" }));

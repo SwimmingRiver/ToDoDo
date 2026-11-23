@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
+import { Platform } from "react-native";
 
 const mockGetIdToken = jest.fn<() => Promise<string>>();
 let mockProviderIds: string[] = ["google.com"];
@@ -199,6 +200,24 @@ describe("deleteAccount", () => {
       expect(mockRevokeAccessToken).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
     });
+  });
+
+  it("Android에서는 Apple 연결 계정도 해지를 건너뛰고 정상 순서로 탈퇴한다", async () => {
+    mockProviderIds = ["apple.com", "google.com"];
+    const restore = jest.replaceProperty(Platform, "OS", "android");
+    try {
+      const { deleteAccount } = await import("../deleteAccount");
+      await deleteAccount();
+      expect(mockSignInAsync).not.toHaveBeenCalled();
+      expect(mockRevokeAccessToken).not.toHaveBeenCalled();
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+        "https://cal.example/disconnect",
+        "https://rem.example/account",
+        "https://bill.example/account/delete",
+      ]);
+    } finally {
+      restore.restore();
+    }
   });
 
   it("구글 사용자는 Apple 확인 창을 열지 않는다", async () => {

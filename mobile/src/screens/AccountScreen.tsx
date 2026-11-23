@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
 import { deleteAccount } from "../account/deleteAccount";
-import { isAppleUser } from "../auth/appleSignIn";
+import { needsAppleRevoke } from "../auth/appleSignIn";
 import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { PremiumSection } from "../premium/PremiumSection";
@@ -85,7 +85,7 @@ export const AccountScreen = () => {
       hasPaddleSubscription && PADDLE_NOTICE,
       appleRenewing && APPLE_WARNING,
       googleRenewing && GOOGLE_NOTICE,
-      !!user && isAppleUser(user) && APPLE_SIGN_IN_NOTICE,
+      !!user && needsAppleRevoke(user) && APPLE_SIGN_IN_NOTICE,
     ]
       .filter(Boolean)
       .join("\n\n");
