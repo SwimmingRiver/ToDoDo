@@ -81,6 +81,9 @@ export const scrubEvent = (event: SentryErrorEvent): SentryErrorEvent => {
     message: event.message,
     exception: event.exception,
     fingerprint: event.fingerprint,
+    // 소스맵을 debug id로 매칭하는 데 필요하다(SDK가 beforeSend 전에 채운다). 번들 URL·id뿐이다.
+    // 배포 소스맵은 debug id로만 등록돼(업로드 이름 ~/<debugId>-N.js) 이게 없으면 압축 위치만 보인다.
+    debug_meta: event.debug_meta,
     tags: event.tags,
     sdk: event.sdk,
   };
