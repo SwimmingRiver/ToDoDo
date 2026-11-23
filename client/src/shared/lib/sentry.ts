@@ -56,6 +56,7 @@ const scrubBreadcrumb = (crumb: Breadcrumb): Breadcrumb => ({
  *
  * 허용 필드:
  * - message, exception(에러 메시지/스택트레이스): 코드 위치 파악에 필요한 정보이며 사용자 입력이 아니다.
+ * - debug_meta: 소스맵 매칭용 debug id + 번들 URL. 둘 다 공개 번들에 이미 들어 있는 값이며 사용자 입력이 아니다.
  * - request.url(쿼리스트링 제거): 어떤 페이지에서 에러가 났는지 파악하기 위함.
  * - request.headers["User-Agent"]: Sentry 서버가 browser/os를 파싱하는 원천. 나머지 헤더는 차단.
  * - contexts.browser / contexts.os: Sentry가 기본 수집하는 환경 정보, PII 아님.
@@ -81,6 +82,9 @@ export const scrubEvent = (event: SentryErrorEvent): SentryErrorEvent => {
     message: event.message,
     exception: event.exception,
     fingerprint: event.fingerprint,
+    // 소스맵을 debug id로 매칭하는 데 필요하다(SDK가 beforeSend 전에 채운다). 번들 URL·id뿐이다.
+    // 배포 소스맵은 debug id로만 등록돼(업로드 이름 ~/<debugId>-N.js) 이게 없으면 압축 위치만 보인다.
+    debug_meta: event.debug_meta,
     tags: event.tags,
     sdk: event.sdk,
   };
