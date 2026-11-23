@@ -3,9 +3,19 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { Alert, Platform, type AlertButton } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+let mockProviderIds: string[] = ["google.com"];
 jest.mock("../../auth/useAuthState", () => ({
-  useAuthState: () => ({ user: { email: "me@example.com" }, loading: false }),
+  useAuthState: () => ({
+    user: { email: "me@example.com", providerData: mockProviderIds.map((providerId) => ({ providerId })) },
+    loading: false,
+  }),
 }));
+
+// Apple 사용자 판별(isAppleUser)은 실제 코드를 쓰고, 네이티브·Firebase 모듈만 비운다.
+jest.mock("expo-apple-authentication", () => ({}));
+jest.mock("expo-crypto", () => ({}));
+jest.mock("firebase/auth", () => ({}));
+jest.mock("../../firebase", () => ({ auth: {} }));
 
 const mockSignOut = jest.fn<(client: QueryClient) => Promise<void>>();
 jest.mock("../../auth/signOut", () => ({
@@ -15,6 +25,7 @@ jest.mock("../../auth/signOut", () => ({
 const mockDeleteAccount = jest.fn<() => Promise<void>>();
 jest.mock("../../account/deleteAccount", () => ({
   deleteAccount: () => mockDeleteAccount(),
+  AppleRevokeError: class AppleRevokeError extends Error {},
 }));
 
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
@@ -58,6 +69,7 @@ describe("AccountScreen", () => {
 
   beforeEach(() => {
     mockEntitlement = undefined;
+    mockProviderIds = ["google.com"];
     mockManage.mockReset().mockResolvedValue(undefined);
     mockSignOut.mockReset().mockResolvedValue(undefined);
     mockDeleteAccount.mockReset().mockResolvedValue(undefined);
@@ -318,6 +330,57 @@ describe("AccountScreen", () => {
       expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 실패", "일부만 처리되었습니다. 다시 시도해 주세요.");
       expect(mockSignOut).not.toHaveBeenCalled();
       expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: false });
+    });
+
+    it("Apple 로그인 사용자에게는 확인 창이 한 번 더 열린다고 알린다", async () => {
+      mockProviderIds = ["apple.com"];
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        "회원 탈퇴",
+        `${DELETE_MESSAGE}\n\nApple 계정 확인 창이 한 번 더 열려요.`,
+        expect.any(Array),
+      );
+    });
+
+    it("Android에서는 Apple 연결 계정이어도 확인 창 안내를 붙이지 않는다", async () => {
+      mockProviderIds = ["apple.com", "google.com"];
+      const restore = jest.replaceProperty(Platform, "OS", "android");
+      try {
+        await renderScreen();
+        await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+        expect(alertSpy).toHaveBeenLastCalledWith("회원 탈퇴", DELETE_MESSAGE, expect.any(Array));
+      } finally {
+        restore.restore();
+      }
+    });
+
+    it("Apple 확인 창을 닫으면 실패 안내 없이 원래 상태로 돌아간다", async () => {
+      mockProviderIds = ["apple.com"];
+      mockDeleteAccount.mockRejectedValueOnce(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" }));
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      const callsBefore = alertSpy.mock.calls.length;
+      await pressAlertButton(alertSpy, "탈퇴하기");
+
+      expect(alertSpy.mock.calls.length).toBe(callsBefore);
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: false });
+    });
+
+    it("Apple 해지 단계에서 실패하면 아무것도 지워지지 않았다고 알린다", async () => {
+      mockProviderIds = ["apple.com"];
+      const { AppleRevokeError } = await import("../../account/deleteAccount");
+      mockDeleteAccount.mockRejectedValueOnce(new AppleRevokeError("revoke"));
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      await pressAlertButton(alertSpy, "탈퇴하기");
+
+      expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 실패", "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.");
+      expect(mockSignOut).not.toHaveBeenCalled();
     });
 
     it("처리 중에는 탈퇴·로그아웃 버튼이 모두 비활성화된다", async () => {

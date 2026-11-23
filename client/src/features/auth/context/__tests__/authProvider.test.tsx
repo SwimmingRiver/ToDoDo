@@ -44,6 +44,33 @@ const Consumer = () => {
   return <div>{user ? `로그인: ${user.uid}` : '비로그인'}</div>
 }
 
+describe('refreshUser', () => {
+  it('호출하면 같은 user 객체의 바뀐 필드를 다시 그린다', async () => {
+    const user = { uid: 'u1', displayName: '수영 강' } as User
+    const RefreshConsumer = () => {
+      const { user, refreshUser } = useAuth()
+      return (
+        <div>
+          <span>{user?.displayName}</span>
+          <button onClick={refreshUser}>새로고침</button>
+        </div>
+      )
+    }
+    render(
+      <AuthProvider>
+        <RefreshConsumer />
+      </AuthProvider>,
+    )
+    act(() => {
+      authStateCallback?.(user)
+    })
+    await screen.findByText('수영 강')
+    ;(user as { displayName: string }).displayName = '강수영'
+    act(() => screen.getByText('새로고침').click())
+    expect(screen.getByText('강수영')).toBeInTheDocument()
+  })
+})
+
 describe('AuthProvider', () => {
   beforeEach(() => {
     authStateCallback = null

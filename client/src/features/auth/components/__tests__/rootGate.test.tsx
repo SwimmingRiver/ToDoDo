@@ -22,6 +22,7 @@ const mockAuthContext = (user: User | null, loading = false) => ({
   user,
   loading,
   logout: vi.fn().mockResolvedValue(undefined),
+  refreshUser: vi.fn(),
 })
 
 const mockUser = {

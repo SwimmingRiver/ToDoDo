@@ -6,6 +6,7 @@ import { auth } from "@/shared/lib/firebase";
 import { useAuth } from "@/features/auth/context/useAuth";
 import { useEntitlement } from "@/features/entitlement";
 import { clearSnapshot } from "@/features/calendarIntegration/hooks/syncSnapshot";
+import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { deleteAccount, type AccountDeletionStep } from "../api/deleteAccount";
 
@@ -14,8 +15,12 @@ const SUBSCRIPTION_NOTICE = "구독이 즉시 해지되고 남은 기간은 사�
 // Apple은 서버가 해지할 수 없어 경고하고, Google은 서버가 탈퇴 때 함께 해지하므로 안내만 한다(스펙 7절).
 const APPLE_WARNING = "App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.";
 const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
+const APPLE_REAUTH_NOTICE = "Apple 계정 확인 창이 한 번 더 열려요.";
 const FAILURE_MESSAGE = "일부만 처리되었습니다. 다시 시도해 주세요.";
+// Apple 단계는 맨 앞이라 여기서 실패하면 아무것도 지우지 않았다.
+const APPLE_FAILURE_MESSAGE = "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.";
 const STEP_LABEL: Record<AccountDeletionStep, string> = {
+  apple: "Apple 연결 해제 중…",
   calendar: "구글 캘린더 연동 해제 중…",
   reminders: "알림 정리 중…",
   account: "계정과 데이터 삭제 중…",
@@ -41,6 +46,7 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
   // 스토어별로 따로 본다 — 둘 다 자동 갱신 중이면 경고와 안내가 함께 나온다. 경고는 안내일 뿐 탈퇴를 막지 않는다.
   const appleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "apple");
   const googleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "google");
+  const isAppleUser = !!auth.currentUser?.providerData.some((p) => p.providerId === "apple.com");
   const isPending = status === "pending";
 
   // 진행 중 탭을 닫으면 일부 단계만 처리된 채 남는다. 브라우저 기본 확인 창으로 한 번 막는다.
@@ -61,6 +67,11 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
     try {
       await deleteAccount(setStep);
     } catch (error) {
+      // Apple 재인증 창을 닫은 경우: 아무것도 지워지지 않았으니 조용히 처음 상태로
+      if (isUserCancelledSignIn((error as { code?: unknown } | null)?.code)) {
+        setStatus("idle");
+        return;
+      }
       console.error("회원 탈퇴 실패:", error);
       setStatus("failed");
       return;
@@ -82,7 +93,9 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
     hasSubscription && SUBSCRIPTION_NOTICE,
     appleRenewing && APPLE_WARNING,
     googleRenewing && GOOGLE_NOTICE,
-    status === "failed" && FAILURE_MESSAGE,
+    isAppleUser && APPLE_REAUTH_NOTICE,
+    // step은 onStep이 마지막으로 알린 단계 = 실패한 단계다.
+    status === "failed" && (step === "apple" ? APPLE_FAILURE_MESSAGE : FAILURE_MESSAGE),
   ]
     .filter(Boolean)
     .join("\n\n");

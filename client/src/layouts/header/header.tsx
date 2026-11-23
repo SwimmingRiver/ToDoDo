@@ -8,6 +8,8 @@ import { radius } from "@/styles/radius";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 import ThemeMenu from "@/layouts/themeMenu/themeMenu";
 import NotificationMenu from "@/layouts/notificationMenu/notificationMenu";
+import UserAvatar from "@/layouts/userAvatar/userAvatar";
+import { userLabel } from "@/layouts/userAvatar/userLabel";
 import logo from "@/assets/logo.png";
 
 interface HeaderProps {
@@ -30,8 +32,8 @@ const Header = ({ onMenuOpen, onDeleteAccountClick }: HeaderProps) => {
         <ThemeMenu />
         <UserInfo>
           <ProfileMenu onDeleteAccountClick={onDeleteAccountClick}>
-            <UserInfoText>{user?.displayName}</UserInfoText>
-            <UserInfoImage src={user?.photoURL || ""} alt="user" />
+            <UserInfoText>{userLabel(user)}</UserInfoText>
+            <UserAvatar user={user} size={24} />
           </ProfileMenu>
         </UserInfo>
         <HamburgerMenuButton onClick={onMenuOpen} aria-label="메뉴 열기">
@@ -85,12 +87,6 @@ const UserInfo = styled.div`
 const UserInfoText = styled.span`
   font-size: 14px;
   font-weight: 500;
-`;
-
-const UserInfoImage = styled.img`
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
 `;
 
 const HeaderContainer = styled.header`

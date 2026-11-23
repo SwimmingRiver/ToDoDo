@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { auth } from "@/shared/lib/firebase";
+import { OAuthProvider, browserPopupRedirectResolver, reauthenticateWithPopup, revokeAccessToken } from "firebase/auth";
+import { auth, appleProvider } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
 import { disconnectCalendar } from "@/features/calendarIntegration/api";
 import { findOrphanGoogleEventIds, loadSnapshot } from "@/features/calendarIntegration/hooks/syncSnapshot";
@@ -16,7 +17,7 @@ const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
 };
 
 /** 탈퇴 진행 단계. 화면이 "지금 무엇을 하는 중인지" 보여주는 데 쓴다. */
-export type AccountDeletionStep = "calendar" | "reminders" | "account";
+export type AccountDeletionStep = "apple" | "calendar" | "reminders" | "account";
 
 /**
  * 탈퇴. 각 단계는 멱등이라 실패하면 처음부터 다시 부르면 된다.
@@ -25,8 +26,17 @@ export type AccountDeletionStep = "calendar" | "reminders" | "account";
  * onStep은 각 단계를 시작하기 직전에 불린다.
  */
 export const deleteAccount = async (onStep?: (step: AccountDeletionStep) => void): Promise<void> => {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not authenticated");
+  const user = auth.currentUser;
+  const uid = user?.uid;
+  if (!user || !uid) throw new Error("Not authenticated");
+  // 0단계: Apple 사용자는 재인증 후 토큰 해지(App Store 요건). 팝업이 막히지 않도록 이 앞에 await를 두지 않는다.
+  if (user.providerData.some((p) => p.providerId === "apple.com")) {
+    onStep?.("apple");
+    const result = await reauthenticateWithPopup(user, appleProvider, browserPopupRedirectResolver);
+    const token = OAuthProvider.credentialFromResult(result)?.accessToken;
+    if (!token) throw new Error("Apple 토큰을 받지 못했습니다");
+    await revokeAccessToken(auth, token);
+  }
   onStep?.("calendar");
   await disconnectCalendar(await collectGoogleEventIds(uid));
   onStep?.("reminders");

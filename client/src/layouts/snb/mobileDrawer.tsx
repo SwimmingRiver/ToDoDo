@@ -10,11 +10,12 @@ import {
 import { useAuth } from "@/features/auth/context/useAuth";
 import LegalLinks from "@/features/legal/components/legalLinks";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
+import UserAvatar from "@/layouts/userAvatar/userAvatar";
+import { userLabel } from "@/layouts/userAvatar/userLabel";
 import {
   Overlay,
   DrawerContainer,
   UserSection,
-  UserImage,
   UserInfo,
   UserName,
   NavList,
@@ -79,9 +80,9 @@ const MobileDrawer = ({ isOpen, onClose, onFeedbackClick, onDeleteAccountClick }
       <DrawerContainer $isClosing={isClosing}>
         <UserSection>
           <ProfileMenu onDeleteAccountClick={handleDeleteAccountClick}>
-            <UserImage src={user?.photoURL || ""} alt="user" />
+            <UserAvatar user={user} size={40} />
             <UserInfo>
-              <UserName>{user?.displayName}</UserName>
+              <UserName>{userLabel(user)}</UserName>
             </UserInfo>
           </ProfileMenu>
         </UserSection>

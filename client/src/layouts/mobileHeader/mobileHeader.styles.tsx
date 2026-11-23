@@ -49,12 +49,4 @@ const AvatarButton = styled.button`
   padding: 0;
 `;
 
-const AvatarImage = styled.img`
-  width: 28px;
-  height: 28px;
-  border-radius: ${radius.full};
-  background-color: ${colors.background.secondary};
-  object-fit: cover;
-`;
-
-export { HeaderContainer, LogoGroup, LogoMark, LogoText, RightGroup, AvatarButton, AvatarImage };
+export { HeaderContainer, LogoGroup, LogoMark, LogoText, RightGroup, AvatarButton };

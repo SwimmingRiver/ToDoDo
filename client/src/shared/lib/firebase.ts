@@ -4,6 +4,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   GoogleAuthProvider,
+  OAuthProvider,
   connectAuthEmulator,
 } from "firebase/auth";
 import { app, isEmulator } from "./firebaseApp";
@@ -20,7 +21,8 @@ import { app, isEmulator } from "./firebaseApp";
 // getAuth() 대신 initializeAuth를 쓰는 이유: getAuth는 브라우저 기본값으로
 // browserPopupRedirectResolver까지 붙여 시작 시점에 팝업/리디렉트 처리기를 초기화한다
 // (getProjectConfig 호출 + 리디렉트 결과 확인용 사용자 재조회). 이미 로그인한 사용자의
-// 첫 화면에는 필요 없는 네트워크 왕복이라, 처리기는 로그인 버튼에서만 넘긴다(loginPage).
+// 첫 화면에는 필요 없는 네트워크 왕복이라, 처리기는 팝업을 여는 호출마다 넘긴다
+// (features/auth/api/signIn.ts, features/account/api/deleteAccount.ts).
 // persistence는 getAuth의 브라우저 기본값과 같은 순서로 둬야 기존 로그인 세션(IndexedDB)이 유지된다.
 export const auth = initializeAuth(app, {
   persistence: [
@@ -30,6 +32,9 @@ export const auth = initializeAuth(app, {
   ],
 });
 export const googleProvider = new GoogleAuthProvider();
+export const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
 
 if (isEmulator) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });

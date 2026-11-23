@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/useAuth";
 import ThemeMenu from "@/layouts/themeMenu/themeMenu";
 import NotificationMenu from "@/layouts/notificationMenu/notificationMenu";
+import UserAvatar from "@/layouts/userAvatar/userAvatar";
 import logo from "@/assets/logo.png";
 import {
   HeaderContainer,
@@ -10,7 +11,6 @@ import {
   LogoText,
   RightGroup,
   AvatarButton,
-  AvatarImage,
 } from "./mobileHeader.styles";
 
 interface MobileHeaderProps {
@@ -31,7 +31,7 @@ const MobileHeader = ({ onAvatarClick }: MobileHeaderProps) => {
         <NotificationMenu />
         <ThemeMenu />
         <AvatarButton onClick={onAvatarClick} aria-label="사용자 메뉴 열기">
-          <AvatarImage src={user?.photoURL || ""} alt="" />
+          <UserAvatar user={user} size={28} />
         </AvatarButton>
       </RightGroup>
     </HeaderContainer>

@@ -14,7 +14,7 @@ const signedIn = { uid: "u1", email: "a@b.com", displayName: "사용자" } as Us
 const renderAt = (path: string, user: User | null) => {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   render(
-    <AuthContext.Provider value={{ user, loading: false, logout: vi.fn() }}>
+    <AuthContext.Provider value={{ user, loading: false, logout: vi.fn(), refreshUser: vi.fn() }}>
       <RouterProvider router={router} />
     </AuthContext.Provider>,
   );
