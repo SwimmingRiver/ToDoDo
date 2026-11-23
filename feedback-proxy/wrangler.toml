@@ -1,0 +1,19 @@
+name = "tododo-feedback-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "tododo-83576"
+CLIENT_APP_URL = "https://tododo-app.com"
+
+# 같은 uid 제출: 60초 3회. 초과 시 429, 저장 안 함.
+[[ratelimits]]
+name = "FEEDBACK_SUBMIT_LIMIT"
+namespace_id = "1101"
+simple = { limit = 3, period = 60 }
+
+# 전역 Discord 알림: 60초 10건. 초과 시 저장은 하고 알림만 생략.
+[[ratelimits]]
+name = "FEEDBACK_NOTIFY_LIMIT"
+namespace_id = "1102"
+simple = { limit = 10, period = 60 }
