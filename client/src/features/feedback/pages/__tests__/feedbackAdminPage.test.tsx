@@ -24,6 +24,13 @@ const items = [
   { id: "b", email: null, content: "반영된 내용", createdAt: "2026-11-02T03:04:00.000Z", platform: "web", status: "done" },
 ];
 
+// 기대 문자열은 로컬 getter로 만든다(UTC 리터럴이면 시간대에 따라 날짜가 달라짐).
+const pad = (n: number) => String(n).padStart(2, "0");
+const expectedLocal = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const renderPage = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -65,7 +72,7 @@ describe("FeedbackAdminPage", () => {
     expect(await screen.findByText("새 내용입니다")).toBeTruthy();
     expect(screen.getByText("a@x.com")).toBeTruthy();
     expect(screen.getByText("ios")).toBeTruthy();
-    expect(screen.getByText(/2026\.11\.01 \d{2}:\d{2}/)).toBeTruthy();
+    expect(screen.getByText(expectedLocal(items[0].createdAt))).toBeTruthy();
     expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("new");
     expect(screen.queryByText("반영된 내용")).toBeNull();
   });
