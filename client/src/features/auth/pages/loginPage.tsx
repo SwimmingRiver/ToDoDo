@@ -5,13 +5,14 @@ import {
 } from "@tododo/core/dist/auth/index.js";
 import { useToast } from "@/shared";
 import { Navigate, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/useAuth";
 import {
   signInWithGoogle,
   signInWithApple,
   consumeLinkedNotice,
 } from "../api/signIn";
+import { warmUpPopupResolver } from "../api/warmUpPopup";
 import { isAppleLoginOpen } from "../config";
 import {
   Container,
@@ -47,6 +48,8 @@ const AppleIcon = () => (
 const LINKED_NOTICE = "이제 Google·Apple 둘 다로 로그인할 수 있어요";
 const ACCOUNT_EXISTS_MESSAGE =
   "이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요.";
+const POPUP_BLOCKED_MESSAGE =
+  "로그인 창이 열리지 않았어요. 한 번 더 눌러 주세요.";
 const GENERIC_ERROR_MESSAGE =
   "로그인 중 오류가 발생했습니다. 다시 시도해주세요.";
 
@@ -56,6 +59,12 @@ const LoginPage = () => {
   const toast = useToast();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // 클릭 전에 팝업 처리기를 준비해 둔다 — 안 하면 Safari가 첫 팝업을 막는다(warmUpPopup.ts).
+  const showsButtons = !loading && !user;
+  useEffect(() => {
+    if (showsButtons) warmUpPopupResolver();
+  }, [showsButtons]);
 
   if (loading) return null;
   if (user) return <Navigate to="/today" replace />;
@@ -80,6 +89,8 @@ const LoginPage = () => {
         // 사용자가 직접 닫은 경우 - 에러 메시지 불필요
       } else if (isAccountExistsError(code)) {
         setErrorMessage(ACCOUNT_EXISTS_MESSAGE);
+      } else if (code === "auth/popup-blocked") {
+        setErrorMessage(POPUP_BLOCKED_MESSAGE);
       } else {
         setErrorMessage(GENERIC_ERROR_MESSAGE);
       }
