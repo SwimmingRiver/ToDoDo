@@ -25,6 +25,7 @@ import type { PlanSubmission } from "@tododo/core/dist/api/planTodoApi.js";
 import { auth } from "@/shared/lib/firebase";
 import { db } from "@/shared/lib/firestore";
 import type { RecurrenceRule, Todo, TodoReorderUpdate } from "../types/todo.type";
+import { resolveDoneAt } from "../utils/doneAt";
 import { getDefaultHorizonEnd } from "../utils/recurrence";
 import { getTodoDateValidationError } from "../utils/todoDateValidation";
 
@@ -133,6 +134,7 @@ export const createTodo = async (todo: Todo) => {
     updatedAt: now,
     parentId: null,
     status: "todo",
+    doneAt: null,
     order: maxOrder + 1,
     archived: false,
   });
@@ -161,14 +163,15 @@ export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
     assertValidTodoDates(data);
   }
 
+  // 완료 시각은 호출부가 넘긴 값이 아니라 저장된 이전 상태로 정한다(resolveDoneAt 참고).
   const writes: Array<{ id: string; updates: object }> = [
-    { id, updates: { ...data, updatedAt: now } },
+    { id, updates: { ...data, doneAt: resolveDoneAt(existingData, data.status, now), updatedAt: now } },
   ];
 
-  // 상위 done → 하위 전부 done
+  // 상위 done → 하위 전부 done. 이미 완료된 하위는 건드리지 않는다(완료 시각 보존).
   if (data.status === "done") {
     allTodos
-      .filter((t) => t.parentId === id)
+      .filter((t) => t.parentId === id && t.status !== "done")
       .forEach((child) => {
         writes.push({
           id: child.id,
@@ -183,10 +186,11 @@ export const editTodo = async (todo: Todo, allTodos: Todo[]) => {
       t.id === id ? { ...t, ...data } : t,
     );
     const siblings = updatedTodos.filter((t) => t.parentId === todo.parentId);
-    const { status: parentStatus, doneAt } = calcParentStatus(siblings);
+    const { status: parentStatus } = calcParentStatus(siblings);
+    const parent = allTodos.find((t) => t.id === todo.parentId);
     writes.push({
       id: todo.parentId,
-      updates: { status: parentStatus, doneAt, updatedAt: now },
+      updates: { status: parentStatus, doneAt: resolveDoneAt(parent, parentStatus, now), updatedAt: now },
     });
   }
 
@@ -333,6 +337,7 @@ export const createChildTodo = async (
     createdAt: now,
     updatedAt: now,
     status: "todo",
+    doneAt: null,
     order: maxOrder + 1,
     recurrence: null,
     recurrenceId: null,

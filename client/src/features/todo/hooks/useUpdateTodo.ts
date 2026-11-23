@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Todo } from "../types";
 import { editTodo, calcParentStatus } from "../api";
+import { resolveDoneAt } from "../utils/doneAt";
 
 export const useUpdateTodo = () => {
   const queryClient = useQueryClient();
@@ -16,14 +17,17 @@ export const useUpdateTodo = () => {
 
       queryClient.setQueryData<Todo[]>(["todos"], (old = []) => {
         const now = new Date().toISOString();
+        // 완료 시각은 editTodo와 같은 규칙으로 정한다 — 호출부는 status만 넘기는 경우가 많다.
         let next = old.map((t) =>
-          t.id === updatedTodo.id ? { ...t, ...updatedTodo } : t,
+          t.id === updatedTodo.id
+            ? { ...t, ...updatedTodo, doneAt: resolveDoneAt(t, updatedTodo.status, now) }
+            : t,
         );
 
-        // 상위 done → 하위 전부 done
+        // 상위 done → 하위 전부 done. 이미 완료된 하위는 완료 시각을 보존한다.
         if (updatedTodo.status === "done") {
           next = next.map((t) =>
-            t.parentId === updatedTodo.id
+            t.parentId === updatedTodo.id && t.status !== "done"
               ? { ...t, status: "done" as const, doneAt: now }
               : t,
           );
@@ -34,11 +38,10 @@ export const useUpdateTodo = () => {
           const siblings = next.filter(
             (t) => t.parentId === updatedTodo.parentId,
           );
-          const { status: newParentStatus, doneAt } =
-            calcParentStatus(siblings);
+          const { status: newParentStatus } = calcParentStatus(siblings);
           next = next.map((t) =>
             t.id === updatedTodo.parentId
-              ? { ...t, status: newParentStatus, doneAt }
+              ? { ...t, status: newParentStatus, doneAt: resolveDoneAt(t, newParentStatus, now) }
               : t,
           );
         }
