@@ -57,10 +57,13 @@ describe("handleFeedback", () => {
   it("토큰 검증 실패 → 401, 저장 안 함", async () => {
     vi.mocked(verifyFirebaseIdToken).mockRejectedValueOnce(new Error("bad"));
     const deps = makeDeps();
-    const res = await handleFeedback(request(), makeEnv(), deps);
+    const env = makeEnv();
+    const res = await handleFeedback(request(), env, deps);
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "UNAUTHORIZED" });
     expect(deps.store.create).not.toHaveBeenCalled();
+    expect(env.FEEDBACK_SUBMIT_LIMIT!.limit).not.toHaveBeenCalled();
+    expect(env.FEEDBACK_NOTIFY_LIMIT!.limit).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -124,6 +127,32 @@ describe("handleFeedback", () => {
       "web",
       "https://app.example.com",
     );
+    expect(env.FEEDBACK_SUBMIT_LIMIT!.limit).toHaveBeenCalledWith({ key: "user-1" });
+    expect(env.FEEDBACK_NOTIFY_LIMIT!.limit).toHaveBeenCalledWith({ key: "global" });
+  });
+
+  it("본문의 추가 필드는 무시하고 서버가 만든 객체만 저장한다", async () => {
+    const deps = makeDeps();
+    const res = await handleFeedback(
+      request({
+        content: "좋아요",
+        platform: "web",
+        userId: "evil",
+        status: "done",
+        createdAt: "x",
+      }),
+      makeEnv(),
+      deps,
+    );
+    expect(res.status).toBe(201);
+    expect(deps.store.create).toHaveBeenCalledTimes(1);
+    expect((deps.store.create.mock.calls[0] as unknown[])[0]).toStrictEqual({
+      userId: "user-1",
+      email: "a@b.com",
+      content: "좋아요",
+      platform: "web",
+      createdAt: NOW.toISOString(),
+    });
   });
 
   it("email 없는 토큰 → email null", async () => {
