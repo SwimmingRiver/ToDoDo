@@ -37,7 +37,7 @@ jest.mock("../../auth/linkedNotice", () => ({ consumeLinkedNotice: (user: unknow
 
 import { LoginScreen } from "../LoginScreen";
 
-const HINT = "전에 Google로 가입했다면 Google로 로그인해 주세요.";
+const HINT = "이전에 Google로 가입했다면 Google로 로그인해 주세요.";
 const ACCOUNT_EXISTS = "이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요.";
 const LINKED_NOTICE = "이제 Google·Apple 둘 다로 로그인할 수 있어요";
 

@@ -19,7 +19,7 @@
 - 문구(그대로 사용):
   - 연결 안내: `이제 Google·Apple 둘 다로 로그인할 수 있어요`
   - 충돌 오류: `이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요.`
-  - 이메일 가리기 안내: `전에 Google로 가입했다면 Google로 로그인해 주세요.`
+  - 이메일 가리기 안내: `이전에 Google로 가입했다면 Google로 로그인해 주세요.`
   - 탈퇴 창 Apple 안내: `Apple 계정 확인 창이 한 번 더 열려요.`
 - Apple 버튼: 검정 바탕 + 흰 Apple 로고 + 흰 글자 `Apple로 로그인`, 구글 버튼과 같은 너비·높이. 브랜드 고정색은 기존 구글 로고처럼 `eslint-disable-next-line no-restricted-syntax -- Apple 브랜드 고정색`.
 - 팝업/네이티브 창을 사용자가 닫은 경우(`auth/popup-closed-by-user`, `auth/cancelled-popup-request`, 앱 `ERR_REQUEST_CANCELED`)는 오류 문구를 띄우지 않는다.

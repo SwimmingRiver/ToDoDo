@@ -95,12 +95,12 @@ describe('LoginPage 컴포넌트', () => {
       vi.setSystemTime(BEFORE_OPEN)
       renderLogin()
       expect(screen.queryByText('Apple로 로그인')).not.toBeInTheDocument()
-      expect(screen.queryByText('전에 Google로 가입했다면 Google로 로그인해 주세요.')).not.toBeInTheDocument()
+      expect(screen.queryByText('이전에 Google로 가입했다면 Google로 로그인해 주세요.')).not.toBeInTheDocument()
     })
 
     it('공개 후에는 버튼과 안내가 보이고 클릭 시 signInWithApple을 호출한다', async () => {
       renderLogin()
-      expect(screen.getByText('전에 Google로 가입했다면 Google로 로그인해 주세요.')).toBeInTheDocument()
+      expect(screen.getByText('이전에 Google로 가입했다면 Google로 로그인해 주세요.')).toBeInTheDocument()
       fireEvent.click(screen.getByText('Apple로 로그인'))
       await waitFor(() => expect(signInWithApple).toHaveBeenCalled())
     })

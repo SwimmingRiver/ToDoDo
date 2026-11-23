@@ -35,7 +35,7 @@ const GoogleIcon = () => (
 const LINKED_NOTICE = "이제 Google·Apple 둘 다로 로그인할 수 있어요";
 const ACCOUNT_EXISTS_MESSAGE = "이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요.";
 const GENERIC_ERROR_MESSAGE = "로그인 중 오류가 발생했습니다. 다시 시도해주세요.";
-const APPLE_HINT = "전에 Google로 가입했다면 Google로 로그인해 주세요.";
+const APPLE_HINT = "이전에 Google로 가입했다면 Google로 로그인해 주세요.";
 
 export const LoginScreen = () => {
   const [error, setError] = useState<string | null>(null);

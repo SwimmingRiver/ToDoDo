@@ -112,7 +112,7 @@ const LoginPage = () => {
           )}
         </Buttons>
         {appleOpen && (
-          <Hint>전에 Google로 가입했다면 Google로 로그인해 주세요.</Hint>
+          <Hint>이전에 Google로 가입했다면 Google로 로그인해 주세요.</Hint>
         )}
       </Card>
     </Container>
