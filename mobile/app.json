@@ -11,7 +11,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.swimmingriver.tododo",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "ko"
+      }
     },
     "android": {
       "package": "com.swimmingriver.tododo",
