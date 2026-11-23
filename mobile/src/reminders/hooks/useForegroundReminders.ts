@@ -40,7 +40,9 @@ export const useForegroundReminders = (): void => {
     const off = onMessage(getMessaging(), async (message) => {
       const title = message.notification?.title;
       const body = message.notification?.body;
-      if (title || body) banner.show(title ?? "", body ?? "");
+      const rawTodoId = message.data?.todoId;
+      const todoId = typeof rawTodoId === "string" && rawTodoId ? rawTodoId : undefined;
+      if (title || body) banner.show(title ?? "", body ?? "", todoId);
       const timer = setTimeout(() => {
         timers.delete(timer);
         void queryClient.invalidateQueries({ queryKey: [REMINDER_HISTORY_KEY, uid] });

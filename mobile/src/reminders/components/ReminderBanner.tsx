@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../theme/colors";
 import { radius, spacing } from "../../theme/spacing";
+import { openTodoDetail } from "../../navigation/navigationRef";
 
 export const BANNER_DURATION_MS = 4000;
 
-type BannerContextValue = { show: (title: string, body: string) => void };
+type BannerContextValue = { show: (title: string, body: string, todoId?: string) => void };
 
 const ReminderBannerContext = createContext<BannerContextValue>({ show: () => {} });
 
@@ -14,7 +15,7 @@ export const useReminderBanner = (): BannerContextValue => useContext(ReminderBa
 
 export const ReminderBannerProvider = ({ children }: { children: ReactNode }) => {
   const insets = useSafeAreaInsets();
-  const [banner, setBanner] = useState<{ title: string; body: string } | null>(null);
+  const [banner, setBanner] = useState<{ title: string; body: string; todoId?: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = () => {
@@ -25,15 +26,21 @@ export const ReminderBannerProvider = ({ children }: { children: ReactNode }) =>
     clearTimer();
     setBanner(null);
   }, []);
-  const show = useCallback((title: string, body: string) => {
+  const show = useCallback((title: string, body: string, todoId?: string) => {
     clearTimer();
-    setBanner({ title, body });
+    setBanner({ title, body, todoId });
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       setBanner(null);
     }, BANNER_DURATION_MS);
   }, []);
   useEffect(() => clearTimer, []);
+  // 시스템 알림을 눌렀을 때와 같게, 할 일이 있으면 상세로 이동한다.
+  const handlePress = () => {
+    const todoId = banner?.todoId;
+    dismiss();
+    if (todoId) openTodoDetail(todoId);
+  };
 
   const value = useMemo(() => ({ show }), [show]);
 
@@ -45,7 +52,7 @@ export const ReminderBannerProvider = ({ children }: { children: ReactNode }) =>
           <Pressable
             accessibilityRole="alert"
             accessibilityLabel={`${banner.title}. ${banner.body}`}
-            onPress={dismiss}
+            onPress={handlePress}
             style={styles.banner}
           >
             <Text style={styles.title} numberOfLines={1}>

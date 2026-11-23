@@ -14,7 +14,7 @@ jest.mock("../components/ReminderBanner", () => ({
   useReminderBanner: () => ({ show: mockShow }),
 }));
 
-type Msg = { notification?: { title?: string; body?: string } };
+type Msg = { notification?: { title?: string; body?: string }; data?: Record<string, unknown> };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyMock = jest.Mock<(...args: any[]) => any>;
@@ -46,10 +46,19 @@ describe("useForegroundReminders", () => {
     const { m, spy } = await setup(1);
     const cb = m.onMessage.mock.calls[0][1] as (msg: Msg) => void;
     cb({ notification: { title: "제목", body: "내용" } });
-    expect(mockShow).toHaveBeenCalledWith("제목", "내용");
+    expect(mockShow).toHaveBeenCalledWith("제목", "내용", undefined);
     expect(spy).not.toHaveBeenCalled();
     await act(async () => { jest.advanceTimersByTime(3000); });
     expect(spy).toHaveBeenCalledWith({ queryKey: ["reminderHistory", "u1"] });
+  });
+
+  it("passes todoId from message data to the banner", async () => {
+    const { m } = await setup(1);
+    const cb = m.onMessage.mock.calls[0][1] as (msg: Msg) => void;
+    cb({ notification: { title: "제목", body: "내용" }, data: { todoId: "t1" } });
+    expect(mockShow).toHaveBeenCalledWith("제목", "내용", "t1");
+    cb({ notification: { title: "제목", body: "내용" }, data: { todoId: 5 } });
+    expect(mockShow).toHaveBeenLastCalledWith("제목", "내용", undefined);
   });
 
   it("no subscribe without permission", async () => {
