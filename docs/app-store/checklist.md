@@ -88,7 +88,7 @@ Other
 
 ## 8. 그 외
 
-- [ ] **미확인 — 사용자가 직접 확인**: Sentry `tododo-mobile` 프로젝트의 Settings → Security & Privacy → "Prevent Storing of IP Addresses"가 켜져 있는지. 꺼져 있으면 켜거나, App Privacy 라벨에 "대략적 위치 — 앱 기능"을 추가한다([app-privacy.md](app-privacy.md)).
+- [x] Sentry `tododo-mobile` 프로젝트의 Settings → Security & Privacy → "Prevent Storing of IP Addresses" 켜짐 — 사용자가 11-22에 확인. App Privacy 라벨에 "대략적 위치"는 추가하지 않는다([app-privacy.md](app-privacy.md)).
 
 - [ ] 저작권: `2026 TODODO`(방침·약관의 판매자 표기와 같게)
 - [ ] 콘텐츠 권한(제3자 콘텐츠): 없음

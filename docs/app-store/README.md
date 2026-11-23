@@ -19,6 +19,6 @@
 
 ## 남은 확인
 
-- **미확인**: Sentry `tododo-mobile` 프로젝트의 "IP 주소 저장 방지" 설정(사용자가 직접 확인). 꺼져 있으면 라벨에 "대략적 위치"를 추가한다. ([checklist.md](checklist.md) §8, [app-privacy.md](app-privacy.md))
+- **확인됨(11-22)**: Sentry `tododo-mobile` 프로젝트의 "IP 주소 저장 방지"가 켜져 있다. 라벨에 "대략적 위치"는 넣지 않는다. ([checklist.md](checklist.md) §8, [app-privacy.md](app-privacy.md))
 - **방침 다음 판 후보(기록만)**: 앱 기기 저장소 고지, 오류 정보의 기기·앱 버전. 심사를 막지는 않는다. ([app-privacy.md](app-privacy.md) §방침 대조)
-- 데모 시드 스크립트는 제안만 한 상태다. 사용자가 승인하면 별도 PR로 만든다. ([demo-data.md](demo-data.md))
+- 데모 시드 스크립트 `npm run seed:demo`가 생겼다(에뮬레이터 검증만 함). 데모 계정은 아직 없다 — 사용 절차는 [demo-data.md](demo-data.md) §사용 절차.

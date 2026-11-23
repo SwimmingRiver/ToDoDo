@@ -27,7 +27,7 @@
 
 ### 넣지 않은 항목과 이유
 
-- **대략적 위치**: Sentry의 `sendDefaultPii: false` 설정 때문에 SDK는 IP를 붙이지 않는다. 그런데 Sentry 서버는 요청을 보낸 IP를 따로 저장할 수 있다. 웹 프로젝트(`tododo-client`)는 "Prevent Storing of IP Addresses"를 켰다고 기록돼 있다. **앱 프로젝트(`tododo-mobile`)는 이 설정이 켜졌다는 기록이 없다. 제출 전에 확인해야 한다.** 꺼져 있다면 켜거나, 라벨에 "대략적 위치 — 앱 기능"을 추가한다. Firebase와 Worker의 접속 IP는 Apple FAQ상 서비스 운영에 필요한 일시 처리여서 보통 신고하지 않는다.
+- **대략적 위치**: Sentry의 `sendDefaultPii: false` 설정 때문에 SDK는 IP를 붙이지 않는다. 그런데 Sentry 서버는 요청을 보낸 IP를 따로 저장할 수 있다. 웹 프로젝트(`tododo-client`)는 "Prevent Storing of IP Addresses"를 켰다고 기록돼 있다. 앱 프로젝트(`tododo-mobile`)도 이 설정이 켜져 있음을 사용자가 11-22에 확인했다. 그래서 라벨에 "대략적 위치"는 넣지 않는다. Firebase와 Worker의 접속 IP는 Apple FAQ상 서비스 운영에 필요한 일시 처리여서 보통 신고하지 않는다.
 - **사진 또는 비디오**: Google 프로필 사진 URL은 Firebase Auth가 받는다. 하지만 기기의 사진을 가져오는 것이 아니다. 그래서 이 분류에 해당하지 않는다고 판단했다.
 - **기기 ID / 광고 데이터**: 수집하지 않는다. 다만 Sentry 네이티브 크래시는 beforeSend를 거치지 않아 기기 모델이 실릴 수 있다(`sentry.ts` 주석의 "한계"). 그래도 이것은 기기 ID가 아니라 충돌 데이터의 일부다.
 - **푸시 토큰**: 앱은 기기 안에서 예약하는 **로컬 알림만** 쓴다(`notifications/scheduleReminder.ts` — `scheduleNotificationAsync`). FCM과 Expo 푸시 토큰은 받지 않는다. 웹의 FCM 알림은 웹에만 있는 기능이라 앱 라벨과 관계없다.
