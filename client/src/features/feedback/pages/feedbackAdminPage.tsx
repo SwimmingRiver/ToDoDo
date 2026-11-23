@@ -24,7 +24,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 // 디스코드 링크로만 진입하는 운영자 전용 화면. 사이드바·드로어에는 링크를 두지 않는다.
 const FeedbackAdminPage = () => {
   const { isOperator, isLoading } = useIsOperator();
-  const { data } = useFeedbackList(isOperator);
+  const { data, isError } = useFeedbackList(isOperator);
   const [filter, setFilter] = useState<Filter>("new");
 
   if (isLoading) return null;
@@ -42,6 +42,9 @@ const FeedbackAdminPage = () => {
             </FilterButton>
           ))}
         </FilterBar>
+        {isError && (
+          <EmptyText role="alert">의견을 불러오지 못했습니다. 다시 로그인하거나 잠시 후 새로고침해 주세요.</EmptyText>
+        )}
         {data && visible.length === 0 && <EmptyText>의견이 없습니다</EmptyText>}
         {visible.map((item) => (
           <FeedbackAdminItem key={item.id} item={item} />
