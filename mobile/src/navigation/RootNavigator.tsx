@@ -149,10 +149,6 @@ const CalendarSync = () => {
 
 // 서버 푸시 알림: 토큰 동기화, 예약 갱신 신호, 포그라운드 배너, 알림 탭 이동. 로그인 중에만 돈다.
 const ReminderSync = () => {
-  // 푸시로 옮기기 전 예약해 둔 로컬 알림이 푸시와 겹쳐 울리지 않도록 첫 실행에 한 번 취소한다.
-  useEffect(() => {
-    cancelLegacyLocalRemindersOnce().catch((error) => reportError(error, "reminder"));
-  }, []);
   usePushTokenSync();
   useReminderRefresh();
   useForegroundReminders();
@@ -174,6 +170,12 @@ export const RootNavigator = () => {
   const { user, loading } = useAuthState();
   // MainTabs는 로그인 중에만 마운트되므로, 로그아웃(uid -> null)을 보려면 항상 마운트된 여기서 호출해야 한다.
   useStartupMaintenance(user?.uid ?? null);
+
+  // 푸시로 옮기기 전 예약해 둔 로컬 알림이 푸시와 겹쳐 울리지 않도록 앱 시작 시 한 번 취소한다.
+  // 로그인 여부와 무관하다(로그아웃 상태에서도 옛 예약은 울린다) — 그래서 항상 마운트된 여기서 부른다.
+  useEffect(() => {
+    cancelLegacyLocalRemindersOnce().catch((error) => reportError(error, "reminder"));
+  }, []);
 
   // 로그인 상태가 정해지면(로그인 화면 또는 탭) 네이티브 스플래시를 걷는다.
   useEffect(() => {

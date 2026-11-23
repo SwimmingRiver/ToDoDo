@@ -171,3 +171,38 @@ describe("RootNavigator 라우트", () => {
   });
 });
 
+
+describe("RootNavigator 옛 로컬 알림 취소", () => {
+  it("로그아웃 상태에서도 앱 시작 시 옛 로컬 알림 취소를 부른다", async () => {
+    const { cancelLegacyLocalRemindersOnce } = jest.requireMock("../../reminders") as {
+      cancelLegacyLocalRemindersOnce: jest.Mock<() => Promise<void>>;
+    };
+    cancelLegacyLocalRemindersOnce.mockClear();
+    authMock.mockReturnValue({ user: null, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    await flush();
+    expect(cancelLegacyLocalRemindersOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it("취소가 실패하면 reminder로 보고한다", async () => {
+    const { cancelLegacyLocalRemindersOnce } = jest.requireMock("../../reminders") as {
+      cancelLegacyLocalRemindersOnce: jest.Mock<() => Promise<void>>;
+    };
+    const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+    sentryMock.captureException.mockClear();
+    cancelLegacyLocalRemindersOnce.mockReset().mockRejectedValueOnce(new Error("native"));
+    authMock.mockReturnValue({ user: null, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    await flush();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+    cancelLegacyLocalRemindersOnce.mockImplementation(() => Promise.resolve());
+  });
+});
