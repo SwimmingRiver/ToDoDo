@@ -22,6 +22,9 @@ jest.mock("../../auth/signOut", () => ({
   signOut: (client: QueryClient) => mockSignOut(client),
 }));
 
+const mockReportError = jest.fn();
+jest.mock("../../shared/lib/sentry", () => ({ reportError: (...args: unknown[]) => mockReportError(...args) }));
+
 const mockDeleteAccount = jest.fn<() => Promise<void>>();
 jest.mock("../../account/deleteAccount", () => ({
   deleteAccount: () => mockDeleteAccount(),
@@ -73,6 +76,7 @@ describe("AccountScreen", () => {
     mockManage.mockReset().mockResolvedValue(undefined);
     mockSignOut.mockReset().mockResolvedValue(undefined);
     mockDeleteAccount.mockReset().mockResolvedValue(undefined);
+    mockReportError.mockReset();
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   });
 
@@ -328,6 +332,7 @@ describe("AccountScreen", () => {
       await pressAlertButton(alertSpy, "탈퇴하기");
 
       expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 실패", "일부만 처리되었습니다. 다시 시도해 주세요.");
+      expect(mockReportError).toHaveBeenCalledWith(expect.objectContaining({ message: "boom" }), "auth");
       expect(mockSignOut).not.toHaveBeenCalled();
       expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: false });
     });
@@ -366,6 +371,7 @@ describe("AccountScreen", () => {
       await pressAlertButton(alertSpy, "탈퇴하기");
 
       expect(alertSpy.mock.calls.length).toBe(callsBefore);
+      expect(mockReportError).not.toHaveBeenCalled();
       expect(mockSignOut).not.toHaveBeenCalled();
       expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: false });
     });
@@ -380,6 +386,7 @@ describe("AccountScreen", () => {
       await pressAlertButton(alertSpy, "탈퇴하기");
 
       expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 실패", "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.");
+      expect(mockReportError).toHaveBeenCalledWith(expect.any(AppleRevokeError), "auth");
       expect(mockSignOut).not.toHaveBeenCalled();
     });
 

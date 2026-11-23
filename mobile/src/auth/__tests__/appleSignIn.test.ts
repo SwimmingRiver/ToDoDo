@@ -140,10 +140,38 @@ describe("revokeAppleSignIn", () => {
     });
   });
 
+  // 실기 확인(11-23): 헤더가 없으면 Firebase가 웹 Services ID로 코드를 교환해 Apple이
+  // "client_id mismatch"로 거절한다. 앱 코드는 번들 ID로 발급되므로 번들 ID를 알려야 한다.
+  it("Firebase가 앱 번들 ID로 코드를 교환하도록 X-Ios-Bundle-Identifier를 app.json 값으로 보낸다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    await revokeAppleSignIn(revokeUser);
+
+    const appJson = jest.requireActual<{ expo: { ios: { bundleIdentifier: string } } }>("../../../app.json");
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init?.headers as Record<string, string>)["X-Ios-Bundle-Identifier"]).toBe(appJson.expo.ios.bundleIdentifier);
+  });
+
   it("해지 응답이 실패면 던진다", async () => {
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
     fetchMock.mockImplementation(async () => new Response("{}", { status: 400 }));
     await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("400");
+  });
+
+  it("해지 실패 시 Identity Toolkit의 오류 메시지를 에러에 담는다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 400, message: "INVALID_IDP_RESPONSE : client_id mismatch" } }), {
+          status: 400,
+        }),
+    );
+    await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("400: INVALID_IDP_RESPONSE : client_id mismatch");
+  });
+
+  it("오류 응답이 JSON이 아니어도 상태 코드로 던진다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    fetchMock.mockImplementation(async () => new Response("<html>bad gateway</html>", { status: 502 }));
+    await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("Apple 토큰 해지 실패 (502)");
   });
 
   it("인증 코드가 없으면 실패한다", async () => {

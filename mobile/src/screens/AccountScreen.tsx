@@ -11,6 +11,7 @@ import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { PremiumSection } from "../premium/PremiumSection";
 import { useEntitlement } from "../premium/useEntitlement";
 import { purchaseClient } from "../premium/iap/purchaseClient";
+import { reportError } from "../shared/lib/sentry";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
@@ -61,6 +62,8 @@ export const AccountScreen = () => {
       setIsDeleting(false);
       // Apple 확인 창을 닫았으면 아무것도 지워지지 않았다 — 실패 안내 없이 원래 상태로.
       if (isUserCancelledSignIn((error as { code?: unknown } | null)?.code)) return;
+      // 실기 재현 없이 원인을 알 수 있게 보고한다(에러 메시지에 서버 오류 내용이 담겨 있다).
+      reportError(error, "auth");
       // Apple 해지는 첫 단계라 여기서 실패했으면 아무것도 지우지 않았다.
       if (error instanceof AppleRevokeError) {
         Alert.alert("탈퇴 실패", "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.");
