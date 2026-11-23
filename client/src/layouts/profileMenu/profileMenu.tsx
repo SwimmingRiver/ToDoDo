@@ -4,6 +4,7 @@ import { BottomSheet } from "@/shared";
 import { BILLING_ENABLED } from "@/features/billing/config";
 import { useAuth } from "@/features/auth/context/useAuth";
 import useModal from "@/shared/hooks/useModal";
+import { userLabel } from "@/layouts/userAvatar/userLabel";
 import { TriggerButton, MenuList, MenuRow } from "./profileMenu.styles";
 
 interface ProfileMenuProps {
@@ -48,7 +49,7 @@ const ProfileMenu = ({ children, onDeleteAccountClick }: ProfileMenuProps) => {
       <TriggerButton type="button" onClick={() => setIsOpen(true)}>
         {children}
       </TriggerButton>
-      <BottomSheet isOpen={isOpen} onClose={close} title={user?.displayName ?? "메뉴"}>
+      <BottomSheet isOpen={isOpen} onClose={close} title={userLabel(user)}>
         <MenuList>
           {BILLING_ENABLED && <PremiumMenuRow onNavigate={close} />}
           <MenuRow onClick={handleLogout}>로그아웃</MenuRow>

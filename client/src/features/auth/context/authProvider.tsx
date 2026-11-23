@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useReducer, useCallback, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import * as Sentry from "@sentry/react";
@@ -9,6 +9,8 @@ import { writeSignedInHint } from "@/features/auth/utils/signedInHint";
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [, forceRender] = useReducer((n: number) => n + 1, 0);
+  const refreshUser = useCallback(() => forceRender(), []);
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 5000);
@@ -41,7 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

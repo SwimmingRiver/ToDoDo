@@ -1,7 +1,27 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { needsAppleRevoke, revokeAppleSignIn } from "../auth/appleSignIn";
 import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
 import { disconnectInChunks } from "@tododo/core/dist/calendarSync/index.js";
+import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
+
+/** Apple 토큰 해지 단계에서 실패했다 — 아직 아무것도 지우지 않았다는 뜻이라 화면이 다른 문구를 띄운다. */
+export class AppleRevokeError extends Error {
+  constructor(readonly cause: unknown) {
+    super(`Apple 토큰 해지 실패: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = "AppleRevokeError";
+  }
+}
+
+// 창을 닫은 취소 오류는 그대로 던진다(화면이 code로 조용히 넘긴다).
+const revokeAppleOrThrow = async (user: Parameters<typeof revokeAppleSignIn>[0]) => {
+  try {
+    await revokeAppleSignIn(user);
+  } catch (error) {
+    if (isUserCancelledSignIn((error as { code?: unknown } | null)?.code)) throw error;
+    throw new AppleRevokeError(error);
+  }
+};
 
 /** Expo는 process.env.EXPO_PUBLIC_*를 빌드 시 인라인한다. 함수 안에서 읽어 테스트가 값을 바꿀 수 있게 한다. */
 const readProxyUrls = () => {
@@ -41,13 +61,15 @@ const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
 };
 
 /**
- * 탈퇴. 웹과 같은 순서: 캘린더 연동 해제 → 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
+ * 탈퇴. 웹과 같은 순서: (Apple 사용자면 토큰 해지) → 캘린더 연동 해제 → 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
  * 각 단계는 멱등이라 실패하면 처음부터 다시 부르면 된다.
  */
 export const deleteAccount = async (): Promise<void> => {
   const urls = readProxyUrls();
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
+  // Apple 토큰부터 해지한다 — 실패하거나 창을 닫으면 아무것도 지우지 않고 멈춘다.
+  if (needsAppleRevoke(user)) await revokeAppleOrThrow(user);
   const idToken = await user.getIdToken();
 
   const googleEventIds = await collectGoogleEventIds(user.uid);

@@ -1,8 +1,13 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+import * as AppleAuthentication from "expo-apple-authentication";
+import type { UserCredential } from "firebase/auth";
+import { isAccountExistsError, isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { signInWithGoogle } from "../auth/googleSignIn";
+import { isAppleSignInAvailable, signInWithApple } from "../auth/appleSignIn";
+import { consumeLinkedNotice } from "../auth/linkedNotice";
 import { colors } from "../theme/colors";
 import { MIN_TOUCH_TARGET, spacing } from "../theme/spacing";
 
@@ -27,17 +32,46 @@ const GoogleIcon = () => (
   </Svg>
 );
 
+const LINKED_NOTICE = "이제 Google·Apple 둘 다로 로그인할 수 있어요";
+const ACCOUNT_EXISTS_MESSAGE = "이미 다른 방법으로 가입된 이메일이에요. 그 방법으로 로그인해 주세요.";
+const GENERIC_ERROR_MESSAGE = "로그인 중 오류가 발생했습니다. 다시 시도해주세요.";
+const APPLE_HINT = "이전에 Google로 가입했다면 Google로 로그인해 주세요.";
+
 export const LoginScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
-  const handleLogin = async () => {
+  useEffect(() => {
+    let active = true;
+    isAppleSignInAvailable()
+      .then((available) => {
+        if (active) setAppleAvailable(available);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // 오류 처리 규칙은 웹 로그인 화면과 같다.
+  const login = async (signIn: () => Promise<UserCredential>) => {
+    // 네이티브 Apple 버튼엔 disabled가 없어 여기서 중복 실행을 막는다.
+    if (isLoading) return;
+    setError(null);
+    setIsLoading(true);
     try {
-      setError(null);
-      setIsLoading(true);
-      await signInWithGoogle();
+      const result = await signIn();
+      if (await consumeLinkedNotice(result.user)) Alert.alert("로그인 방법 연결", LINKED_NOTICE);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "로그인에 실패했습니다");
+      const code = (e as { code?: unknown } | null)?.code;
+      if (isUserCancelledSignIn(code)) {
+        // 사용자가 창을 닫음 — 안내 불필요
+      } else if (isAccountExistsError(code)) {
+        setError(ACCOUNT_EXISTS_MESSAGE);
+      } else {
+        setError(GENERIC_ERROR_MESSAGE);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -52,23 +86,36 @@ export const LoginScreen = () => {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-        <Pressable
-          onPress={handleLogin}
-          disabled={isLoading}
-          accessibilityRole="button"
-          accessibilityLabel={isLoading ? "로그인 중..." : "Google로 로그인"}
-          accessibilityState={{ disabled: isLoading }}
-          style={({ pressed }) => [
-            styles.googleButton,
-            pressed && !isLoading && styles.googleButtonPressed,
-            isLoading && styles.googleButtonDisabled,
-          ]}
-        >
-          <GoogleIcon />
-          <Text style={styles.googleButtonText}>
-            {isLoading ? "로그인 중..." : "Google로 로그인"}
-          </Text>
-        </Pressable>
+        <View style={styles.buttons}>
+          <Pressable
+            onPress={() => login(signInWithGoogle)}
+            disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel={isLoading ? "로그인 중..." : "Google로 로그인"}
+            accessibilityState={{ disabled: isLoading }}
+            style={({ pressed }) => [
+              styles.googleButton,
+              pressed && !isLoading && styles.googleButtonPressed,
+              isLoading && styles.googleButtonDisabled,
+            ]}
+          >
+            <GoogleIcon />
+            <Text style={styles.googleButtonText}>
+              {isLoading ? "로그인 중..." : "Google로 로그인"}
+            </Text>
+          </Pressable>
+          {appleAvailable && (
+            // 문구·로고·색은 iOS가 그린다(검정 바탕, 기기 언어로 "Apple로 로그인")
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={8}
+              onPress={() => login(signInWithApple)}
+              style={[styles.appleButton, isLoading && styles.googleButtonDisabled]}
+            />
+          )}
+        </View>
+        {appleAvailable && <Text style={styles.hint}>{APPLE_HINT}</Text>}
       </View>
     </SafeAreaView>
   );
@@ -133,6 +180,19 @@ const styles = StyleSheet.create({
   },
   googleButtonDisabled: {
     opacity: 0.6,
+  },
+  buttons: {
+    width: "100%",
+    gap: spacing.md,
+  },
+  appleButton: {
+    width: "100%",
+    height: MIN_TOUCH_TARGET,
+  },
+  hint: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    textAlign: "center",
   },
   googleButtonText: {
     fontSize: 15,

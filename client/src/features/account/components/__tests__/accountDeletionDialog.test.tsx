@@ -3,9 +3,9 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setupUser } from "@/test/setupUser";
 
-const mockDeleteAccount = vi.fn<(onStep?: (step: "calendar" | "reminders" | "account") => void) => Promise<void>>();
+const mockDeleteAccount = vi.fn<(onStep?: (step: "apple" | "calendar" | "reminders" | "account") => void) => Promise<void>>();
 vi.mock("../../api/deleteAccount", () => ({
-  deleteAccount: (onStep?: (step: "calendar" | "reminders" | "account") => void) => mockDeleteAccount(onStep),
+  deleteAccount: (onStep?: (step: "apple" | "calendar" | "reminders" | "account") => void) => mockDeleteAccount(onStep),
 }));
 
 const mockLogout = vi.fn(async () => undefined);
@@ -39,7 +39,8 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => mockNavigate }));
 
 const mockClearSnapshot = vi.fn();
 vi.mock("@/features/calendarIntegration/hooks/syncSnapshot", () => ({ clearSnapshot: (uid: string) => mockClearSnapshot(uid) }));
-vi.mock("@/shared/lib/firebase", () => ({ auth: { currentUser: { uid: "u1" } } }));
+const fakeAuth = { currentUser: { uid: "u1", providerData: [{ providerId: "google.com" }] } };
+vi.mock("@/shared/lib/firebase", () => ({ auth: fakeAuth }));
 
 const renderDialog = async (onClose = vi.fn()) => {
   const { default: AccountDeletionDialog } = await import("../accountDeletionDialog");
@@ -57,6 +58,7 @@ describe("AccountDeletionDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     entitlement = undefined;
+    fakeAuth.currentUser.providerData = [{ providerId: "google.com" }];
     mockDeleteAccount.mockResolvedValue(undefined);
   });
 
@@ -182,9 +184,79 @@ describe("AccountDeletionDialog", () => {
     await user.click(screen.getByRole("button", { name: "취소" }));
     expect(onClose).toHaveBeenCalled();
   });
+  describe("Apple 로그인 사용자", () => {
+    const NOTICE = /Apple 계정 확인 창이 한 번 더 열려요\./;
+
+    it("재인증 안내를 보여주고, 구글 사용자에게는 보이지 않는다", async () => {
+      fakeAuth.currentUser.providerData = [{ providerId: "apple.com" }];
+      const { unmount } = await renderDialog().then((r) => ({ ...r, unmount: () => document.body.replaceChildren() }));
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
+      unmount();
+      fakeAuth.currentUser.providerData = [{ providerId: "google.com" }];
+      await renderDialog();
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+    });
+
+    it("진행 중 apple 단계 문구를 보여준다", async () => {
+      mockDeleteAccount.mockImplementation((onStep) => {
+        onStep?.("apple");
+        return new Promise(() => {});
+      });
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+      expect(screen.getByRole("status")).toHaveTextContent("Apple 연결 해제 중…");
+    });
+
+    it("재인증 창을 닫으면 실패 문구 없이 원래 상태로 돌아간다", async () => {
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockRejectedValueOnce(Object.assign(new Error("closed"), { code: "auth/popup-closed-by-user" }));
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+      await waitFor(() => expect(screen.getByRole("button", { name: "탈퇴하기" })).toBeEnabled());
+      expect(screen.queryByText(/일부만 처리되었습니다/)).not.toBeInTheDocument();
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(mockLogout).not.toHaveBeenCalled();
+    });
+
+    it("apple 단계에서 실패하면 아무것도 삭제되지 않았다고 알린다", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockImplementationOnce(async (onStep) => {
+        onStep?.("apple");
+        throw new Error("revoke");
+      });
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+      expect(
+        await screen.findByText(/Apple 확인에 실패해 아무것도 삭제되지 않았어요\. 다시 시도해 주세요\./),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/일부만 처리되었습니다/)).not.toBeInTheDocument();
+      expect(mockLogout).not.toHaveBeenCalled();
+    });
+
+    it("apple 다음 단계에서 실패하면 기존 실패 문구를 보여준다", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockImplementationOnce(async (onStep) => {
+        onStep?.("apple");
+        onStep?.("calendar");
+        throw new Error("calendar");
+      });
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+      expect(await screen.findByText(/일부만 처리되었습니다\. 다시 시도해 주세요\./)).toBeInTheDocument();
+      expect(screen.queryByText(/Apple 확인에 실패해/)).not.toBeInTheDocument();
+    });
+  });
+
   describe("진행 표시", () => {
     it("진행 중에는 현재 단계와 '창을 닫지 마세요' 안내를 보여주고, 단계가 바뀌면 갱신한다", async () => {
-      let reportStep: ((step: "calendar" | "reminders" | "account") => void) | undefined;
+      let reportStep: ((step: "apple" | "calendar" | "reminders" | "account") => void) | undefined;
       mockDeleteAccount.mockImplementation((onStep) => {
         reportStep = onStep;
         onStep?.("calendar");
