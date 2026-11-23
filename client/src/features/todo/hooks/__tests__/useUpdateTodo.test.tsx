@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
@@ -139,5 +139,64 @@ describe('useUpdateTodo 훅', () => {
     })
 
     expect(vi.mocked(getTodoDetail)).toHaveBeenCalledTimes(2)
+  })
+  // 저장 응답 전에 보이는 캐시도 editTodo와 같은 완료 시각 규칙(resolveDoneAt)을 따른다.
+  describe('낙관적 업데이트의 doneAt', () => {
+    const NOW = new Date('2030-01-15T03:00:00.000Z')
+    const EARLIER = '2030-01-01T00:00:00.000Z'
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(NOW)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const runOptimistic = async (cache: Todo[], update: Todo) => {
+      const { editTodo } = await import('../../api')
+      // 저장이 끝나지 않은 상태에서 캐시를 본다
+      vi.mocked(editTodo).mockReturnValueOnce(new Promise(() => {}))
+      const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+      queryClient.setQueryData(['todos'], cache)
+      const { result } = renderHook(() => useUpdateTodo(), { wrapper: createWrapper(queryClient) })
+      result.current.mutate(update)
+      await waitFor(() => expect(vi.mocked(editTodo)).toHaveBeenCalled())
+      const byId = (id: string) => queryClient.getQueryData<Todo[]>(['todos'])?.find((t) => t.id === id)
+      return byId
+    }
+
+    it('status만 done으로 넘겨도 캐시에 지금 시각을 채운다', async () => {
+      const todo = makeTodo({ status: 'doing' })
+      const byId = await runOptimistic([todo], { ...todo, status: 'done' })
+      expect(byId('todo-1')?.doneAt).toBe(NOW.toISOString())
+    })
+
+    it('이미 완료된 할 일은 처음 완료 시각을 유지하고, 완료 취소는 지운다', async () => {
+      const done = makeTodo({ status: 'done', doneAt: EARLIER })
+      let byId = await runOptimistic([done], { ...done, doneAt: null, title: '수정' })
+      expect(byId('todo-1')?.doneAt).toBe(EARLIER)
+
+      byId = await runOptimistic([done], { ...done, status: 'todo' })
+      expect(byId('todo-1')?.doneAt).toBeNull()
+    })
+
+    it('상위 완료 시 이미 완료된 하위의 완료 시각은 덮어쓰지 않는다', async () => {
+      const root = makeTodo({ id: 'root-1', status: 'doing' })
+      const open = makeTodo({ id: 'c-open', parentId: 'root-1', status: 'todo' })
+      const done = makeTodo({ id: 'c-done', parentId: 'root-1', status: 'done', doneAt: EARLIER })
+      const byId = await runOptimistic([root, open, done], { ...root, status: 'done' })
+      expect(byId('c-open')).toMatchObject({ status: 'done', doneAt: NOW.toISOString() })
+      expect(byId('c-done')?.doneAt).toBe(EARLIER)
+    })
+
+    it('하위를 고쳐도 상위가 계속 완료면 상위의 완료 시각을 유지한다', async () => {
+      const { calcParentStatus } = await import('../../api')
+      vi.mocked(calcParentStatus).mockReturnValueOnce({ status: 'done', doneAt: NOW.toISOString() })
+      const parent = makeTodo({ id: 'root-1', status: 'done', doneAt: EARLIER })
+      const child = makeTodo({ id: 'c-1', parentId: 'root-1', status: 'done', doneAt: EARLIER })
+      const byId = await runOptimistic([parent, child], { ...child, title: '수정' })
+      expect(byId('root-1')?.doneAt).toBe(EARLIER)
+    })
   })
 })
