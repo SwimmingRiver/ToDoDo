@@ -41,6 +41,8 @@ const mockClearSnapshot = vi.fn();
 vi.mock("@/features/calendarIntegration/hooks/syncSnapshot", () => ({ clearSnapshot: (uid: string) => mockClearSnapshot(uid) }));
 const fakeAuth = { currentUser: { uid: "u1", providerData: [{ providerId: "google.com" }] } };
 vi.mock("@/shared/lib/firebase", () => ({ auth: fakeAuth }));
+const mockWarmUp = vi.fn();
+vi.mock("@/features/auth/api/warmUpPopup", () => ({ warmUpPopupResolver: () => mockWarmUp() }));
 
 const renderDialog = async (onClose = vi.fn()) => {
   const { default: AccountDeletionDialog } = await import("../accountDeletionDialog");
@@ -323,5 +325,32 @@ describe("AccountDeletionDialog", () => {
       await screen.findByText(/일부만 처리되었습니다/);
       expect(fireBeforeUnload().defaultPrevented).toBe(false);
     });
+  });
+
+  it("Apple 사용자면 열릴 때 팝업 처리기를 미리 준비한다(Safari 첫 팝업 차단 방지)", async () => {
+    fakeAuth.currentUser.providerData = [{ providerId: "apple.com" }];
+    await renderDialog();
+    expect(mockWarmUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("구글 사용자면 팝업 처리기를 준비하지 않는다", async () => {
+    await renderDialog();
+    expect(mockWarmUp).not.toHaveBeenCalled();
+  });
+
+  it("Apple 확인 창이 차단되면 아무것도 지워지지 않았다며 한 번 더 누르라고 안내한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fakeAuth.currentUser.providerData = [{ providerId: "apple.com" }];
+    mockDeleteAccount.mockImplementationOnce(async (onStep) => {
+      onStep?.("apple");
+      throw { code: "auth/popup-blocked" };
+    });
+    const user = setupUser();
+    await renderDialog();
+    await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+    expect(
+      await screen.findByText(/Apple 확인 창이 열리지 않았어요\. 아무것도 삭제되지 않았으니 한 번 더 눌러 주세요\./),
+    ).toBeInTheDocument();
+    expect(mockLogout).not.toHaveBeenCalled();
   });
 });

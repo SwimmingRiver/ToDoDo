@@ -9,6 +9,7 @@ import { clearSnapshot } from "@/features/calendarIntegration/hooks/syncSnapshot
 import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { deleteAccount, type AccountDeletionStep } from "../api/deleteAccount";
+import { warmUpPopupResolver } from "@/features/auth/api/warmUpPopup";
 
 const BASE_MESSAGE = "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.";
 const SUBSCRIPTION_NOTICE = "구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
@@ -19,6 +20,7 @@ const APPLE_REAUTH_NOTICE = "Apple 계정 확인 창이 한 번 더 열려요.";
 const FAILURE_MESSAGE = "일부만 처리되었습니다. 다시 시도해 주세요.";
 // Apple 단계는 맨 앞이라 여기서 실패하면 아무것도 지우지 않았다.
 const APPLE_FAILURE_MESSAGE = "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.";
+const APPLE_POPUP_BLOCKED_MESSAGE = "Apple 확인 창이 열리지 않았어요. 아무것도 삭제되지 않았으니 한 번 더 눌러 주세요.";
 const STEP_LABEL: Record<AccountDeletionStep, string> = {
   apple: "Apple 연결 해제 중…",
   calendar: "구글 캘린더 연동 해제 중…",
@@ -35,6 +37,7 @@ interface AccountDeletionDialogProps {
 const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
   const [status, setStatus] = useState<"idle" | "pending" | "failed">("idle");
   const [step, setStep] = useState<AccountDeletionStep>("calendar");
+  const [popupBlocked, setPopupBlocked] = useState(false);
   const { logout } = useAuth();
   const { data: entitlement } = useEntitlement();
   const queryClient = useQueryClient();
@@ -48,6 +51,11 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
   const googleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "google");
   const isAppleUser = !!auth.currentUser?.providerData.some((p) => p.providerId === "apple.com");
   const isPending = status === "pending";
+
+  // Apple 재인증 팝업이 첫 클릭에 열리도록 처리기를 미리 준비한다(Safari, warmUpPopup.ts).
+  useEffect(() => {
+    if (isAppleUser) warmUpPopupResolver();
+  }, [isAppleUser]);
 
   // 진행 중 탭을 닫으면 일부 단계만 처리된 채 남는다. 브라우저 기본 확인 창으로 한 번 막는다.
   useEffect(() => {
@@ -63,6 +71,7 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
     if (isPending) return;
     const uid = auth.currentUser?.uid;
     setStep("calendar");
+    setPopupBlocked(false);
     setStatus("pending");
     try {
       await deleteAccount(setStep);
@@ -73,6 +82,8 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
         return;
       }
       console.error("회원 탈퇴 실패:", error);
+      // 처리기 준비 전에 눌렀거나 준비가 실패하면 Safari가 막는다 — 두 번째 클릭은 열린다.
+      setPopupBlocked((error as { code?: unknown } | null)?.code === "auth/popup-blocked");
       setStatus("failed");
       return;
     }
@@ -95,7 +106,8 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
     googleRenewing && GOOGLE_NOTICE,
     isAppleUser && APPLE_REAUTH_NOTICE,
     // step은 onStep이 마지막으로 알린 단계 = 실패한 단계다.
-    status === "failed" && (step === "apple" ? APPLE_FAILURE_MESSAGE : FAILURE_MESSAGE),
+    status === "failed" &&
+      (step === "apple" ? (popupBlocked ? APPLE_POPUP_BLOCKED_MESSAGE : APPLE_FAILURE_MESSAGE) : FAILURE_MESSAGE),
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import LoginPage from '../loginPage'
 import { AuthContext } from '../../context/authContext'
 import { signInWithGoogle, signInWithApple, consumeLinkedNotice } from '../../api/signIn'
+import { warmUpPopupResolver } from '../../api/warmUpPopup'
 import type { User } from 'firebase/auth'
 
 vi.mock('../../api/signIn', () => ({
@@ -11,6 +12,8 @@ vi.mock('../../api/signIn', () => ({
   signInWithApple: vi.fn(),
   consumeLinkedNotice: vi.fn(),
 }))
+
+vi.mock('../../api/warmUpPopup', () => ({ warmUpPopupResolver: vi.fn() }))
 
 const toastInfo = vi.fn()
 vi.mock('@/shared', () => ({
@@ -144,5 +147,22 @@ describe('LoginPage 컴포넌트', () => {
     await waitFor(() => expect(screen.getByText('홈')).toBeInTheDocument())
     expect(toastInfo).toHaveBeenCalledTimes(1)
     expect(toastInfo).toHaveBeenCalledWith('이제 Google·Apple 둘 다로 로그인할 수 있어요')
+  })
+
+  it('로그인 화면에 들어오면 팝업 처리기를 미리 준비한다(Safari 첫 팝업 차단 방지)', () => {
+    renderLogin()
+    expect(warmUpPopupResolver).toHaveBeenCalledTimes(1)
+  })
+
+  it('이미 로그인된 사용자면 팝업 처리기를 준비하지 않는다', () => {
+    renderLogin(mockUser)
+    expect(warmUpPopupResolver).not.toHaveBeenCalled()
+  })
+
+  it('팝업이 차단되면 한 번 더 누르라고 안내한다', async () => {
+    vi.mocked(signInWithGoogle).mockRejectedValue({ code: 'auth/popup-blocked' })
+    renderLogin()
+    fireEvent.click(screen.getByText('Google로 로그인'))
+    expect(await screen.findByText('로그인 창이 열리지 않았어요. 한 번 더 눌러 주세요.')).toBeInTheDocument()
   })
 })
