@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { auth } from "../firebase";
+import { reportError } from "../shared/lib/sentry";
 
 /** Expo는 process.env.EXPO_PUBLIC_*를 빌드 시 인라인한다. 함수 안에서 읽어 테스트가 값을 바꿀 수 있게 한다. */
 const feedbackProxyUrl = (): string => process.env.EXPO_PUBLIC_FEEDBACK_PROXY_URL ?? "";
@@ -17,7 +18,7 @@ export class FeedbackError extends Error {
 
 /**
  * 의견을 전송한다. 429만 TOO_FREQUENT로 구분하고, 설정·로그인·네트워크·그 외 응답은
- * 모두 UNKNOWN으로 바꾼다(원인은 console.warn에 남긴다).
+ * 모두 UNKNOWN으로 바꾸고 Sentry로 보고한다(429는 예상된 오류라 보고하지 않는다).
  */
 export const submitFeedback = async (content: string): Promise<void> => {
   const trimmed = content.trim();
@@ -35,10 +36,11 @@ export const submitFeedback = async (content: string): Promise<void> => {
       body: JSON.stringify({ content: trimmed, platform: Platform.OS === "android" ? "android" : "ios" }),
     });
   } catch (error) {
-    console.warn("[feedback] 요청 실패", error);
+    reportError(error, "feedback");
     throw new FeedbackError("UNKNOWN");
   }
   if (res.ok) return;
-  console.warn("[feedback] 응답 실패", res.status);
-  throw new FeedbackError(res.status === 429 ? "TOO_FREQUENT" : "UNKNOWN");
+  if (res.status === 429) throw new FeedbackError("TOO_FREQUENT");
+  reportError(new Error(`feedback-proxy ${res.status}`), "feedback");
+  throw new FeedbackError("UNKNOWN");
 };
