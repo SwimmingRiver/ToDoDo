@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Todo, RecurrenceRule } from "../../types/todo.type";
 
 // 9f659ea(반복 할 일 호라이즌 데이터 손실 방지 및 정합성 개선) 회귀 테스트.
@@ -382,5 +382,129 @@ describe("editTodo batch 원자성 (상위/하위 상태 동기화)", () => {
     await expect(editTodo(todo, [todo])).rejects.toThrow(
       "시작일시는 마감일시보다 늦을 수 없습니다",
     );
+  });
+});
+
+// 11-23 운영 점검: 웹의 칸반·카드 상태 시트·상세 폼은 `{ ...todo, status }`만 넘겨
+// doneAt이 기록되지 않았다(done 117건 중 64건). 완료 시각은 저장 계층(editTodo)이 정한다.
+describe("editTodo 완료 시각(doneAt) 기록", () => {
+  const NOW = new Date("2030-01-15T03:00:00.000Z");
+  const EARLIER = "2030-01-01T00:00:00.000Z";
+
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const setup = async (existing: Record<string, unknown>) => {
+    const { getDoc, writeBatch } = await import("firebase/firestore");
+    vi.mocked(getDoc).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ userId: "test-user-id", ...existing }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+    const batch = makeBatch();
+    vi.mocked(writeBatch).mockReturnValue(batch as unknown as ReturnType<typeof writeBatch>);
+    const { editTodo } = await import("../todoApi");
+    const updatesFor = (id: string) =>
+      batch.update.mock.calls.find(([ref]) => (ref as { id: string }).id === id)?.[1] as
+        | Record<string, unknown>
+        | undefined;
+    return { editTodo, batch, updatesFor };
+  };
+
+  it("칸반처럼 doneAt 없이 status만 done으로 넘겨도 지금 시각을 기록한다", async () => {
+    const { editTodo, updatesFor } = await setup({ status: "doing", doneAt: null });
+    const todo = makeTodo({ status: "done", doneAt: null });
+
+    await editTodo(todo, [todo]);
+
+    expect(updatesFor("todo-1")?.doneAt).toBe(NOW.toISOString());
+  });
+
+  it("이미 완료된 할 일을 다시 저장하면(제목 수정 등) 처음 완료 시각을 유지한다", async () => {
+    const { editTodo, updatesFor } = await setup({ status: "done", doneAt: EARLIER });
+    const todo = makeTodo({ status: "done", doneAt: null, title: "제목만 수정" });
+
+    await editTodo(todo, [todo]);
+
+    expect(updatesFor("todo-1")?.doneAt).toBe(EARLIER);
+  });
+
+  it("완료를 취소하면 doneAt을 지운다", async () => {
+    const { editTodo, updatesFor } = await setup({ status: "done", doneAt: EARLIER });
+    const todo = makeTodo({ status: "todo", doneAt: EARLIER });
+
+    await editTodo(todo, [todo]);
+
+    expect(updatesFor("todo-1")?.doneAt).toBeNull();
+  });
+
+  it("상위를 완료하면 미완료 하위만 지금 시각으로 완료하고, 이미 완료된 하위의 완료 시각은 덮어쓰지 않는다", async () => {
+    const { editTodo, updatesFor } = await setup({ status: "doing", doneAt: null });
+    const root = makeTodo({ id: "root-1", status: "done" });
+    const allTodos = [
+      root,
+      makeTodo({ id: "child-open", parentId: "root-1", status: "doing" }),
+      makeTodo({ id: "child-done", parentId: "root-1", status: "done", doneAt: EARLIER }),
+    ];
+
+    await editTodo(root, allTodos);
+
+    expect(updatesFor("child-open")).toMatchObject({ status: "done", doneAt: NOW.toISOString() });
+    expect(updatesFor("child-done")).toBeUndefined();
+  });
+
+  it("이미 완료된 상위의 하위를 고쳐 상위가 계속 완료면 상위의 완료 시각을 유지한다", async () => {
+    const { editTodo, updatesFor } = await setup({ status: "done", doneAt: EARLIER, parentId: "root-1" });
+    const parent = makeTodo({ id: "root-1", status: "done", doneAt: EARLIER });
+    const child = makeTodo({ id: "child-1", parentId: "root-1", status: "done", doneAt: EARLIER, title: "수정" });
+
+    await editTodo(child, [parent, child]);
+
+    expect(updatesFor("root-1")).toMatchObject({ status: "done", doneAt: EARLIER });
+  });
+
+  it("마지막 하위를 완료해 상위가 새로 완료되면 상위에 지금 시각을 기록한다", async () => {
+    const { editTodo, updatesFor } = await setup({ status: "doing", doneAt: null, parentId: "root-1" });
+    const parent = makeTodo({ id: "root-1", status: "doing" });
+    const child = makeTodo({ id: "child-1", parentId: "root-1", status: "done" });
+
+    await editTodo(child, [parent, child]);
+
+    expect(updatesFor("root-1")).toMatchObject({ status: "done", doneAt: NOW.toISOString() });
+  });
+});
+
+describe("생성 시 doneAt 필드", () => {
+  beforeEach(async () => {
+    await resetFirestoreMocks();
+  });
+
+  it("createTodo는 doneAt: null을 함께 저장한다 (필드가 아예 없는 문서를 만들지 않는다)", async () => {
+    const { getDocs, addDoc } = await import("firebase/firestore");
+    vi.mocked(getDocs).mockResolvedValue(emptyDocsSnapshot as GetDocsResult);
+    vi.mocked(addDoc).mockResolvedValue({ id: "new-1" } as Awaited<ReturnType<typeof addDoc>>);
+    const { createTodo } = await import("../todoApi");
+
+    const { doneAt: _omit, ...withoutDoneAt } = makeTodo();
+    await createTodo(withoutDoneAt as Todo);
+
+    expect(vi.mocked(addDoc).mock.calls[0][1]).toMatchObject({ status: "todo", doneAt: null });
+  });
+
+  it("createChildTodo는 doneAt: null을 함께 저장한다", async () => {
+    const { addDoc, updateDoc } = await import("firebase/firestore");
+    vi.mocked(addDoc).mockResolvedValue({ id: "child-new" } as Awaited<ReturnType<typeof addDoc>>);
+    vi.mocked(updateDoc).mockResolvedValue(undefined);
+    const { createChildTodo } = await import("../todoApi");
+
+    await createChildTodo("root-1", { title: "하위" }, [makeTodo({ id: "root-1" })]);
+
+    expect(vi.mocked(addDoc).mock.calls[0][1]).toMatchObject({ status: "todo", doneAt: null });
   });
 });
