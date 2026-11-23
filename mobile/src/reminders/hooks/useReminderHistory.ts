@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react-native";
 import { useAuthState } from "../../auth/useAuthState";
@@ -20,8 +22,9 @@ export const useReminderHistory = () => {
         throw error;
       }),
     enabled: !!uid,
-    // 백그라운드에서 푸시를 받고 돌아왔을 때 배지가 바로 떠야 하므로 항상 stale로 둔다.
-    staleTime: 0,
+    // 헤더(벨)가 화면마다 마운트되므로 짧게 신선하게 둔다. 포그라운드 복귀 시 갱신은 TanStack focusManager가
+    // 아니라(앱에 AppState 연결이 없다) useRefreshHistoryOnForeground가 무효화로 한다. 포그라운드 수신은 useForegroundReminders가 다시 불러온다.
+    staleTime: 30_000,
     retry: 1,
   });
 };
@@ -45,4 +48,18 @@ export const useMarkHistorySeen = () => {
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
+};
+
+/** 백그라운드에서 푸시를 받고 돌아왔을 때 배지가 바로 뜨도록, 앱이 active가 되면 기록을 무효화한다. */
+export const useRefreshHistoryOnForeground = (): void => {
+  const queryClient = useQueryClient();
+  const { user } = useAuthState();
+  const uid = user?.uid;
+  useEffect(() => {
+    if (!uid) return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void queryClient.invalidateQueries({ queryKey: historyKey(uid) });
+    });
+    return () => sub.remove();
+  }, [queryClient, uid]);
 };

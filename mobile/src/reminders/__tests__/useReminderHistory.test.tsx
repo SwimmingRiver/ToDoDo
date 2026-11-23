@@ -1,21 +1,69 @@
-import { describe, it, expect, jest } from "@jest/globals";
+import React from "react";
+import { describe, it, expect, jest, afterEach } from "@jest/globals";
+import { renderHook, waitFor } from "@testing-library/react-native";
+import { AppState } from "react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { hasUnreadReminders, useRefreshHistoryOnForeground, useReminderHistory } from "../hooks/useReminderHistory";
 
 jest.mock("../../firebase", () => ({ auth: {}, db: {} }));
 jest.mock("../../auth/useAuthState", () => ({
   useAuthState: () => ({ user: { uid: "u1" }, loading: false }),
 }));
+jest.mock("../api/reminderProxyApi", () => ({
+  fetchReminderHistory: jest.fn(() => Promise.resolve({ items: [], lastSeenAt: 0 })),
+  markReminderHistorySeen: jest.fn(),
+}));
 
 const item = (sentAt: number) => ({ todoId: "a", title: "t", offsetMinutes: 30 as const, dueAt: "x", sentAt });
 
+let client: QueryClient;
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={client}>{children}</QueryClientProvider>
+);
+afterEach(() => {
+  client?.clear();
+});
+
 describe("hasUnreadReminders", () => {
-  it("hasUnreadReminders true when sentAt > lastSeenAt", async () => {
-    const { hasUnreadReminders } = await import("../hooks/useReminderHistory");
+  it("hasUnreadReminders true when sentAt > lastSeenAt", () => {
     expect(hasUnreadReminders({ items: [item(5), item(20)], lastSeenAt: 10 })).toBe(true);
   });
 
-  it("false when empty", async () => {
-    const { hasUnreadReminders } = await import("../hooks/useReminderHistory");
+  it("false when empty", () => {
     expect(hasUnreadReminders({ items: [], lastSeenAt: 0 })).toBe(false);
     expect(hasUnreadReminders(undefined)).toBe(false);
+  });
+});
+
+describe("useRefreshHistoryOnForeground", () => {
+  it("invalidates the history query when the app becomes active", async () => {
+    type Listener = (state: string) => void;
+    const listeners: Listener[] = [];
+    const remove = jest.fn();
+    const spy = jest.spyOn(AppState, "addEventListener").mockImplementation(((_: string, l: Listener) => {
+      listeners.push(l);
+      return { remove };
+    }) as never);
+    client = new QueryClient();
+    const invalidate = jest.spyOn(client, "invalidateQueries");
+
+    const { unmount } = await renderHook(() => useRefreshHistoryOnForeground(), { wrapper });
+    expect(listeners).toHaveLength(1);
+    listeners[0]("background");
+    expect(invalidate).not.toHaveBeenCalled();
+    listeners[0]("active");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["reminderHistory", "u1"] });
+    await unmount();
+    expect(remove).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+describe("useReminderHistory staleTime", () => {
+  it("history stays fresh for 30s so header remounts do not refetch", async () => {
+    client = new QueryClient();
+    const { result } = await renderHook(() => useReminderHistory(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(client.getQueryCache().find({ queryKey: ["reminderHistory", "u1"] })?.isStale()).toBe(false);
   });
 });

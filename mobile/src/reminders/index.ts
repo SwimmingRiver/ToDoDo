@@ -13,6 +13,7 @@ export { useReminderDefault, useSetReminderDefault } from "./hooks/useReminderSe
 export {
   useReminderHistory,
   useMarkHistorySeen,
+  useRefreshHistoryOnForeground,
   hasUnreadReminders,
   REMINDER_HISTORY_KEY,
 } from "./hooks/useReminderHistory";

@@ -34,6 +34,7 @@ import {
   useForegroundReminders,
   useNotificationNavigation,
   usePushTokenSync,
+  useRefreshHistoryOnForeground,
   useReminderRefresh,
 } from "../reminders";
 import { flushPendingTodoDetail, navigationRef } from "./navigationRef";
@@ -156,6 +157,7 @@ const ReminderSync = () => {
   useReminderRefresh();
   useForegroundReminders();
   useNotificationNavigation();
+  useRefreshHistoryOnForeground();
   return null;
 };
 
