@@ -37,3 +37,9 @@ export { useReminderRefresh, REFRESH_DEBOUNCE_MS } from "./hooks/useReminderRefr
 export { useForegroundReminders, HISTORY_REFETCH_DELAY_MS } from "./hooks/useForegroundReminders";
 export { useNotificationNavigation } from "./hooks/useNotificationNavigation";
 export { ReminderBannerProvider, useReminderBanner } from "./components/ReminderBanner";
+export {
+  ReminderPromptProvider,
+  useReminderPrompt,
+  PROMPT_SNOOZE_KEY,
+  PROMPT_SNOOZE_MS,
+} from "./components/ReminderPromptProvider";

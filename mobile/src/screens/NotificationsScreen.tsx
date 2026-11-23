@@ -25,6 +25,7 @@ import { openTodoDetail } from "../navigation/navigationRef";
 import { reportError } from "../shared/lib/sentry";
 import { Button } from "../shared/ui/button/Button";
 import { EmptyState } from "../shared/ui/emptyState/EmptyState";
+import { ReminderChips } from "../shared/ui/reminderField/ReminderField";
 import { colors } from "../theme/colors";
 import { MIN_TOUCH_TARGET, radius, spacing } from "../theme/spacing";
 
@@ -149,26 +150,15 @@ export const NotificationsScreen = () => {
       </View>
       <View style={styles.card}>
         <Text style={styles.label}>기본 알림 시점</Text>
-        <View style={styles.chips} accessibilityRole="radiogroup">
-          {REMINDER_SETTING_OPTIONS.map((option) => {
-            const selected = option.value === selectedValue;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={() => {
-                  const setting = parseReminderSetting(option.value);
-                  if (setting !== null) setDefault.mutate(setting);
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={`기본 알림 시점 ${option.label}`}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{option.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <ReminderChips
+          options={REMINDER_SETTING_OPTIONS}
+          value={selectedValue}
+          onChange={(value) => {
+            const setting = parseReminderSetting(value);
+            if (setting !== null) setDefault.mutate(setting);
+          }}
+          accessibilityPrefix="기본 알림 시점"
+        />
       </View>
       <Text style={styles.sectionTitle}>받은 알림</Text>
     </View>
@@ -207,20 +197,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, color: colors.text.secondary },
   statusOn: { fontSize: 15, fontWeight: "600", color: colors.brand.strong },
   smallButton: { minWidth: 120 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: {
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: spacing.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border.secondary,
-    backgroundColor: colors.background.primary,
-  },
-  chipSelected: { backgroundColor: colors.brand.tint, borderColor: colors.brand.strong },
-  chipLabel: { fontSize: 14, color: colors.text.secondary },
-  chipLabelSelected: { color: colors.brand.strong, fontWeight: "600" },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: colors.text.secondary },
   item: {
     flexDirection: "row",

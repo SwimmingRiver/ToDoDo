@@ -21,6 +21,7 @@ jest.mock("@react-navigation/native", () => ({
 }));
 jest.mock("../../reminders", () => ({
   ReminderBannerProvider: ({ children }: { children: unknown }) => children,
+  ReminderPromptProvider: ({ children }: { children: unknown }) => children,
   usePushTokenSync: jest.fn(),
   useReminderRefresh: jest.fn(),
   useForegroundReminders: jest.fn(),

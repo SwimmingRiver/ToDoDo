@@ -29,6 +29,7 @@ import { hideSplash } from "../shared/lib/splash";
 import { reportError } from "../shared/lib/sentry";
 import {
   ReminderBannerProvider,
+  ReminderPromptProvider,
   cancelLegacyLocalRemindersOnce,
   useForegroundReminders,
   useNotificationNavigation,
@@ -189,11 +190,14 @@ export const RootNavigator = () => {
     <NavigationContainer ref={navigationRef} onReady={flushPendingTodoDetail}>
       {user ? (
         <ReminderBannerProvider>
-          <EntitlementSync />
-          <CalendarSync />
-          <ReminderSync />
-          <PendingPurchaseResume />
-          <MainTabs />
+          {/* 할 일 저장 직후의 알림 권한 안내. 폼 화면은 저장하자마자 닫히므로 화면 밖에 둔다. */}
+          <ReminderPromptProvider>
+            <EntitlementSync />
+            <CalendarSync />
+            <ReminderSync />
+            <PendingPurchaseResume />
+            <MainTabs />
+          </ReminderPromptProvider>
         </ReminderBannerProvider>
       ) : (
         <LoginScreen />

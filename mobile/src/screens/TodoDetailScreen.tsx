@@ -11,6 +11,11 @@ import {
   type RecurringTodoInput,
   type Todo,
 } from "@tododo/core";
+import {
+  DEFAULT_REMINDER_SETTING,
+  parseReminderSetting,
+  toReminderChoice,
+} from "@tododo/core/dist/reminders/index.js";
 import type { TodoListStackParamList } from "../navigation/types";
 import { useTodos } from "../hooks/useTodos";
 import { useUpdateTodo } from "../hooks/useUpdateTodo";
@@ -26,6 +31,8 @@ import { ChildTodoCard } from "../shared/ui/childTodoCard/ChildTodoCard";
 import { ProgressBar } from "../shared/ui/progressBar/ProgressBar";
 import { RecurrenceBadge } from "../shared/ui/recurrenceBadge/RecurrenceBadge";
 import { RecurrenceSection } from "../shared/ui/recurrenceSection/RecurrenceSection";
+import { ReminderField } from "../shared/ui/reminderField/ReminderField";
+import { useReminderDefault, useReminderPrompt } from "../reminders";
 import { getTodoDateValidationError } from "../shared/utils/todoDateValidation";
 import { getProjectOverdue, getProjectProgress } from "../shared/utils/projectUtils";
 import { colors } from "../theme/colors";
@@ -77,6 +84,8 @@ export const TodoDetailScreen = () => {
   // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭(Alert 버튼 두 번 등)은
   // ref로 막는다. 저장과 시리즈 삭제가 같은 ref를 공유해 서로도 겹치지 않는다.
   const saveInFlightRef = useRef(false);
+  const { data: reminderDefault = DEFAULT_REMINDER_SETTING } = useReminderDefault();
+  const { maybePrompt } = useReminderPrompt();
 
   const allTodos = todos ?? [];
   const todo = allTodos.find((t: Todo) => t.id === id);
@@ -93,6 +102,8 @@ export const TodoDetailScreen = () => {
   const [recurrenceValue, setRecurrenceValue] = useState<RecurrenceFormValue | null>(
     toFormValue(todo?.recurrence),
   );
+  // "default" | "off" | "0" | "10" | ... — 저장 직전 parseReminderSetting으로 바꾼다(웹 todoForm과 동일).
+  const [reminderChoice, setReminderChoice] = useState(toReminderChoice(todo?.reminderOffsetMinutes));
 
   // 시작일시가 지워지면 반복은 의미가 없으므로 끈다 (웹 todoDetail과 동일)
   useEffect(() => {
@@ -111,6 +122,7 @@ export const TodoDetailScreen = () => {
     setStartAt(todo.startAt);
     setDueAt(todo.dueAt);
     setRecurrenceValue(toFormValue(todo.recurrence));
+    setReminderChoice(toReminderChoice(todo.reminderOffsetMinutes));
   }, [todo?.id]);
 
   if (!todo) {
@@ -127,6 +139,14 @@ export const TodoDetailScreen = () => {
   // 검증에서도 뺀다. 값은 지우지 않아 반복을 끄면 그대로 다시 보인다(웹 todoForm과 동일).
   const hideDueAt = recurrenceValue !== null && !todo.recurrence;
   const dateValidationError = getTodoDateValidationError(startAt, hideDueAt ? null : dueAt);
+  // 알림은 마감이 있을 때만 의미가 있다. 반복이면 각 회차에 마감(=시작 시각)이 생기므로 보인다.
+  const isRecurring = recurrenceValue !== null;
+  const showReminder = isRecurring || !!dueAt;
+  // 저장 성공 후 알림 안내를 제안할 기준 시각(웹 todoForm offerTarget과 동일).
+  const promptTarget = isRecurring ? startAt : dueAt;
+  const promptIfDue = () => {
+    if (promptTarget) maybePrompt();
+  };
 
   const runSave = async (task: () => Promise<void>) => {
     if (saveInFlightRef.current) return;
@@ -143,6 +163,7 @@ export const TodoDetailScreen = () => {
       try {
         setError(null);
         await editRecurringSeries(updated);
+        promptIfDue();
         navigation.goBack();
       } catch {
         setError(SERIES_SAVE_ERROR);
@@ -163,6 +184,9 @@ export const TodoDetailScreen = () => {
       return;
     }
 
+    // 선택 칩이 숨은 상태(마감 없음)로 저장하면 이전 값과 무관하게 기본값(null)으로 되돌린다.
+    const reminderOffsetMinutes = showReminder ? parseReminderSetting(reminderChoice) : null;
+
     const updated = {
       ...todo,
       title,
@@ -171,6 +195,7 @@ export const TodoDetailScreen = () => {
       startAt,
       dueAt,
       recurrence: toRecurrenceRule(recurrenceValue),
+      reminderOffsetMinutes,
     };
 
     // 웹과 동일: 반복 시리즈였던 할 일의 저장(규칙 변경·끄기·일반 필드만 수정 모두)은
@@ -196,6 +221,7 @@ export const TodoDetailScreen = () => {
         }
         try {
           await deleteTodo(todo.id);
+          promptIfDue();
         } catch {
           Alert.alert("정리 실패", CONVERSION_CLEANUP_ERROR);
         }
@@ -209,9 +235,10 @@ export const TodoDetailScreen = () => {
         setError(null);
         await updateTodo({
           id: todo.id,
-          fields: { title, description, priority, startAt, dueAt },
+          fields: { title, description, priority, startAt, dueAt, reminderOffsetMinutes },
           title,
         });
+        promptIfDue();
         navigation.goBack();
       } catch (e) {
         setError(e instanceof Error ? e.message : "저장에 실패했습니다");
@@ -375,6 +402,16 @@ export const TodoDetailScreen = () => {
 
           <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
           {!hideDueAt && <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />}
+          {showReminder && (
+            <>
+              <Text style={styles.label}>마감 알림</Text>
+              <ReminderField
+                value={reminderChoice}
+                onChange={setReminderChoice}
+                defaultSetting={reminderDefault}
+              />
+            </>
+          )}
           {isRoot && (
             <RecurrenceSection
               disabled={hasChildren || !startAt}
