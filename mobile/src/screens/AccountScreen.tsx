@@ -5,6 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
 import { deleteAccount } from "../account/deleteAccount";
+import { isAppleUser } from "../auth/appleSignIn";
+import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { PremiumSection } from "../premium/PremiumSection";
 import { useEntitlement } from "../premium/useEntitlement";
@@ -22,6 +24,8 @@ const PADDLE_NOTICE = "구독이 즉시 해지되고 남은 기간은 사라집�
 // Apple은 서버가 해지할 수 없어 경고하고 구독 관리로 보낸다. Google은 서버가 탈퇴 때 함께 해지하므로 안내만 한다(스펙 7절).
 const APPLE_WARNING = "App Store 구독은 탈퇴해도 해지되지 않고 Apple을 통해 계속 결제돼요. 먼저 구독을 해지해 주세요.";
 const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
+// 구독과 무관하게 Apple로 로그인한 사용자는 토큰 해지를 위해 Apple 확인 창을 한 번 더 거친다.
+const APPLE_SIGN_IN_NOTICE = "Apple 계정 확인 창이 한 번 더 열려요.";
 
 export const AccountScreen = () => {
   const { user } = useAuthState();
@@ -53,8 +57,10 @@ export const AccountScreen = () => {
     setIsDeleting(true);
     try {
       await deleteAccount();
-    } catch {
+    } catch (error) {
       setIsDeleting(false);
+      // Apple 확인 창을 닫았으면 아무것도 지워지지 않았다 — 실패 안내 없이 원래 상태로.
+      if (isUserCancelledSignIn((error as { code?: unknown } | null)?.code)) return;
       Alert.alert("탈퇴 실패", "일부만 처리되었습니다. 다시 시도해 주세요.");
       return;
     }
@@ -79,6 +85,7 @@ export const AccountScreen = () => {
       hasPaddleSubscription && PADDLE_NOTICE,
       appleRenewing && APPLE_WARNING,
       googleRenewing && GOOGLE_NOTICE,
+      !!user && isAppleUser(user) && APPLE_SIGN_IN_NOTICE,
     ]
       .filter(Boolean)
       .join("\n\n");

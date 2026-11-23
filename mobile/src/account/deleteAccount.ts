@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { isAppleUser, revokeAppleSignIn } from "../auth/appleSignIn";
 import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
 import { disconnectInChunks } from "@tododo/core/dist/calendarSync/index.js";
 
@@ -41,13 +42,15 @@ const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
 };
 
 /**
- * 탈퇴. 웹과 같은 순서: 캘린더 연동 해제 → 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
+ * 탈퇴. 웹과 같은 순서: (Apple 사용자면 토큰 해지) → 캘린더 연동 해제 → 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
  * 각 단계는 멱등이라 실패하면 처음부터 다시 부르면 된다.
  */
 export const deleteAccount = async (): Promise<void> => {
   const urls = readProxyUrls();
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
+  // Apple 토큰부터 해지한다 — 실패하거나 창을 닫으면 아무것도 지우지 않고 멈춘다.
+  if (isAppleUser(user)) await revokeAppleSignIn();
   const idToken = await user.getIdToken();
 
   const googleEventIds = await collectGoogleEventIds(user.uid);
