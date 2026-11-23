@@ -68,5 +68,15 @@ export const revokeAppleSignIn = async (user: Pick<User, "getIdToken">): Promise
       idToken: await user.getIdToken(),
     }),
   });
-  if (!res.ok) throw new Error(`Apple 토큰 해지 실패 (${res.status})`);
+  if (!res.ok) throw new Error(`Apple 토큰 해지 실패 (${res.status}${await readErrorMessage(res)})`);
+};
+
+// Identity Toolkit 오류 본문의 error.message를 붙인다 — 상태 코드만으론 원인(예: client_id mismatch)을 알 수 없다.
+const readErrorMessage = async (res: Response): Promise<string> => {
+  try {
+    const body = (await res.json()) as { error?: { message?: unknown } };
+    return typeof body.error?.message === "string" ? `: ${body.error.message}` : "";
+  } catch {
+    return "";
+  }
 };

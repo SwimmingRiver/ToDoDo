@@ -157,6 +157,23 @@ describe("revokeAppleSignIn", () => {
     await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("400");
   });
 
+  it("해지 실패 시 Identity Toolkit의 오류 메시지를 에러에 담는다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { code: 400, message: "INVALID_IDP_RESPONSE : client_id mismatch" } }), {
+          status: 400,
+        }),
+    );
+    await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("400: INVALID_IDP_RESPONSE : client_id mismatch");
+  });
+
+  it("오류 응답이 JSON이 아니어도 상태 코드로 던진다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    fetchMock.mockImplementation(async () => new Response("<html>bad gateway</html>", { status: 502 }));
+    await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("Apple 토큰 해지 실패 (502)");
+  });
+
   it("인증 코드가 없으면 실패한다", async () => {
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: null });
     await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow();
