@@ -49,9 +49,17 @@ export const Title = styled.h1`
 
 /* Google 로그인 버튼: 로고 SVG 색만 Google 브랜딩 가이드라인 고정값이라 토큰화하지 않는다
    (GoogleIcon, loginPage.tsx 참고). 버튼 자체 색은 다른 요소와 동일하게 토큰화한다. */
+export const Buttons = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+`;
+
 export const GoogleButton = styled.button`
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   padding: 12px 24px;
   background-color: ${colors.surface.raised};
@@ -82,6 +90,32 @@ export const GoogleButton = styled.button`
     outline: 2px solid ${colors.brand.strong};
     outline-offset: 2px;
   }
+`;
+
+// eslint-disable-next-line no-restricted-syntax -- Apple 브랜드 고정색
+const APPLE_BLACK = "#000000";
+// eslint-disable-next-line no-restricted-syntax -- Apple 브랜드 고정색
+const APPLE_BLACK_HOVER = "#1a1a1a";
+// eslint-disable-next-line no-restricted-syntax -- Apple 브랜드 고정색
+const APPLE_WHITE = "#ffffff";
+
+/* Apple 버튼: Apple 가이드라인상 검정 바탕+흰 글자 고정. 크기는 GoogleButton과 동일(border 포함). */
+export const AppleButton = styled(GoogleButton)`
+  background-color: ${APPLE_BLACK};
+  border-color: ${APPLE_BLACK};
+  color: ${APPLE_WHITE};
+
+  &:hover:not(:disabled),
+  &:active:not(:disabled) {
+    background-color: ${APPLE_BLACK_HOVER};
+  }
+`;
+
+export const Hint = styled.p`
+  font-size: 13px;
+  color: ${colors.text.secondary};
+  text-align: center;
+  margin: -16px 0 0;
 `;
 
 export const ErrorMessage = styled.p`
