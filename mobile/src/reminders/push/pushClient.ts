@@ -71,57 +71,91 @@ const syncPushTokenRaw = async (uid: string): Promise<void> => {
   await registerPushToken(token, Platform.OS);
 };
 
-type QueuedSync = {
-  uid: string;
+type Deferred = {
   promise: Promise<void>;
   resolve: () => void;
   reject: (error: unknown) => void;
 };
-let inflightSync: Promise<void> | null = null;
-let queuedSync: QueuedSync | null = null;
-
-const startSync = (uid: string): Promise<void> => {
-  const run = syncPushTokenRaw(uid);
-  inflightSync = run;
-  const after = () => {
-    inflightSync = null;
-    const next = queuedSync;
-    queuedSync = null;
-    if (next) startSync(next.uid).then(next.resolve, next.reject);
-  };
-  run.then(after, after);
-  return run;
-};
-
-/**
- * 끝나지 않은 해제가 있으면 권한과 무관하게 먼저 처리하고(실패하면 던진다), 권한이 있을 때만
- * 현재 토큰을 Worker에 등록한다. upsert라 여러 번 불러도 된다.
- *
- * 모듈 전체에서 직렬화한다(getToken/deleteToken이 겹치면 죽은 토큰을 등록할 수 있다). 실행 중에 온 호출은
- * 끝난 뒤 한 번만 더 도는 후행 실행 하나로 합치고, 그 사이 호출한 쪽의 uid가 가장 마지막 것이 이긴다.
- */
-export const syncPushToken = (uid: string): Promise<void> => {
-  if (!inflightSync) return startSync(uid);
-  if (queuedSync) {
-    queuedSync.uid = uid;
-    return queuedSync.promise;
-  }
+const deferred = (): Deferred => {
   let resolve!: () => void;
   let reject!: (error: unknown) => void;
   const promise = new Promise<void>((res, rej) => {
     resolve = res;
     reject = rej;
   });
-  queuedSync = { uid, promise, resolve, reject };
-  return promise;
+  return { promise, resolve, reject };
+};
+
+type QueuedSync = Deferred & { uid: string };
+type QueuedDisable = Deferred & { uid: string };
+
+/**
+ * 동기화와 해제는 하나의 모듈 수준 큐를 공유한다(getToken/deleteToken이 겹치면 다른 계정의 토큰을
+ * 지우거나, 해제 중인 계정에 새 토큰을 등록할 수 있다).
+ *
+ * - 한 번에 하나만 돈다. 대기열은 해제(도착 순) → 후행 동기화 하나 순이다.
+ * - 해제가 들어오면 그때까지 대기 중이던 후행 동기화는 버린다.
+ * - 해제가 끝날 때 대기 중인 후행 동기화가 같은 uid면 버린다(로그아웃 중인 계정에 다시 등록하지 않는다).
+ *   다른 uid(다음 계정)면 해제 뒤에 돌아 남은 해제 대기를 처리한다.
+ */
+let running: Promise<void> | null = null;
+let queuedSync: QueuedSync | null = null;
+const queuedDisables: QueuedDisable[] = [];
+
+const dropQueuedSync = (): void => {
+  const dropped = queuedSync;
+  queuedSync = null;
+  dropped?.resolve();
+};
+
+const runExclusive = (op: () => Promise<void>, onDone?: () => void): Promise<void> => {
+  const run = op();
+  running = run;
+  const after = () => {
+    running = null;
+    onDone?.();
+    const nextDisable = queuedDisables.shift();
+    if (nextDisable) {
+      startDisable(nextDisable.uid).then(nextDisable.resolve, nextDisable.reject);
+      return;
+    }
+    const next = queuedSync;
+    queuedSync = null;
+    if (next) runExclusive(() => syncPushTokenRaw(next.uid)).then(next.resolve, next.reject);
+  };
+  run.then(after, after);
+  return run;
+};
+
+const startDisable = (uid: string): Promise<void> =>
+  runExclusive(
+    () => disablePushRaw(uid),
+    () => {
+      if (queuedSync?.uid === uid) dropQueuedSync();
+    },
+  );
+
+/**
+ * 끝나지 않은 해제가 있으면 권한과 무관하게 먼저 처리하고(실패하면 던진다), 권한이 있을 때만
+ * 현재 토큰을 Worker에 등록한다. upsert라 여러 번 불러도 된다.
+ *
+ * 해제와 같은 큐로 직렬화한다. 실행 중에 온 호출은 끝난 뒤 한 번만 더 도는 후행 실행 하나로 합치고,
+ * 그 사이 호출한 쪽의 uid가 가장 마지막 것이 이긴다.
+ */
+export const syncPushToken = (uid: string): Promise<void> => {
+  if (!running) return runExclusive(() => syncPushTokenRaw(uid));
+  if (queuedSync) {
+    queuedSync.uid = uid;
+    return queuedSync.promise;
+  }
+  queuedSync = { uid, ...deferred() };
+  return queuedSync.promise;
 };
 
 /** 로그아웃 등으로 더는 필요 없는 uid의 대기 중 후행 실행을 버린다(이미 도는 실행은 끝까지 간다). */
 export const cancelQueuedPushSync = (uid: string): void => {
   if (queuedSync?.uid !== uid) return;
-  const dropped = queuedSync;
-  queuedSync = null;
-  dropped.resolve();
+  dropQueuedSync();
 };
 
 export const enablePushOnThisDevice = async (uid: string): Promise<PushPermission> => {
@@ -139,8 +173,11 @@ export const enablePushOnThisDevice = async (uid: string): Promise<PushPermissio
  *   같은 토큰을 받는다.
  * - 저장소 실패와 무관하게 서버·기기 삭제를 모두 시도한다. 기기 토큰 무효화가 핵심 안전장치다.
  * - 첫 에러를 다시 던진다(호출부가 로그만 남긴다).
+ * - 동기화와 같은 큐에서 돈다: 도는 동기화가 끝나길 기다리고, 대기 중인 후행 동기화는 버리며,
+ *   끝날 때까지 뒤에 온 동기화를 막는다. 호출부가 시간 초과로 먼저 넘어가도 다음 계정의 동기화는
+ *   이 해제가 끝난 뒤에 돈다.
  */
-export const disablePushOnThisDevice = async (uid: string): Promise<void> => {
+const disablePushRaw = async (uid: string): Promise<void> => {
   const messaging = getMessaging();
   let firstError: unknown = null;
   const record = (error: unknown) => {
@@ -195,4 +232,12 @@ export const disablePushOnThisDevice = async (uid: string): Promise<void> => {
     await persist(pending);
   }
   if (firstError !== null) throw firstError;
+};
+
+export const disablePushOnThisDevice = (uid: string): Promise<void> => {
+  dropQueuedSync();
+  if (!running) return startDisable(uid);
+  const queued: QueuedDisable = { uid, ...deferred() };
+  queuedDisables.push(queued);
+  return queued.promise;
 };

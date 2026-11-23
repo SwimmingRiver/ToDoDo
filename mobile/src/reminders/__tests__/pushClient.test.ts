@@ -154,6 +154,97 @@ describe("pushClient", () => {
     });
   });
 
+  describe("disable shares the sync queue", () => {
+    const gate = () => {
+      let open!: () => void;
+      const promise = new Promise<void>((r) => {
+        open = r;
+      });
+      return { promise, open };
+    };
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    it("late-finishing disable after timeout does not delete the next account's token", async () => {
+      const events: string[] = [];
+      const g = gate();
+      messaging.getToken.mockResolvedValueOnce("tokenA").mockResolvedValue("tokenB");
+      mockUnregister.mockImplementation(async (token) => {
+        events.push(`unregister:${token}`);
+        await g.promise; // 네트워크가 느려 signOut이 5초에서 포기한 상황
+      });
+      messaging.deleteToken.mockImplementation(async () => {
+        events.push("deleteToken");
+      });
+      mockRegister.mockImplementation(async (token) => {
+        events.push(`register:${token}`);
+      });
+
+      const disabling = disablePushOnThisDevice("uA");
+      await flush();
+      // B가 로그인해 동기화를 시작한다. 해제가 끝날 때까지 기다려야 한다.
+      const syncing = syncPushToken("uB");
+      await flush();
+      expect(events).toEqual(["unregister:tokenA"]);
+
+      g.open();
+      await Promise.all([disabling, syncing]);
+
+      expect(events).toEqual(["unregister:tokenA", "deleteToken", "register:tokenB"]);
+      expect(readPending()).toBeNull();
+    });
+
+    it("sync started during disable does not register", async () => {
+      const g = gate();
+      messaging.getToken.mockResolvedValue("tokenA");
+      mockUnregister.mockImplementation(async () => {
+        await g.promise;
+      });
+
+      const disabling = disablePushOnThisDevice("uA");
+      await flush();
+      // 해제 대기가 저장된 뒤, 아직 A의 ID 토큰이 살아 있을 때 A의 동기화가 끼어든다.
+      expect(readPending()).not.toBeNull();
+      const syncing = syncPushToken("uA");
+      await flush();
+      g.open();
+      await Promise.all([disabling, syncing]);
+
+      expect(mockRegister).not.toHaveBeenCalled();
+      expect(messaging.deleteToken).toHaveBeenCalledTimes(1);
+      expect(readPending()).toBeNull();
+    });
+
+    it("disable waits for an in-flight sync and drops its queued trailing run", async () => {
+      const events: string[] = [];
+      const g = gate();
+      messaging.getToken.mockImplementationOnce(async () => {
+        events.push("sync:getToken");
+        await g.promise;
+        return "t1";
+      });
+      messaging.getToken.mockImplementation(async () => {
+        events.push("getToken");
+        return "t1";
+      });
+      messaging.deleteToken.mockImplementation(async () => {
+        events.push("deleteToken");
+      });
+      mockRegister.mockImplementation(async (token) => {
+        events.push(`register:${token}`);
+      });
+
+      const first = syncPushToken("uA");
+      const trailing = syncPushToken("uA");
+      const disabling = disablePushOnThisDevice("uA");
+      await flush();
+      expect(events).toEqual(["sync:getToken"]);
+      g.open();
+      await Promise.all([first, trailing, disabling]);
+
+      expect(events).toEqual(["sync:getToken", "register:t1", "getToken", "deleteToken"]);
+    });
+  });
+
   describe("syncPushToken", () => {
     it("sync does nothing without permission", async () => {
       messaging.hasPermission.mockResolvedValue(AuthorizationStatus.DENIED);
