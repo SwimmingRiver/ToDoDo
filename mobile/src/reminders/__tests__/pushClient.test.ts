@@ -8,6 +8,7 @@ import {
   notifyPushPermissionChanged,
   subscribePushPermissionChanged,
   syncPushToken,
+  cancelQueuedPushSync,
 } from "../push/pushClient";
 import type { ReleasePending } from "../push/releasePending";
 
@@ -75,6 +76,81 @@ describe("pushClient", () => {
     ])("status %p → %p", async (status, expected) => {
       messaging.hasPermission.mockResolvedValue(status);
       await expect(getPushPermission()).resolves.toBe(expected);
+    });
+  });
+
+  describe("syncPushToken serialization", () => {
+    const gate = () => {
+      let open!: () => void;
+      const promise = new Promise<void>((r) => {
+        open = r;
+      });
+      return { promise, open };
+    };
+
+    it("concurrent sync calls for same uid do not overlap", async () => {
+      const events: string[] = [];
+      const g = gate();
+      seedPending({ token: "old", uid: "u1", serverDeleted: true, deviceDeleted: false });
+      messaging.deleteToken.mockImplementation(async () => {
+        events.push("delete:start");
+        await g.promise;
+        events.push("delete:end");
+      });
+      messaging.getToken.mockImplementation(async () => {
+        events.push("getToken");
+        return "new-token";
+      });
+      const a = syncPushToken("u1");
+      const b = syncPushToken("u1");
+      const c = syncPushToken("u1");
+      await Promise.resolve();
+      await new Promise((r) => setImmediate(r));
+      expect(events).toEqual(["delete:start"]);
+      g.open();
+      await Promise.all([a, b, c]);
+      // 두 번째 실행은 첫 실행이 끝난 뒤에만 시작하고, 세 호출은 후행 하나로 합쳐진다.
+      expect(events).toEqual(["delete:start", "delete:end", "getToken", "getToken"]);
+      expect(mockRegister).toHaveBeenCalledTimes(2);
+    });
+
+    it("enable + permission listener produce a single overlapping-free sequence", async () => {
+      const events: string[] = [];
+      const g = gate();
+      seedPending({ token: "old", uid: "u1", serverDeleted: true, deviceDeleted: false });
+      messaging.deleteToken.mockImplementation(async () => {
+        events.push("delete:start");
+        await g.promise;
+        events.push("delete:end");
+      });
+      messaging.getToken.mockImplementation(async () => {
+        events.push("getToken");
+        return "new-token";
+      });
+      // 훅의 리스너가 권한 변경 알림에 반응해 sync를 시작하는 것을 흉내 낸다.
+      const off = subscribePushPermissionChanged(() => void syncPushToken("u1"));
+      const enabling = enablePushOnThisDevice("u1");
+      await new Promise((r) => setImmediate(r));
+      expect(events).toEqual(["delete:start"]);
+      g.open();
+      await enabling;
+      off();
+      expect(events.indexOf("getToken")).toBeGreaterThan(events.indexOf("delete:end"));
+      expect(events.filter((e) => e === "delete:start")).toHaveLength(1);
+    });
+
+    it("drops a queued sync for a cancelled uid", async () => {
+      const g = gate();
+      messaging.getToken.mockImplementationOnce(async () => {
+        await g.promise;
+        return "t";
+      });
+      const a = syncPushToken("u1");
+      const b = syncPushToken("u1");
+      cancelQueuedPushSync("u1");
+      g.open();
+      await Promise.all([a, b]);
+      expect(mockRegister).toHaveBeenCalledTimes(1);
     });
   });
 

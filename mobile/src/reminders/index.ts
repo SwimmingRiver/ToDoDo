@@ -19,6 +19,7 @@ export {
   getPushPermission,
   enablePushOnThisDevice,
   syncPushToken,
+  cancelQueuedPushSync,
   disablePushOnThisDevice,
   subscribePushPermissionChanged,
   notifyPushPermissionChanged,

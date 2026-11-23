@@ -63,16 +63,65 @@ const resolveReleasePending = async (pending: ReleasePending, uid: string): Prom
   await clearReleasePending();
 };
 
-/**
- * 끝나지 않은 해제가 있으면 권한과 무관하게 먼저 처리하고(실패하면 던진다), 권한이 있을 때만
- * 현재 토큰을 Worker에 등록한다. upsert라 여러 번 불러도 된다.
- */
-export const syncPushToken = async (uid: string): Promise<void> => {
+const syncPushTokenRaw = async (uid: string): Promise<void> => {
   const pending = await loadReleasePending();
   if (pending) await resolveReleasePending(pending, uid);
   if ((await getPushPermission()) !== "granted") return;
   const token = await getToken(getMessaging());
   await registerPushToken(token, Platform.OS);
+};
+
+type QueuedSync = {
+  uid: string;
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+let inflightSync: Promise<void> | null = null;
+let queuedSync: QueuedSync | null = null;
+
+const startSync = (uid: string): Promise<void> => {
+  const run = syncPushTokenRaw(uid);
+  inflightSync = run;
+  const after = () => {
+    inflightSync = null;
+    const next = queuedSync;
+    queuedSync = null;
+    if (next) startSync(next.uid).then(next.resolve, next.reject);
+  };
+  run.then(after, after);
+  return run;
+};
+
+/**
+ * 끝나지 않은 해제가 있으면 권한과 무관하게 먼저 처리하고(실패하면 던진다), 권한이 있을 때만
+ * 현재 토큰을 Worker에 등록한다. upsert라 여러 번 불러도 된다.
+ *
+ * 모듈 전체에서 직렬화한다(getToken/deleteToken이 겹치면 죽은 토큰을 등록할 수 있다). 실행 중에 온 호출은
+ * 끝난 뒤 한 번만 더 도는 후행 실행 하나로 합치고, 그 사이 호출한 쪽의 uid가 가장 마지막 것이 이긴다.
+ */
+export const syncPushToken = (uid: string): Promise<void> => {
+  if (!inflightSync) return startSync(uid);
+  if (queuedSync) {
+    queuedSync.uid = uid;
+    return queuedSync.promise;
+  }
+  let resolve!: () => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  queuedSync = { uid, promise, resolve, reject };
+  return promise;
+};
+
+/** 로그아웃 등으로 더는 필요 없는 uid의 대기 중 후행 실행을 버린다(이미 도는 실행은 끝까지 간다). */
+export const cancelQueuedPushSync = (uid: string): void => {
+  if (queuedSync?.uid !== uid) return;
+  const dropped = queuedSync;
+  queuedSync = null;
+  dropped.resolve();
 };
 
 export const enablePushOnThisDevice = async (uid: string): Promise<PushPermission> => {

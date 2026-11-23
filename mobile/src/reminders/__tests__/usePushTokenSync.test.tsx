@@ -9,6 +9,7 @@ jest.mock("../push/pushClient", () => {
   const listeners = new Set<() => void>();
   return {
     syncPushToken: jest.fn(() => Promise.resolve()),
+    cancelQueuedPushSync: jest.fn(),
     subscribePushPermissionChanged: jest.fn((l: () => void) => {
       listeners.add(l);
       return () => listeners.delete(l);
@@ -50,19 +51,23 @@ describe("usePushTokenSync", () => {
     expect(mod.syncPushToken).toHaveBeenCalledTimes(2);
   });
 
-  it("does not overlap concurrent syncs and runs one trailing sync", async () => {
-    const mod = jest.requireMock("../push/pushClient") as { syncPushToken: AnyMock; __emit: () => void };
-    let release: () => void = () => {};
-    mod.syncPushToken.mockImplementationOnce(() => new Promise<void>((r) => { release = r; }));
+  it("no rerun after unmount", async () => {
+    const mod = jest.requireMock("../push/pushClient") as {
+      syncPushToken: AnyMock;
+      cancelQueuedPushSync: AnyMock;
+      __emit: () => void;
+    };
+    const { onTokenRefresh } = jest.requireMock("@react-native-firebase/messaging") as { onTokenRefresh: AnyMock };
     const { usePushTokenSync } = await import("../hooks/usePushTokenSync");
-    await renderHook(() => usePushTokenSync());
+    const { unmount } = await renderHook(() => usePushTokenSync());
+    await flush();
+    const tokenCb = onTokenRefresh.mock.calls[0][1] as () => void;
+    await unmount();
+    expect(mod.cancelQueuedPushSync).toHaveBeenCalledWith("u1");
+    tokenCb();
     mod.__emit();
-    mod.__emit();
+    await flush();
     expect(mod.syncPushToken).toHaveBeenCalledTimes(1);
-    release();
-    await flush();
-    await flush();
-    expect(mod.syncPushToken).toHaveBeenCalledTimes(2);
   });
 
   it("reports errors via reportError without throwing", async () => {
