@@ -166,4 +166,3 @@ describe('LoginPage 컴포넌트', () => {
     expect(await screen.findByText('로그인 창이 열리지 않았어요. 한 번 더 눌러 주세요.')).toBeInTheDocument()
   })
 })
-

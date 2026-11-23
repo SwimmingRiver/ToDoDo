@@ -337,5 +337,20 @@ describe("AccountDeletionDialog", () => {
     await renderDialog();
     expect(mockWarmUp).not.toHaveBeenCalled();
   });
-});
 
+  it("Apple 확인 창이 차단되면 아무것도 지워지지 않았다며 한 번 더 누르라고 안내한다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fakeAuth.currentUser.providerData = [{ providerId: "apple.com" }];
+    mockDeleteAccount.mockImplementationOnce(async (onStep) => {
+      onStep?.("apple");
+      throw { code: "auth/popup-blocked" };
+    });
+    const user = setupUser();
+    await renderDialog();
+    await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+    expect(
+      await screen.findByText(/Apple 확인 창이 열리지 않았어요\. 아무것도 삭제되지 않았으니 한 번 더 눌러 주세요\./),
+    ).toBeInTheDocument();
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+});
