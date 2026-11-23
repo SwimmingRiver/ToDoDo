@@ -101,6 +101,18 @@ describe("deleteAccount", () => {
       await p;
     });
 
+    it("재인증 창을 닫으면(취소) 그 오류로 reject되고 아무것도 지우지 않는다", async () => {
+      const cancelErr = Object.assign(new Error("closed"), { code: "auth/popup-closed-by-user" });
+      mockReauth.mockRejectedValueOnce(cancelErr);
+      const { deleteAccount } = await import("../deleteAccount");
+      await expect(deleteAccount()).rejects.toBe(cancelErr);
+      expect(mockRevoke).not.toHaveBeenCalled();
+      expect(mockGetDocs).not.toHaveBeenCalled();
+      expect(mockDisconnect).not.toHaveBeenCalled();
+      expect(mockReminder).not.toHaveBeenCalled();
+      expect(mockServer).not.toHaveBeenCalled();
+    });
+
     it("해지가 실패하면 뒤 단계를 하나도 부르지 않고 던진다", async () => {
       mockRevoke.mockRejectedValueOnce(new Error("revoke fail"));
       const { deleteAccount } = await import("../deleteAccount");
