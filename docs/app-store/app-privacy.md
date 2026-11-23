@@ -1,0 +1,48 @@
+# App Privacy(개인정보 라벨) 답변 초안
+
+2026-11-23 develop 코드 기준. Apple 기준에서 "수집"은 데이터가 기기를 떠나 운영자 또는 제3자(외부 서비스)가 실시간 처리 이상으로 접근할 수 있는 경우를 말한다. 기기 안에만 있는 데이터(AsyncStorage, 로컬 알림 일정)는 라벨 대상이 아니다.
+
+## 추적(ATT)
+
+**추적하지 않음 → "아니요"**. 근거는 다음과 같다.
+- 광고 SDK와 IDFA 접근이 없다.
+- Firebase Analytics를 초기화하지 않는다. `mobile/src/firebase/index.native.ts`는 `initializeApp`과 `initializeAuth`만 부른다. `measurementId`는 설정값으로 넘길 뿐이다.
+- 다른 회사 데이터와 결합하는 곳도 없다.
+
+따라서 `NSUserTrackingUsageDescription`과 ATT 권한 요청은 필요 없다.
+
+## 수집 데이터 표
+
+모든 항목의 답은 같다: **사용자 신원에 연결됨 = 예**(Firebase uid로 묶인다), **추적에 사용 = 아니요**.
+
+| Apple 분류 | 항목 | 목적 | 근거(코드) |
+|---|---|---|---|
+| 연락처 정보 | **이메일 주소** | 앱 기능 | Google·Apple 로그인 → Firebase Auth(`auth/googleSignIn.ts`, `auth/appleSignIn.ts`). Apple 대리 이메일 포함 |
+| 연락처 정보 | **이름** | 앱 기능 | Google 프로필 이름, Apple 첫 가입 시 이름 |
+| 사용자 콘텐츠 | **기타 사용자 콘텐츠** | 앱 기능 | ① 할 일(제목·설명·일정·반복·알림 설정) → Firestore ② AI 플랜 목표 문장 → ai-proxy → Anthropic(`aiPlan/aiProxyApi.ts`) ③ 연동 시 할 일을 구글 캘린더로 동기화(`calendarIntegration/useSyncTodosToCalendar.ts`) |
+| 식별자 | **사용자 ID** | 앱 기능 | Firebase uid. Sentry `user.id`, IAP `appAccountToken`(서버가 uid로 발급) |
+| 구입 항목 | **구입 내역** | 앱 기능 | 구독 상태·원거래 ID → billing-proxy가 검증 후 entitlements에 저장(`premium/iap/verifyApi.ts`) |
+| 진단 | **충돌 데이터** | 앱 기능 | Sentry(`shared/lib/sentry.ts`). 운영 빌드에서만 켜짐 |
+| 진단 | **기타 진단 데이터** | 앱 기능 | Sentry로 잡아 보내는 비충돌 오류(`reportError`)와 그 안의 OS·앱 버전 |
+
+### 넣지 않은 항목과 이유
+
+- **대략적 위치**: Sentry의 `sendDefaultPii: false` 설정 때문에 SDK는 IP를 붙이지 않는다. 그런데 Sentry 서버는 요청을 보낸 IP를 따로 저장할 수 있다. 웹 프로젝트(`tododo-client`)는 "Prevent Storing of IP Addresses"를 켰다고 기록돼 있다. **앱 프로젝트(`tododo-mobile`)는 이 설정이 켜졌다는 기록이 없다. 제출 전에 확인해야 한다.** 꺼져 있다면 켜거나, 라벨에 "대략적 위치 — 앱 기능"을 추가한다. Firebase와 Worker의 접속 IP는 Apple FAQ상 서비스 운영에 필요한 일시 처리여서 보통 신고하지 않는다.
+- **사진 또는 비디오**: Google 프로필 사진 URL은 Firebase Auth가 받는다. 하지만 기기의 사진을 가져오는 것이 아니다. 그래서 이 분류에 해당하지 않는다고 판단했다.
+- **기기 ID / 광고 데이터**: 수집하지 않는다. 다만 Sentry 네이티브 크래시는 beforeSend를 거치지 않아 기기 모델이 실릴 수 있다(`sentry.ts` 주석의 "한계"). 그래도 이것은 기기 ID가 아니라 충돌 데이터의 일부다.
+- **푸시 토큰**: 앱은 기기 안에서 예약하는 **로컬 알림만** 쓴다(`notifications/scheduleReminder.ts` — `scheduleNotificationAsync`). FCM과 Expo 푸시 토큰은 받지 않는다. 웹의 FCM 알림은 웹에만 있는 기능이라 앱 라벨과 관계없다.
+- **사용 데이터(제품 상호작용)**: AI 플랜 하루 사용 횟수는 KV에 2일간 저장된다(`ai-proxy/src/usage.ts`). 다만 이는 횟수 제한에만 쓰는 카운터이고 분석에는 쓰지 않는다. 그래서 넣지 않았다. 보수적으로 가려면 "제품 상호작용 — 앱 기능"을 추가한다.
+- **구글 캘린더 일정**: 앱이 calendar-proxy를 거쳐 실시간으로 받아 보여 주기만 한다. 서버에 저장하지 않는다(KV에는 OAuth 토큰과 state만 있다). 구글 캘린더 OAuth 토큰은 사용자 데이터 분류에 딱 맞는 항목이 없어 넣지 않았다. 굳이 넣는다면 "기타 데이터 — 앱 기능"이다.
+- **고객 지원**: 앱에는 "의견 보내기" 기능이 없다(웹에만 있다).
+
+## 개인정보처리방침 대조 (4판, 12-28 시행)
+
+| # | 차이 | 심각도 | 제안 |
+|---|---|---|---|
+| A | **Apple 로그인 정보는 4판(12-28)에만 적혀 있다.** 앱에는 Apple 로그인이 날짜 제한 없이 들어 있다. 12-28 전에 출시하면, 그때 시행 중인 3판(11-27)에는 없는 정보를 받게 된다 | **높음** | 확정(11-23): 심사 먼저, 공개는 12-28 00:00 KST 이후([checklist.md](checklist.md) §1) |
+| B | 방침 8조 제목은 "브라우저 저장소"다. 앱의 기기 저장소(AsyncStorage: 로그인 유지, 캘린더 동기화 스냅샷, 정리 작업 시각, 계정 연결 안내 표시 여부)는 언급하지 않는다 | 낮음 | 다음 판에서 "브라우저 또는 앱 저장소"로 넓힌다. 외부로 나가지 않으므로 라벨에는 영향이 없다 |
+| C | 오류 정보 항목은 "브라우저·OS, 페이지 주소"다. 앱은 OS와 **앱 버전·빌드 번호**를 보내고, 네이티브 크래시에는 **기기 모델**이 실릴 수 있다 | 낮음 | 다음 판에서 "기기·OS·앱 버전"을 추가한다 |
+| D | 방침은 "알림 받을 기기 토큰"을 수집한다고 적었지만 앱은 받지 않는다(웹만 해당) | 없음 | 방침이 더 넓게 적힌 것이라 문제없다 |
+| E | 방침에 "의견 보내기"가 있지만 앱에는 이 기능이 없다 | 없음 | 문제없다 |
+
+B와 C는 심사를 막지 않는다. **다음 판 후보로 기록만 해 둔다(11-23).** 다음 판은 시행 7일 전에 공지해야 한다.
