@@ -11,7 +11,8 @@
     "audit:recurring": "tsx scripts/auditRecurringData.ts",
     "test:scripts": "tsx --test scripts/lib/*.test.ts",
     "audit:done-at": "tsx scripts/auditDoneAtData.ts",
-    "backfill:done-at": "tsx scripts/backfillDoneAt.ts"
+    "backfill:done-at": "tsx scripts/backfillDoneAt.ts",
+    "seed:demo": "tsx scripts/seedDemoTodos.ts"
   },
   "repository": {
     "type": "git",
