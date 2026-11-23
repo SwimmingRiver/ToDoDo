@@ -17,6 +17,8 @@ const APPLE_WARNING = "App Store 구독은 탈퇴해도 해지되지 않고 Appl
 const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
 const APPLE_REAUTH_NOTICE = "Apple 계정 확인 창이 한 번 더 열려요.";
 const FAILURE_MESSAGE = "일부만 처리되었습니다. 다시 시도해 주세요.";
+// Apple 단계는 맨 앞이라 여기서 실패하면 아무것도 지우지 않았다.
+const APPLE_FAILURE_MESSAGE = "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.";
 const STEP_LABEL: Record<AccountDeletionStep, string> = {
   apple: "Apple 연결 해제 중…",
   calendar: "구글 캘린더 연동 해제 중…",
@@ -92,7 +94,8 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
     appleRenewing && APPLE_WARNING,
     googleRenewing && GOOGLE_NOTICE,
     isAppleUser && APPLE_REAUTH_NOTICE,
-    status === "failed" && FAILURE_MESSAGE,
+    // step은 onStep이 마지막으로 알린 단계 = 실패한 단계다.
+    status === "failed" && (step === "apple" ? APPLE_FAILURE_MESSAGE : FAILURE_MESSAGE),
   ]
     .filter(Boolean)
     .join("\n\n");

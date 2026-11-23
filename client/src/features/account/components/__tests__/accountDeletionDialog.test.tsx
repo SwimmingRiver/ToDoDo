@@ -220,6 +220,38 @@ describe("AccountDeletionDialog", () => {
       expect(consoleError).not.toHaveBeenCalled();
       expect(mockLogout).not.toHaveBeenCalled();
     });
+
+    it("apple 단계에서 실패하면 아무것도 삭제되지 않았다고 알린다", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockImplementationOnce(async (onStep) => {
+        onStep?.("apple");
+        throw new Error("revoke");
+      });
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+      expect(
+        await screen.findByText(/Apple 확인에 실패해 아무것도 삭제되지 않았어요\. 다시 시도해 주세요\./),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/일부만 처리되었습니다/)).not.toBeInTheDocument();
+      expect(mockLogout).not.toHaveBeenCalled();
+    });
+
+    it("apple 다음 단계에서 실패하면 기존 실패 문구를 보여준다", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      mockDeleteAccount.mockImplementationOnce(async (onStep) => {
+        onStep?.("apple");
+        onStep?.("calendar");
+        throw new Error("calendar");
+      });
+      const user = setupUser();
+      await renderDialog();
+      await user.click(screen.getByRole("button", { name: "탈퇴하기" }));
+
+      expect(await screen.findByText(/일부만 처리되었습니다\. 다시 시도해 주세요\./)).toBeInTheDocument();
+      expect(screen.queryByText(/Apple 확인에 실패해/)).not.toBeInTheDocument();
+    });
   });
 
   describe("진행 표시", () => {
