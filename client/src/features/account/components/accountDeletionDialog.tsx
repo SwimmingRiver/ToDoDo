@@ -9,6 +9,7 @@ import { clearSnapshot } from "@/features/calendarIntegration/hooks/syncSnapshot
 import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
 import { deleteAccount, type AccountDeletionStep } from "../api/deleteAccount";
+import { warmUpPopupResolver } from "@/features/auth/api/warmUpPopup";
 
 const BASE_MESSAGE = "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.";
 const SUBSCRIPTION_NOTICE = "구독이 즉시 해지되고 남은 기간은 사라집니다. 결제 14일 이내라면 환불을 요청할 수 있습니다.";
@@ -48,6 +49,11 @@ const AccountDeletionDialog = ({ onClose }: AccountDeletionDialogProps) => {
   const googleRenewing = !!entitlement && isAutoRenewingStore(entitlement, "google");
   const isAppleUser = !!auth.currentUser?.providerData.some((p) => p.providerId === "apple.com");
   const isPending = status === "pending";
+
+  // Apple 재인증 팝업이 첫 클릭에 열리도록 처리기를 미리 준비한다(Safari, warmUpPopup.ts).
+  useEffect(() => {
+    if (isAppleUser) warmUpPopupResolver();
+  }, [isAppleUser]);
 
   // 진행 중 탭을 닫으면 일부 단계만 처리된 채 남는다. 브라우저 기본 확인 창으로 한 번 막는다.
   useEffect(() => {

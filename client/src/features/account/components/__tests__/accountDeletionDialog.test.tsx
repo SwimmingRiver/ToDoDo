@@ -41,6 +41,8 @@ const mockClearSnapshot = vi.fn();
 vi.mock("@/features/calendarIntegration/hooks/syncSnapshot", () => ({ clearSnapshot: (uid: string) => mockClearSnapshot(uid) }));
 const fakeAuth = { currentUser: { uid: "u1", providerData: [{ providerId: "google.com" }] } };
 vi.mock("@/shared/lib/firebase", () => ({ auth: fakeAuth }));
+const mockWarmUp = vi.fn();
+vi.mock("@/features/auth/api/warmUpPopup", () => ({ warmUpPopupResolver: () => mockWarmUp() }));
 
 const renderDialog = async (onClose = vi.fn()) => {
   const { default: AccountDeletionDialog } = await import("../accountDeletionDialog");
@@ -324,4 +326,16 @@ describe("AccountDeletionDialog", () => {
       expect(fireBeforeUnload().defaultPrevented).toBe(false);
     });
   });
+
+  it("Apple 사용자면 열릴 때 팝업 처리기를 미리 준비한다(Safari 첫 팝업 차단 방지)", async () => {
+    fakeAuth.currentUser.providerData = [{ providerId: "apple.com" }];
+    await renderDialog();
+    expect(mockWarmUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("구글 사용자면 팝업 처리기를 준비하지 않는다", async () => {
+    await renderDialog();
+    expect(mockWarmUp).not.toHaveBeenCalled();
+  });
 });
+
