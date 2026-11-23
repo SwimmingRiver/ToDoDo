@@ -79,6 +79,42 @@ describe("signOut", () => {
     expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
   });
 
+  it("signOut proceeds after 5s when release hangs", async () => {
+    jest.useFakeTimers();
+    try {
+      sentryMock.captureException.mockClear();
+      mockDisablePush.mockImplementation(() => new Promise<void>(() => {}));
+      const { signOut } = await import("../signOut");
+      const { client, clear } = makeQueryClient();
+
+      const done = signOut(client);
+      await jest.advanceTimersByTimeAsync(4999);
+      expect(mockFirebaseSignOut).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await done;
+
+      expect(mockFirebaseSignOut).toHaveBeenCalled();
+      expect(clear).toHaveBeenCalled();
+      expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("release finishing first clears the timeout timer", async () => {
+    jest.useFakeTimers();
+    try {
+      const { signOut } = await import("../signOut");
+      const { client } = makeQueryClient();
+
+      await signOut(client);
+
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("로그인 사용자가 없으면 푸시 해제를 건너뛴다", async () => {
     mockAuth.currentUser = null;
     const { signOut } = await import("../signOut");

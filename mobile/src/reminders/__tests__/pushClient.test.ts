@@ -81,7 +81,6 @@ describe("pushClient", () => {
   describe("syncPushToken", () => {
     it("sync does nothing without permission", async () => {
       messaging.hasPermission.mockResolvedValue(AuthorizationStatus.DENIED);
-      seedPending({ token: "old", uid: "u1", serverDeleted: false, deviceDeleted: false });
 
       await syncPushToken("u1");
 
@@ -89,6 +88,19 @@ describe("pushClient", () => {
       expect(messaging.deleteToken).not.toHaveBeenCalled();
       expect(mockRegister).not.toHaveBeenCalled();
       expect(mockUnregister).not.toHaveBeenCalled();
+    });
+
+    it("sync processes pending release without permission and does not register", async () => {
+      messaging.hasPermission.mockResolvedValue(AuthorizationStatus.DENIED);
+      seedPending({ token: "old", uid: "u1", serverDeleted: false, deviceDeleted: false });
+
+      await syncPushToken("u1");
+
+      expect(messaging.deleteToken).toHaveBeenCalledTimes(1);
+      expect(mockUnregister).toHaveBeenCalledWith("old");
+      expect(readPending()).toBeNull();
+      expect(messaging.getToken).not.toHaveBeenCalled();
+      expect(mockRegister).not.toHaveBeenCalled();
     });
 
     it("sync registers token with Platform.OS", async () => {
@@ -272,14 +284,44 @@ describe("pushClient", () => {
       expect(readPending()).toEqual({ token: "", uid: "u1", serverDeleted: false, deviceDeleted: false });
     });
 
-    it("disable does nothing without permission", async () => {
-      messaging.hasPermission.mockResolvedValue(AuthorizationStatus.NOT_DETERMINED);
+    it("disable releases even when permission denied", async () => {
+      messaging.hasPermission.mockResolvedValue(AuthorizationStatus.DENIED);
+      messaging.getToken.mockResolvedValue("cur-token");
 
       await disablePushOnThisDevice("u1");
 
-      expect(messaging.getToken).not.toHaveBeenCalled();
-      expect(messaging.deleteToken).not.toHaveBeenCalled();
+      expect(mockUnregister).toHaveBeenCalledWith("cur-token");
+      expect(messaging.deleteToken).toHaveBeenCalled();
       expect(readPending()).toBeNull();
+    });
+
+    it("disable releases even when hasPermission throws", async () => {
+      messaging.hasPermission.mockRejectedValue(new Error("native"));
+      messaging.getToken.mockResolvedValue("cur-token");
+
+      await disablePushOnThisDevice("u1");
+
+      expect(mockUnregister).toHaveBeenCalledWith("cur-token");
+      expect(messaging.deleteToken).toHaveBeenCalled();
+    });
+
+    it("disable still deletes device token when AsyncStorage setItem rejects", async () => {
+      messaging.getToken.mockResolvedValue("cur-token");
+      setItem.mockRejectedValue(new Error("storage full"));
+
+      await expect(disablePushOnThisDevice("u1")).rejects.toThrow("storage full");
+
+      expect(mockUnregister).toHaveBeenCalledWith("cur-token");
+      expect(messaging.deleteToken).toHaveBeenCalled();
+    });
+
+    it("disable getToken failure with storage failure still deletes device token", async () => {
+      messaging.getToken.mockRejectedValue(new Error("no token"));
+      setItem.mockRejectedValue(new Error("storage full"));
+
+      await expect(disablePushOnThisDevice("u1")).rejects.toThrow("no token");
+
+      expect(messaging.deleteToken).toHaveBeenCalled();
     });
   });
 });
