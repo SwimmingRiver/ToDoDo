@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { isAppleLoginOpen } from '../config'
 
+// 로컬 .env에 미리보기가 켜져 있어도 공개 시각 테스트가 흔들리지 않게 비운다.
+beforeEach(() => vi.stubEnv('VITE_APPLE_LOGIN_PREVIEW', ''))
 afterEach(() => vi.unstubAllEnvs())
 
 describe('isAppleLoginOpen', () => {

@@ -19,7 +19,7 @@ const UserAvatar = ({ user, size }: UserAvatarProps) => {
   }
   return (
     <Initial $size={size} aria-hidden="true">
-      {userLabel(user).charAt(0)}
+      {Array.from(userLabel(user))[0]}
     </Initial>
   );
 };

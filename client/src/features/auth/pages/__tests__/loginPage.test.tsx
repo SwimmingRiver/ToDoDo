@@ -50,6 +50,8 @@ const renderLogin = (user: User | null = null, loading = false) =>
 const credential = { user: mockUser }
 
 beforeEach(() => {
+  // 로컬 .env에 미리보기가 켜져 있어도 공개 시각 테스트가 흔들리지 않게 비운다.
+  vi.stubEnv('VITE_APPLE_LOGIN_PREVIEW', '')
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(AFTER_OPEN)
   vi.mocked(signInWithGoogle).mockResolvedValue(credential as never)
@@ -58,6 +60,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   vi.useRealTimers()
   vi.clearAllMocks()
 })

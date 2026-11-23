@@ -25,6 +25,11 @@ describe("UserAvatar", () => {
     expect(screen.getByText("강")).toBeInTheDocument();
   });
 
+  it("이름이 이모지로 시작하면 이모지 한 글자를 통째로 보여준다(서로게이트 쌍)", () => {
+    render(<UserAvatar user={{ displayName: "😀abc", email: null, photoURL: null }} size={24} />);
+    expect(screen.getByText("😀")).toBeInTheDocument();
+  });
+
   it("photoURL이 있으면 img를 보여준다", () => {
     const { container } = render(
       <UserAvatar user={{ ...base, photoURL: "https://example.com/a.png" }} size={24} />,

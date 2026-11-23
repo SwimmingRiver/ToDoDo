@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { signInWithPopup, updateProfile, browserPopupRedirectResolver } from 'firebase/auth'
 import type { User, UserCredential } from 'firebase/auth'
 import { auth, googleProvider, appleProvider } from '@/shared/lib/firebase'
@@ -87,6 +87,7 @@ describe('consumeLinkedNotice', () => {
     ({ uid: 'u1', providerData: ids.map((providerId) => ({ providerId })) }) as unknown as User
 
   beforeEach(() => localStorage.clear())
+  afterEach(() => vi.restoreAllMocks())
 
   it('제공자가 둘이면 첫 호출만 true', () => {
     const user = userWith(['google.com', 'apple.com'])
@@ -103,6 +104,5 @@ describe('consumeLinkedNotice', () => {
       throw new Error('denied')
     })
     expect(consumeLinkedNotice(userWith(['google.com', 'apple.com']))).toBe(false)
-    vi.restoreAllMocks()
   })
 })
