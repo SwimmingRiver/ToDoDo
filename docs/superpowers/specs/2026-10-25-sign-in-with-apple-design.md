@@ -135,7 +135,9 @@ nonce: 재생 공격 방지를 위해 무작위 nonce를 만들어 SHA-256 해�
 
 0. Apple 재인증 → `revokeAccessToken(auth, token)`
    - 웹: `reauthenticateWithPopup(user, appleProvider, browserPopupRedirectResolver)` → `OAuthProvider.credentialFromResult(result).accessToken`(실측: 웹 팝업 결과에 접근 토큰이 들어옴)
-   - iOS: `AppleAuthentication.signInAsync()`로 `authorizationCode`를 받음(토큰 형태·RN 동작은 네이티브 빌드 때 실측)
+   - iOS: `AppleAuthentication.signInAsync()`로 `authorizationCode`를 받아 Identity Toolkit `v2/accounts:revokeToken`에 `tokenType: "CODE"`로 직접 보낸다. JS SDK `revokeAccessToken`은 `tokenType`을 `ACCESS_TOKEN`으로 고정해 인증 코드를 넘기면 종류가 틀린다(SDK 소스 확인, 2026-11-23). 실제 해지 여부는 네이티브 빌드 때 실측
+   - Android: Apple 창을 띄울 수 없어 해지를 건너뛰고 탈퇴를 진행한다(Apple ID의 "Apple로 로그인" 목록에 남을 수 있음, 웹에서 탈퇴하면 해지됨)
+   - Apple 단계에서 실패하면(취소 제외) "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요." — 뒤 단계 실패는 기존 문구
 
 0단계를 맨 앞에 두는 이유:
 
@@ -210,4 +212,5 @@ nonce: 재생 공격 방지를 위해 무작위 nonce를 만들어 SHA-256 해�
 - 웹에서도 이름이 채워지지만 한국어 순서가 뒤집히고, Apple 첫 연결 시 구글 이름을 덮어씀 → `formatAppleDisplayName` + `updateProfile` 추가
 - 웹 탈퇴 해지 토큰은 `credentialFromResult(...).accessToken`으로 받음을 확인. iOS 토큰 형태만 남음
 - 체험 재지급 방지·4판은 #214·#217로 끝나 범위 밖 목록에서 뺌
+- (구현 중) iOS 해지는 SDK 대신 `revokeToken` 직접 호출(`CODE`), Android는 해지 생략, iOS 개발 지역 `ko`(시스템이 그리는 Apple 버튼 한국어), Apple 단계 실패 문구 분리
 - 자동 연결을 조용히 두지 않고 한 번 안내(토스트), 막기는 기각(서버에서 이미 연결된 뒤라 unlink가 불안정, 설정 변경은 계정 분리). 이메일 가리기로 인한 빈 계정 사고 예방 안내 한 줄 추가
