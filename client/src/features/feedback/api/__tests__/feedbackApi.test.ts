@@ -38,6 +38,20 @@ describe('feedbackApi', () => {
       expect(authorizedFetch).not.toHaveBeenCalled()
     })
 
+    it('주소가 비어 있으면 요청 없이 UNKNOWN으로 실패하고 Sentry로 1회 캡처한다', async () => {
+      vi.stubEnv('VITE_FEEDBACK_PROXY_URL', '')
+      const Sentry = await import('@sentry/react')
+      const { submitFeedback, FeedbackError } = await import('../feedbackApi')
+
+      const error = await submitFeedback('의견').catch((e) => e)
+
+      expect(authorizedFetch).not.toHaveBeenCalled()
+      expect(error).toBeInstanceOf(FeedbackError)
+      expect(error.code).toBe('UNKNOWN')
+      expect(error.message).toContain('VITE_FEEDBACK_PROXY_URL')
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    })
+
     it('429면 TOO_FREQUENT FeedbackError를 던지고 Sentry로 캡처하지 않는다', async () => {
       authorizedFetch.mockResolvedValueOnce(res(429))
       const Sentry = await import('@sentry/react')

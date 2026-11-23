@@ -18,10 +18,18 @@ export const submitFeedback = async (content: string): Promise<void> => {
   const trimmed = content.trim();
   if (!trimmed) throw new Error("피드백 내용을 입력해주세요");
 
+  const proxyUrl = (import.meta.env.VITE_FEEDBACK_PROXY_URL as string | undefined) ?? "";
+  // 주소가 없으면 "undefined/feedback"으로 보내지 않고 설정 누락을 바로 알린다.
+  if (!proxyUrl) {
+    const error = new FeedbackError("UNKNOWN", "feedback-proxy 주소 미설정(VITE_FEEDBACK_PROXY_URL)");
+    Sentry.captureException(error, { tags: { feature: "feedback" } });
+    throw error;
+  }
+
   let res: Response;
   try {
     res = await authorizedFetch(
-      import.meta.env.VITE_FEEDBACK_PROXY_URL as string,
+      proxyUrl,
       "/feedback",
       {
         method: "POST",
