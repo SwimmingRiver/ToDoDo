@@ -140,6 +140,17 @@ describe("revokeAppleSignIn", () => {
     });
   });
 
+  // 실기 확인(11-23): 헤더가 없으면 Firebase가 웹 Services ID로 코드를 교환해 Apple이
+  // "client_id mismatch"로 거절한다. 앱 코드는 번들 ID로 발급되므로 번들 ID를 알려야 한다.
+  it("Firebase가 앱 번들 ID로 코드를 교환하도록 X-Ios-Bundle-Identifier를 app.json 값으로 보낸다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    await revokeAppleSignIn(revokeUser);
+
+    const appJson = jest.requireActual<{ expo: { ios: { bundleIdentifier: string } } }>("../../../app.json");
+    const [, init] = fetchMock.mock.calls[0];
+    expect((init?.headers as Record<string, string>)["X-Ios-Bundle-Identifier"]).toBe(appJson.expo.ios.bundleIdentifier);
+  });
+
   it("해지 응답이 실패면 던진다", async () => {
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
     fetchMock.mockImplementation(async () => new Response("{}", { status: 400 }));
