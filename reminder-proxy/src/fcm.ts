@@ -41,6 +41,14 @@ export const sendPush = async (
         notification: { title: message.title, body: message.body },
         data: { todoId: message.todoId },
         webpush: { headers: { TTL: String(message.ttlSeconds) }, fcm_options: { link: message.link } },
+        // FCM은 해당 플랫폼 블록만 쓴다 — 메시지 하나로 웹·iOS 모두 보낸다
+        apns: {
+          headers: {
+            "apns-expiration": String(Math.floor(Date.now() / 1000) + message.ttlSeconds),
+            "apns-priority": "10",
+          },
+          payload: { aps: { sound: "default" } },
+        },
       },
     }),
   });

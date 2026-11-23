@@ -36,8 +36,25 @@ describe("sendPush", () => {
         data: { todoId: "t1" },
         // 전달 못 한 알림은 마감 + 5분이 지나면 FCM이 버린다(뒤늦게 몰려오는 옛 알림 방지).
         webpush: { headers: { TTL: "2100" }, fcm_options: { link: "https://app.example.com/todo/t1" } },
+        apns: expect.any(Object),
       },
     });
+  });
+
+  it("includes apns block with expiration from ttl", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_800_000_000_000);
+    try {
+      const fetchFn = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+      await sendPush("p1", "access", { ...message, ttlSeconds: 600 }, fetchFn as unknown as typeof fetch);
+      const sent = JSON.parse(fetchFn.mock.calls[0][1].body).message;
+      expect(sent.apns.headers["apns-expiration"]).toBe("1800000600");
+      expect(sent.apns.headers["apns-priority"]).toBe("10");
+      expect(sent.apns.payload.aps.sound).toBe("default");
+      expect(sent.webpush.headers.TTL).toBe("600");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
