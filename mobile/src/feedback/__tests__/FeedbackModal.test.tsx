@@ -100,4 +100,38 @@ describe("FeedbackModal", () => {
     await fireEvent.press(screen.getByRole("button", { name: "닫기" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("전송 중 닫았다가 응답이 오면 다시 열어도 새 폼이고 onClose가 늦게 불리지 않는다", async () => {
+    let resolve: () => void = () => {};
+    mockSubmit.mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    const onClose = jest.fn();
+    const view = await render(<FeedbackModal visible onClose={onClose} />);
+    await fireEvent.changeText(screen.getByPlaceholderText(PLACEHOLDER), "좋아요");
+    await fireEvent.press(screen.getByRole("button", { name: "보내기" }));
+    await view.rerender(<FeedbackModal visible={false} onClose={onClose} />);
+    await act(async () => {
+      resolve();
+    });
+    await view.rerender(<FeedbackModal visible onClose={onClose} />);
+    expect(screen.queryByText("감사합니다! 의견이 전달되었습니다.")).toBeNull();
+    expect(screen.getByPlaceholderText(PLACEHOLDER).props.value).toBe("");
+    await fireEvent.changeText(screen.getByPlaceholderText(PLACEHOLDER), "다시");
+    expect(screen.getByRole("button", { name: "보내기" }).props.accessibilityState.disabled).toBe(false);
+    await act(async () => {
+      jest.advanceTimersByTime(1500);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("같은 틱에 두 번 눌러도 한 번만 전송한다", async () => {
+    mockSubmit.mockReturnValue(new Promise<void>(() => {}));
+    await renderModal();
+    await fireEvent.changeText(screen.getByPlaceholderText(PLACEHOLDER), "좋아요");
+    const button = screen.getByRole("button", { name: "보내기" });
+    // 같은 틱 중복 탭을 재현하려고 act를 겹치므로 React의 겹침 경고는 의도된 것이다.
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    await Promise.all([fireEvent.press(button), fireEvent.press(button)]);
+    errorSpy.mockRestore();
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+  });
 });

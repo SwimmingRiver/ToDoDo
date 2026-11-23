@@ -24,6 +24,9 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
   const [isSent, setIsSent] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 같은 틱의 중복 탭을 막고, 닫힌 뒤 도착한 응답을 버리기 위한 값(state는 비동기라 쓸 수 없다).
+  const submittingRef = useRef(false);
+  const generationRef = useRef(0);
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -35,6 +38,8 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
   useEffect(() => {
     if (visible) return;
     clearTimer();
+    generationRef.current += 1;
+    submittingRef.current = false;
     setText("");
     setIsSubmitting(false);
     setIsSent(false);
@@ -44,17 +49,24 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
   const canSubmit = text.trim().length > 0 && !isSubmitting && !isSent;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submittingRef.current) return;
+    submittingRef.current = true;
+    const generation = generationRef.current;
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
       await submitFeedback(text);
+      if (generation !== generationRef.current) return;
       setIsSent(true);
       timerRef.current = setTimeout(onClose, CLOSE_DELAY_MS);
     } catch (error) {
+      if (generation !== generationRef.current) return;
       setErrorMessage(error instanceof FeedbackError && error.code === "TOO_FREQUENT" ? TOO_FREQUENT_MESSAGE : UNKNOWN_MESSAGE);
     } finally {
-      setIsSubmitting(false);
+      if (generation === generationRef.current) {
+        submittingRef.current = false;
+        setIsSubmitting(false);
+      }
     }
   };
 
