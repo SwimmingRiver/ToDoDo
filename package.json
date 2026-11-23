@@ -9,7 +9,8 @@
     "backfill:archived": "tsx scripts/backfillArchivedField.ts",
     "grant:entitlement": "tsx scripts/grantEntitlement.ts",
     "audit:recurring": "tsx scripts/auditRecurringData.ts",
-    "test:scripts": "tsx --test scripts/lib/*.test.ts"
+    "test:scripts": "tsx --test scripts/lib/*.test.ts",
+    "audit:done-at": "tsx scripts/auditDoneAtData.ts"
   },
   "repository": {
     "type": "git",
