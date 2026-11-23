@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
-import { deleteAccount } from "../account/deleteAccount";
+import { AppleRevokeError, deleteAccount } from "../account/deleteAccount";
 import { needsAppleRevoke } from "../auth/appleSignIn";
 import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
 import { isAutoRenewingStore } from "@tododo/core/dist/entitlement/index.js";
@@ -61,6 +61,11 @@ export const AccountScreen = () => {
       setIsDeleting(false);
       // Apple 확인 창을 닫았으면 아무것도 지워지지 않았다 — 실패 안내 없이 원래 상태로.
       if (isUserCancelledSignIn((error as { code?: unknown } | null)?.code)) return;
+      // Apple 해지는 첫 단계라 여기서 실패했으면 아무것도 지우지 않았다.
+      if (error instanceof AppleRevokeError) {
+        Alert.alert("탈퇴 실패", "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.");
+        return;
+      }
       Alert.alert("탈퇴 실패", "일부만 처리되었습니다. 다시 시도해 주세요.");
       return;
     }

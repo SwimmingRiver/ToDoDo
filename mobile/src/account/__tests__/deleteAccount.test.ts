@@ -14,17 +14,16 @@ const mockAuth = {
 };
 jest.mock("../../firebase", () => ({ auth: mockAuth, db: {} }));
 
-// Apple 해지: 실제 revokeAppleSignIn을 쓰고 네이티브 창과 Firebase 호출만 목으로 둔다.
+// Apple 해지: 실제 revokeAppleSignIn을 쓰고 네이티브 창만 목으로 둔다(해지 요청은 fetch로 나간다).
 const mockSignInAsync = jest.fn<(options: unknown) => Promise<{ authorizationCode: string | null }>>();
 jest.mock("expo-apple-authentication", () => ({
   signInAsync: (options: unknown) => mockSignInAsync(options),
   AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
 }));
 jest.mock("expo-crypto", () => ({}));
-const mockRevokeAccessToken = jest.fn<(auth: unknown, token: string) => Promise<void>>();
-jest.mock("firebase/auth", () => ({
-  revokeAccessToken: (auth: unknown, token: string) => mockRevokeAccessToken(auth, token),
-}));
+jest.mock("firebase/auth", () => ({}));
+const REVOKE_URL_PART = "identitytoolkit.googleapis.com/v2/accounts:revokeToken";
+const isRevokeCall = (url: unknown) => String(url).includes(REVOKE_URL_PART);
 
 const mockGetDocs = jest.fn<() => Promise<{ docs: { data: () => Record<string, unknown> }[] }>>();
 jest.mock("firebase/firestore", () => ({
@@ -62,7 +61,6 @@ describe("deleteAccount", () => {
     global.fetch = fetchMock;
     mockProviderIds = ["google.com"];
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
-    mockRevokeAccessToken.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -167,29 +165,36 @@ describe("deleteAccount", () => {
       mockProviderIds = ["apple.com"];
     });
 
-    it("다른 어떤 서버 호출보다 먼저 Apple 토큰을 해지한다", async () => {
-      const order: string[] = [];
-      mockRevokeAccessToken.mockImplementation(async () => {
-        order.push("revoke");
-      });
-      fetchMock.mockImplementation(async (url) => {
-        order.push(String(url));
-        return new Response(null, { status: 204 });
-      });
+    const workerCalls = () => fetchMock.mock.calls.filter(([url]) => !isRevokeCall(url));
+
+    it("다른 어떤 서버 호출보다 먼저 Apple 토큰을 tokenType CODE로 해지한다", async () => {
       const { deleteAccount } = await import("../deleteAccount");
       await deleteAccount();
 
-      expect(mockRevokeAccessToken).toHaveBeenCalledWith(mockAuth, "auth-code");
-      expect(order[0]).toBe("revoke");
-      expect(order).toHaveLength(4);
+      const urls = fetchMock.mock.calls.map(([url]) => String(url));
+      expect(urls[0]).toContain(REVOKE_URL_PART);
+      expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toMatchObject({
+        providerId: "apple.com",
+        tokenType: "CODE",
+        token: "auth-code",
+        idToken: "id-token",
+      });
+      expect(urls).toHaveLength(4);
     });
 
-    it("해지가 실패하면 아무 단계도 부르지 않고 던진다", async () => {
-      mockRevokeAccessToken.mockRejectedValue(new Error("revoke"));
-      const { deleteAccount } = await import("../deleteAccount");
-      await expect(deleteAccount()).rejects.toThrow("revoke");
-      expect(fetchMock).not.toHaveBeenCalled();
+    it("해지가 실패하면 아무 단계도 부르지 않고 AppleRevokeError를 던진다", async () => {
+      fetchMock.mockImplementation(async (url) => new Response(null, { status: isRevokeCall(url) ? 400 : 204 }));
+      const { deleteAccount, AppleRevokeError } = await import("../deleteAccount");
+      await expect(deleteAccount()).rejects.toBeInstanceOf(AppleRevokeError);
+      expect(workerCalls()).toHaveLength(0);
       expect(mockClearSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("Apple 인증 코드를 못 받아도 AppleRevokeError로 던진다", async () => {
+      mockSignInAsync.mockResolvedValue({ authorizationCode: null });
+      const { deleteAccount, AppleRevokeError } = await import("../deleteAccount");
+      await expect(deleteAccount()).rejects.toBeInstanceOf(AppleRevokeError);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("Apple 확인 창을 닫으면 그 취소 오류를 그대로 던지고 아무것도 지우지 않는다", async () => {
@@ -197,8 +202,17 @@ describe("deleteAccount", () => {
       mockSignInAsync.mockRejectedValue(cancelled);
       const { deleteAccount } = await import("../deleteAccount");
       await expect(deleteAccount()).rejects.toBe(cancelled);
-      expect(mockRevokeAccessToken).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("Apple 단계가 끝난 뒤의 실패는 AppleRevokeError가 아니다", async () => {
+      fetchMock.mockImplementation(async (url) =>
+        new Response(null, { status: String(url).startsWith("https://rem.example") ? 500 : 200 }),
+      );
+      const { deleteAccount, AppleRevokeError } = await import("../deleteAccount");
+      const error = await deleteAccount().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(AppleRevokeError);
     });
   });
 
@@ -209,7 +223,6 @@ describe("deleteAccount", () => {
       const { deleteAccount } = await import("../deleteAccount");
       await deleteAccount();
       expect(mockSignInAsync).not.toHaveBeenCalled();
-      expect(mockRevokeAccessToken).not.toHaveBeenCalled();
       expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
         "https://cal.example/disconnect",
         "https://rem.example/account",
@@ -224,6 +237,6 @@ describe("deleteAccount", () => {
     const { deleteAccount } = await import("../deleteAccount");
     await deleteAccount();
     expect(mockSignInAsync).not.toHaveBeenCalled();
-    expect(mockRevokeAccessToken).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => isRevokeCall(url))).toBe(false);
   });
 });

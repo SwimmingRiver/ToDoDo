@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import { Platform } from "react-native";
 
 const mockSignInAsync = jest.fn<(options: unknown) => Promise<unknown>>();
@@ -26,14 +26,12 @@ jest.mock("../../firebase", () => ({
 const mockCredential = jest.fn((options: unknown) => ({ credential: options }));
 const mockSignInWithCredential = jest.fn<(auth: unknown, credential: unknown) => Promise<unknown>>();
 const mockUpdateProfile = jest.fn<(user: unknown, profile: unknown) => Promise<void>>();
-const mockRevokeAccessToken = jest.fn<(auth: unknown, token: string) => Promise<void>>();
 jest.mock("firebase/auth", () => ({
   OAuthProvider: function (providerId: string) {
     return { credential: (options: object) => mockCredential({ providerId, ...options }) };
   },
   signInWithCredential: (auth: unknown, credential: unknown) => mockSignInWithCredential(auth, credential),
   updateProfile: (user: unknown, profile: unknown) => mockUpdateProfile(user, profile),
-  revokeAccessToken: (auth: unknown, token: string) => mockRevokeAccessToken(auth, token),
 }));
 
 import { isAppleSignInAvailable, revokeAppleSignIn, signInWithApple } from "../appleSignIn";
@@ -112,20 +110,45 @@ describe("isAppleSignInAvailable", () => {
 });
 
 describe("revokeAppleSignIn", () => {
+  const fetchMock = jest.fn<typeof fetch>();
+  const revokeUser = { getIdToken: async () => "firebase-id-token" };
+
   beforeEach(() => {
-    mockRevokeAccessToken.mockReset().mockResolvedValue(undefined);
+    process.env.EXPO_PUBLIC_FIREBASE_API_KEY = "api-key";
+    fetchMock.mockReset().mockImplementation(async () => new Response("{}", { status: 200 }));
+    global.fetch = fetchMock;
   });
 
-  it("다시 받은 인증 코드로 토큰을 해지한다", async () => {
+  afterEach(() => {
+    delete process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+  });
+
+  it("다시 받은 인증 코드를 tokenType CODE로 Identity Toolkit에 보내 해지한다", async () => {
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
-    await revokeAppleSignIn();
+    await revokeAppleSignIn(revokeUser);
+
     expect(mockSignInAsync).toHaveBeenCalledWith({ requestedScopes: [] });
-    expect(mockRevokeAccessToken).toHaveBeenCalledWith(mockAuth, "auth-code");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("https://identitytoolkit.googleapis.com/v2/accounts:revokeToken?key=api-key");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      providerId: "apple.com",
+      tokenType: "CODE",
+      token: "auth-code",
+      idToken: "firebase-id-token",
+    });
+  });
+
+  it("해지 응답이 실패면 던진다", async () => {
+    mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
+    fetchMock.mockImplementation(async () => new Response("{}", { status: 400 }));
+    await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow("400");
   });
 
   it("인증 코드가 없으면 실패한다", async () => {
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: null });
-    await expect(revokeAppleSignIn()).rejects.toThrow();
-    expect(mockRevokeAccessToken).not.toHaveBeenCalled();
+    await expect(revokeAppleSignIn(revokeUser)).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

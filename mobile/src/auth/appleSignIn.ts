@@ -1,6 +1,6 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
-import { OAuthProvider, revokeAccessToken, signInWithCredential, updateProfile } from "firebase/auth";
+import { OAuthProvider, signInWithCredential, updateProfile } from "firebase/auth";
 import type { User, UserCredential } from "firebase/auth";
 import { Platform } from "react-native";
 import { formatAppleDisplayName } from "@tododo/core/dist/auth/index.js";
@@ -47,9 +47,23 @@ export const signInWithApple = async (): Promise<UserCredential> => {
 };
 
 // 탈퇴 전 Apple 토큰 해지. 새 인증 코드가 필요해 확인 창이 한 번 더 열린다(취소하면 그 오류가 그대로 던져진다).
-export const revokeAppleSignIn = async (): Promise<void> => {
+// Firebase JS의 revokeAccessToken은 tokenType을 ACCESS_TOKEN으로 고정해 보낸다. iOS가 주는 건 인증 코드라
+// 네이티브 SDK처럼 tokenType CODE로 Identity Toolkit을 직접 부른다.
+export const revokeAppleSignIn = async (user: Pick<User, "getIdToken">): Promise<void> => {
   const { authorizationCode } = await AppleAuthentication.signInAsync({ requestedScopes: [] });
   if (!authorizationCode) throw new Error("Apple 인증 코드를 받지 못했습니다");
-  // 인증 코드를 넘기는 것과 RN에서의 실제 동작은 목으로 확인할 수 없다 — 네이티브 빌드에서 실측(spec "구현 전 확인할 것" 2번).
-  await revokeAccessToken(auth, authorizationCode);
+  // Expo가 빌드 시 인라인한다. 함수 안에서 읽어 테스트가 값을 바꿀 수 있게 한다.
+  const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? "";
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v2/accounts:revokeToken?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      providerId: "apple.com",
+      tokenType: "CODE",
+      token: authorizationCode,
+      idToken: await user.getIdToken(),
+    }),
+  });
+  // 실제 Apple 해지 동작은 목으로 확인할 수 없다 — 네이티브 빌드에서 실측(spec "구현 전 확인할 것" 2번).
+  if (!res.ok) throw new Error(`Apple 토큰 해지 실패 (${res.status})`);
 };

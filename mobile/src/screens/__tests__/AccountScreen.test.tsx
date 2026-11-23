@@ -25,6 +25,7 @@ jest.mock("../../auth/signOut", () => ({
 const mockDeleteAccount = jest.fn<() => Promise<void>>();
 jest.mock("../../account/deleteAccount", () => ({
   deleteAccount: () => mockDeleteAccount(),
+  AppleRevokeError: class AppleRevokeError extends Error {},
 }));
 
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "@tododo/core/dist/entitlement/index.js";
@@ -367,6 +368,19 @@ describe("AccountScreen", () => {
       expect(alertSpy.mock.calls.length).toBe(callsBefore);
       expect(mockSignOut).not.toHaveBeenCalled();
       expect(screen.getByRole("button", { name: "회원 탈퇴" }).props.accessibilityState).toMatchObject({ disabled: false });
+    });
+
+    it("Apple 해지 단계에서 실패하면 아무것도 지워지지 않았다고 알린다", async () => {
+      mockProviderIds = ["apple.com"];
+      const { AppleRevokeError } = await import("../../account/deleteAccount");
+      mockDeleteAccount.mockRejectedValueOnce(new AppleRevokeError("revoke"));
+      await renderScreen();
+
+      await fireEvent.press(screen.getByRole("button", { name: "회원 탈퇴" }));
+      await pressAlertButton(alertSpy, "탈퇴하기");
+
+      expect(alertSpy).toHaveBeenLastCalledWith("탈퇴 실패", "Apple 확인에 실패해 아무것도 삭제되지 않았어요. 다시 시도해 주세요.");
+      expect(mockSignOut).not.toHaveBeenCalled();
     });
 
     it("처리 중에는 탈퇴·로그아웃 버튼이 모두 비활성화된다", async () => {
