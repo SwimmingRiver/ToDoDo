@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FeedbackForm from '../feedbackForm'
+import { FeedbackError } from '../../api/feedbackApi'
+
+// FeedbackError만 쓰므로 firebase를 끌어오는 authorizedFetch는 대체한다.
+vi.mock('@/shared/lib/authorizedFetch', () => ({ authorizedFetch: vi.fn() }))
 
 // vi.mock 팩토리는 이 파일의 다른 import보다 먼저(모듈 로드 시점에) 실행되므로,
 // 나중에 선언되는 일반 let 변수를 참조하면 TDZ 에러가 난다. todoListItem.test.tsx가
@@ -9,7 +13,7 @@ import FeedbackForm from '../feedbackForm'
 const { mutate, reset, mutationState } = vi.hoisted(() => ({
   mutate: vi.fn(),
   reset: vi.fn(),
-  mutationState: { isPending: false, isSuccess: false, isError: false },
+  mutationState: { isPending: false, isSuccess: false, isError: false, error: null as unknown },
 }))
 
 vi.mock('../../hooks', () => ({
@@ -19,6 +23,7 @@ vi.mock('../../hooks', () => ({
     get isPending() { return mutationState.isPending },
     get isSuccess() { return mutationState.isSuccess },
     get isError() { return mutationState.isError },
+    get error() { return mutationState.error },
   }),
 }))
 
@@ -28,6 +33,7 @@ describe('FeedbackForm 컴포넌트', () => {
     mutationState.isPending = false
     mutationState.isSuccess = false
     mutationState.isError = false
+    mutationState.error = null
   })
 
   afterEach(() => {
@@ -73,6 +79,15 @@ describe('FeedbackForm 컴포넌트', () => {
     render(<FeedbackForm isOpen onClose={vi.fn()} />)
 
     expect(screen.getByText('전송에 실패했습니다. 잠시 후 다시 시도해주세요.')).toBeInTheDocument()
+  })
+
+  it('에러가 TOO_FREQUENT면 과다 전송 안내 문구를 보여준다', () => {
+    mutationState.isError = true
+    mutationState.error = new FeedbackError('TOO_FREQUENT')
+    render(<FeedbackForm isOpen onClose={vi.fn()} />)
+
+    expect(screen.getByText('잠시 후 다시 보내주세요. 짧은 시간에 너무 많이 보냈어요.')).toBeInTheDocument()
+    expect(screen.queryByText('전송에 실패했습니다. 잠시 후 다시 시도해주세요.')).not.toBeInTheDocument()
   })
 
   it('닫기를 누르면 onClose가 호출되고 입력 상태가 초기화된다', async () => {
