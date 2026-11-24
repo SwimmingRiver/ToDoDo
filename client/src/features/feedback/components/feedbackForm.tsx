@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSubmitFeedback } from "../hooks";
 import { FEEDBACK_CONTENT_MAX_LENGTH } from "../api/constants";
+import { FeedbackError } from "../api/feedbackApi";
 import {
   Overlay,
   Container,
@@ -21,7 +22,7 @@ interface FeedbackFormProps {
 
 const FeedbackForm = ({ isOpen, onClose }: FeedbackFormProps) => {
   const [content, setContent] = useState("");
-  const { mutate, isPending, isSuccess, isError, reset } = useSubmitFeedback();
+  const { mutate, isPending, isSuccess, isError, error, reset } = useSubmitFeedback();
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -68,7 +69,9 @@ const FeedbackForm = ({ isOpen, onClose }: FeedbackFormProps) => {
         </CharCount>
         {isError && (
           <ErrorMessage>
-            전송에 실패했습니다. 잠시 후 다시 시도해주세요.
+            {error instanceof FeedbackError && error.code === "TOO_FREQUENT"
+              ? "잠시 후 다시 보내주세요. 짧은 시간에 너무 많이 보냈어요."
+              : "전송에 실패했습니다. 잠시 후 다시 시도해주세요."}
           </ErrorMessage>
         )}
         {isSuccess && (

@@ -45,6 +45,10 @@ const PremiumChunk = preloadableLazy(
   () => import("@/features/billing/pages/premiumPage"),
 );
 
+const FeedbackAdminChunk = preloadableLazy(
+  () => import("@/features/feedback/pages/feedbackAdminPage"),
+);
+
 const App = AppChunk.Component;
 const LoginPage = lazy(() => import("@/features/auth/pages/loginPage"));
 const GuestTodayPage = lazy(
@@ -57,6 +61,7 @@ const CalendarPage = CalendarChunk.Component;
 const KanbanPage = KanbanChunk.Component;
 const InsightsPage = InsightsChunk.Component;
 const PremiumPage = PremiumChunk.Component;
+const FeedbackAdminPage = FeedbackAdminChunk.Component;
 // 법적 페이지는 로그인 여부와 무관하게 열려야 한다(Paddle 심사자는 로그인하지 않는다).
 // 그래서 RootGate·ProtectedRoute 밖의 최상위 라우트로 둔다.
 const LegalPage = lazy(() => import("@/features/legal/pages/legalPage"));
@@ -179,6 +184,11 @@ export const routes: RouteObject[] = [
               {
                 path: "premium",
                 element: withSuspense(<PremiumPage />),
+              },
+              {
+                // 운영자 전용: 디스코드 링크로만 진입(사이드바 링크 없음). 비운영자는 페이지가 /today로 보낸다.
+                path: "admin/feedback",
+                element: withSuspense(<FeedbackAdminPage />),
               },
               { path: "*", loader: notFoundLoader },
             ],

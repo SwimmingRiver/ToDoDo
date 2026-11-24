@@ -194,4 +194,28 @@ describe("verifyFirebaseIdToken", () => {
     expect(result.premium).toBe(false);
     expect(result.premiumUntil).toBeNull();
   });
+
+  it("email 클레임이 문자열이면 email로 돌려준다", async () => {
+    const { token, jwk } = await makeSignedToken({ email: "a@b.com" });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.email).toBe("a@b.com");
+  });
+
+  it("email 클레임이 없으면 undefined다", async () => {
+    const { token, jwk } = await makeSignedToken();
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.email).toBeUndefined();
+  });
+
+  it("email 클레임이 문자열이 아니면 undefined다", async () => {
+    const { token, jwk } = await makeSignedToken({ email: 123 });
+    stubJwksFetch(jwk);
+
+    const result = await verifyFirebaseIdToken(token, FIREBASE_PROJECT_ID);
+    expect(result.email).toBeUndefined();
+  });
 });
