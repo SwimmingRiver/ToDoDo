@@ -8,9 +8,8 @@
 1. 웹(`client/`)의 브랜드 컬러·레이아웃·인터랙션 패턴을 그대로 이식해 "같은 앱"처럼
    보이게 한다 — 픽셀 단위 동일이 아니라 색/간격/컴포넌트 언어의 일관성이 기준이다.
 2. `TodoFormScreen`에 빠져 있는 `dueAt`(마감일시) 입력을 추가한다. `startAt`(시작일시)도
-   함께 다룬다. 이미 구현된 로컬 알림 예약(`useCreateTodo`/`useUpdateTodo` →
-   `scheduleReminder`)은 `fields.dueAt`이 채워지는 순간부터 자동으로 동작하므로,
-   폼에 입력 UI를 추가하는 것만으로 알림 기능이 살아난다 — 알림 로직 자체는 손댈 필요 없음.
+   함께 다룬다. 마감 알림은 기기 로컬 예약이 아니라 서버 푸시(reminder-proxy)가 보내므로,
+   폼은 `dueAt`만 저장하면 되고 알림 로직은 손댈 필요 없음.
 
 ## 범위 밖 (Out of scope)
 
@@ -333,8 +332,8 @@ TodoListScreen" 및 컴포넌트 패턴 표 참고.
 ### 데이터 흐름
 
 - `TodoFormScreen`은 현재 `startAt: null, dueAt: null`을 항상 고정 전달한다 — 이 부분만
-  실제 입력값으로 교체하면 된다. `useCreateTodo`가 이미 `fields.dueAt`으로 `scheduleReminder`를
-  호출하므로 알림 예약은 폼 구현만으로 자동 연결된다.
+  실제 입력값으로 교체하면 된다. 마감 알림은 서버 푸시가 `dueAt`을 기준으로
+  보내므로 폼 구현만으로 자동 연결된다.
 - 저장 형식은 웹과 동일하게 **UTC ISO 문자열**(`Date.toISOString()`)이어야 한다(dueAt/startAt
   UTC 저장 규칙, `client/src/features/todo/utils` 관례와 동일). 네이티브 피커가 반환하는 `Date`
   객체를 그대로 `toISOString()`하면 된다 — 로컬 자정으로 문자열을 자르는 방식(`split("T")[0]`)은

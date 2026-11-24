@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Alert, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react-native";
 import { useAuthState } from "../auth/useAuthState";
 import { signOut } from "../auth/signOut";
 import { AppleRevokeError, deleteAccount } from "../account/deleteAccount";
@@ -12,9 +14,10 @@ import { PremiumSection } from "../premium/PremiumSection";
 import { useEntitlement } from "../premium/useEntitlement";
 import { purchaseClient } from "../premium/iap/purchaseClient";
 import { reportError } from "../shared/lib/sentry";
+import { FeedbackModal } from "../feedback";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
-import { radius, spacing } from "../theme/spacing";
+import { MIN_TOUCH_TARGET, radius, spacing } from "../theme/spacing";
 
 // 기본 문구는 항상 보인다. 아래 안내들은 해당 구독이 있을 때만 덧붙인다.
 const DELETE_MESSAGE = "할 일·설정·구글 캘린더 연동이 모두 삭제되며 복구할 수 없습니다.";
@@ -29,11 +32,13 @@ const GOOGLE_NOTICE = "Google Play 구독은 탈퇴하면 함께 해지돼요.";
 const APPLE_SIGN_IN_NOTICE = "Apple 계정 확인 창이 한 번 더 열려요.";
 
 export const AccountScreen = () => {
+  const navigation = useNavigation<{ navigate: (name: "Notifications") => void }>();
   const { user } = useAuthState();
   const { data: entitlement } = useEntitlement();
   const queryClient = useQueryClient();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // 성공하면 RootNavigator가 user=null을 받아 로그인 화면으로 바꾸므로 여기서 이동하지 않는다.
   const runSignOut = async () => {
@@ -73,7 +78,8 @@ export const AccountScreen = () => {
       return;
     }
     try {
-      await signOut(queryClient);
+      // 탈퇴가 이미 기기 토큰을 지웠으니 푸시 해제는 건너뛴다(삭제된 uid로 다시 요청하지 않는다).
+      await signOut(queryClient, { skipPushRelease: true });
     } catch {
       // 계정은 이미 삭제됐다. 세션만 남은 상태라 재실행하면 토큰 갱신에서 끊긴다.
       Alert.alert("탈퇴 완료", "앱을 다시 실행해 주세요.");
@@ -111,6 +117,16 @@ export const AccountScreen = () => {
         <Text style={styles.email}>{user?.email ?? ""}</Text>
       </View>
       <PremiumSection />
+      <Pressable
+        onPress={() => navigation.navigate("Notifications")}
+        accessibilityRole="button"
+        accessibilityLabel="알림 설정"
+        style={styles.linkRow}
+      >
+        <Text style={styles.linkLabel}>알림 설정</Text>
+        <ChevronRight size={18} color={colors.text.tertiary} />
+      </Pressable>
+      <Button title="의견 보내기" variant="outline" onPress={() => setFeedbackOpen(true)} />
       <Button
         title="로그아웃"
         variant="outline"
@@ -123,6 +139,7 @@ export const AccountScreen = () => {
         onPress={handleDeletePress}
         disabled={isSigningOut || isDeleting}
       />
+      <FeedbackModal visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </SafeAreaView>
   );
 };
@@ -139,6 +156,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.xs,
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: MIN_TOUCH_TARGET,
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  linkLabel: {
+    fontSize: 16,
+    color: colors.text.primary,
   },
   label: {
     fontSize: 13,

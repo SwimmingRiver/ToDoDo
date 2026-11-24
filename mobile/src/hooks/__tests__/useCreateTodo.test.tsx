@@ -10,8 +10,8 @@ jest.mock("../../auth/useAuthState", () => ({
 jest.mock("@tododo/core", () => ({
   createTodo: jest.fn(() => Promise.resolve("new-id")),
 }));
-jest.mock("../../notifications/scheduleReminder", () => ({
-  scheduleReminder: jest.fn(() => Promise.resolve(null)),
+jest.mock("expo-notifications", () => ({
+  scheduleNotificationAsync: jest.fn(),
 }));
 
 describe("useCreateTodo", () => {
@@ -46,43 +46,8 @@ describe("useCreateTodo", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos", "u1"] });
   });
 
-  it("생성 성공 시 새로 만든 id로 알림을 예약한다", async () => {
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
-    const { useCreateTodo } = await import("../useCreateTodo");
-
-    const client = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
-        mutations: { retry: false, gcTime: 0 },
-      },
-    });
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-
-    const { result } = await renderHook(() => useCreateTodo(), { wrapper });
-
-    result.current.mutate({
-      title: "장보기",
-      priority: "medium",
-      startAt: null,
-      dueAt: "2099-01-01T09:00:00.000Z",
-      parentId: null,
-      order: 0,
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(scheduleReminder).toHaveBeenCalledWith({
-      id: "new-id",
-      title: "장보기",
-      dueAt: "2099-01-01T09:00:00.000Z",
-    });
-  });
-
-  it("알림 예약이 실패해도 할 일 생성 자체는 성공 처리한다", async () => {
-    (jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException.mockClear();
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
-    jest.mocked(scheduleReminder).mockRejectedValueOnce(new Error("permission denied"));
+  it("does not schedule local notification", async () => {
+    const Notifications = await import("expo-notifications");
     const { useCreateTodo } = await import("../useCreateTodo");
 
     const client = new QueryClient({
@@ -108,6 +73,6 @@ describe("useCreateTodo", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBe("new-id");
-    expect((jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });

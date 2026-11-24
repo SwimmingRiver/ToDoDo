@@ -119,7 +119,7 @@ export const initSentry = (): void => {
 };
 
 /** 화면을 깨지 않고 삼켜지는 실패를 보고하는 곳. 웹의 feature 태그와 같은 이름을 쓴다. */
-export type SentryFeature = "iap" | "aiPlan" | "entitlement" | "calendar" | "maintenance" | "auth" | "reminder";
+export type SentryFeature = "iap" | "aiPlan" | "entitlement" | "calendar" | "maintenance" | "auth" | "reminder" | "feedback";
 
 /**
  * 실패를 로그로 남기고 Sentry로 보낸다. 오류 보고가 본래 흐름을 깨면 안 되므로 절대 던지지 않는다.

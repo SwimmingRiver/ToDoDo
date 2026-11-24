@@ -48,6 +48,12 @@ jest.mock("../../hooks/useTodos", () => ({
   useTodos: () => mockUseTodos(),
 }));
 
+const mockMaybePrompt = jest.fn();
+jest.mock("../../reminders", () => ({
+  useReminderDefault: () => ({ data: 30 }),
+  useReminderPrompt: () => ({ maybePrompt: mockMaybePrompt }),
+}));
+
 const mockGoBack = jest.fn();
 let mockRouteParams: { parentId?: string; dueAt?: string } | undefined = undefined;
 jest.mock("@react-navigation/native", () => ({
@@ -62,6 +68,7 @@ describe("TodoFormScreen", () => {
     mockGoBack.mockReset();
     mockUseTodos.mockReturnValue({ data: [] });
     mockRouteParams = undefined;
+    mockMaybePrompt.mockReset();
   });
 
   it("제목이 공백뿐이면 생성 요청을 보내지 않는다", async () => {
@@ -338,5 +345,100 @@ describe("TodoFormScreen", () => {
     });
 
     expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+  });
+  describe("마감 알림", () => {
+    const DUE = "2026-11-10T01:00:00.000Z";
+    const renderWithTitle = async (title = "알림 할 일") => {
+      const { TodoFormScreen } = await import("../TodoFormScreen");
+      await render(<TodoFormScreen />);
+      await fireEvent.changeText(screen.getByPlaceholderText("할 일 제목"), title);
+      await screen.findByDisplayValue(title);
+      await fireEvent.press(screen.getByText("더보기"));
+    };
+
+    it("hides reminder field without dueAt", async () => {
+      await renderWithTitle();
+      expect(screen.queryByText("마감 알림")).toBeNull();
+      expect(screen.queryByLabelText("마감 알림 10분 전")).toBeNull();
+
+      await fireEvent.press(screen.getByText("만료일시 설정"));
+      expect(screen.getByText("마감 알림")).toBeTruthy();
+      expect(screen.getByLabelText("마감 알림 기본값(30분 전)").props.accessibilityState.selected).toBe(true);
+    });
+
+    it("saves reminderOffsetMinutes 10 when chosen", async () => {
+      mockMutateAsync.mockResolvedValue("id");
+      await renderWithTitle();
+      await fireEvent.press(screen.getByText("만료일시 설정"));
+      await fireEvent.press(screen.getByLabelText("마감 알림 10분 전"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ dueAt: DUE, reminderOffsetMinutes: 10 }),
+      );
+    });
+
+    it("saves null for default choice", async () => {
+      mockMutateAsync.mockResolvedValue("id");
+      await renderWithTitle();
+      await fireEvent.press(screen.getByText("만료일시 설정"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ dueAt: DUE, reminderOffsetMinutes: null }),
+      );
+    });
+
+    it("saves null when the deadline is cleared after choosing", async () => {
+      mockMutateAsync.mockResolvedValue("id");
+      await renderWithTitle();
+      await fireEvent.press(screen.getByText("만료일시 설정"));
+      await fireEvent.press(screen.getByLabelText("마감 알림 10분 전"));
+      await fireEvent.press(screen.getByText("만료일시 해제"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ dueAt: null, reminderOffsetMinutes: null }),
+      );
+      expect(mockMaybePrompt).not.toHaveBeenCalled();
+    });
+
+    it("recurring create passes reminderOffsetMinutes", async () => {
+      mockCreateRecurring.mockResolvedValue([]);
+      await renderWithTitle();
+      await fireEvent.press(screen.getByText("시작일시 설정"));
+      expect(screen.queryByText("마감 알림")).toBeNull();
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", true);
+      await fireEvent.press(screen.getByLabelText("마감 알림 알림 없음"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockCreateRecurring).toHaveBeenCalledWith(
+        expect.objectContaining({ reminderOffsetMinutes: "off" }),
+      );
+      expect(mockMaybePrompt).toHaveBeenCalledTimes(1);
+    });
+
+    it("calls maybePrompt after save with dueAt", async () => {
+      mockMutateAsync.mockResolvedValue("id");
+      await renderWithTitle();
+      await fireEvent.press(screen.getByText("만료일시 설정"));
+      await fireEvent.press(screen.getByText("추가"));
+
+      expect(mockMaybePrompt).toHaveBeenCalledTimes(1);
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it("does not call maybePrompt when saving without dueAt or when save fails", async () => {
+      mockMutateAsync.mockResolvedValueOnce("id");
+      await renderWithTitle();
+      await fireEvent.press(screen.getByText("추가"));
+      expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ reminderOffsetMinutes: null }));
+      expect(mockMaybePrompt).not.toHaveBeenCalled();
+
+      mockMutateAsync.mockRejectedValueOnce(new Error("실패"));
+      await fireEvent.press(screen.getByText("만료일시 설정"));
+      await fireEvent.press(screen.getByText("추가"));
+      expect(mockMaybePrompt).not.toHaveBeenCalled();
+    });
   });
 });

@@ -16,6 +16,8 @@ export interface VerifiedToken {
   premium: boolean;
   /** 커스텀 클레임 premiumUntil(epoch 초). 없거나 숫자가 아니면 null. */
   premiumUntil: number | null;
+  /** ID 토큰 email 클레임(의견 저장용). 없을 수 있다(Apple 등) — 비어 있지 않은 문자열일 때만 존재. */
+  email?: string;
 }
 
 interface JwksCache {
@@ -93,6 +95,7 @@ export const verifyFirebaseIdToken = async (
     exp?: number;
     sub?: string;
     premiumUntil?: unknown;
+    email?: unknown;
     firebase?: { identities?: unknown };
   };
 
@@ -141,5 +144,6 @@ export const verifyFirebaseIdToken = async (
     identities: parseIdentities(payload.firebase?.identities),
     premium: premiumUntil !== null && premiumUntil > Date.now() / 1000,
     premiumUntil,
+    ...(typeof payload.email === "string" && payload.email ? { email: payload.email } : {}),
   };
 };

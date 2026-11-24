@@ -2,7 +2,7 @@ import { isAllowedOrigin, verifyFirebaseIdToken } from "@tododo/worker-auth";
 import type { Env } from "./env";
 
 const MAX_TOKEN_LENGTH = 4096;
-const PLATFORMS = new Set(["web"]);
+const PLATFORMS = new Set(["web", "ios"]);
 
 const json = (body: unknown, status: number): Response =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

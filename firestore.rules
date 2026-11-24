@@ -41,13 +41,23 @@ service cloud.firestore {
         return c is string && c.size() > 0 && c.size() <= 1000;
       }
 
+      function isOperator() {
+        return request.auth != null && request.auth.token.operator == true;
+      }
+
+      // 옛 웹 탭 호환을 위해 이번 릴리스까지 유지 — 후속 PR에서 if false로 막는다(feedback-proxy가 저장 담당)
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.email == request.auth.token.email
                     && contentValid()
                     && request.resource.data.keys().hasOnly(["userId", "email", "content", "createdAt"])
                     && request.resource.data.createdAt is string;
-      allow read, update, delete: if false;
+      // 운영자(커스텀 클레임 operator)만 읽고, status 필드만 바꿀 수 있다.
+      allow read: if isOperator();
+      allow update: if isOperator()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+                    && request.resource.data.status in ["new", "planned", "done", "wontfix"];
+      allow delete: if false;
     }
 
     match /calendarIntegrations/{userId} {

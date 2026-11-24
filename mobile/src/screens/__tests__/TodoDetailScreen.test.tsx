@@ -63,6 +63,12 @@ jest.mock("../../hooks/useDeleteRecurringSeries", () => {
   };
 });
 
+const mockMaybePrompt = jest.fn();
+jest.mock("../../reminders", () => ({
+  useReminderDefault: () => ({ data: 30 }),
+  useReminderPrompt: () => ({ maybePrompt: mockMaybePrompt }),
+}));
+
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
 const mockPush = jest.fn();
@@ -101,6 +107,7 @@ describe("TodoDetailScreen", () => {
     mockCreateRecurring.mockReset();
     mockEditSeries.mockReset();
     mockDeleteSeries.mockReset();
+    mockMaybePrompt.mockReset();
   });
 
   it("route id에 해당하는 할 일이 캐시에 없으면 안내 문구를 보여준다", async () => {
@@ -162,6 +169,7 @@ describe("TodoDetailScreen", () => {
         priority: "medium",
         startAt: null,
         dueAt: null,
+        reminderOffsetMinutes: null,
       },
       title: "수정된 제목",
     });
@@ -748,6 +756,120 @@ describe("TodoDetailScreen", () => {
       await render(<TodoDetailScreen />);
 
       expect(screen.queryByText("이 할 일을 반복합니다")).toBeNull();
+    });
+  });
+  describe("마감 알림", () => {
+    type AlertButton = { text: string; style?: string; onPress?: () => unknown };
+    const START_AT = "2026-11-10T01:00:00.000Z";
+    const DUE_AT = "2026-11-10T09:00:00.000Z";
+    const DAILY = { type: "daily", endType: "indefinite", endDate: null };
+
+    it("prefills choice from todo.reminderOffsetMinutes", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ dueAt: DUE_AT, reminderOffsetMinutes: 60 })] });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.getByText("마감 알림")).toBeTruthy();
+      expect(screen.getByLabelText("마감 알림 1시간 전").props.accessibilityState.selected).toBe(true);
+      expect(screen.getByLabelText("마감 알림 기본값(30분 전)").props.accessibilityState.selected).toBe(false);
+    });
+
+    it("hides the reminder field without dueAt and recurrence", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ reminderOffsetMinutes: 60 })] });
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+
+      expect(screen.queryByText("마감 알림")).toBeNull();
+    });
+
+    it("plain edit passes reminderOffsetMinutes", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ dueAt: DUE_AT })] });
+      mockUpdateTodoMutateAsync.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByLabelText("마감 알림 10분 전"));
+      await act(async () => {
+        fireEvent.press(screen.getByText("저장"));
+      });
+
+      expect(mockUpdateTodoMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "root-1",
+          fields: expect.objectContaining({ dueAt: DUE_AT, reminderOffsetMinutes: 10 }),
+        }),
+      );
+      expect(mockMaybePrompt).toHaveBeenCalledTimes(1);
+    });
+
+    it("plain edit without dueAt saves null and does not prompt", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ reminderOffsetMinutes: 60 })] });
+      mockUpdateTodoMutateAsync.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await act(async () => {
+        fireEvent.press(screen.getByText("저장"));
+      });
+
+      expect(mockUpdateTodoMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ fields: expect.objectContaining({ reminderOffsetMinutes: null }) }),
+      );
+      expect(mockMaybePrompt).not.toHaveBeenCalled();
+    });
+
+    it("series edit passes reminderOffsetMinutes", async () => {
+      const { Alert } = require("react-native");
+      const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {}) as unknown as jest.Mock;
+      mockUseTodos.mockReturnValue({
+        data: [
+          rootTodo({
+            recurrenceId: "series-1",
+            recurrence: DAILY,
+            startAt: START_AT,
+            dueAt: DUE_AT,
+            reminderOffsetMinutes: 30,
+          }),
+        ],
+      });
+      mockEditSeries.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      await fireEvent.press(screen.getByLabelText("마감 알림 정각"));
+      await fireEvent.press(screen.getByText("저장"));
+      const apply = (alertSpy.mock.calls.at(-1) as [string, string, AlertButton[]])[2].find(
+        (b) => b.text === "전체 적용",
+      );
+      await act(async () => {
+        await apply?.onPress?.();
+      });
+
+      expect(mockEditSeries).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrenceId: "series-1", reminderOffsetMinutes: 0 }),
+      );
+      expect(mockMaybePrompt).toHaveBeenCalledTimes(1);
+      alertSpy.mockRestore();
+    });
+
+    it("conversion to recurring passes reminderOffsetMinutes", async () => {
+      mockUseTodos.mockReturnValue({ data: [rootTodo({ startAt: START_AT })] });
+      mockCreateRecurring.mockResolvedValue([]);
+      mockDeleteTodoMutateAsync.mockResolvedValue(undefined);
+
+      const { TodoDetailScreen } = await import("../TodoDetailScreen");
+      await render(<TodoDetailScreen />);
+      expect(screen.queryByText("마감 알림")).toBeNull();
+      await fireEvent(screen.getByLabelText("이 할 일을 반복합니다"), "valueChange", true);
+      await fireEvent.press(screen.getByLabelText("마감 알림 하루 전"));
+      await fireEvent.press(screen.getByText("저장"));
+
+      expect(mockCreateRecurring).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrence: DAILY, reminderOffsetMinutes: 1440 }),
+      );
+      expect(mockMaybePrompt).toHaveBeenCalledTimes(1);
     });
   });
 });

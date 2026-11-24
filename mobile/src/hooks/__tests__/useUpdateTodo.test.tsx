@@ -10,8 +10,8 @@ jest.mock("../../auth/useAuthState", () => ({
 jest.mock("@tododo/core", () => ({
   updateTodo: jest.fn(() => Promise.resolve()),
 }));
-jest.mock("../../notifications/scheduleReminder", () => ({
-  scheduleReminder: jest.fn(() => Promise.resolve("notif-id")),
+jest.mock("expo-notifications", () => ({
+  scheduleNotificationAsync: jest.fn(),
 }));
 
 // queries.gcTime는 기본값(5분)을 유지한다 — 0으로 두면 setQueryData로 채운
@@ -108,8 +108,8 @@ describe("useUpdateTodo", () => {
     expect(updateTodo).not.toHaveBeenCalled();
   });
 
-  it("dueAt이 바뀌고 title이 주어지면 알림을 재예약한다", async () => {
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
+  it("does not schedule local notification", async () => {
+    const Notifications = await import("expo-notifications");
     const { useUpdateTodo } = await import("../useUpdateTodo");
 
     const client = createTestClient();
@@ -127,76 +127,6 @@ describe("useUpdateTodo", () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(scheduleReminder).toHaveBeenCalledWith({
-      id: "root-1",
-      title: "장보기",
-      dueAt: "2099-01-01T09:00:00.000Z",
-    });
-  });
-
-  it("status가 done이면 알림을 재예약하지 않는다", async () => {
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
-    const { useUpdateTodo } = await import("../useUpdateTodo");
-
-    const client = createTestClient();
-    client.setQueryData(["todos", "u1"], []);
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-
-    const { result } = await renderHook(() => useUpdateTodo(), { wrapper });
-
-    result.current.mutate({
-      id: "root-1",
-      fields: { status: "done", doneAt: "2026-08-23T00:00:00.000Z" },
-      title: "장보기",
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(scheduleReminder).not.toHaveBeenCalled();
-  });
-
-  it("title이 주어지지 않으면 알림을 재예약하지 않는다", async () => {
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
-    const { useUpdateTodo } = await import("../useUpdateTodo");
-
-    const client = createTestClient();
-    client.setQueryData(["todos", "u1"], []);
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-
-    const { result } = await renderHook(() => useUpdateTodo(), { wrapper });
-
-    result.current.mutate({ id: "root-1", fields: { status: "doing" } });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(scheduleReminder).not.toHaveBeenCalled();
-  });
-
-  it("알림 재예약이 실패해도 수정 자체는 성공 처리한다", async () => {
-    (jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException.mockClear();
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
-    jest.mocked(scheduleReminder).mockRejectedValueOnce(new Error("permission denied"));
-    const { updateTodo } = await import("@tododo/core");
-    const { useUpdateTodo } = await import("../useUpdateTodo");
-
-    const client = createTestClient();
-    client.setQueryData(["todos", "u1"], []);
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-
-    const { result } = await renderHook(() => useUpdateTodo(), { wrapper });
-
-    result.current.mutate({
-      id: "root-1",
-      fields: { dueAt: "2099-01-01T09:00:00.000Z" },
-      title: "장보기",
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(updateTodo).toHaveBeenCalled();
-    expect((jest.requireMock("@sentry/react-native") as { captureException: jest.Mock }).captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });

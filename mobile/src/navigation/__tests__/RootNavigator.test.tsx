@@ -1,6 +1,7 @@
 import { render, act } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import { Platform } from "react-native";
 
 jest.mock("../../firebase", () => ({ db: {} }));
 const mockHideSplash = jest.fn();
@@ -15,7 +16,20 @@ jest.mock("../../premium", () => ({ useEntitlementSync: jest.fn() }));
 jest.mock("../../calendarIntegration/useSyncTodosToCalendar", () => ({ useSyncTodosToCalendar: jest.fn() }));
 jest.mock("../../premium/iap/resumePending", () => ({ resumePendingPurchases: jest.fn() }));
 jest.mock("../../auth/useAuthState", () => ({ useAuthState: jest.fn() }));
-jest.mock("@react-navigation/native", () => ({ NavigationContainer: ({ children }: { children: unknown }) => children }));
+jest.mock("@react-navigation/native", () => ({
+  NavigationContainer: ({ children }: { children: unknown }) => children,
+  createNavigationContainerRef: () => ({ isReady: () => false, navigate: jest.fn() }),
+}));
+jest.mock("../../reminders", () => ({
+  ReminderBannerProvider: ({ children }: { children: unknown }) => children,
+  ReminderPromptProvider: ({ children }: { children: unknown }) => children,
+  usePushTokenSync: jest.fn(),
+  useReminderRefresh: jest.fn(),
+  useForegroundReminders: jest.fn(),
+  useNotificationNavigation: jest.fn(),
+  useRefreshHistoryOnForeground: jest.fn(),
+  cancelLegacyLocalRemindersOnce: jest.fn(() => Promise.resolve()),
+}));
 // 탭은 각 스택 컴포넌트를 렌더하고, 스택은 등록된 Screen(name/options)을 mockStackScreens에 모은다.
 const mockStackScreens: { name: string; options?: { title?: string } }[] = [];
 jest.mock("@react-navigation/bottom-tabs", () => ({
@@ -41,6 +55,7 @@ jest.mock("../../screens/TodoFormScreen", () => ({ TodoFormScreen: () => null })
 jest.mock("../../screens/TodoDetailScreen", () => ({ TodoDetailScreen: () => null }));
 jest.mock("../../screens/CalendarScreen", () => ({ CalendarScreen: () => null }));
 jest.mock("../../screens/AccountScreen", () => ({ AccountScreen: () => null }));
+jest.mock("../../screens/NotificationsScreen", () => ({ NotificationsScreen: () => null }));
 jest.mock("../../screens/AiPlanScreen", () => ({ AiPlanScreen: () => null }));
 jest.mock("../../screens/InsightsScreen", () => ({ InsightsScreen: () => null }));
 jest.mock("../../shared/ui/iconButton/IconButton", () => ({ IconButton: () => null }));
@@ -141,6 +156,7 @@ describe("RootNavigator 라우트", () => {
     expect(insights).toHaveLength(1);
     expect(insights[0].options?.title).toBe("통계");
     expect(mockStackScreens.filter((s) => s.name === "Account")).toHaveLength(4);
+    expect(mockStackScreens.filter((s) => s.name === "Notifications")).toHaveLength(4);
   });
 
   it("인증 상태를 확인하는 동안은 스플래시를 유지하고, 정해지면 숨긴다", async () => {
@@ -156,3 +172,79 @@ describe("RootNavigator 라우트", () => {
   });
 });
 
+
+describe("RootNavigator 옛 로컬 알림 취소", () => {
+  it("로그아웃 상태에서도 앱 시작 시 옛 로컬 알림 취소를 부른다", async () => {
+    const { cancelLegacyLocalRemindersOnce } = jest.requireMock("../../reminders") as {
+      cancelLegacyLocalRemindersOnce: jest.Mock<() => Promise<void>>;
+    };
+    cancelLegacyLocalRemindersOnce.mockClear();
+    authMock.mockReturnValue({ user: null, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    await flush();
+    expect(cancelLegacyLocalRemindersOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it("취소가 실패하면 reminder로 보고한다", async () => {
+    const { cancelLegacyLocalRemindersOnce } = jest.requireMock("../../reminders") as {
+      cancelLegacyLocalRemindersOnce: jest.Mock<() => Promise<void>>;
+    };
+    const sentryMock = jest.requireMock("@sentry/react-native") as { captureException: jest.Mock };
+    sentryMock.captureException.mockClear();
+    cancelLegacyLocalRemindersOnce.mockReset().mockRejectedValueOnce(new Error("native"));
+    authMock.mockReturnValue({ user: null, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    await flush();
+    expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
+    cancelLegacyLocalRemindersOnce.mockImplementation(() => Promise.resolve());
+  });
+});
+
+describe("RootNavigator 푸시 알림 플랫폼", () => {
+  type Hooks = Record<
+    "usePushTokenSync" | "useForegroundReminders" | "useNotificationNavigation" | "useReminderRefresh" | "useRefreshHistoryOnForeground",
+    jest.Mock
+  >;
+  const renderSignedIn = async () => {
+    const hooks = jest.requireMock("../../reminders") as Hooks;
+    Object.values(hooks).forEach((h) => typeof h?.mockClear === "function" && h.mockClear());
+    authMock.mockReturnValue({ user: { uid: "u1" }, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    await flush();
+    return hooks;
+  };
+
+  it("iOS에서는 토큰 동기화·포그라운드 수신·알림 탭 이동을 켠다", async () => {
+    const hooks = await renderSignedIn();
+    expect(hooks.usePushTokenSync).toHaveBeenCalled();
+    expect(hooks.useForegroundReminders).toHaveBeenCalled();
+    expect(hooks.useNotificationNavigation).toHaveBeenCalled();
+  });
+
+  it("Android에서는 messaging을 부르는 훅을 켜지 않고, 예약 갱신 신호·기록 갱신만 둔다", async () => {
+    const restore = jest.replaceProperty(Platform, "OS", "android");
+    try {
+      const hooks = await renderSignedIn();
+      expect(hooks.usePushTokenSync).not.toHaveBeenCalled();
+      expect(hooks.useForegroundReminders).not.toHaveBeenCalled();
+      expect(hooks.useNotificationNavigation).not.toHaveBeenCalled();
+      // 다른 기기(웹·iPhone)의 예약은 이 기기의 할 일 변경으로도 갱신돼야 한다.
+      expect(hooks.useReminderRefresh).toHaveBeenCalled();
+      expect(hooks.useRefreshHistoryOnForeground).toHaveBeenCalled();
+    } finally {
+      restore.restore();
+    }
+  });
+});
