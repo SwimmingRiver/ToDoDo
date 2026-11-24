@@ -379,7 +379,12 @@ describe("useSyncTodosToCalendar", () => {
     });
     mockTodos = [makeTodo()];
     await rerender({});
-    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
+    // 정확한 호출 횟수(타이밍에 따라 1~2번 더 돈다)가 아니라 "쿨다운에 걸렸던 t1이 다시 전송됐는지"를 본다 —
+    // 쿨다운 기록이 남아 있으면 t1은 걸러져 보내지지 않는다.
+    await waitFor(() => {
+      const resentIds = mockSync.mock.calls.slice(1).flatMap(([batch]) => batch.map((p) => p.id));
+      expect(resentIds).toContain("t1");
+    });
   });
 
   it("로그인 사용자가 바뀌면 쿨다운 기록을 비운다", async () => {
@@ -391,7 +396,12 @@ describe("useSyncTodosToCalendar", () => {
     mockAuth.currentUser = { uid: "uid-2" };
     mockTodos = [makeTodo()];
     await rerender({});
-    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(2));
+    // 정확한 호출 횟수(타이밍에 따라 1~2번 더 돈다)가 아니라 "쿨다운에 걸렸던 t1이 다시 전송됐는지"를 본다 —
+    // 쿨다운 기록이 남아 있으면 t1은 걸러져 보내지지 않는다.
+    await waitFor(() => {
+      const resentIds = mockSync.mock.calls.slice(1).flatMap(([batch]) => batch.map((p) => p.id));
+      expect(resentIds).toContain("t1");
+    });
   });
 
   // 리뷰: 뒤 묶음은 루프 시작 때 잡은 todos로 보내서, 도중에 지워진 할 일도 upsert하고 그
