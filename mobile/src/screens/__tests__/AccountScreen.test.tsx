@@ -95,6 +95,15 @@ describe("AccountScreen", () => {
     expect(screen.getByText("me@example.com")).toBeTruthy();
   });
 
+  it("의견 보내기를 누르면 의견 모달이 열린다", async () => {
+    await renderScreen();
+    expect(screen.queryByPlaceholderText("불편한 점이나 바라는 기능을 자유롭게 적어주세요.")).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "의견 보내기" }));
+
+    expect(screen.getByPlaceholderText("불편한 점이나 바라는 기능을 자유롭게 적어주세요.")).toBeTruthy();
+  });
+
   it("로그아웃을 누르면 확인 창을 띄우고, 확인하면 signOut을 호출한다", async () => {
     await renderScreen();
 

@@ -289,4 +289,14 @@ describe('scrubEvent', () => {
     expect(result.level).toBe('error')
     expect(result.environment).toBe('production')
   })
+  // 배포 소스맵은 debug id로만 등록된다(업로드 이름이 ~/<debugId>-N.js라 파일 경로로는 매칭 불가).
+  // SDK가 beforeSend 전에 채우는 debug_meta를 버리면 Sentry가 압축된 번들 위치(assets/x.js:1:긴숫자)만 보여준다.
+  it('소스맵 매칭용 debug_meta는 그대로 둔다', () => {
+    const debugMeta = {
+      images: [{ type: 'sourcemap', code_file: `${window.location.origin}/assets/App-abc123.js`, debug_id: '2533aac5-aaef-46d0-8877-ab8a8f392f13' }],
+    }
+    const result = scrubEvent({ type: undefined, debug_meta: debugMeta } as unknown as SentryErrorEvent)
+
+    expect(result.debug_meta).toEqual(debugMeta)
+  })
 })

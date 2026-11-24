@@ -1,84 +1,94 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/shared/lib/firebase', () => ({
-  auth: {
-    currentUser: { uid: 'test-user-id', email: 'user@example.com' },
-  },
-  googleProvider: {},
-}))
+const { authorizedFetch } = vi.hoisted(() => ({ authorizedFetch: vi.fn() }))
 
-vi.mock('@/shared/lib/firestore', () => ({
-  db: {},
-}))
-
-vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(() => ({})),
-  addDoc: vi.fn(),
-}))
+vi.mock('@/shared/lib/authorizedFetch', () => ({ authorizedFetch }))
 
 vi.mock('@sentry/react', () => ({
   captureException: vi.fn(),
 }))
 
+const res = (status: number) => ({ ok: status >= 200 && status < 300, status }) as Response
+
 describe('feedbackApi', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubEnv('VITE_FEEDBACK_PROXY_URL', 'https://fb.example.com')
   })
 
   describe('submitFeedback', () => {
-    it('인증된 사용자의 uid/email과 trim된 content, ISO createdAt을 저장해야 한다', async () => {
-      const { addDoc } = await import('firebase/firestore')
+    it('trim된 content와 platform web을 Worker로 POST해야 한다', async () => {
+      authorizedFetch.mockResolvedValueOnce(res(201))
       const { submitFeedback } = await import('../feedbackApi')
 
       await submitFeedback('  좋아요  ')
 
-      expect(addDoc).toHaveBeenCalledTimes(1)
-      const [, payload] = vi.mocked(addDoc).mock.calls[0]
-      expect(payload).toMatchObject({
-        userId: 'test-user-id',
-        email: 'user@example.com',
-        content: '좋아요',
-      })
-      expect(typeof (payload as { createdAt: string }).createdAt).toBe('string')
-    })
-
-    it('빈 문자열(공백만)이면 Firestore를 호출하지 않고 에러를 던져야 한다', async () => {
-      const { addDoc } = await import('firebase/firestore')
-      const { submitFeedback } = await import('../feedbackApi')
-
-      await expect(submitFeedback('   ')).rejects.toThrow()
-      expect(addDoc).not.toHaveBeenCalled()
-    })
-
-    it('미인증 상태면 에러를 던져야 한다', async () => {
-      // todoApi.test.ts와 동일한 관례: Object.defineProperty로 currentUser를 바꾼다
-      const { auth } = await import('@/shared/lib/firebase')
-      Object.defineProperty(auth, 'currentUser', { value: null, configurable: true })
-
-      const { submitFeedback } = await import('../feedbackApi')
-
-      await expect(submitFeedback('의견입니다')).rejects.toThrow('Not authenticated')
-
-      // 이후 테스트에 영향 주지 않도록 원복
-      Object.defineProperty(auth, 'currentUser', {
-        value: { uid: 'test-user-id', email: 'user@example.com' },
-        configurable: true,
+      expect(authorizedFetch).toHaveBeenCalledTimes(1)
+      expect(authorizedFetch).toHaveBeenCalledWith('https://fb.example.com', '/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '좋아요', platform: 'web' }),
       })
     })
 
-    it('addDoc이 실패하면 Sentry로 캡처하고 에러를 다시 던져야 한다', async () => {
-      const { addDoc } = await import('firebase/firestore')
+    it('빈 문자열(공백만)이면 요청 없이 에러를 던져야 한다', async () => {
+      const { submitFeedback } = await import('../feedbackApi')
+
+      await expect(submitFeedback('   ')).rejects.toThrow('피드백 내용을 입력해주세요')
+      expect(authorizedFetch).not.toHaveBeenCalled()
+    })
+
+    it('주소가 비어 있으면 요청 없이 UNKNOWN으로 실패하고 Sentry로 1회 캡처한다', async () => {
+      vi.stubEnv('VITE_FEEDBACK_PROXY_URL', '')
       const Sentry = await import('@sentry/react')
-      const { submitFeedback } = await import('../feedbackApi')
+      const { submitFeedback, FeedbackError } = await import('../feedbackApi')
 
-      const error = new Error('network down')
-      vi.mocked(addDoc).mockRejectedValueOnce(error)
+      const error = await submitFeedback('의견').catch((e) => e)
 
-      await expect(submitFeedback('의견입니다')).rejects.toThrow('network down')
-      expect(Sentry.captureException).toHaveBeenCalledWith(
-        error,
-        { tags: { feature: 'feedback' } },
-      )
+      expect(authorizedFetch).not.toHaveBeenCalled()
+      expect(error).toBeInstanceOf(FeedbackError)
+      expect(error.code).toBe('UNKNOWN')
+      expect(error.message).toContain('VITE_FEEDBACK_PROXY_URL')
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    })
+
+    it('429면 TOO_FREQUENT FeedbackError를 던지고 Sentry로 캡처하지 않는다', async () => {
+      authorizedFetch.mockResolvedValueOnce(res(429))
+      const Sentry = await import('@sentry/react')
+      const { submitFeedback, FeedbackError } = await import('../feedbackApi')
+
+      const error = await submitFeedback('의견').catch((e) => e)
+
+      expect(error).toBeInstanceOf(FeedbackError)
+      expect(error.code).toBe('TOO_FREQUENT')
+      expect(Sentry.captureException).not.toHaveBeenCalled()
+    })
+
+    it('500이면 UNKNOWN FeedbackError를 던지고 Sentry로 1회 캡처한다', async () => {
+      authorizedFetch.mockResolvedValueOnce(res(500))
+      const Sentry = await import('@sentry/react')
+      const { submitFeedback, FeedbackError } = await import('../feedbackApi')
+
+      const error = await submitFeedback('의견').catch((e) => e)
+
+      expect(error).toBeInstanceOf(FeedbackError)
+      expect(error.code).toBe('UNKNOWN')
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+      expect(Sentry.captureException).toHaveBeenCalledWith(expect.anything(), {
+        tags: { feature: 'feedback' },
+      })
+    })
+
+    it('fetch가 reject되면(미인증 포함) UNKNOWN FeedbackError로 감싸 Sentry로 1회 캡처한다', async () => {
+      authorizedFetch.mockRejectedValueOnce(new Error('Not authenticated'))
+      const Sentry = await import('@sentry/react')
+      const { submitFeedback, FeedbackError } = await import('../feedbackApi')
+
+      const error = await submitFeedback('의견').catch((e) => e)
+
+      expect(error).toBeInstanceOf(FeedbackError)
+      expect(error.code).toBe('UNKNOWN')
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1)
     })
   })
 })
