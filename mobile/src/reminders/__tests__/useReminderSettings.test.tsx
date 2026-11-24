@@ -12,6 +12,8 @@ jest.mock("firebase/firestore", () => ({
   getDoc: jest.fn(),
   setDoc: jest.fn(() => Promise.resolve()),
 }));
+const mockReportError = jest.fn();
+jest.mock("../../shared/lib/sentry", () => ({ reportError: (...args: unknown[]) => mockReportError(...args) }));
 jest.mock("../api/reminderProxyApi", () => ({
   requestReminderRefresh: jest.fn(() => Promise.resolve()),
 }));
@@ -52,5 +54,16 @@ describe("reminder default hooks", () => {
     );
     expect(spy).toHaveBeenCalledWith({ queryKey: ["reminderDefault", "u1"] });
     expect(requestReminderRefresh).toHaveBeenCalled();
+  });
+
+  it("reports refresh signal failures as reminder errors", async () => {
+    const { requestReminderRefresh } = await import("../api/reminderProxyApi");
+    const err = new Error("refresh");
+    (requestReminderRefresh as unknown as jest.Mock<() => Promise<void>>).mockRejectedValueOnce(err);
+    const { useSetReminderDefault } = await import("../hooks/useReminderSettings");
+    const { wrapper } = setup();
+    const { result } = await renderHook(() => useSetReminderDefault(), { wrapper });
+    result.current.mutate(60);
+    await waitFor(() => expect(mockReportError).toHaveBeenCalledWith(err, "reminder"));
   });
 });

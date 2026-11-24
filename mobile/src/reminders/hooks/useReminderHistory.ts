@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as Sentry from "@sentry/react-native";
 import { useAuthState } from "../../auth/useAuthState";
+import { reportError } from "../../shared/lib/sentry";
 import { fetchReminderHistory, markReminderHistorySeen, type ReminderHistory } from "../api/reminderProxyApi";
 
 export const REMINDER_HISTORY_KEY = "reminderHistory";
@@ -18,7 +18,7 @@ export const useReminderHistory = () => {
     queryKey: historyKey(uid),
     queryFn: () =>
       fetchReminderHistory().catch((error: unknown) => {
-        Sentry.captureException(error);
+        reportError(error, "reminder");
         throw error;
       }),
     enabled: !!uid,
@@ -44,7 +44,7 @@ export const useMarkHistorySeen = () => {
     },
     onError: (error, _seenUntil, context) => {
       if (context?.prev) queryClient.setQueryData(key, context.prev);
-      Sentry.captureException(error);
+      reportError(error, "reminder");
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });

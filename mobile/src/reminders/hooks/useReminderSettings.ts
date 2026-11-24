@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as Sentry from "@sentry/react-native";
 import type { ReminderSetting } from "@tododo/core/dist/reminders/index.js";
 import { useAuthState } from "../../auth/useAuthState";
+import { reportError } from "../../shared/lib/sentry";
 import { getReminderDefault, setReminderDefault } from "../api/reminderSettingsApi";
 import { requestReminderRefresh } from "../api/reminderProxyApi";
 
@@ -30,7 +30,7 @@ export const useSetReminderDefault = () => {
       queryClient.setQueryData(settingsKey(uid), setting);
       queryClient.invalidateQueries({ queryKey: settingsKey(uid) });
       // 기본값이 바뀌면 예약 전체가 바뀐다. 실패해도 다음 할 일 변경 때 다시 신호가 간다.
-      requestReminderRefresh().catch((error) => Sentry.captureException(error));
+      requestReminderRefresh().catch((error) => reportError(error, "reminder"));
     },
   });
 };

@@ -3,12 +3,19 @@ import { describe, it, expect, jest, afterEach } from "@jest/globals";
 import { renderHook, waitFor } from "@testing-library/react-native";
 import { AppState } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { hasUnreadReminders, useRefreshHistoryOnForeground, useReminderHistory } from "../hooks/useReminderHistory";
+import {
+  hasUnreadReminders,
+  useMarkHistorySeen,
+  useRefreshHistoryOnForeground,
+  useReminderHistory,
+} from "../hooks/useReminderHistory";
 
 jest.mock("../../firebase", () => ({ auth: {}, db: {} }));
 jest.mock("../../auth/useAuthState", () => ({
   useAuthState: () => ({ user: { uid: "u1" }, loading: false }),
 }));
+const mockReportError = jest.fn();
+jest.mock("../../shared/lib/sentry", () => ({ reportError: (...args: unknown[]) => mockReportError(...args) }));
 jest.mock("../api/reminderProxyApi", () => ({
   fetchReminderHistory: jest.fn(() => Promise.resolve({ items: [], lastSeenAt: 0 })),
   markReminderHistorySeen: jest.fn(),
@@ -65,5 +72,34 @@ describe("useReminderHistory staleTime", () => {
     const { result } = await renderHook(() => useReminderHistory(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(client.getQueryCache().find({ queryKey: ["reminderHistory", "u1"] })?.isStale()).toBe(false);
+  });
+});
+
+describe("error reporting", () => {
+  const api = jest.requireMock("../api/reminderProxyApi") as {
+    fetchReminderHistory: jest.Mock<() => Promise<unknown>>;
+    markReminderHistorySeen: jest.Mock<(n: number) => Promise<void>>;
+  };
+
+  it("reports history fetch failures as reminder errors", async () => {
+    const err = new Error("fetch");
+    mockReportError.mockClear();
+    // 훅이 retry: 1이라 두 번 모두 실패시키고 끝까지 기다린다(재시도 타이머가 남지 않게).
+    api.fetchReminderHistory.mockRejectedValueOnce(err).mockRejectedValueOnce(err);
+    client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retryDelay: 0 } } });
+    const { result } = await renderHook(() => useReminderHistory(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockReportError).toHaveBeenCalledWith(err, "reminder");
+  });
+
+  it("reports mark-seen failures as reminder errors", async () => {
+    const err = new Error("seen");
+    mockReportError.mockClear();
+    api.markReminderHistorySeen.mockRejectedValueOnce(err);
+    client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
+    const { result } = await renderHook(() => useMarkHistorySeen(), { wrapper });
+    result.current.mutate(100);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mockReportError).toHaveBeenCalledWith(err, "reminder");
   });
 });
