@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
-import { Alert, Text } from "react-native";
+import { Alert, Text, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const NOW = new Date(2026, 10, 24, 12, 0).getTime();
@@ -166,5 +166,17 @@ describe("ReminderPromptProvider", () => {
       maybePrompt();
     });
     expect(alertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("Android에서는 권한을 읽지도, 안내를 띄우지도 않는다(messaging 미구성)", async () => {
+    const restore = jest.replaceProperty(Platform, "OS", "android");
+    try {
+      await renderProvider();
+      await prompt();
+      expect(mockGetPermission).not.toHaveBeenCalled();
+      expect(alertSpy).not.toHaveBeenCalled();
+    } finally {
+      restore.restore();
+    }
   });
 });

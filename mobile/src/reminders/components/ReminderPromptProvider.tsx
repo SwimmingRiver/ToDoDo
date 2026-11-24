@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from "react";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_REMINDER_SETTING, reminderSettingLabel } from "@tododo/core/dist/reminders/index.js";
 import { useAuthState } from "../../auth/useAuthState";
@@ -58,6 +58,8 @@ export const ReminderPromptProvider = ({ children }: { children: ReactNode }) =>
   }, [uid]);
 
   const maybePrompt = useCallback(() => {
+    // 이 기기의 푸시는 iOS 전용이다(Android는 messaging 미구성).
+    if (Platform.OS !== "ios") return;
     if (activeRef.current) return;
     if (reminderDefault === "off") return;
     activeRef.current = true;

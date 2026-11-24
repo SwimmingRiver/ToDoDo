@@ -1,6 +1,7 @@
 import { render, act } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import { Platform } from "react-native";
 
 jest.mock("../../firebase", () => ({ db: {} }));
 const mockHideSplash = jest.fn();
@@ -204,5 +205,46 @@ describe("RootNavigator 옛 로컬 알림 취소", () => {
     await flush();
     expect(sentryMock.captureException).toHaveBeenCalledWith(expect.any(Error), { tags: { feature: "reminder" } });
     cancelLegacyLocalRemindersOnce.mockImplementation(() => Promise.resolve());
+  });
+});
+
+describe("RootNavigator 푸시 알림 플랫폼", () => {
+  type Hooks = Record<
+    "usePushTokenSync" | "useForegroundReminders" | "useNotificationNavigation" | "useReminderRefresh" | "useRefreshHistoryOnForeground",
+    jest.Mock
+  >;
+  const renderSignedIn = async () => {
+    const hooks = jest.requireMock("../../reminders") as Hooks;
+    Object.values(hooks).forEach((h) => typeof h?.mockClear === "function" && h.mockClear());
+    authMock.mockReturnValue({ user: { uid: "u1" }, loading: false });
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RootNavigator />
+      </QueryClientProvider>,
+    );
+    await flush();
+    return hooks;
+  };
+
+  it("iOS에서는 토큰 동기화·포그라운드 수신·알림 탭 이동을 켠다", async () => {
+    const hooks = await renderSignedIn();
+    expect(hooks.usePushTokenSync).toHaveBeenCalled();
+    expect(hooks.useForegroundReminders).toHaveBeenCalled();
+    expect(hooks.useNotificationNavigation).toHaveBeenCalled();
+  });
+
+  it("Android에서는 messaging을 부르는 훅을 켜지 않고, 예약 갱신 신호·기록 갱신만 둔다", async () => {
+    const restore = jest.replaceProperty(Platform, "OS", "android");
+    try {
+      const hooks = await renderSignedIn();
+      expect(hooks.usePushTokenSync).not.toHaveBeenCalled();
+      expect(hooks.useForegroundReminders).not.toHaveBeenCalled();
+      expect(hooks.useNotificationNavigation).not.toHaveBeenCalled();
+      // 다른 기기(웹·iPhone)의 예약은 이 기기의 할 일 변경으로도 갱신돼야 한다.
+      expect(hooks.useReminderRefresh).toHaveBeenCalled();
+      expect(hooks.useRefreshHistoryOnForeground).toHaveBeenCalled();
+    } finally {
+      restore.restore();
+    }
   });
 });

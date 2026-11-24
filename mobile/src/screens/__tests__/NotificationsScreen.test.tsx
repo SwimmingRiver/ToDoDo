@@ -1,7 +1,7 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 
 const NOW = new Date(2026, 10, 24, 12, 0).getTime();
 
@@ -26,6 +26,7 @@ const mockSetDefault = jest.fn();
 let mockHistory: { items: unknown[]; lastSeenAt: number } | undefined;
 const mockGetPermission = jest.fn<() => Promise<string>>();
 const mockEnable = jest.fn<(uid: string) => Promise<string>>();
+const mockSubscribePermission = jest.fn(() => () => {});
 jest.mock("../../reminders", () => ({
   useReminderDefault: () => ({ data: 30 }),
   useSetReminderDefault: () => ({ mutate: mockSetDefault }),
@@ -33,7 +34,7 @@ jest.mock("../../reminders", () => ({
   useMarkHistorySeen: () => ({ mutate: mockMarkSeen }),
   getPushPermission: () => mockGetPermission(),
   enablePushOnThisDevice: (uid: string) => mockEnable(uid),
-  subscribePushPermissionChanged: () => () => {},
+  subscribePushPermissionChanged: () => mockSubscribePermission(),
 }));
 
 const item = (todoId: string, sentAt: number) => ({ todoId, title: `제목-${todoId}`, offsetMinutes: 30, dueAt: "2026-11-24T05:00:00.000Z", sentAt });
@@ -126,5 +127,19 @@ describe("NotificationsScreen", () => {
     await fireEvent.press(screen.getByText("제목-a"));
     expect(mockOpenTodoDetail).toHaveBeenCalledWith("a");
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("Android에서는 messaging 권한을 읽지 않고 푸시 상태 카드 없이 기록만 보여 준다", async () => {
+    const restore = jest.replaceProperty(Platform, "OS", "android");
+    try {
+      mockHistory = { items: [item("a", NOW - 5 * 60_000)], lastSeenAt: NOW };
+      await renderScreen();
+      expect(mockGetPermission).not.toHaveBeenCalled();
+      expect(mockSubscribePermission).not.toHaveBeenCalled();
+      expect(screen.queryByText("푸시 알림")).toBeNull();
+      expect(screen.getByText("제목-a")).toBeTruthy();
+    } finally {
+      restore.restore();
+    }
   });
 });

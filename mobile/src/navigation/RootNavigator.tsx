@@ -5,7 +5,7 @@ import {
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { Sun, ListTodo, CalendarDays, ChartColumn } from "lucide-react-native";
 import { useAuthState } from "../auth/useAuthState";
 import { LoginScreen } from "../screens/LoginScreen";
@@ -147,13 +147,20 @@ const CalendarSync = () => {
   return null;
 };
 
-// 서버 푸시 알림: 토큰 동기화, 예약 갱신 신호, 포그라운드 배너, 알림 탭 이동. 로그인 중에만 돈다.
+// 서버 푸시 알림: 예약 갱신 신호·기록 갱신은 이 기기의 알림 권한과 무관하다(다른 기기에서 켰을 수 있다).
+// 로그인 중에만 돈다.
 const ReminderSync = () => {
-  usePushTokenSync();
   useReminderRefresh();
+  useRefreshHistoryOnForeground();
+  return null;
+};
+
+// 이 기기의 푸시: 토큰 동기화, 포그라운드 배너, 알림 탭 이동. iOS 전용이다 — Android는 googleServicesFile이
+// 없어 messaging이 구성되지 않고, Worker도 platform "android" 등록을 거절한다.
+const DevicePushSync = () => {
+  usePushTokenSync();
   useForegroundReminders();
   useNotificationNavigation();
-  useRefreshHistoryOnForeground();
   return null;
 };
 
@@ -199,6 +206,7 @@ export const RootNavigator = () => {
             <EntitlementSync />
             <CalendarSync />
             <ReminderSync />
+            {Platform.OS === "ios" && <DevicePushSync />}
             <PendingPurchaseResume />
             <MainTabs />
           </ReminderPromptProvider>

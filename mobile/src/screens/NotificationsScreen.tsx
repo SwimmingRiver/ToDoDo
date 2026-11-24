@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, FlatList, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, FlatList, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { BellOff } from "lucide-react-native";
@@ -44,6 +44,8 @@ export const NotificationsScreen = () => {
   const setDefault = useSetReminderDefault();
   const { data: history } = useReminderHistory();
   const markSeen = useMarkHistorySeen();
+  // 이 기기의 푸시는 iOS 전용이다. Android는 messaging이 구성되지 않아 권한을 읽지 않고 기록·기본값만 보여 준다.
+  const devicePushSupported = Platform.OS === "ios";
 
   const refreshPermission = useCallback(() => {
     getPushPermission()
@@ -52,6 +54,7 @@ export const NotificationsScreen = () => {
   }, []);
 
   useEffect(() => {
+    if (!devicePushSupported) return;
     refreshPermission();
     const unsubscribe = subscribePushPermissionChanged(refreshPermission);
     // iOS 설정 앱에서 돌아오면 권한이 바뀌어 있을 수 있다.
@@ -62,7 +65,7 @@ export const NotificationsScreen = () => {
       unsubscribe();
       sub.remove();
     };
-  }, [refreshPermission]);
+  }, [refreshPermission, devicePushSupported]);
 
   // 화면에 들어온 시점의 lastSeenAt을 기억해, 읽음 처리 후에도 이번에 새로 온 항목의 점을 유지한다.
   const seenAtEntry = useRef<number | null>(null);
@@ -131,23 +134,25 @@ export const NotificationsScreen = () => {
 
   const header = (
     <View style={styles.headerWrap}>
-      <View style={styles.card}>
-        <View style={styles.statusRow}>
-          <Text style={styles.label}>푸시 알림</Text>
-          {permission === "granted" && <Text style={styles.statusOn}>알림 켜짐</Text>}
-          {permission === "undetermined" && (
-            <Button title="켜기" onPress={handleEnable} loading={enabling} style={styles.smallButton} />
-          )}
-          {permission === "denied" && (
-            <Button
-              title="iOS 설정 열기"
-              variant="outline"
-              onPress={() => void Linking.openSettings()}
-              style={styles.smallButton}
-            />
-          )}
+      {devicePushSupported && (
+        <View style={styles.card}>
+          <View style={styles.statusRow}>
+            <Text style={styles.label}>푸시 알림</Text>
+            {permission === "granted" && <Text style={styles.statusOn}>알림 켜짐</Text>}
+            {permission === "undetermined" && (
+              <Button title="켜기" onPress={handleEnable} loading={enabling} style={styles.smallButton} />
+            )}
+            {permission === "denied" && (
+              <Button
+                title="iOS 설정 열기"
+                variant="outline"
+                onPress={() => void Linking.openSettings()}
+                style={styles.smallButton}
+              />
+            )}
+          </View>
         </View>
-      </View>
+      )}
       <View style={styles.card}>
         <Text style={styles.label}>기본 알림 시점</Text>
         <ReminderChips
