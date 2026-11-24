@@ -65,4 +65,17 @@ describe("useForegroundReminders", () => {
     const { m } = await setup(0);
     expect(m.onMessage).not.toHaveBeenCalled();
   });
+
+  it("subscribes once the permission change is announced (e.g. after returning from iOS Settings)", async () => {
+    const { m } = await setup(0);
+    expect(m.onMessage).not.toHaveBeenCalled();
+    m.hasPermission.mockResolvedValue(1);
+    const { notifyPushPermissionChanged } = await import("../push/pushClient");
+    await act(async () => {
+      notifyPushPermissionChanged();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(m.onMessage).toHaveBeenCalledTimes(1);
+  });
 });
