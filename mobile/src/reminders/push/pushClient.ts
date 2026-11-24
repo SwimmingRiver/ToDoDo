@@ -247,12 +247,11 @@ const disablePushRaw = async (uid: string): Promise<void> => {
 
   const done = pending.deviceDeleted && (pending.serverDeleted || !token);
   if (done) {
-    if (token) {
-      try {
-        await clearReleasePending();
-      } catch (error) {
-        record(error);
-      }
+    // 토큰을 못 받아 이번에 아무것도 남기지 않았어도, 예전 해제 대기가 남아 있을 수 있다 — 해제가 끝났으니 지운다.
+    try {
+      await clearReleasePending();
+    } catch (error) {
+      record(error);
     }
   } else {
     await persist(pending);

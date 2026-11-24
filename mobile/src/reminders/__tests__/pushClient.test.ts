@@ -546,6 +546,17 @@ describe("pushClient", () => {
       expect(readPending()).toBeNull();
     });
 
+    it("disable getToken failure but device delete success clears an older pending record", async () => {
+      seedPending({ token: "", uid: "u1", serverDeleted: false, deviceDeleted: false });
+      messaging.getToken.mockRejectedValue(new Error("no token"));
+
+      await expect(disablePushOnThisDevice("u1")).rejects.toThrow("no token");
+
+      // 기기 토큰을 지웠으니 해제는 끝났다 — 예전 대기를 남겨 두면 다음 로그인이 기기 토큰을 또 지운다.
+      expect(messaging.deleteToken).toHaveBeenCalledTimes(1);
+      expect(readPending()).toBeNull();
+    });
+
     it("disable getToken and deleteToken failure: persists empty-token pending", async () => {
       messaging.getToken.mockRejectedValue(new Error("no token"));
       messaging.deleteToken.mockRejectedValue(new Error("device"));
