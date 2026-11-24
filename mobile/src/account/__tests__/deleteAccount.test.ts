@@ -46,8 +46,26 @@ jest.mock("../../calendarIntegration/snapshotStorage", () => {
 
 const ENV_KEYS = ["EXPO_PUBLIC_CALENDAR_PROXY_URL", "EXPO_PUBLIC_REMINDER_PROXY_URL", "EXPO_PUBLIC_BILLING_PROXY_URL"] as const;
 
+// 실제 pushClient 큐를 쓴다(탈퇴 중 동기화가 끼어드는지 보려면 큐 동작이 필요하다). 저장소만 메모리로 둔다.
+const mockStore = new Map<string, string>();
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: async (key: string) => mockStore.get(key) ?? null,
+  setItem: async (key: string, value: string) => {
+    mockStore.set(key, value);
+  },
+  removeItem: async (key: string) => {
+    mockStore.delete(key);
+  },
+}));
+
 const fetchMock = jest.fn<typeof fetch>();
-const messagingMock = jest.requireMock("@react-native-firebase/messaging") as { deleteToken: jest.Mock<() => Promise<void>> };
+const messagingMock = jest.requireMock("@react-native-firebase/messaging") as {
+  deleteToken: jest.Mock<() => Promise<void>>;
+  hasPermission: jest.Mock<() => Promise<number>>;
+};
+const isRegisterCall = ([url, init]: Parameters<typeof fetch>) =>
+  String(url) === "https://rem.example/push-tokens" && init?.method === "POST";
+const flushAsync = () => new Promise((r) => setImmediate(r));
 
 describe("deleteAccount", () => {
   beforeEach(() => {
@@ -63,6 +81,8 @@ describe("deleteAccount", () => {
     mockProviderIds = ["google.com"];
     mockSignInAsync.mockReset().mockResolvedValue({ authorizationCode: "auth-code" });
     messagingMock.deleteToken.mockReset().mockResolvedValue(undefined);
+    messagingMock.hasPermission.mockReset().mockResolvedValue(1);
+    mockStore.clear();
   });
 
   afterEach(() => {
@@ -97,8 +117,35 @@ describe("deleteAccount", () => {
     const { deleteAccount } = await import("../deleteAccount");
     await deleteAccount();
 
-    // 알림 저장소(DELETE /account)를 지운 다음에 기기 토큰을 지운다.
-    expect(order.indexOf("deleteToken")).toBeGreaterThan(order.indexOf("https://rem.example/account"));
+    // 기기 토큰은 pushClient 큐에서 알림 저장소(DELETE /account)보다 먼저 지운다 — 그 사이 동기화가 끼어들 틈이 없다.
+    expect(order.indexOf("deleteToken")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("deleteToken")).toBeLessThan(order.indexOf("https://rem.example/account"));
+  });
+
+  it("탈퇴 중·후에 온 동기화(onTokenRefresh 등)가 삭제된 계정에 토큰을 다시 등록하지 않는다", async () => {
+    const { syncPushToken } = await import("../../reminders/push/pushClient");
+    fetchMock.mockImplementation(async (url) => {
+      // 알림 저장소를 지우는 바로 그 순간 FCM이 토큰을 새로 발급해 훅이 동기화를 부른다.
+      if (String(url) === "https://rem.example/account") await syncPushToken("u1");
+      return new Response(null, { status: 204 });
+    });
+    const { deleteAccount } = await import("../deleteAccount");
+    await deleteAccount();
+    await syncPushToken("u1");
+    await flushAsync();
+
+    expect(fetchMock.mock.calls.filter(isRegisterCall)).toHaveLength(0);
+  });
+
+  it("탈퇴가 중간에 실패하면 래치를 풀고 토큰을 다시 등록한다(계정이 그대로 남는다)", async () => {
+    fetchMock.mockImplementation(async (url) =>
+      String(url) === "https://bill.example/account/delete" ? new Response(null, { status: 500 }) : new Response(null, { status: 204 }),
+    );
+    const { deleteAccount } = await import("../deleteAccount");
+    await expect(deleteAccount()).rejects.toThrow("billing-proxy");
+    await flushAsync();
+
+    expect(fetchMock.mock.calls.filter(isRegisterCall)).toHaveLength(1);
   });
 
   it("기기 토큰 삭제가 실패해도 탈퇴는 계속 진행한다", async () => {
@@ -143,7 +190,9 @@ describe("deleteAccount", () => {
       .mockResolvedValueOnce(new Response(null, { status: 500 }));
     const { deleteAccount } = await import("../deleteAccount");
     await expect(deleteAccount()).rejects.toThrow("reminder-proxy /account 실패 (500)");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await flushAsync();
+    // 실패 뒤 다시 등록하는 동기화 호출은 빼고 센다.
+    expect(fetchMock.mock.calls.filter((call) => !isRegisterCall(call))).toHaveLength(2);
   });
 
   it("서버 주소가 비어 있으면 아무것도 호출하지 않고 던진다", async () => {

@@ -10,6 +10,7 @@ import {
   syncPushToken,
   cancelQueuedPushSync,
   resetPushReleaseLatch,
+  releaseDeviceTokenForDeletedAccount,
 } from "../push/pushClient";
 import type { ReleasePending } from "../push/releasePending";
 
@@ -292,6 +293,59 @@ describe("pushClient", () => {
       resetPushReleaseLatch();
       await syncPushToken("uA");
 
+      expect(mockRegister).toHaveBeenCalledWith("new-token", Platform.OS);
+    });
+  });
+
+  describe("releaseDeviceTokenForDeletedAccount", () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    it("waits for an in-flight sync, deletes the device token, and blocks later syncs for that uid", async () => {
+      const events: string[] = [];
+      let open!: () => void;
+      const g = new Promise<void>((r) => {
+        open = r;
+      });
+      mockRegister.mockImplementationOnce(async (token) => {
+        events.push(`register:start:${token}`);
+        await g;
+        events.push(`register:end:${token}`);
+      });
+      messaging.deleteToken.mockImplementation(async () => {
+        events.push("deleteToken");
+      });
+
+      const syncing = syncPushToken("uA");
+      await flush();
+      const releasing = releaseDeviceTokenForDeletedAccount("uA");
+      // 도는 동기화와 겹치지 않는다: 등록이 끝나기 전에 기기 토큰을 지우지 않는다.
+      const trailing = syncPushToken("uA");
+      await flush();
+      expect(events).toEqual(["register:start:new-token"]);
+      open();
+      await Promise.all([syncing, releasing, trailing]);
+      // 탈퇴 요청 뒤에 onTokenRefresh 등으로 온 동기화도 등록하지 않는다.
+      await syncPushToken("uA");
+
+      expect(events).toEqual(["register:start:new-token", "register:end:new-token", "deleteToken"]);
+      expect(mockRegister).toHaveBeenCalledTimes(1);
+      expect(mockUnregister).not.toHaveBeenCalled();
+    });
+
+    it("rejects when the device token deletion fails (caller reports and continues)", async () => {
+      messaging.deleteToken.mockRejectedValueOnce(new Error("device"));
+
+      await expect(releaseDeviceTokenForDeletedAccount("uA")).rejects.toThrow("device");
+      await syncPushToken("uA");
+      expect(mockRegister).not.toHaveBeenCalled();
+    });
+
+    it("a sync queued behind it for the next account still runs", async () => {
+      const releasing = releaseDeviceTokenForDeletedAccount("uA");
+      const syncing = syncPushToken("uB");
+      await Promise.all([releasing, syncing]);
+
+      expect(messaging.deleteToken).toHaveBeenCalledTimes(1);
       expect(mockRegister).toHaveBeenCalledWith("new-token", Platform.OS);
     });
   });

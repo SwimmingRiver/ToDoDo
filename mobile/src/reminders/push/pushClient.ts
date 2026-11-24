@@ -104,7 +104,7 @@ const deferred = (): Deferred => {
 };
 
 type QueuedSync = Deferred & { uid: string };
-type QueuedDisable = Deferred & { uid: string };
+type QueuedRelease = Deferred & { start: () => Promise<void> };
 
 /**
  * 동기화와 해제는 하나의 모듈 수준 큐를 공유한다(getToken/deleteToken이 겹치면 다른 계정의 토큰을
@@ -117,7 +117,7 @@ type QueuedDisable = Deferred & { uid: string };
  */
 let running: Promise<void> | null = null;
 let queuedSync: QueuedSync | null = null;
-const queuedDisables: QueuedDisable[] = [];
+const queuedReleases: QueuedRelease[] = [];
 
 const dropQueuedSync = (): void => {
   const dropped = queuedSync;
@@ -131,9 +131,9 @@ const runExclusive = (op: () => Promise<void>, onDone?: () => void): Promise<voi
   const after = () => {
     running = null;
     onDone?.();
-    const nextDisable = queuedDisables.shift();
-    if (nextDisable) {
-      startDisable(nextDisable.uid).then(nextDisable.resolve, nextDisable.reject);
+    const nextRelease = queuedReleases.shift();
+    if (nextRelease) {
+      nextRelease.start().then(nextRelease.resolve, nextRelease.reject);
       return;
     }
     const next = queuedSync;
@@ -144,13 +144,20 @@ const runExclusive = (op: () => Promise<void>, onDone?: () => void): Promise<voi
   return run;
 };
 
-const startDisable = (uid: string): Promise<void> =>
-  runExclusive(
-    () => disablePushRaw(uid),
-    () => {
-      if (queuedSync?.uid === uid) dropQueuedSync();
-    },
-  );
+const startRelease = (uid: string, op: () => Promise<void>): Promise<void> =>
+  runExclusive(op, () => {
+    if (queuedSync?.uid === uid) dropQueuedSync();
+  });
+
+/** 해제류(로그아웃 해제·탈퇴 기기 토큰 삭제)를 큐에 넣는다. 래치는 큐에 넣기 전에 건다. */
+const enqueueRelease = (uid: string, op: () => Promise<void>): Promise<void> => {
+  releasedUid = uid;
+  dropQueuedSync();
+  if (!running) return startRelease(uid, op);
+  const queued: QueuedRelease = { start: () => startRelease(uid, op), ...deferred() };
+  queuedReleases.push(queued);
+  return queued.promise;
+};
 
 /**
  * 끝나지 않은 해제가 있으면 권한과 무관하게 먼저 처리하고(실패하면 던진다), 권한이 있을 때만
@@ -253,11 +260,15 @@ const disablePushRaw = async (uid: string): Promise<void> => {
   if (firstError !== null) throw firstError;
 };
 
-export const disablePushOnThisDevice = (uid: string): Promise<void> => {
-  releasedUid = uid;
-  dropQueuedSync();
-  if (!running) return startDisable(uid);
-  const queued: QueuedDisable = { uid, ...deferred() };
-  queuedDisables.push(queued);
-  return queued.promise;
-};
+export const disablePushOnThisDevice = (uid: string): Promise<void> => enqueueRelease(uid, () => disablePushRaw(uid));
+
+/**
+ * 탈퇴 시: Worker의 DELETE /account 전에 부른다. 래치를 걸고 같은 큐에서 기기 토큰만 지운다 —
+ * 도는 동기화가 끝난 뒤에 지우고, 이후 이 uid의 동기화(onTokenRefresh 등)는 등록하지 않으므로
+ * 삭제된 계정의 DO에 토큰이 다시 들어가지 않는다. 서버 쪽 토큰은 DELETE /account가 계정째 지운다.
+ * 실패하면 던진다(호출부가 보고하고 탈퇴를 계속한다).
+ */
+export const releaseDeviceTokenForDeletedAccount = (uid: string): Promise<void> =>
+  enqueueRelease(uid, async () => {
+    await deleteToken(getMessaging());
+  });
