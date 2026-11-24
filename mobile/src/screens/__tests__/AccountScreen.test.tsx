@@ -3,6 +3,9 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { Alert, Platform, type AlertButton } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+const mockNavigate = jest.fn();
+jest.mock("@react-navigation/native", () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+
 let mockProviderIds: string[] = ["google.com"];
 jest.mock("../../auth/useAuthState", () => ({
   useAuthState: () => ({
@@ -17,9 +20,9 @@ jest.mock("expo-crypto", () => ({}));
 jest.mock("firebase/auth", () => ({}));
 jest.mock("../../firebase", () => ({ auth: {} }));
 
-const mockSignOut = jest.fn<(client: QueryClient) => Promise<void>>();
+const mockSignOut = jest.fn<(client: QueryClient, options?: { skipPushRelease?: boolean }) => Promise<void>>();
 jest.mock("../../auth/signOut", () => ({
-  signOut: (client: QueryClient) => mockSignOut(client),
+  signOut: (...args: [QueryClient, { skipPushRelease?: boolean }?]) => mockSignOut(...args),
 }));
 
 const mockReportError = jest.fn();
@@ -78,6 +81,12 @@ describe("AccountScreen", () => {
     mockDeleteAccount.mockReset().mockResolvedValue(undefined);
     mockReportError.mockReset();
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  });
+
+  it("account has link to notifications", async () => {
+    await renderScreen();
+    fireEvent.press(screen.getByText("알림 설정"));
+    expect(mockNavigate).toHaveBeenCalledWith("Notifications");
   });
 
   it("로그인한 계정의 이메일을 보여준다", async () => {
@@ -156,7 +165,8 @@ describe("AccountScreen", () => {
       await pressAlertButton(alertSpy, "탈퇴하기");
 
       expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
-      expect(mockSignOut).toHaveBeenCalledWith(queryClient);
+      // 탈퇴가 이미 기기 토큰을 지웠다 — 삭제된 uid로 푸시 해제를 다시 하지 않는다.
+      expect(mockSignOut).toHaveBeenCalledWith(queryClient, { skipPushRelease: true });
     });
 
     it("자동 갱신 스토어 구독이 있으면 경고를 덧붙이고 구독 관리 버튼을 낸다", async () => {

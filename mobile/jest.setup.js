@@ -19,3 +19,28 @@ jest.mock("@sentry/react-native", () => ({
   setUser: jest.fn(),
   wrap: (component) => component,
 }));
+
+// @react-native-firebase/*는 네이티브 모듈이라 jest에서 그대로 불러오면 초기화가 실패한다.
+// 앱 코드가 쓰는 modular API만 전역 목으로 둔다. 테스트는 jest.requireMock("@react-native-firebase/messaging")로 꺼내 단언한다.
+jest.mock("@react-native-firebase/app", () => ({
+  getApp: jest.fn(() => ({})),
+}));
+
+jest.mock("@react-native-firebase/messaging", () => ({
+  AuthorizationStatus: {
+    NOT_DETERMINED: -1,
+    DENIED: 0,
+    AUTHORIZED: 1,
+    PROVISIONAL: 2,
+    EPHEMERAL: 3,
+  },
+  getMessaging: jest.fn(() => ({})),
+  getToken: jest.fn(() => Promise.resolve("test-fcm-token")),
+  deleteToken: jest.fn(() => Promise.resolve()),
+  onTokenRefresh: jest.fn(() => jest.fn()),
+  onMessage: jest.fn(() => jest.fn()),
+  onNotificationOpenedApp: jest.fn(() => jest.fn()),
+  getInitialNotification: jest.fn(() => Promise.resolve(null)),
+  requestPermission: jest.fn(() => Promise.resolve(1)),
+  hasPermission: jest.fn(() => Promise.resolve(-1)),
+}));

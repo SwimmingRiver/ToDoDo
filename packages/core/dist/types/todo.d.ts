@@ -54,5 +54,6 @@ interface TodoFields {
     dueAt: string | null;
     parentId: string | null;
     order: number;
+    reminderOffsetMinutes?: ReminderSetting | null;
 }
 export type { Todo, TodoFields, RecurrenceRule };

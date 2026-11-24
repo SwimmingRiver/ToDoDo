@@ -10,14 +10,14 @@ jest.mock("../../auth/useAuthState", () => ({
 jest.mock("@tododo/core", () => ({
   createPlanTodos: jest.fn(() => Promise.resolve({ parentId: "p1", count: 3 })),
 }));
-jest.mock("../../notifications/scheduleReminder", () => ({
-  scheduleReminder: jest.fn(() => Promise.resolve(null)),
+jest.mock("expo-notifications", () => ({
+  scheduleNotificationAsync: jest.fn(),
 }));
 
 describe("useCreatePlanTodos", () => {
   it("저장하고 todos를 무효화하며 알림은 예약하지 않는다", async () => {
     const { createPlanTodos } = await import("@tododo/core");
-    const { scheduleReminder } = await import("../../notifications/scheduleReminder");
+    const Notifications = await import("expo-notifications");
     const { useCreatePlanTodos } = await import("../useCreatePlanTodos");
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } },
@@ -34,6 +34,6 @@ describe("useCreatePlanTodos", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(createPlanTodos).toHaveBeenCalledWith({}, "uid-1", submission);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["todos", "uid-1"] });
-    expect(scheduleReminder).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,18 @@ describe("handleRequest", () => {
     expect(stub.registerToken).toHaveBeenCalledWith("u1", "tok", "web");
   });
 
+  it("registers ios token", async () => {
+    const res = await handleRequest(req("POST", "/push-tokens", { token: "t", platform: "ios" }), env);
+    expect(res.status).toBe(204);
+    expect(stub.registerToken).toHaveBeenCalledWith("u1", "t", "ios");
+  });
+
+  it("rejects android", async () => {
+    const res = await handleRequest(req("POST", "/push-tokens", { token: "t", platform: "android" }), env);
+    expect(res.status).toBe(400);
+    expect(stub.registerToken).not.toHaveBeenCalled();
+  });
+
   it("DELETE /push-tokens → 해제 204", async () => {
     const res = await handleRequest(req("DELETE", "/push-tokens", { token: "tok" }), env);
     expect(res.status).toBe(204);
@@ -79,7 +91,7 @@ describe("handleRequest", () => {
     [{ platform: "web" }],
     [{ token: "", platform: "web" }],
     [{ token: "x".repeat(4097), platform: "web" }],
-    [{ token: "tok", platform: "ios" }],
+    [{ token: "tok", platform: "android" }],
     ["not json"],
   ])("잘못된 등록 본문 %j → 400", async (body) => {
     const res = await handleRequest(req("POST", "/push-tokens", body), env);

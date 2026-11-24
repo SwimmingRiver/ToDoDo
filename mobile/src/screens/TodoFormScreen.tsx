@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { TodoListStackParamList } from "../navigation/types";
 import { getRecurrenceValidationError, toRecurrenceRule, type RecurrenceFormValue } from "@tododo/core";
+import { DEFAULT_REMINDER_SETTING, parseReminderSetting } from "@tododo/core/dist/reminders/index.js";
 import { useCreateTodo } from "../hooks/useCreateTodo";
 import { useCreateRecurringTodo } from "../hooks/useCreateRecurringTodo";
 import { useTodos } from "../hooks/useTodos";
@@ -11,6 +12,8 @@ import { Button } from "../shared/ui/button/Button";
 import { PriorityChips, type Priority } from "../shared/ui/priorityChips/PriorityChips";
 import { DateTimeField } from "../shared/ui/dateTimeField/DateTimeField";
 import { RecurrenceSection } from "../shared/ui/recurrenceSection/RecurrenceSection";
+import { ReminderField } from "../shared/ui/reminderField/ReminderField";
+import { useReminderDefault, useReminderPrompt } from "../reminders";
 import { getTodoDateValidationError } from "../shared/utils/todoDateValidation";
 import { colors } from "../theme/colors";
 import { radius, spacing } from "../theme/spacing";
@@ -35,11 +38,18 @@ export const TodoFormScreen = () => {
   // isPending은 다음 렌더에서야 반영되므로, 같은 틱 안의 연속 탭은 ref로 막는다.
   const submitInFlightRef = useRef(false);
   const { data: todos } = useTodos();
+  // "default" | "off" | "0" | "10" | ... — 저장 직전 parseReminderSetting으로 바꾼다(웹 todoForm과 동일).
+  const [reminderChoice, setReminderChoice] = useState("default");
+  const { data: reminderDefault = DEFAULT_REMINDER_SETTING } = useReminderDefault();
+  const { maybePrompt } = useReminderPrompt();
 
   // 반복을 켜 두는 동안 만료일시는 회차에 쓰이지 않으므로 숨기고 검증에서도 뺀다.
   // 값은 지우지 않아 반복을 끄면 그대로 다시 보인다(웹 todoForm과 동일).
   const hideDueAt = recurrenceValue !== null;
   const dateValidationError = getTodoDateValidationError(startAt, hideDueAt ? null : dueAt);
+  // 알림은 마감이 있을 때만 의미가 있다. 반복이면 각 회차에 마감(=시작 시각)이 생기므로 보인다.
+  const isRecurring = recurrenceValue !== null;
+  const showReminder = isRecurring || !!dueAt;
 
   // 시작일시가 지워지면 반복은 의미가 없으므로 끈다 (웹 todoForm과 동일)
   useEffect(() => {
@@ -62,6 +72,9 @@ export const TodoFormScreen = () => {
       return;
     }
 
+    // 선택 칩이 숨은 상태(마감 없음)로 저장하면 이전 선택과 무관하게 기본값(null)으로 저장한다.
+    const reminderOffsetMinutes = showReminder ? parseReminderSetting(reminderChoice) : null;
+
     submitInFlightRef.current = true;
     try {
       setError(null);
@@ -75,7 +88,10 @@ export const TodoFormScreen = () => {
           dueAt,
           parentId: null,
           recurrence: toRecurrenceRule(recurrenceValue),
+          reminderOffsetMinutes,
         });
+        // 반복이면 회차마다 마감이 생긴다. startAt이 없으면 반복 검증에서 이미 막혔다.
+        if (startAt) maybePrompt();
         navigation.goBack();
         return;
       }
@@ -94,7 +110,9 @@ export const TodoFormScreen = () => {
         dueAt,
         parentId,
         order: nextOrder,
+        reminderOffsetMinutes,
       });
+      if (dueAt) maybePrompt();
       navigation.goBack();
     } catch (e) {
       setError(e instanceof Error ? e.message : "할 일 추가에 실패했습니다");
@@ -139,6 +157,16 @@ export const TodoFormScreen = () => {
               <DateTimeField label="시작일시" value={startAt} onChange={setStartAt} />
               {!hideDueAt && <DateTimeField label="만료일시" value={dueAt} onChange={setDueAt} />}
               {dateValidationError && <Text style={styles.fieldError}>{dateValidationError}</Text>}
+              {showReminder && (
+                <>
+                  <Text style={styles.label}>마감 알림</Text>
+                  <ReminderField
+                    value={reminderChoice}
+                    onChange={setReminderChoice}
+                    defaultSetting={reminderDefault}
+                  />
+                </>
+              )}
               {!parentId && (
                 <RecurrenceSection
                   disabled={!startAt}

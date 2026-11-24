@@ -39,7 +39,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "enableSceneSupport": true
+            "enableSceneSupport": true,
+            "useFrameworks": "dynamic"
           }
         }
       ],
@@ -59,7 +60,9 @@
           "imageWidth": 200,
           "backgroundColor": "#FFFFFF"
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging"
     ],
     "extra": {
       "eas": {

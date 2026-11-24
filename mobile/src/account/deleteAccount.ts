@@ -4,6 +4,12 @@ import { needsAppleRevoke, revokeAppleSignIn } from "../auth/appleSignIn";
 import { clearSnapshot, findOrphanGoogleEventIds, loadSnapshot } from "../calendarIntegration/snapshotStorage";
 import { disconnectInChunks } from "@tododo/core/dist/calendarSync/index.js";
 import { isUserCancelledSignIn } from "@tododo/core/dist/auth/index.js";
+import { reportError } from "../shared/lib/sentry";
+import {
+  releaseDeviceTokenForDeletedAccount,
+  resetPushReleaseLatch,
+  syncPushToken,
+} from "../reminders/push/pushClient";
 
 /** Apple 토큰 해지 단계에서 실패했다 — 아직 아무것도 지우지 않았다는 뜻이라 화면이 다른 문구를 띄운다. */
 export class AppleRevokeError extends Error {
@@ -61,7 +67,7 @@ const collectGoogleEventIds = async (uid: string): Promise<string[]> => {
 };
 
 /**
- * 탈퇴. 웹과 같은 순서: (Apple 사용자면 토큰 해지) → 캘린더 연동 해제 → 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
+ * 탈퇴. 웹과 같은 순서: (Apple 사용자면 토큰 해지) → 캘린더 연동 해제 → (기기 FCM 토큰 삭제) 알림 저장소 삭제 → 결제 서버(구독 해지·데이터·계정 삭제).
  * 각 단계는 멱등이라 실패하면 처음부터 다시 부르면 된다.
  */
 export const deleteAccount = async (): Promise<void> => {
@@ -91,9 +97,23 @@ export const deleteAccount = async (): Promise<void> => {
     // 탈퇴는 삭제 확인 id로 Firestore를 정리하지 않는다(계정 데이터가 통째로 지워진다).
     return { deletedGoogleEventIds: [] };
   });
-  await callWorker("reminder-proxy", urls.reminder, "/account", { method: "DELETE" }, idToken);
-  await callWorker("billing-proxy", urls.billing, "/account/delete", { method: "POST" }, idToken);
-  // 전부 성공한 뒤에만 지운다 — 중간 실패 후 재시도할 때 고아 id가 다시 필요하다.
-  // 호출부는 이 다음에 signOut한다. clearSnapshot은 throw하지 않는다.
+  // 기기 FCM 토큰은 알림 저장소를 지우기 전에, 동기화와 같은 pushClient 큐에서 지운다. 래치가 걸려
+  // 이후 이 uid의 동기화(onTokenRefresh·권한 이벤트)는 등록하지 않으므로, 도는 동기화가 DELETE /account
+  // 뒤에 끝나 삭제된 계정의 DO에 토큰을 다시 넣을 틈이 없다. 다음 계정이 같은 토큰을 받지도 않는다.
+  // 실패해도 탈퇴는 진행한다(서버 쪽 토큰은 DELETE /account가 계정째 지운다).
+  try {
+    await releaseDeviceTokenForDeletedAccount(user.uid);
+  } catch (error) {
+    reportError(error, "reminder");
+  }
+  try {
+    await callWorker("reminder-proxy", urls.reminder, "/account", { method: "DELETE" }, idToken);
+    await callWorker("billing-proxy", urls.billing, "/account/delete", { method: "POST" }, idToken);
+  } catch (error) {
+    // 계정이 남아 사용자는 계속 로그인 상태다. 래치를 풀고 지운 토큰을 다시 등록한다(재시도하면 다시 건다).
+    resetPushReleaseLatch();
+    syncPushToken(user.uid).catch((syncError) => reportError(syncError, "reminder"));
+    throw error;
+  }
   await clearSnapshot(user.uid);
 };
