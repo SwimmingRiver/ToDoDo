@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   query: vi.fn((...a: unknown[]) => ({ q: a })),
   orderBy: vi.fn((f: string, d: string) => ({ orderBy: [f, d] })),
   limit: vi.fn((n: number) => ({ limit: n })),
+  startAfter: vi.fn((v: string) => ({ startAfter: v })),
 }));
 
 vi.mock("firebase/firestore", () => m);
@@ -22,10 +23,12 @@ describe("feedbackAdminApi", () => {
     m.getDocs.mockResolvedValue({
       docs: [{ id: "d1", data: () => ({ content: "a", createdAt: "2026-11-01T00:00:00.000Z", userId: "u" }) }],
     });
-    const items = await listFeedback();
+    const { items, nextCursor } = await listFeedback();
     expect(items).toEqual([
       { id: "d1", email: null, content: "a", createdAt: "2026-11-01T00:00:00.000Z", platform: "web", status: "new" },
     ]);
+    expect(nextCursor).toBeNull();
+    expect(m.startAfter).not.toHaveBeenCalled();
     expect(m.orderBy).toHaveBeenCalledWith("createdAt", "desc");
     expect(m.limit).toHaveBeenCalledWith(100);
   });
@@ -34,8 +37,27 @@ describe("feedbackAdminApi", () => {
     m.getDocs.mockResolvedValue({
       docs: [{ id: "d2", data: () => ({ content: "b", createdAt: "x", email: "a@b.c", platform: "ios", status: "done" }) }],
     });
-    const [item] = await listFeedback();
+    const {
+      items: [item],
+    } = await listFeedback();
     expect(item).toMatchObject({ email: "a@b.c", platform: "ios", status: "done" });
+  });
+
+  it("커서가 있으면 startAfter(createdAt)로 다음 페이지를 조회한다", async () => {
+    m.getDocs.mockResolvedValue({ docs: [] });
+    await listFeedback("2026-10-01T00:00:00.000Z");
+    expect(m.startAfter).toHaveBeenCalledWith("2026-10-01T00:00:00.000Z");
+  });
+
+  it("페이지가 가득 차면 마지막 createdAt을 nextCursor로 준다", async () => {
+    const docs = Array.from({ length: 100 }, (_, i) => ({
+      id: `d${i}`,
+      data: () => ({ content: "c", createdAt: `2026-11-01T00:00:${String(99 - i).padStart(2, "0")}.000Z` }),
+    }));
+    m.getDocs.mockResolvedValue({ docs });
+    const { items, nextCursor } = await listFeedback();
+    expect(items).toHaveLength(100);
+    expect(nextCursor).toBe("2026-11-01T00:00:00.000Z");
   });
 
   it("updateFeedbackStatus는 status만 갱신한다", async () => {

@@ -38,4 +38,21 @@ describe("useIsOperator", () => {
     const { result } = renderHook(() => useIsOperator());
     await waitFor(() => expect(result.current).toEqual({ isOperator: false, isLoading: false }));
   });
+
+  it("첫 조회에 클레임이 없으면 강제 갱신으로 한 번 재조회해 운영자로 인정한다", async () => {
+    const fn = vi.fn((force?: boolean) => Promise.resolve({ claims: force ? { operator: true } : {} }));
+    setUser(fn);
+    const { result } = renderHook(() => useIsOperator());
+    await waitFor(() => expect(result.current).toEqual({ isOperator: true, isLoading: false }));
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenLastCalledWith(true);
+  });
+
+  it("강제 갱신 후에도 클레임이 없으면 운영자가 아니며 재조회는 한 번뿐이다", async () => {
+    const fn = vi.fn((_force?: boolean) => Promise.resolve({ claims: {} }));
+    setUser(fn);
+    const { result } = renderHook(() => useIsOperator());
+    await waitFor(() => expect(result.current).toEqual({ isOperator: false, isLoading: false }));
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
 });

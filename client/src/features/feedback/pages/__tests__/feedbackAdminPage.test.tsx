@@ -48,7 +48,7 @@ const renderPage = () => {
 describe("FeedbackAdminPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    m.listFeedback.mockResolvedValue(items);
+    m.listFeedback.mockResolvedValue({ items, nextCursor: null });
     m.updateFeedbackStatus.mockResolvedValue(undefined);
     m.useIsOperator.mockReturnValue({ isOperator: true, isLoading: false });
   });
@@ -94,7 +94,7 @@ describe("FeedbackAdminPage", () => {
   });
 
   it("목록이 비면 안내 문구를 표시한다", async () => {
-    m.listFeedback.mockResolvedValue([]);
+    m.listFeedback.mockResolvedValue({ items: [], nextCursor: null });
     renderPage();
     expect(await screen.findByText("의견이 없습니다")).toBeTruthy();
   });
@@ -116,5 +116,33 @@ describe("FeedbackAdminPage", () => {
     expect(await screen.findByText("상태를 바꾸지 못했습니다")).toBeTruthy();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "done" } });
     await waitFor(() => expect(screen.queryByText("상태를 바꾸지 못했습니다")).toBeNull());
+  });
+
+  it("처음 불러오는 동안 불러오는 중 문구를 표시한다", async () => {
+    m.listFeedback.mockReturnValue(new Promise(() => {}));
+    renderPage();
+    expect(await screen.findByText("불러오는 중…")).toBeTruthy();
+    expect(screen.queryByText("의견이 없습니다")).toBeNull();
+  });
+
+  it("다음 페이지가 있으면 더 보기 버튼으로 이어서 불러온다", async () => {
+    m.listFeedback
+      .mockResolvedValueOnce({ items, nextCursor: "2026-11-01T03:04:00.000Z" })
+      .mockResolvedValueOnce({
+        items: [{ ...items[0], id: "c", content: "옛날 새 의견" }],
+        nextCursor: null,
+      });
+    renderPage();
+    await screen.findByText("새 내용입니다");
+    fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+    expect(await screen.findByText("옛날 새 의견")).toBeTruthy();
+    expect(m.listFeedback).toHaveBeenLastCalledWith("2026-11-01T03:04:00.000Z");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "더 보기" })).toBeNull());
+  });
+
+  it("다음 페이지가 없으면 더 보기 버튼이 없다", async () => {
+    renderPage();
+    await screen.findByText("새 내용입니다");
+    expect(screen.queryByRole("button", { name: "더 보기" })).toBeNull();
   });
 });

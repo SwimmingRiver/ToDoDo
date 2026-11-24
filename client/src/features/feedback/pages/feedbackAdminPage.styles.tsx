@@ -43,4 +43,21 @@ const EmptyText = styled.p`
   color: ${colors.text.tertiary};
 `;
 
-export { FeedbackAdminContainer, FeedbackAdminBody, FilterBar, FilterButton, EmptyText };
+const MoreButton = styled.button`
+  align-self: center;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid ${colors.border.secondary};
+  color: ${colors.text.secondary};
+  background-color: ${colors.background.primary};
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+`;
+
+export { FeedbackAdminContainer, FeedbackAdminBody, FilterBar, FilterButton, EmptyText, MoreButton };
