@@ -10,6 +10,7 @@ jest.mock("../push/pushClient", () => {
   return {
     syncPushToken: jest.fn(() => Promise.resolve()),
     cancelQueuedPushSync: jest.fn(),
+    resetPushReleaseLatch: jest.fn(),
     subscribePushPermissionChanged: jest.fn((l: () => void) => {
       listeners.add(l);
       return () => listeners.delete(l);
@@ -39,6 +40,17 @@ describe("usePushTokenSync", () => {
     cb();
     await flush();
     expect(syncPushToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases the logout latch on sign-in before the first sync", async () => {
+    const mod = jest.requireMock("../push/pushClient") as { syncPushToken: AnyMock; resetPushReleaseLatch: AnyMock };
+    const { usePushTokenSync } = await import("../hooks/usePushTokenSync");
+    await renderHook(() => usePushTokenSync());
+    await flush();
+    expect(mod.resetPushReleaseLatch).toHaveBeenCalledTimes(1);
+    expect(mod.resetPushReleaseLatch.mock.invocationCallOrder[0]).toBeLessThan(
+      mod.syncPushToken.mock.invocationCallOrder[0],
+    );
   });
 
   it("resyncs when permission changes to granted", async () => {

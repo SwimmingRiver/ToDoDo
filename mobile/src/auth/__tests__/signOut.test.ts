@@ -9,8 +9,12 @@ const mockAuth: { name: string; currentUser: { uid: string } | null } = { name: 
 jest.mock("../../firebase", () => ({ auth: mockAuth }));
 
 const mockDisablePush = jest.fn<(uid: string) => Promise<void>>();
+const mockResetLatch = jest.fn();
+const mockSyncPush = jest.fn<(uid: string) => Promise<void>>();
 jest.mock("../../reminders/push/pushClient", () => ({
   disablePushOnThisDevice: (uid: string) => mockDisablePush(uid),
+  resetPushReleaseLatch: () => mockResetLatch(),
+  syncPushToken: (uid: string) => mockSyncPush(uid),
 }));
 
 const mockDismissAll = jest.fn<() => Promise<void>>();
@@ -53,6 +57,8 @@ describe("signOut", () => {
       calls.push("dismissNotifications");
     });
     mockAuth.currentUser = { uid: "u1" };
+    mockResetLatch.mockReset();
+    mockSyncPush.mockReset().mockResolvedValue(undefined);
   });
 
   it("signOut dismisses delivered notifications so the next account cannot open them", async () => {
@@ -191,5 +197,24 @@ describe("signOut", () => {
 
     await expect(signOut(client)).rejects.toThrow("network");
     expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("firebase 로그아웃이 실패하면 해제 래치를 풀고 토큰을 다시 등록한다(여전히 로그인 상태)", async () => {
+    mockFirebaseSignOut.mockRejectedValueOnce(new Error("network"));
+    const { signOut } = await import("../signOut");
+    const { client } = makeQueryClient();
+
+    await expect(signOut(client)).rejects.toThrow("network");
+    expect(mockResetLatch).toHaveBeenCalledTimes(1);
+    expect(mockSyncPush).toHaveBeenCalledWith("u1");
+  });
+
+  it("로그아웃이 성공하면 래치를 그대로 둔다", async () => {
+    const { signOut } = await import("../signOut");
+    const { client } = makeQueryClient();
+
+    await signOut(client);
+    expect(mockResetLatch).not.toHaveBeenCalled();
+    expect(mockSyncPush).not.toHaveBeenCalled();
   });
 });

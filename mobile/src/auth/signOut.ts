@@ -3,7 +3,7 @@ import { signOut as firebaseSignOut } from "firebase/auth";
 import * as Notifications from "expo-notifications";
 import type { QueryClient } from "@tanstack/react-query";
 import { auth } from "../firebase";
-import { disablePushOnThisDevice } from "../reminders/push/pushClient";
+import { disablePushOnThisDevice, resetPushReleaseLatch, syncPushToken } from "../reminders/push/pushClient";
 import { reportError } from "../shared/lib/sentry";
 
 /**
@@ -15,6 +15,7 @@ import { reportError } from "../shared/lib/sentry";
  *   탈퇴 직후에는 탈퇴가 이미 기기 토큰을 지웠으므로 skipPushRelease로 건너뛴다(삭제된 uid로 다시 요청하지 않는다).
  * - 받은 알림 지우기: 알림 센터에 남은 이전 계정의 알림을 다음 사용자가 눌러 그 할 일을 열지 않게 한다.
  * - 구글 로그아웃: 하지 않으면 다음 로그인에서 계정 선택 없이 같은 구글 계정으로 바로 들어간다.
+ * - firebase signOut이 실패하면 해제 래치를 풀고 토큰을 다시 등록한다(로그인 상태가 그대로다).
  * - 캐시 비우기: firebase signOut 이후에 해야 한다. 먼저 비우면 아직 로그인 상태인 화면의
  *   쿼리가 즉시 다시 불러온다. 반대로 signOut이 실패했으면 화면이 그대로이므로 비우지 않는다.
  */
@@ -40,7 +41,8 @@ export type SignOutOptions = {
 
 export const signOut = async (queryClient: QueryClient, options: SignOutOptions = {}) => {
   const uid = auth.currentUser?.uid;
-  if (uid && !options.skipPushRelease) {
+  const releasing = !!uid && !options.skipPushRelease;
+  if (uid && releasing) {
     try {
       await releasePushWithTimeout(uid);
     } catch (error) {
@@ -61,6 +63,15 @@ export const signOut = async (queryClient: QueryClient, options: SignOutOptions 
     console.warn("구글 로그아웃 실패:", error);
   }
 
-  await firebaseSignOut(auth);
+  try {
+    await firebaseSignOut(auth);
+  } catch (error) {
+    // 세션이 그대로라 이 사용자는 계속 앱을 쓴다. 해제 래치를 풀고 지운 토큰을 다시 등록한다.
+    if (uid && releasing) {
+      resetPushReleaseLatch();
+      syncPushToken(uid).catch((syncError) => reportError(syncError, "reminder"));
+    }
+    throw error;
+  }
   queryClient.clear();
 };

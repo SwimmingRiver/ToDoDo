@@ -9,6 +9,7 @@ import {
   subscribePushPermissionChanged,
   syncPushToken,
   cancelQueuedPushSync,
+  resetPushReleaseLatch,
 } from "../push/pushClient";
 import type { ReleasePending } from "../push/releasePending";
 
@@ -64,6 +65,7 @@ describe("pushClient", () => {
     messaging.deleteToken.mockReset().mockResolvedValue(undefined);
     messaging.requestPermission.mockReset().mockResolvedValue(AuthorizationStatus.AUTHORIZED);
     messaging.hasPermission.mockReset().mockResolvedValue(AuthorizationStatus.AUTHORIZED);
+    resetPushReleaseLatch();
   });
 
   describe("getPushPermission", () => {
@@ -242,6 +244,55 @@ describe("pushClient", () => {
       await Promise.all([first, trailing, disabling]);
 
       expect(events).toEqual(["sync:getToken", "register:t1", "getToken", "deleteToken"]);
+    });
+  });
+
+  describe("release latch", () => {
+    it("sync for released uid does not register until next sign-in", async () => {
+      messaging.getToken.mockResolvedValue("tokenA");
+      await disablePushOnThisDevice("uA");
+      // FCM이 토큰을 새로 발급해 onTokenRefresh가 오거나 권한 이벤트가 와도 firebase signOut 전이다.
+      messaging.getToken.mockResolvedValue("fresh-token");
+      await syncPushToken("uA");
+      await syncPushToken("uA");
+
+      expect(mockRegister).not.toHaveBeenCalled();
+      expect(messaging.getToken).toHaveBeenCalledTimes(1);
+
+      // 다른 계정의 로그인은 막지 않는다.
+      await syncPushToken("uB");
+      expect(mockRegister).toHaveBeenCalledWith("fresh-token", Platform.OS);
+    });
+
+    it("sync for released uid queued behind the release does not register", async () => {
+      let open!: () => void;
+      const g = new Promise<void>((r) => {
+        open = r;
+      });
+      messaging.getToken.mockResolvedValue("tokenA");
+      mockUnregister.mockImplementation(async () => {
+        await g;
+      });
+      const disabling = disablePushOnThisDevice("uA");
+      await new Promise((r) => setImmediate(r));
+      const syncing = syncPushToken("uA");
+      open();
+      await Promise.all([disabling, syncing]);
+      await syncPushToken("uA");
+
+      expect(mockRegister).not.toHaveBeenCalled();
+    });
+
+    it("same user can register again after signing back in", async () => {
+      await disablePushOnThisDevice("uA");
+      await syncPushToken("uA");
+      expect(mockRegister).not.toHaveBeenCalled();
+
+      // 로그인 상태가 같은 사용자로 다시 바뀌면 훅이 래치를 푼다.
+      resetPushReleaseLatch();
+      await syncPushToken("uA");
+
+      expect(mockRegister).toHaveBeenCalledWith("new-token", Platform.OS);
     });
   });
 

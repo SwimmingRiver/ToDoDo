@@ -63,7 +63,24 @@ const resolveReleasePending = async (pending: ReleasePending, uid: string): Prom
   await clearReleasePending();
 };
 
+/**
+ * 해제를 시작한 uid. 해제가 끝나도 firebase signOut 전까지는 그 계정의 동기화(onTokenRefresh로 FCM이
+ * 새로 발급한 토큰, 권한 이벤트)가 올 수 있다 — 그대로 등록하면 다음 계정이 같은 토큰을 받아 앞 계정의
+ * 알림이 다음 계정에게 간다. 그래서 래치가 걸린 uid의 동기화는 등록하지 않고 끝낸다.
+ *
+ * 풀리는 때: 다른 uid의 동기화가 돌 때(다음 계정 로그인), 또는 로그인 상태가 사용자로 바뀌었을 때
+ * usePushTokenSync가 resetPushReleaseLatch()를 부를 때(같은 사용자의 재로그인).
+ */
+let releasedUid: string | null = null;
+
+/** 로그인 상태가 사용자로 바뀌었을 때 부른다(같은 사용자가 로그아웃 뒤 다시 로그인해도 등록되게). */
+export const resetPushReleaseLatch = (): void => {
+  releasedUid = null;
+};
+
 const syncPushTokenRaw = async (uid: string): Promise<void> => {
+  if (releasedUid === uid) return;
+  if (releasedUid !== null) releasedUid = null;
   const pending = await loadReleasePending();
   if (pending) await resolveReleasePending(pending, uid);
   if ((await getPushPermission()) !== "granted") return;
@@ -143,6 +160,8 @@ const startDisable = (uid: string): Promise<void> =>
  * 그 사이 호출한 쪽의 uid가 가장 마지막 것이 이긴다.
  */
 export const syncPushToken = (uid: string): Promise<void> => {
+  // 해제 중이거나 해제한 계정은 기다리지 않고 버린다(대기 중인 다음 계정의 후행 실행 uid도 덮지 않는다).
+  if (releasedUid === uid) return Promise.resolve();
   if (!running) return runExclusive(() => syncPushTokenRaw(uid));
   if (queuedSync) {
     queuedSync.uid = uid;
@@ -235,6 +254,7 @@ const disablePushRaw = async (uid: string): Promise<void> => {
 };
 
 export const disablePushOnThisDevice = (uid: string): Promise<void> => {
+  releasedUid = uid;
   dropQueuedSync();
   if (!running) return startDisable(uid);
   const queued: QueuedDisable = { uid, ...deferred() };
