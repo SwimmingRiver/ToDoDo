@@ -43,12 +43,12 @@ eas build --platform android --profile production
 | `EXPO_PUBLIC_BILLING_PROXY_URL` | 인앱결제 검증, 탈퇴 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_CALENDAR_PROXY_URL` | 구글 캘린더 연동, 탈퇴 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_AI_PROXY_URL` | AI 할 일 플랜 | 등록됨 | 등록됨 |
-| `EXPO_PUBLIC_FEEDBACK_PROXY_URL` | 의견 보내기 | 미등록 | 미등록 |
+| `EXPO_PUBLIC_FEEDBACK_PROXY_URL` | 의견 보내기 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_REMINDER_PROXY_URL` | 탈퇴 시 알림 정리 | 등록됨 | 등록됨 |
 | `EXPO_PUBLIC_SENTRY_DSN` | Sentry | — | 등록됨 |
 | `SENTRY_AUTH_TOKEN` (secret) | Sentry 소스맵 업로드 | — | 등록됨 |
 
-2026-11-22 두 환경 모두 등록 완료(의견 보내기 제외, `eas env:list`로 이름과 값이 비어 있지 않음만 확인). Firebase가 비면 로그인부터 실패하고, 프록시 URL이 비면 결제·캘린더·AI 플랜·탈퇴가 실패한다(`mobile/AGENTS.md` 참고). 프록시 URL은 운영 Worker 주소로, 로컬 `mobile/.env`의 값과 같다.
+2026-11-22 두 환경 모두 등록 완료(`eas env:list`로 이름과 값이 비어 있지 않음만 확인). 의견 보내기(`EXPO_PUBLIC_FEEDBACK_PROXY_URL`)는 2026-11-24 추가 등록. Firebase가 비면 로그인부터 실패하고, 프록시 URL이 비면 결제·캘린더·AI 플랜·탈퇴가 실패한다(`mobile/AGENTS.md` 참고). 프록시 URL은 운영 Worker 주소로, 로컬 `mobile/.env`의 값과 같다.
 
 값을 바꾸거나 새로 추가할 때:
 
