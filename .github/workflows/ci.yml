@@ -27,6 +27,7 @@ jobs:
       feedbackProxy: ${{ steps.filter.outputs.feedbackProxy }}
       mobile: ${{ steps.filter.outputs.mobile }}
       scripts: ${{ steps.filter.outputs.scripts }}
+      client: ${{ steps.code.outputs.client }}
 
     steps:
       - name: Checkout
@@ -85,9 +86,36 @@ jobs:
               - 'package-lock.json'
               - '.github/workflows/ci.yml'
 
+      # Client·E2E는 "문서만 바뀐 게 아니면" 돈다 — 필요한 경로를 나열하는 대신 문서만
+      # 빼는 쪽을 택했다(경로를 하나 빠뜨리면 테스트·rules 배포가 소리 없이 skip되므로).
+      # predicate-quantifier는 step 전체 필터에 적용되므로 위 필터와 step을 나눈다.
+      - name: Filter non-docs changes
+        uses: dorny/paths-filter@v3
+        id: code
+        with:
+          base: ${{ github.ref_name }}
+          predicate-quantifier: 'every'
+          filters: |
+            client:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+
+  # main 브랜치 보호가 "Client"·"E2E Test"를 필수 검사로 요구한다 — 워크플로 paths-ignore로
+  # 통째 건너뛰면 검사가 보고되지 않아 PR이 영원히 대기하므로, job 단위 if로 skip한다
+  # (skip은 필수 검사 통과로 취급됨). 조건:
+  #  - changes job이 실패하면 skip하지 않고 돈다(판정 실패가 "통과"로 보이지 않게)
+  #  - main push에는 항상 돈다(Worker job과 같은 이유 + deploy가 이 둘을 needs로 기다림)
   client:
     name: Client
     runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      (
+        needs.changes.result != 'success' ||
+        needs.changes.outputs.client == 'true' ||
+        (github.ref == 'refs/heads/main' && github.event_name == 'push')
+      ) && !cancelled()
     defaults:
       run:
         working-directory: client
@@ -152,6 +180,14 @@ jobs:
   e2e:
     name: E2E Test
     runs-on: ubuntu-latest
+    needs: changes
+    # client job과 같은 조건(위 주석 참고)
+    if: >-
+      (
+        needs.changes.result != 'success' ||
+        needs.changes.outputs.client == 'true' ||
+        (github.ref == 'refs/heads/main' && github.event_name == 'push')
+      ) && !cancelled()
     defaults:
       run:
         working-directory: client
