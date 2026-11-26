@@ -48,7 +48,7 @@
 
 ## 사용 절차
 
-데모 계정은 아직 없다. 아래 순서대로 한다. 운영 Firebase에 쓰므로 `--uid`와 허용 목록을 꼭 데모 계정으로 맞춘다.
+**11-26 데모 계정 생성·시드 완료**: 데모 전용 Google 계정 `tododo.demo@gmail.com`(2단계 인증 끔, 심사 로그인 정보와 같은 계정). uid와 비밀번호는 저장소에 적지 않는다(Firebase 콘솔 Authentication에서 이메일로 찾는다). 시드 51개(11-26 기준) + manual 프리미엄(2099-12-31) + 반복 2개를 앱에서 만들었다. 구글 캘린더 오버레이는 연동하지 않고 찍었다. 다시 찍을 때는 아래 순서를 그대로 따른다. 운영 Firebase에 쓰므로 `--uid`와 허용 목록을 꼭 데모 계정으로 맞춘다.
 
 1. **데모 계정 만들기**: 데모 전용 Apple ID(또는 Google 계정)로 앱에 가입한다. Apple "이메일 가리기"를 고르면 Auth 이메일은 `…@privaterelay.appleid.com` 주소가 된다 — 허용 목록에도 그 주소를 넣는다.
 2. **uid·이메일 확인**: Firebase 콘솔 → Authentication → 사용자에서 그 계정의 사용자 UID와 이메일을 확인한다. 저장소에 적지 않는다.
@@ -71,8 +71,9 @@
 
 ## 촬영 규격
 
-- **필수: iPhone 6.9형 1320×2868(세로)** 최소 1장, 최대 10장. 6.9형을 올리면 작은 화면은 App Store Connect가 축소해 쓴다. iPhone 전용이라 iPad 스크린샷은 불필요.
-- 출처가 엇갈림: 일부 자료는 6.5형(1242×2688)으로 대체 가능하다고 함 — 제출 시점에 App Store Connect의 미디어 관리 화면에서 최종 확인. 6.9형으로 찍으면 어느 쪽이든 안전.
-- 촬영: iPhone 18 Pro Max(6.9형) 시뮬레이터 + `xcrun simctl io booted screenshot <파일>`. 상태 막대 정리: `xcrun simctl status_bar booted override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4`.
+- **실제 규격(11-26 제출 화면)**: 칸 이름은 "15.5cm 또는 15.9cm 디스플레이의 iPhone"(중형, Dynamic Island)이고 **1179×2556 또는 1206×2622만** 받는다. 6.9형(1320×2868)은 거절됐다. iPhone 전용이라 iPad·Watch·iPhone Duo 칸은 비운다.
+- 촬영: **iPhone 18 Pro 시뮬레이터(1206×2622)** + `xcrun simctl io booted screenshot <파일>`. 시뮬레이터 앱은 EAS `simulator` 프로필 빌드를 `eas build:run`으로 설치한다(Xcode 27은 Simulator.app 대신 `Xcode.app/Contents/Applications/DeviceHub.app`). 터치 자동화 도구가 없어 화면 이동은 사람이 한다.
+- 11-26 제출본은 Pro Max로 찍어 `sips --resampleHeightWidth 2622 1207` 후 `--cropToHeightWidth 2622 1206`, JPEG(알파 없음)로 변환했다. 순서: 오늘 → AI 플랜(맨 위 "AI가 만든 계획"이 보이게) → 목록(하위 할 일 펼침) → 캘린더(오늘 날짜를 눌러 시트를 연 상태) → 통계 → 상세(반복 요일이 보이게 스크롤). 구독 심사용은 무료 계정의 계정 화면(체험 버튼·고지 문구).
+- 함정: 오후에 찍으면 오전 마감 할 일에 빨간 "○시간 지남"이 붙는다 → 그 할 일의 마감을 저녁으로 옮기거나 완료 처리 후 찍는다. 상태 막대 정리: `xcrun simctl status_bar booted override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4`.
 - 라이트 모드로(앱이 `userInterfaceStyle: light`).
 - 프리뷰 영상은 선택 — 이번엔 생략 추천.
