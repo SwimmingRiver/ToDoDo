@@ -3,10 +3,10 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Footer from "../footer";
 
-const renderFooter = (props: { showBusinessInfo?: boolean } = {}) =>
+const renderFooter = () =>
   render(
     <MemoryRouter>
-      <Footer {...props} />
+      <Footer />
     </MemoryRouter>,
   );
 
@@ -27,13 +27,8 @@ describe("Footer", () => {
     );
   });
 
-  it("기본(앱 안)에서는 사업자정보를 보여주지 않는다", () => {
+  it("모든 화면(앱 안 포함)에서 전자상거래법 신원정보를 보여준다", () => {
     renderFooter();
-    expect(screen.queryByRole("region", { name: "사업자정보" })).not.toBeInTheDocument();
-  });
-
-  it("공개 화면에서는 전자상거래법 신원정보를 보여준다", () => {
-    renderFooter({ showBusinessInfo: true });
     const info = screen.getByRole("region", { name: "사업자정보" });
     for (const text of [
       "투도도(TODODO)",
@@ -49,7 +44,7 @@ describe("Footer", () => {
   });
 
   it("통신판매업 신고번호를 표시하고 '신고 준비 중'은 사라진다", () => {
-    renderFooter({ showBusinessInfo: true });
+    renderFooter();
     const info = screen.getByRole("region", { name: "사업자정보" });
     expect(info).toHaveTextContent("제2026-경남김해-1588호");
     expect(info).not.toHaveTextContent("신고 준비 중");
