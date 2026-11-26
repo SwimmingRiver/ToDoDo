@@ -76,7 +76,8 @@ Account deletion (5.1.1(v))
   during deletion.
 
 Other
-- All UI is Korean. Reminders are local notifications scheduled on device (no push server for the iOS app).
+- All UI is Korean. Deadline reminders are push notifications sent by our server through Firebase Cloud Messaging (APNs),
+  only after the user allows notifications. They arrive even when the app is closed.
 - AI Plan sends only the goal text and dates to our server, which calls Anthropic's API; no tracking or ads.
 ```
 - [ ] 연락처(이름·전화·이메일)는 사용자가 입력한다.
