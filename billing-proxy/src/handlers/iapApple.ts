@@ -104,7 +104,7 @@ export const handleAppleVerify = async (
   }
 
   // R4: 거래 id가 아니라 원거래 id로 조회해 구독 단위의 최신 상태를 받는다.
-  const snap = await deps.apple.getSubscriptionSnapshot(tx.originalTransactionId);
+  const snap = await deps.apple.getSubscriptionSnapshot(tx.originalTransactionId, tx.environment);
   // 연결은 남겨 둔다 — 같은 uid의 연결이라 해가 없고, 다음 verify가 그대로 재연결한다.
   if (!snap) return invalid();
   // 조회 결과가 요청한 구독이 아니면 추측해서 반영하지 않는다.
@@ -235,7 +235,7 @@ export const handleAppleWebhook = async (
     return ok();
   }
 
-  const current = await deps.apple.getSubscriptionSnapshot(tx.originalTransactionId);
+  const current = await deps.apple.getSubscriptionSnapshot(tx.originalTransactionId, tx.environment);
   if (!current) {
     console.error("Apple 알림: 구독 조회 결과 없음 — 무시:", notification.notificationType, tx.originalTransactionId);
     return ok();

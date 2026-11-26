@@ -125,7 +125,7 @@ describe("스토어 시크릿이 없을 때의 의존성", () => {
     expect((await call(post("/iap/account-token"))).status).toBe(500);
     await expect(deps.play.getSubscription("token")).rejects.toThrow("GOOGLE_PLAY_SERVICE_ACCOUNT");
     await expect(deps.google.cancelSubscription("token")).rejects.toThrow("GOOGLE_PLAY_SERVICE_ACCOUNT");
-    await expect(deps.apple.getSubscriptionSnapshot("otx_1")).rejects.toThrow("APPLE_ISSUER_ID");
+    await expect(deps.apple.getSubscriptionSnapshot("otx_1", "Production")).rejects.toThrow("APPLE_ISSUER_ID");
     await expect(deps.verifyPubSub("Bearer oidc")).rejects.toThrow("GOOGLE_PUBSUB_AUDIENCE");
     expect((await call(post("/webhooks/google", "{}", { Authorization: "Bearer oidc" }))).status).toBe(500);
   });

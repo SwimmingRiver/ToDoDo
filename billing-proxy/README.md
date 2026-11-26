@@ -10,7 +10,7 @@
 | `POST /webhooks/paddle` | `Paddle-Signature` | `subscription.created/updated/canceled` 반영 |
 | `POST /account/delete` | Firebase ID 토큰 | 회원 탈퇴(허용 목록과 무관). 순서: 살아 있는 Paddle 구독 즉시 해지 → 자동 갱신 중인 Google Play 구독 `subscriptionsv2.cancel`(갱신 중지, 이미 해지·만료면 성공으로 봄) → 데이터 삭제 → Auth 삭제. 해지 실패면 아무것도 지우지 않고 `502 PADDLE_CANCEL_FAILED`/`502 GOOGLE_CANCEL_FAILED`. Apple 구독은 서버가 해지할 수 없어 화면 경고만 한다 |
 | `POST /iap/account-token` | Firebase ID 토큰 | 앱이 구매 때 붙일 `appAccountToken` |
-| `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
+| `POST /iap/apple/verify` | Firebase ID 토큰 | 본문 `{ jws }`(StoreKit 2 `jwsRepresentation`) 검증 → 영수증을 계정에 연결 → App Store Server API(거래의 `environment`가 Sandbox면 샌드박스 API)로 현재 상태 조회 → `sources.apple` 반영 → `{ premiumUntil }`. 실패 `400 INVALID_TRANSACTION`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT` |
 | `POST /iap/google/verify` | Firebase ID 토큰 | 본문 `{ purchaseToken, productId }`(`productId`는 `premium_monthly`만) → Play Developer API `subscriptionsv2`로 현재 상태 조회 → 구매 토큰을 계정에 연결(교체 토큰이면 `linkedPurchaseToken`의 연결이 같은 계정이어야 함) → `sources.google` 반영 → 미승인이면 acknowledge → `{ premiumUntil }`. 결제 대기면 승인 없이 `{ premiumUntil, pending: true }`. 실패 `400 INVALID_PURCHASE`, 다른 계정에 연결됨 `409 LINKED_TO_OTHER_ACCOUNT`, 다른 Google 구독이 갱신 중 `409 ALREADY_SUBSCRIBED`(승인 안 함 → 자동 환불), 승인 실패 `500`(반영은 같은 값이라 앱이 재시도하면 승인까지 이어짐) |
 | `POST /webhooks/google` | Pub/Sub 푸시 OIDC 토큰 | Play RTDN. 알림 본문 상태는 믿지 않고 `purchaseToken`으로 매번 다시 조회해 반영(구독 환불 `voidedPurchaseNotification`(`productType` 1)도 같음, 다른 상품 환불은 무시). 연결된 계정에만 반영(교체 토큰은 이전 토큰의 계정을 따라가 새로 연결, 둘 다 없으면 200 무시), 반영했는데 미승인이면 승인. OIDC 불일치 401, 형식 오류·다른 앱·테스트 알림 200, 일시 오류 500(Pub/Sub 재전송) |
 | `POST /webhooks/apple` | Apple JWS 서명 | App Store Server Notifications v2. 알림은 신호로만 쓰고 상태는 매번 App Store Server API로 다시 조회한다(알림의 거래는 지난 갱신분일 수 있음). 연결된 계정에만 반영(연결 없으면 200 무시), 서명 불일치 401, 일시 오류 500(Apple 재전송). `CONSUMPTION_REQUEST`(환불 요청)는 권한을 바꾸지 않고 결제일 14일 이내면 `GRANT_FULL`, 지나면 `DECLINE`으로 회신한다(`APPLE_CONSUMPTION_REPLY_ENABLED="true"`일 때만, 실패해도 200) |
@@ -43,7 +43,7 @@
    openssl rand -hex 32 | npx wrangler secret put IAP_ACCOUNT_TOKEN_SECRET
    npx wrangler secret put APPLE_ISSUER_ID
    npx wrangler secret put APPLE_KEY_ID
-   npx wrangler secret put APPLE_PRIVATE_KEY < ~/AuthKey_XXXXXXXXXX.p8
+   npx wrangler secret put APPLE_PRIVATE_KEY < ~/SubscriptionKey_XXXXXXXXXX.p8   # 인앱 구입 키는 SubscriptionKey_<Key ID>.p8로 내려받아진다
    ```
 4. **환불 요청 회신**(`CONSUMPTION_REQUEST`): 사용자가 Apple에 환불을 요청하면 알림이 오고, 우리는 App Store Server API "Send Consumption Information"(`PUT /inApps/v2/transactions/consumption/{transactionId}`)으로 환불 선호를 회신한다. 기준은 웹·Google과 같은 **결제일(이 거래의 `purchaseDate`, 갱신분이면 갱신일) 14일 이내 → `GRANT_FULL`, 지나면 `DECLINE`**(정확히 14일은 기간 안)이다. 판단이 결제일만으로 정해지므로 계정 연결이 없어도(탈퇴한 계정 포함) 회신하고, 권한은 바꾸지 않는다 — 실제 환불되면 뒤따르는 `REFUND` 알림이 회수한다. 회신이 실패해도 알림은 200으로 받는다(로그만).
    - Apple은 **고객 동의(`customerConsented: true`) 없이는 회신하지 말라**고 한다(`true`가 아니면 400). 그래서 `wrangler.toml`의 `APPLE_CONSUMPTION_REPLY_ENABLED`가 `"true"`가 아니면 회신하지 않고 `환불 회신 비활성(동의 고지 전)` 로그만 남긴다. 개인정보처리방침에 "환불 요청 시 Apple에 이용 정보 제공"을 고지한 릴리스에서 `"true"`로 바꾼다.

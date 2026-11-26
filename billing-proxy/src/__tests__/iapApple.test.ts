@@ -3,6 +3,7 @@ import type { AppleRecord } from "@tododo/core/dist/entitlement/index.js";
 import { handleAppleVerify, handleAppleWebhook, type AppleIapDeps } from "../handlers/iapApple";
 import { verifyAppleJws } from "../apple/jws";
 import type { AppleSnapshot, AppleTransaction } from "../apple/decide";
+import type { StoreEnvironment } from "../apple/serverApi";
 import { deriveAccountToken } from "../accountToken";
 import { UserNotFoundError } from "../claims";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
@@ -69,7 +70,7 @@ const deps = (existing: EntitlementDoc = EMPTY_ENTITLEMENT, link: StoreLink | nu
       put: vi.fn(async (_store: "apple" | "google", _id: string, _link: StoreLink, _updateTime: string | null) => "ok" as "ok" | "conflict"),
     },
     apple: {
-      getSubscriptionSnapshot: vi.fn(async (_id: string): Promise<AppleSnapshot | null> => snapshot()),
+      getSubscriptionSnapshot: vi.fn(async (_id: string, _environment: StoreEnvironment): Promise<AppleSnapshot | null> => snapshot()),
       sendConsumptionInfo: vi.fn(async (_id: string, _env: "Production" | "Sandbox", _body: unknown): Promise<void> => undefined),
     },
     verifyAppleJws: (jws: string) => verifyAppleJws<unknown>(jws, { trustedRootsDer: [chain.rootDer], now: NOW }),
@@ -130,6 +131,15 @@ describe("handleAppleVerify", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it("Sandbox 거래(TestFlight·심사 결제)는 샌드박스 환경으로 조회한다", async () => {
+    const d = deps();
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ transaction: transaction({ environment: "Sandbox" }) }));
+    const jws = await signTestJws(transaction({ environment: "Sandbox" }), chain);
+    const res = await handleAppleVerify("u1", d, NOW, ENV, verifyRequest({ jws }));
+    expect(res.status).toBe(200);
+    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1", "Sandbox");
+  });
+
   it("valid jws → link created, sources.apple written, claim set before doc", async () => {
     const d = deps();
     const res = await handleAppleVerify("u1", d, NOW, ENV, verifyRequest({ jws: await signTestJws(transaction(), chain) }));
@@ -144,7 +154,7 @@ describe("handleAppleVerify", () => {
       null,
     );
     // 규칙 R4: 구독 조회는 원거래 id로 한다.
-    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1");
+    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1", "Production");
     expect(d.order).toEqual(["claim", "doc"]);
     const written = d.store.write.mock.calls[0][1];
     expect(written.sources.apple?.originalTransactionId).toBe("otx_1");
@@ -348,7 +358,7 @@ describe("handleAppleWebhook", () => {
     expect(apple?.lastSignedDate).toBe(new Date(NOW.getTime() - 1000).toISOString());
     expect(apple?.premiumUntil).toBe(new Date(EXPIRES + 3 * DAY).toISOString());
     expect(apple?.environment).toBe("Production");
-    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1");
+    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1", "Production");
   });
 
   it("webhook uses API snapshot and keeps notificationUUID/signedDate", async () => {
@@ -445,6 +455,8 @@ describe("handleAppleWebhook", () => {
     const payload = await notification({}, { environment: "Sandbox" }, transaction({ environment: "Sandbox" }));
     expect((await handleAppleWebhook(webhookRequest({ signedPayload: payload }), ENV, d, NOW)).status).toBe(200);
     expect(d.store.write.mock.calls[0][1].sources.apple?.environment).toBe("Sandbox");
+    // 알림 거래의 environment로 그 환경 API에만 묻는다.
+    expect(d.apple.getSubscriptionSnapshot).toHaveBeenCalledWith("otx_1", "Sandbox");
   });
 
   it("조회한 갱신 정보가 자동 갱신 끔이면 만료 시각 그대로(유예 없음)", async () => {
