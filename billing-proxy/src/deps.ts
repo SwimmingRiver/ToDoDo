@@ -60,7 +60,8 @@ export const buildDeps = (env: Env): BillingDeps => {
     accountData: new AccountDataStore(env.FIREBASE_PROJECT_ID, getToken),
     storeLinks: new StoreLinkStore(env.FIREBASE_PROJECT_ID, getToken),
     apple: {
-      getSubscriptionSnapshot: async (transactionId) => getApple().getSubscriptionSnapshot(transactionId),
+      getSubscriptionSnapshot: async (transactionId, environment) =>
+        getApple().getSubscriptionSnapshot(transactionId, environment),
       sendConsumptionInfo: async (transactionId, environment, body) =>
         getApple().sendConsumptionInfo(transactionId, environment, body),
     },

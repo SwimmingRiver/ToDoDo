@@ -62,7 +62,7 @@ const setup = async (responses: Response[]) => {
 describe("AppleServerApi", () => {
   it("signs ES256 JWT with kid, iss, aud appstoreconnect-v1, bid, exp ≤ iat+3600", async () => {
     const { api, fetchFn, key } = await setup([ok(body([entry(tx())]))]);
-    await api.getSubscriptionSnapshot("101");
+    await api.getSubscriptionSnapshot("101", "Production");
     const init = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1];
     const token = (init.headers as Record<string, string>).Authorization.replace("Bearer ", "");
     const [h, p, s] = token.split(".");
@@ -83,7 +83,7 @@ describe("AppleServerApi", () => {
 
   it("calls GET https://api.storekit.itunes.apple.com/inApps/v1/subscriptions/{id}", async () => {
     const { api, fetchFn } = await setup([ok(body([entry(tx())]))]);
-    await api.getSubscriptionSnapshot("101");
+    await api.getSubscriptionSnapshot("101", "Production");
     const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`${PROD}101`);
     expect(init.method).toBe("GET");
@@ -91,25 +91,28 @@ describe("AppleServerApi", () => {
 
   it("caches the token between calls", async () => {
     const { api, fetchFn } = await setup([ok(body([entry(tx())])), ok(body([entry(tx())]))]);
-    await api.getSubscriptionSnapshot("101");
-    await api.getSubscriptionSnapshot("101");
+    await api.getSubscriptionSnapshot("101", "Production");
+    await api.getSubscriptionSnapshot("101", "Production");
     const auth = (i: number) => ((fetchFn.mock.calls[i] as unknown as [string, RequestInit])[1].headers as Record<string, string>).Authorization;
     expect(auth(0)).toBe(auth(1));
   });
 
-  it("falls back to sandbox on 404", async () => {
-    const { api, fetchFn } = await setup([
-      new Response("{}", { status: 404 }),
-      ok(body([entry(tx({ environment: "Sandbox" }))])),
-    ]);
-    const snap = await api.getSubscriptionSnapshot("101");
-    expect((fetchFn.mock.calls[1] as unknown as [string])[0]).toBe(`${SANDBOX}101`);
+  // 출시 전 앱은 운영 API가 샌드박스 거래에 404가 아니라 401을 준다(2026-11-26 TestFlight 실측).
+  // 운영→샌드박스 순서로 추측하지 않고 거래에 서명된 environment의 API에만 묻는다.
+  it("queries only the sandbox base for a Sandbox transaction", async () => {
+    const { api, fetchFn } = await setup([ok(body([entry(tx({ environment: "Sandbox" }))]))]);
+    const snap = await api.getSubscriptionSnapshot("101", "Sandbox");
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect((fetchFn.mock.calls[0] as unknown as [string])[0]).toBe(`${SANDBOX}101`);
     expect(snap?.transaction.environment).toBe("Sandbox");
   });
 
-  it("returns null when both 404", async () => {
-    const { api } = await setup([new Response("{}", { status: 404 }), new Response("{}", { status: 404 })]);
-    expect(await api.getSubscriptionSnapshot("101")).toBeNull();
+  it("does not fall back to the other environment on 404", async () => {
+    for (const environment of ["Production", "Sandbox"] as const) {
+      const { api, fetchFn } = await setup([new Response("{}", { status: 404 }), ok(body([entry(tx())]))]);
+      expect(await api.getSubscriptionSnapshot("101", environment)).toBeNull();
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("picks lastTransactions entry matching originalTransactionId, verifies both signed fields", async () => {
@@ -118,7 +121,7 @@ describe("AppleServerApi", () => {
     const { api } = await setup([ok(body([entry(other, 2), entry(mine, 4)]))]);
     const verify = vi.fn(fakeVerify);
     (api as unknown as { verify: typeof verify }).verify = verify;
-    const snap = await api.getSubscriptionSnapshot("105");
+    const snap = await api.getSubscriptionSnapshot("105", "Production");
     expect(snap).toEqual({
       status: 4,
       transaction: mine,
@@ -134,22 +137,22 @@ describe("AppleServerApi", () => {
   it("throws on 5xx, 429 and 401", async () => {
     for (const status of [500, 429, 401]) {
       const { api } = await setup([new Response("x", { status })]);
-      await expect(api.getSubscriptionSnapshot("101")).rejects.toThrow();
+      await expect(api.getSubscriptionSnapshot("101", "Production")).rejects.toThrow();
     }
   });
 
   it("throws on malformed transaction payload or bad status", async () => {
     const bad = { ...tx(), expiresDate: "soon" };
     const { api } = await setup([ok(body([entry(bad)]))]);
-    await expect(api.getSubscriptionSnapshot("101")).rejects.toThrow(/expiresDate/);
+    await expect(api.getSubscriptionSnapshot("101", "Production")).rejects.toThrow(/expiresDate/);
     const { api: api2 } = await setup([ok(body([entry(tx(), 9)]))]);
-    await expect(api2.getSubscriptionSnapshot("101")).rejects.toThrow(/status/);
+    await expect(api2.getSubscriptionSnapshot("101", "Production")).rejects.toThrow(/status/);
   });
 
   it("returns renewal null when signedRenewalInfo is absent", async () => {
     const e = { ...entry(tx()), signedRenewalInfo: undefined };
     const { api } = await setup([ok(body([e]))]);
-    expect((await api.getSubscriptionSnapshot("101"))?.renewal).toBeNull();
+    expect((await api.getSubscriptionSnapshot("101", "Production"))?.renewal).toBeNull();
   });
 
   it("sendConsumptionInfo PUTs to production or sandbox base by environment with bearer JWT", async () => {

@@ -109,7 +109,7 @@ export class AppleServerApi {
     return token;
   }
 
-  /** 404면 null(환경이 다르거나 없는 거래), 그 밖의 비정상 응답은 던진다(호출부가 재시도하도록). */
+  /** 404면 null(없는 거래), 그 밖의 비정상 응답은 던진다(호출부가 재시도하도록). */
   private async fetchEnv(base: string, transactionId: string): Promise<unknown | null> {
     const res = await this.fetchFn(`${base}/inApps/v1/subscriptions/${encodeURIComponent(transactionId)}`, {
       method: "GET",
@@ -134,9 +134,12 @@ export class AppleServerApi {
     if (!res.ok) throw new Error(`App Store Server API 환불 회신 오류: ${res.status}`);
   }
 
-  async getSubscriptionSnapshot(transactionId: string): Promise<AppleSnapshot | null> {
-    // 운영에서 못 찾으면 샌드박스(TestFlight·심사 결제)에 있을 수 있다.
-    const body = (await this.fetchEnv(PROD_BASE, transactionId)) ?? (await this.fetchEnv(SANDBOX_BASE, transactionId));
+  /**
+   * 거래에 서명된 environment의 API에만 묻는다. 운영→샌드박스 순서로 추측하지 않는다 — 출시 전 앱은 운영 API가
+   * 샌드박스 거래에 404가 아니라 401을 돌려줘서(2026-11-26 TestFlight 실측) 폴백이 영영 일어나지 않았다.
+   */
+  async getSubscriptionSnapshot(transactionId: string, environment: StoreEnvironment): Promise<AppleSnapshot | null> {
+    const body = await this.fetchEnv(environment === "Sandbox" ? SANDBOX_BASE : PROD_BASE, transactionId);
     if (body === null) return null;
 
     const entries: unknown[] = isRecord(body) && Array.isArray(body.data)
