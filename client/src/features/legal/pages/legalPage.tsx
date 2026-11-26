@@ -115,7 +115,7 @@ const LegalPage = ({ slug }: LegalPageProps) => {
           </History>
         )}
       </Article>
-      <Footer showBusinessInfo />
+      <Footer />
     </PageContainer>
   );
 };

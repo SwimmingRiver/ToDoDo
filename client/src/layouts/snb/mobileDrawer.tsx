@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/useAuth";
 import LegalLinks from "@/features/legal/components/legalLinks";
+import BusinessInfo from "@/features/legal/components/businessInfo";
 import ProfileMenu from "@/layouts/profileMenu/profileMenu";
 import UserAvatar from "@/layouts/userAvatar/userAvatar";
 import { userLabel } from "@/layouts/userAvatar/userLabel";
@@ -104,6 +105,8 @@ const MobileDrawer = ({ isOpen, onClose, onFeedbackClick, onDeleteAccountClick }
         </FeedbackNavRow>
         <DrawerLegalLinks>
           <LegalLinks onNavigate={handleClose} />
+          {/* 모바일 웹은 푸터 대신 탭바라, 결제 화면에서 닿는 신원정보 자리는 여기다. */}
+          <BusinessInfo align="start" />
         </DrawerLegalLinks>
       </DrawerContainer>
     </>,

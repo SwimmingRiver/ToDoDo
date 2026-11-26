@@ -6,7 +6,7 @@ import MobileDrawer from "../mobileDrawer";
 
 vi.mock("@/features/auth/context/useAuth", () => ({
   useAuth: () => ({
-    user: { displayName: "강수영", photoURL: "https://example.com/avatar.png" },
+    user: { displayName: "테스트 사용자", photoURL: "https://example.com/avatar.png" },
     logout: vi.fn(),
   }),
 }));
@@ -36,7 +36,7 @@ describe("MobileDrawer 안 ProfileMenu 스태킹", () => {
     const user = setupUser();
     const { container } = renderDrawer();
 
-    await user.click(screen.getByText("강수영"));
+    await user.click(screen.getByText("테스트 사용자"));
 
     const bodyChildren = Array.from(document.body.children).filter(
       (el) => el !== container
@@ -77,7 +77,7 @@ describe("MobileDrawer 안 회원 탈퇴", () => {
     const user = setupUser();
     renderDrawer({ onClose, onDeleteAccountClick });
 
-    await user.click(screen.getByText("강수영"));
+    await user.click(screen.getByText("테스트 사용자"));
     await user.click(screen.getByText("회원 탈퇴"));
 
     expect(onDeleteAccountClick).toHaveBeenCalledTimes(1);
@@ -96,5 +96,13 @@ describe("MobileDrawer 법적 링크", () => {
     await user.click(link);
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  // 모바일 웹은 푸터 대신 탭바라, 앱 안에서 신원정보가 닿는 곳은 드로어뿐이다.
+  it("전자상거래법 신원정보(사업자정보)를 보여준다", () => {
+    renderDrawer();
+    const info = screen.getByRole("region", { name: "사업자정보" });
+    expect(info).toHaveTextContent("266-61-00839");
+    expect(info).toHaveTextContent("제2026-경남김해-1588호");
   });
 });
