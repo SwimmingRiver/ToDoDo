@@ -22,7 +22,7 @@
 | 사용자 콘텐츠 | **고객 지원** | 앱 기능 | 계정 화면의 "의견 보내기": 의견 본문과 로그인 계정의 이메일·uid를 feedback-proxy로 보내 Firestore에 저장한다(`feedback/feedbackProxyApi.ts`) |
 | 사용자 콘텐츠 | **기타 사용자 콘텐츠** | 앱 기능 | ① 할 일(제목·설명·일정·반복·알림 설정) → Firestore ② AI 플랜 목표 문장 → ai-proxy → Anthropic(`aiPlan/aiProxyApi.ts`) ③ 연동 시 할 일을 구글 캘린더로 동기화(`calendarIntegration/useSyncTodosToCalendar.ts`) ④ 마감 알림: reminder-proxy가 할 일의 일정·알림 설정을 읽어 예약하고, 보낸 알림 기록(할 일 제목·마감 시각)을 저장한다(`reminder-proxy/src/store.ts`의 `history`). 알림 본문은 FCM·APNs를 거친다 |
 | 식별자 | **사용자 ID** | 앱 기능 | Firebase uid. Sentry `user.id`, IAP `appAccountToken`(서버가 uid로 발급) |
-| 식별자 | **기기 ID** (보수적 신고, 사용자 결정) | 앱 기능 | 마감 알림용 FCM 등록 토큰을 uid별로 reminder-proxy에 저장한다(`reminders/push/pushClient.ts` → `/push-tokens`). Apple은 푸시 토큰의 분류를 따로 정하지 않았다. 기기(앱 설치) 단위 식별자라 "기기 ID"로 신고하는 쪽을 추천한다. 빼도 심사 차단 사유가 될 가능성은 낮다 |
+| 식별자 | **기기 ID** (보수적 신고, 확정 11-26) | 앱 기능 | 마감 알림용 FCM 등록 토큰을 uid별로 reminder-proxy에 저장한다(`reminders/push/pushClient.ts` → `/push-tokens`). Apple은 푸시 토큰의 분류를 따로 정하지 않았다. 기기(앱 설치) 단위 식별자라 "기기 ID"로 신고한다(11-26 사용자 확정: 넣어도 불이익이 없고, 빼면 라벨 불일치 지적 위험이 있다) |
 | 구입 항목 | **구입 내역** | 앱 기능 | 구독 상태·원거래 ID → billing-proxy가 검증 후 entitlements에 저장(`premium/iap/verifyApi.ts`) |
 | 진단 | **충돌 데이터** | 앱 기능 | Sentry(`shared/lib/sentry.ts`). 운영 빌드에서만 켜짐 |
 | 진단 | **기타 진단 데이터** | 앱 기능 | Sentry로 잡아 보내는 비충돌 오류(`reportError`)와 그 안의 OS·앱 버전 |
