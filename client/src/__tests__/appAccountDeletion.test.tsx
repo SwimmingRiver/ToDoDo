@@ -33,7 +33,7 @@ vi.mock("@/layouts/mobileHeader/mobileHeader", () => ({
   ),
 }));
 vi.mock("@/features/auth/context/useAuth", () => ({
-  useAuth: () => ({ user: { uid: "u1", displayName: "강수영", photoURL: "" }, logout: vi.fn() }),
+  useAuth: () => ({ user: { uid: "u1", displayName: "테스트 사용자", photoURL: "" }, logout: vi.fn() }),
 }));
 vi.mock("@/features/account", () => ({
   AccountDeletionDialog: () => <div role="dialog" aria-label="회원 탈퇴 확인" />,
@@ -49,7 +49,7 @@ describe("App의 회원 탈퇴 창 수명", () => {
     );
 
     await user.click(screen.getByText("아바타"));
-    await user.click(screen.getByText("강수영"));
+    await user.click(screen.getByText("테스트 사용자"));
     await user.click(screen.getByText("회원 탈퇴"));
 
     // 드로어가 스스로 닫힌다(언마운트까지 기다린다)

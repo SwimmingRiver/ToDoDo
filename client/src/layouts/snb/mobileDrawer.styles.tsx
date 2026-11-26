@@ -25,6 +25,8 @@ export const DrawerContainer = styled.div<{ $isClosing: boolean }>`
   z-index: 9999;
   display: flex;
   flex-direction: column;
+  /* 하단 사업자정보까지 들어가면 작은 화면에서 높이를 넘는다 */
+  overflow-y: auto;
   animation: ${({ $isClosing }) => ($isClosing ? slideOut : slideIn)} 0.25s ease forwards;
 `;
 
