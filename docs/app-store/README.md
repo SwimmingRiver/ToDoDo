@@ -8,6 +8,7 @@
 | [app-privacy.md](app-privacy.md) | App Privacy(개인정보 라벨) 답변 초안 + 개인정보처리방침과 어긋나는 곳 |
 | [demo-data.md](demo-data.md) | 스크린샷 데모 데이터 세트, 넣는 방법, 촬영 규격 |
 | [checklist.md](checklist.md) | URL·연령 등급·카테고리·심사 메모·수출 규정 등 나머지 메타데이터 |
+| [launch-day.md](launch-day.md) | 출시일(12-28) 체크리스트 — 자동 전환 확인·출시 버튼·첫 운영 결제·첫 주 모니터링 |
 
 확정 사항(재제안 금지): 월 4,900원 1종 · 캘린더 양방향 안 함 · iPhone 전용.
 
