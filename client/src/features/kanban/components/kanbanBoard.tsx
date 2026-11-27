@@ -7,6 +7,13 @@ import KanbanColumn, { type Status } from "./kanbanColumn";
 import { useKanbanDrag } from "../hooks/useKanbanDrag";
 import { isVisibleInKanban } from "../utils/kanbanFilters";
 import { collapseRecurringInstances } from "@/features/todo";
+import { useTodoFilterParams } from "@/features/todo/hooks/useTodoFilterParams";
+import { TodoSearch } from "@/features/todo/components/todoSearch";
+import { PriorityFilterChips } from "@/features/todo/components/priorityFilterChips";
+import {
+  matchesTodoFilter,
+  isTodoFilterActive,
+} from "@tododo/core/dist/todoFilter/index.js";
 import { Circle, Loader, CheckCircle, AlertCircle } from "lucide-react";
 import {
   KanbanBoardContainer,
@@ -16,6 +23,8 @@ import {
   MobileTabContainer,
   MobileTabButton,
   MobileColumnWrapper,
+  FilterBar,
+  KanbanPageWrapper,
 } from "./kanbanBoard.styles";
 
 type KanbanTab = "todo" | "doing" | "done";
@@ -28,6 +37,9 @@ const KanbanBoard = () => {
   const [activeTab, setActiveTab] = useState<KanbanTab>("todo");
   const isTablet = useMediaQuery("tablet");
   const toast = useToast();
+  // 칸반은 목록의 완료 탭(tab)을 쓰지 않는다 — 검색어·우선순위만 사용.
+  const { filter, setQuery, togglePriority } = useTodoFilterParams();
+  const isFiltering = isTodoFilterActive(filter);
 
   const notifyStatusChangeError = () =>
     toast.error("상태 변경 실패", "할 일 상태 변경 중 오류가 발생했습니다");
@@ -35,6 +47,7 @@ const KanbanBoard = () => {
   const { sensors, activeId, activeTodo, handleDragStart, handleDragEnd } =
     useKanbanDrag({
       todos,
+      isReorderLocked: isFiltering,
       onUpdateTodo: (todo) =>
         updateTodo.mutate(todo, { onError: notifyStatusChangeError }),
       onReorderTodos: (updates) =>
@@ -52,28 +65,39 @@ const KanbanBoard = () => {
     const today = new Date();
     return collapseRecurringInstances(
       todos?.filter(
-        (todo) => todo.status === "todo" && isVisibleInKanban(todo, today),
+        (todo) =>
+          todo.status === "todo" &&
+          isVisibleInKanban(todo, today) &&
+          matchesTodoFilter(todo, filter),
       ) ?? [],
     );
-  }, [todos]);
+  }, [todos, filter]);
 
   const doingList = useMemo(() => {
     const today = new Date();
     return collapseRecurringInstances(
       todos?.filter(
-        (todo) => todo.status === "doing" && isVisibleInKanban(todo, today),
+        (todo) =>
+          todo.status === "doing" &&
+          isVisibleInKanban(todo, today) &&
+          matchesTodoFilter(todo, filter),
       ) ?? [],
     );
-  }, [todos]);
+  }, [todos, filter]);
 
   const doneList = useMemo(() => {
     const today = new Date();
     return collapseRecurringInstances(
       todos?.filter(
-        (todo) => todo.status === "done" && isVisibleInKanban(todo, today),
+        (todo) =>
+          todo.status === "done" &&
+          isVisibleInKanban(todo, today) &&
+          matchesTodoFilter(todo, filter),
       ) ?? [],
     );
-  }, [todos]);
+  }, [todos, filter]);
+
+  const filteredCount = todoList.length + doingList.length + doneList.length;
 
   const handleNavigate = (id: string) => {
     if (!activeId) {
@@ -128,6 +152,22 @@ const KanbanBoard = () => {
   }
 
   return (
+    <KanbanPageWrapper>
+      <FilterBar>
+        <TodoSearch
+          initialValue={filter.query}
+          onSearch={setQuery}
+          onClear={() => {
+            if (filter.query) setQuery("");
+          }}
+          resultCount={filteredCount}
+          isSearching={isFiltering}
+        />
+        <PriorityFilterChips
+          selected={filter.priorities}
+          onToggle={togglePriority}
+        />
+      </FilterBar>
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
@@ -196,6 +236,7 @@ const KanbanBoard = () => {
         ) : null}
       </DragOverlay>
     </DndContext>
+    </KanbanPageWrapper>
   );
 };
 

@@ -411,4 +411,41 @@ describe("useKanbanDrag", () => {
       expect(result.current.sensors).toHaveLength(3);
     });
   });
+
+  describe("isReorderLocked", () => {
+    const todos = [
+      makeTodo({ id: "t1", status: "todo", order: 0 }),
+      makeTodo({ id: "t2", status: "todo", order: 1 }),
+      makeTodo({ id: "d1", status: "doing", order: 0 }),
+    ];
+
+    it("잠기면 같은 열 위로 드롭해도 재정렬하지 않는다", () => {
+      const onReorderTodos = vi.fn();
+      const onUpdateTodo = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos, isReorderLocked: true }),
+      );
+      act(() => result.current.handleDragEnd(makeDragEndEvent("t1", "t2")));
+      expect(onReorderTodos).not.toHaveBeenCalled();
+      expect(onUpdateTodo).not.toHaveBeenCalled();
+    });
+
+    it("잠겨도 다른 열 위로 드롭하면 상태가 바뀐다", () => {
+      const onUpdateTodo = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo, onReorderTodos: vi.fn(), isReorderLocked: true }),
+      );
+      act(() => result.current.handleDragEnd(makeDragEndEvent("t1", "d1")));
+      expect(onUpdateTodo).toHaveBeenCalledWith(expect.objectContaining({ id: "t1", status: "doing" }));
+    });
+
+    it("false면 기존 재정렬 동작 그대로", () => {
+      const onReorderTodos = vi.fn();
+      const { result } = renderHook(() =>
+        useKanbanDrag({ todos, onUpdateTodo: vi.fn(), onReorderTodos, isReorderLocked: false }),
+      );
+      act(() => result.current.handleDragEnd(makeDragEndEvent("t1", "t2")));
+      expect(onReorderTodos).toHaveBeenCalled();
+    });
+  });
 });

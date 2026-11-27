@@ -17,6 +17,8 @@ interface UseKanbanDragProps {
   todos: Todo[] | undefined;
   onUpdateTodo: (todo: Todo) => void;
   onReorderTodos: (updates: TodoReorderUpdate[]) => void;
+  /** true면 같은 열 재정렬을 하지 않는다(필터 중에는 보이는 카드만의 순서라 order가 어긋남). */
+  isReorderLocked?: boolean;
 }
 
 /** order 필드가 없는(undefined) 레거시 문서를 만나도 비교 함수가 NaN을 반환해 정렬
@@ -28,6 +30,7 @@ export const useKanbanDrag = ({
   todos,
   onUpdateTodo,
   onReorderTodos,
+  isReorderLocked = false,
 }: UseKanbanDragProps) => {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -86,6 +89,8 @@ export const useKanbanDrag = ({
       });
       return;
     }
+
+    if (isReorderLocked) return;
 
     // 같은 컬럼(status) 내 재정렬. todos(allTodos, collapse/가시성 필터 적용 전)에서
     // 같은 status를 가진 문서 전체를 order 기준으로 정렬해 기준 배열로 삼는다 —
