@@ -34,24 +34,13 @@ service cloud.firestore {
     }
 
     match /feedback/{feedbackId} {
-      // 상한 1000은 클라이언트의 FEEDBACK_CONTENT_MAX_LENGTH
-      // (features/feedback/api/feedbackApi.ts)와 같은 값이어야 한다.
-      function contentValid() {
-        let c = request.resource.data.content;
-        return c is string && c.size() > 0 && c.size() <= 1000;
-      }
-
       function isOperator() {
         return request.auth != null && request.auth.token.operator == true;
       }
 
-      // 옛 웹 탭 호환을 위해 이번 릴리스까지 유지 — 후속 PR에서 if false로 막는다(feedback-proxy가 저장 담당)
-      allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid
-                    && request.resource.data.email == request.auth.token.email
-                    && contentValid()
-                    && request.resource.data.keys().hasOnly(["userId", "email", "content", "createdAt"])
-                    && request.resource.data.createdAt is string;
+      // 의견 저장은 feedback-proxy(서비스 계정, 규칙 우회)만 한다. 클라이언트가 직접 쓰면
+      // Worker의 연타 제한·내용 검증·Discord 알림을 우회할 수 있어 막는다.
+      allow create: if false;
       // 운영자(커스텀 클레임 operator)만 읽고, status 필드만 바꿀 수 있다.
       allow read: if isOperator();
       allow update: if isOperator()

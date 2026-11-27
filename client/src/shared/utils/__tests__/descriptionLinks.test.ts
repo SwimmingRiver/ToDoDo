@@ -6,7 +6,6 @@ import {
   toDescriptionSegments,
   DESCRIPTION_MAX_LENGTH,
 } from "../descriptionLinks";
-import { FEEDBACK_CONTENT_MAX_LENGTH } from "@/features/feedback/api/constants";
 
 describe("extractLinks", () => {
   it("빈 값이면 빈 배열을 반환한다", () => {
@@ -98,7 +97,8 @@ describe("extractLinks", () => {
     const limits = [...rules.matchAll(/\.size\(\)\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
 
     expect(limits.length).toBeGreaterThan(0);
-    const knownLimits = [DESCRIPTION_MAX_LENGTH, FEEDBACK_CONTENT_MAX_LENGTH];
+    // 의견(feedback) 상한은 규칙이 아니라 feedback-proxy가 검증한다(클라이언트 create 차단).
+    const knownLimits = [DESCRIPTION_MAX_LENGTH];
     for (const limit of limits) {
       expect(knownLimits).toContain(limit);
     }
