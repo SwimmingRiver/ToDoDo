@@ -68,4 +68,38 @@ describe("useTodoFilterParams", () => {
     act(() => result.current.params.setTab("active"));
     expect(search(result).has("tab")).toBe(false);
   });
+
+  it("setQuery·setTab을 같은 값으로 부르면 location이 바뀌지 않는다", () => {
+    const { result } = setup("/list?q=a&tab=done");
+    const key = result.current.location.key;
+
+    // 같은 주소로 replace해도 react-router는 새 location을 만들어 구독자가 다시 렌더된다.
+    // 디바운스 effect와 맞물리면 무한 반복이 되므로(칸반 I1) 훅에서 막는다.
+    act(() => result.current.params.setQuery("a"));
+    act(() => result.current.params.setTab("done"));
+    act(() => result.current.params.setQuery("a"));
+
+    expect(result.current.location.key).toBe(key);
+  });
+
+  it("지울 필터가 없을 때 resetFilter는 내비게이션하지 않는다", () => {
+    const { result } = setup("/list?tab=done");
+    const key = result.current.location.key;
+
+    act(() => result.current.params.resetFilter());
+
+    expect(result.current.location.key).toBe(key);
+  });
+
+  it("resetFilter는 q와 p를 한 번에 지우고 tab과 다른 키는 보존한다", () => {
+    const { result } = setup("/list?q=a&p=high,low&tab=done&x=1");
+
+    act(() => result.current.params.resetFilter());
+
+    expect(search(result).has("q")).toBe(false);
+    expect(search(result).has("p")).toBe(false);
+    expect(search(result).get("tab")).toBe("done");
+    expect(search(result).get("x")).toBe("1");
+    expect(result.current.navType).toBe("REPLACE");
+  });
 });

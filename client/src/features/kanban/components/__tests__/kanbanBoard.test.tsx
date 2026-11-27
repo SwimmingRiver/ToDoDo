@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ToastProvider } from "@/shared/ui/toast/toastContext";
 import KanbanBoard from "../kanbanBoard";
 import type { Todo, TodoReorderUpdate } from "@/features/todo";
@@ -217,5 +217,49 @@ describe("KanbanBoard 검색·우선순위 필터", () => {
     expect(screen.getByRole("button", { name: /To Do \(1\)/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Doing \(1\)/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Done \(1\)/ })).toBeInTheDocument();
+  });
+});
+
+describe("KanbanBoard 검색어가 URL에 있을 때 반복 내비게이션 없음", () => {
+  // location.key는 내비게이션마다(같은 주소로의 replace 포함) 새로 바뀐다.
+  const locationKeys = new Set<string>();
+  const LocationProbe = () => {
+    locationKeys.add(useLocation().key);
+    return null;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedDragProps = null;
+    columnCalls.length = 0;
+    locationKeys.clear();
+    isTabletMock.mockReturnValue(false);
+    todosData = [makeTodo({ title: "보고서 작성" })];
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 14, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("가만히 두면 디바운스가 같은 검색어로 주소를 계속 다시 쓰지 않는다", async () => {
+    render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/kanban?q=" + encodeURIComponent("보고서")]}>
+          <LocationProbe />
+          <KanbanBoard />
+        </MemoryRouter>
+      </ToastProvider>,
+    );
+
+    for (let i = 0; i < 10; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(310);
+      });
+    }
+
+    // 첫 위치 + (있다면) 디바운스 1회 정도까지만 허용한다. 반복이면 10 이상이 된다.
+    expect(locationKeys.size).toBeLessThanOrEqual(2);
   });
 });

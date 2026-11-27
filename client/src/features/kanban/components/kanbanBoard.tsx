@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, DragOverlay, closestCorners } from "@dnd-kit/core";
 import { useGetTodos, useUpdateTodo, useReorderTodos, type Todo } from "@/features/todo";
@@ -40,6 +40,17 @@ const KanbanBoard = () => {
   // 칸반은 목록의 완료 탭(tab)을 쓰지 않는다 — 검색어·우선순위만 사용.
   const { filter, setQuery, togglePriority } = useTodoFilterParams();
   const isFiltering = isTodoFilterActive(filter);
+
+  // TodoSearch의 디바운스 effect는 onClear에 의존하므로 참조를 고정해야 한다. 렌더마다
+  // 새 함수를 주면 300ms마다 같은 검색어로 setQuery → replace 내비게이션 → 리렌더가 끝없이
+  // 반복된다. 최신 검색어는 ref로 읽는다(목록의 handleClearQuery와 같은 방식).
+  const queryRef = useRef(filter.query);
+  useEffect(() => {
+    queryRef.current = filter.query;
+  }, [filter.query]);
+  const handleClearQuery = useCallback(() => {
+    if (queryRef.current) setQuery("");
+  }, [setQuery]);
 
   const notifyStatusChangeError = () =>
     toast.error("상태 변경 실패", "할 일 상태 변경 중 오류가 발생했습니다");
@@ -157,9 +168,7 @@ const KanbanBoard = () => {
         <TodoSearch
           initialValue={filter.query}
           onSearch={setQuery}
-          onClear={() => {
-            if (filter.query) setQuery("");
-          }}
+          onClear={handleClearQuery}
           resultCount={filteredCount}
           isSearching={isFiltering}
         />
