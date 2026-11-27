@@ -3,6 +3,7 @@ import { media } from "../../../../styles/breakpoints";
 import { colors } from "@/styles/colors";
 import { statusColors, type Status } from "@/styles/statusColors";
 import { urgencyColors } from "@/styles/urgencyColors";
+import { nativeDateInputReset } from "@/styles/nativeDateInput";
 import { ChildTodoCardList } from "../projectCard.styles";
 
 const slideIn = keyframes`
@@ -39,7 +40,10 @@ const Panel = styled.div`
   top: 0;
   right: 0;
   width: 50%;
+  /* iOS Safari의 100vh는 주소창이 접힌 높이라 하단 버튼 줄(PanelFooter)이 툴바 뒤로
+     40px 내려간다(시뮬레이터 실측). App 셸 Container와 같은 이유로 dvh를 쓴다. */
   height: 100vh;
+  height: 100dvh;
   background-color: ${colors.surface.overlay};
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
   z-index: 101;
@@ -157,6 +161,10 @@ const Input = styled.input`
   &:focus {
     border-color: ${colors.brand.strong};
     box-shadow: 0 0 0 3px color-mix(in srgb, ${colors.brand.strong} 12%, transparent);
+  }
+
+  &[type="datetime-local"] {
+    ${nativeDateInputReset}
   }
 `;
 
