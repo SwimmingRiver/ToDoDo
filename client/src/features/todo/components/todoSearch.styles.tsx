@@ -1,11 +1,6 @@
-import { styled, keyframes } from "styled-components";
+import { styled } from "styled-components";
 import { media } from "@/styles/breakpoints";
 import { colors } from "@/styles/colors";
-
-const spin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
 
 const SearchContainer = styled.div`
   position: relative;
@@ -75,17 +70,6 @@ const ClearButton = styled.button`
   }
 `;
 
-const LoadingSpinner = styled.div`
-  position: absolute;
-  right: 12px;
-  width: 18px;
-  height: 18px;
-  border: 2px solid ${colors.border.tertiary};
-  border-top-color: ${colors.brand.fill};
-  border-radius: 50%;
-  animation: ${spin} 0.8s linear infinite;
-`;
-
 const SearchResultInfo = styled.div`
   display: flex;
   align-items: center;
@@ -137,7 +121,6 @@ export {
   SearchIcon,
   SearchInput,
   ClearButton,
-  LoadingSpinner,
   SearchResultInfo,
   ResultCount,
   CancelSearchButton,

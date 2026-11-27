@@ -6,7 +6,6 @@ import {
   SearchIcon,
   SearchInput,
   ClearButton,
-  LoadingSpinner,
   SearchResultInfo,
   ResultCount,
   CancelSearchButton,
@@ -15,7 +14,7 @@ import {
 interface TodoSearchProps {
   onSearch: (query: string) => void;
   onClear: () => void;
-  isLoading?: boolean;
+  initialValue?: string;
   resultCount?: number;
   isSearching: boolean;
 }
@@ -23,11 +22,11 @@ interface TodoSearchProps {
 export const TodoSearch = ({
   onSearch,
   onClear,
-  isLoading = false,
+  initialValue = "",
   resultCount = 0,
   isSearching,
 }: TodoSearchProps) => {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(initialValue);
 
   // 디바운스 처리
   useEffect(() => {
@@ -61,8 +60,7 @@ export const TodoSearch = ({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
         />
-        {isLoading && <LoadingSpinner />}
-        {!isLoading && inputValue && (
+        {inputValue && (
           <ClearButton onClick={handleClear}>
             <X size={14} />
           </ClearButton>

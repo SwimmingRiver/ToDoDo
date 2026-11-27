@@ -57,8 +57,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const deleteRecurringSeries = useDeleteRecurringSeries();
   const toast = useToast();
 
-  const { data: searchResults, isLoading: isSearchLoading } =
-    useSearchTodo(searchQuery);
+  const { data: searchResults } = useSearchTodo(searchQuery);
 
   const isSearching = searchQuery.length > 0;
 
@@ -230,7 +229,6 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       <TodoSearch
         onSearch={handleSearch}
         onClear={handleClearSearch}
-        isLoading={isSearchLoading}
         resultCount={searchResults?.length ?? 0}
         isSearching={isSearching}
       />

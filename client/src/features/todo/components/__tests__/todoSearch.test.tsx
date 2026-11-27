@@ -94,24 +94,13 @@ describe("TodoSearch 디바운스 검색", () => {
   });
 });
 
-describe("TodoSearch 로딩/지우기", () => {
-  it("isLoading이면 지우기 버튼을 숨긴다", () => {
-    const { container, rerender, onSearch, onClear } = renderSearch({
-      isLoading: false,
-    });
+describe("TodoSearch 초기값/지우기", () => {
+  it("initialValue가 입력창 초기값이 된다", () => {
+    renderSearch({ initialValue: "운동" });
 
-    typeInto(screen.getByPlaceholderText("할 일 검색..."), "검색어");
-
-    rerender(
-      <TodoSearch
-        onSearch={onSearch}
-        onClear={onClear}
-        isSearching={false}
-        isLoading={true}
-      />,
-    );
-
-    expect(container.querySelector(".lucide-x")).not.toBeInTheDocument();
+    expect(
+      (screen.getByPlaceholderText("할 일 검색...") as HTMLInputElement).value,
+    ).toBe("운동");
   });
 
   it("입력값이 있으면 지우기 버튼이 나타나고, 클릭하면 입력값이 비워지며 onClear가 호출된다", async () => {

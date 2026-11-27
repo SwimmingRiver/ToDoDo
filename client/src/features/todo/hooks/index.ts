@@ -13,3 +13,5 @@ export { useDeleteRecurringSeries } from "./useDeleteRecurringSeries";
 export { useReorderTodos } from "./useReorderTodos";
 export { useRunStartupMaintenance } from "./useRunStartupMaintenance";
 export { useCreatePlanTodos } from "./useCreatePlanTodos";
+export { useTodoFilterParams } from "./useTodoFilterParams";
+export type { ListTab } from "./useTodoFilterParams";
