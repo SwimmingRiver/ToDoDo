@@ -1,6 +1,8 @@
 # 메타데이터·제출 체크리스트
 
 > **2026-11-26 심사 제출 완료.** 빌드 1.0.0 (4) + 구독 2개(그룹 "ToDoDo 프리미엄")를 한 묶음으로 제출했고, 출시 방식은 **수동**이다(12-28 00:00 KST 이후 직접 "출시"). 아래 체크 표시는 제출 시점 기준이다. 제출 화면에서 알게 된 점은 맨 아래 §9에 있다.
+>
+> **2026-11-27 재제출.** 1차 제출이 Guideline 2.1 "Information Needed"(정보 요청)로 돌아왔다. 거절이 아니라 자료를 더 달라는 요청이었다. 실기기 화면 녹화를 첨부하고 메모를 2차 제출본으로 바꿔 같은 빌드로 재제출했다. 현재 유효한 메모와 대응 기록은 §10에 있다.
 
 ## 1. 출시 시점 — 심사 먼저, 공개는 12-28 이후 (확정 11-23)
 
@@ -52,7 +54,9 @@
 | 마케팅 URL(선택) | `https://tododo-app.com/` | |
 | 이용약관(EULA) | 표준 Apple EULA 대신 `https://tododo-app.com/terms` 사용 → 앱 정보 > "사용권 계약"에 맞춤 EULA로 입력하거나 설명 끝 링크로 대신한다([listing-ko.md](listing-ko.md)) | 앱 구독 화면에도 약관·방침 버튼이 있다(`PremiumSection.tsx`) |
 
-## 6. 앱 심사 정보 — 메모(영어, 심사관용, 11-26 제출본)
+## 6. 앱 심사 정보 — 메모(영어, 심사관용, 11-26 1차 제출본)
+
+> 11-27 2.1 정보 요청을 받고 **§10의 2차 제출본으로 교체**했다. 아래는 1차 기록으로 남겨 둔다. 로그인 정보 설명은 지금도 유효하다.
 
 **로그인 정보**: 데모 계정은 **Google 데모 계정 + 운영자 부여 프리미엄**을 추천한다. 이유는 다음과 같다.
 - 심사관은 자기 Apple ID로 Apple 로그인을 할 수 있다. 하지만 그렇게 하면 프리미엄 기능을 보려면 샌드박스에서 구독해야 한다.
@@ -114,3 +118,89 @@ Other
 - 앱 개인정보 보호의 "사용자 개인정보 선택 URL"은 선택 항목이라 비웠다.
 - 콘텐츠 권한(제3자 콘텐츠)은 **아니요** — 구글 캘린더 일정은 사용자 본인 데이터, AI 플랜 결과는 그 사용자 전용 생성물이다.
 - 앱 심사 정보: 로그인 필요, 데모 계정 `tododo.demo@gmail.com`(비밀번호는 저장소에 적지 않는다). 메모에는 "Please do not delete the demo Google account."를 덧붙였다.
+
+## 10. 2차 제출 — Guideline 2.1 정보 요청 대응 (11-27)
+
+### Apple이 요청한 것
+
+Apple은 "App Review Information의 Notes 칸에 아래를 모두 넣고 재제출하라"고 요청했다. **설명(공개)이 아니라 앱 심사 정보 → 메모(심사관만 봄)**에 넣는다.
+
+1. 실기기·최신 OS 화면 녹화. 앱 실행부터 시작하고, 가입·로그인·탈퇴, 사용자 생성 콘텐츠의 신고·차단(있으면), 유료 기능 접근을 포함한다.
+2. 앱의 목적과 대상 사용자
+3. 주요 기능 접근 방법과 로그인 정보
+4. 외부 서비스 목록(인증·결제·AI 등)
+5. 지역별 차이
+6. 규제 산업이나 제3자 보호 자료 관련 서류
+
+### 화면 녹화
+
+- **첨부 위치**: 앱 심사 정보 → 메모 아래 **첨부 파일**. 칸은 선택사항이지만 이번 요청에서는 필수다.
+- **찍은 순서**: 앱 아이콘 탭 → 스플래시 → **새 Apple 계정**으로 가입(이메일 가리기) → 할 일 추가·완료 → 잠금 안내 → 프리미엄 구독 → 프리미엄 기능 → 의견 보내기 → 구매 복원 → 탈퇴 시 Apple 구독 경고 → 탈퇴 → 로그인 화면.
+- **탈퇴는 새로 만든 계정으로만** 한다. 데모 계정(`tododo.demo@gmail.com`)을 지우면 심사관이 로그인하지 못한다.
+- **신고·차단은 해당 없음**: 할 일은 본인만 보고 사용자끼리 공유하는 기능이 없다. 의견 보내기는 개발자에게만 간다.
+- **샌드박스 구독 함정**: 프리미엄은 ToDoDo 계정(uid) 기준이라, 새 계정에서는 Apple ID에 구독이 살아 있어도 잠금 화면이 보인다. 하지만 같은 Apple ID에 구독이 살아 있으면 새 결제창이 뜨지 않는다. 이전 실측 구독은 해지한 뒤 만료되고 나서 찍는다(TestFlight는 갱신 주기가 짧다). 탈퇴한 계정의 `storeLinks`는 서버가 지우므로(`billing-proxy/src/accountDataStore.ts`) 새 계정이 "다른 계정에서 사용 중"에 걸리지는 않는다.
+- **Apple 구독은 탈퇴해도 해지되지 않는다**: 개발자 서버가 해지할 방법이 없다. 앱은 탈퇴 때 경고와 "구독 관리" 버튼을 보여준다(`mobile/src/screens/AccountScreen.tsx`).
+- **파일 형식 함정**: iPhone 화면 녹화는 확장자가 `.MP4`여도 코덱이 **HEVC**다. 업로드가 안 돼서 macOS 내장 `avconvert`로 H.264로 바꿨다(원본 2분 37초, 41MB → 49MB). Apple 문서에는 심사 첨부의 허용 형식이 따로 없다. 앱 미리보기 규격이 H.264이고 포럼에 대문자 확장자 사례가 있어 이렇게 판단했다.
+  ```bash
+  avconvert --source "<원본>.MP4" --preset PresetHighestQuality --output review-h264.mp4
+  ```
+  그래도 안 올라가면 YouTube 일부 공개 링크를 메모 1번에 넣는다.
+
+### 메모 (2차 제출본)
+
+```
+1. Screen recording
+- Attached in App Review Information (recorded on a physical iPhone, latest iOS). It shows: app launch,
+  account creation with Sign in with Apple, core to-do features, subscribing to Premium (sandbox) and
+  using Premium features, Restore Purchases, and account deletion.
+
+2. Purpose and target audience
+- ToDoDo is a personal to-do planner for students and working adults in Korea who struggle to turn
+  a big goal into concrete daily tasks. Users manage to-dos with due dates, priorities, subtasks and
+  repeats, see them by day/list/calendar, and get deadline reminders. Premium adds an AI planner that
+  breaks a goal into step-by-step to-dos with dates, Google Calendar overlay, and statistics.
+
+3. How to access the main features
+- Sign in with the demo Google account in the Sign-In Information fields ("Google로 로그인").
+  It has Premium enabled and sample to-dos. Please do not delete this account.
+  You can also create a new account instantly with "Sign in with Apple".
+- Tabs: 오늘 (Today) / 목록 (List) / 캘린더 (Calendar) / 통계 (Insights). The account screen (계정)
+  opens from the person icon in the header.
+- Premium: Account screen > Premium. Two auto-renewable products in one group: premium_monthly_trial
+  (7-day free trial for new subscribers) and premium_monthly (for accounts that already used a trial),
+  both ₩4,900/month. "Restore Purchases" (구매 복원) is on the same screen. Free users see a locked
+  notice with a subscribe button.
+- AI Plan: 목록 tab > "AI로 계획" > enter a goal (e.g. "다음 달까지 토익 800점") > preview > save.
+- Account deletion: Account screen > "회원 탈퇴". For Sign in with Apple users, the Apple token is
+  revoked during deletion.
+- Feedback: "의견 보내기" sends a message privately to the developer. There is no content shared
+  between users (no public posts, comments, or profiles), so reporting/blocking does not apply.
+
+4. External services
+- Firebase (Google): Authentication, Cloud Firestore (user data), Cloud Messaging (push via APNs)
+- Sign in with Apple, Google Sign-In (authentication)
+- Apple In-App Purchase / App Store Server API (subscriptions)
+- Anthropic Claude API (AI Plan; only the goal text and dates are sent, via our server)
+- Google Calendar API (read-only overlay, only if the user connects it)
+- Cloudflare Workers (our server endpoints for AI, billing, calendar, reminders, feedback)
+- Sentry (crash/error reporting; IP address storage disabled)
+- No ads, no tracking.
+
+5. Regional differences
+- The app is distributed in South Korea only and the UI is Korean. Features and content are the
+  same for all users; there are no region-specific features.
+
+6. Regulated industry / third-party material
+- Not applicable. The app is not in a regulated industry and contains no protected third-party
+  content. Google Calendar events shown are the user's own data.
+```
+
+외부 서비스 목록은 `mobile/package.json` 의존성과 Worker 5개(ai·billing·calendar·feedback·reminder-proxy)를 대조해 적었다. 의견 알림용 Discord(내용 없는 알림)는 핵심 기능이 아니라서 넣지 않았다.
+
+### 재제출 절차
+
+1. 메모·첨부를 저장한다(저장 버튼이 회색이 될 때까지).
+2. **앱 심사** 페이지에서 해당 제출 건을 열고 재제출 버튼을 누른다. 저장만 해서는 재심사에 들어가지 않는다.
+3. 제출 묶음에 구독 상품 2개가 남아 있는지 확인한다. 빠졌으면 각 상품 페이지에서 "심사에 추가"를 다시 누른다.
+4. 출시 방식이 **수동**으로 남아 있는지 확인한다.
+5. (선택) 심사 메시지 스레드에 "메모와 녹화를 추가했다"고 짧게 답장한다.
