@@ -14,6 +14,11 @@ import {
 interface TodoSearchProps {
   onSearch: (query: string) => void;
   onClear: () => void;
+  /**
+   * 결과 줄의 버튼으로 필터 전체(검색어 + 우선순위 칩)를 지울 때 부른다. 칩만 켜져 있으면
+   * 입력을 비우는 것만으로는 아무 일도 없으므로, 주면 이 버튼이 "필터 해제"로도 동작한다.
+   */
+  onReset?: () => void;
   initialValue?: string;
   resultCount?: number;
   isSearching: boolean;
@@ -22,6 +27,7 @@ interface TodoSearchProps {
 export const TodoSearch = ({
   onSearch,
   onClear,
+  onReset,
   initialValue = "",
   resultCount = 0,
   isSearching,
@@ -48,6 +54,14 @@ export const TodoSearch = ({
     setInputValue("");
   }, []);
 
+  const handleCancel = useCallback(() => {
+    setInputValue("");
+    onReset?.();
+  }, [onReset]);
+
+  // 입력이 비어 있는데 결과 줄이 떠 있으면 칩만 켜진 상태다.
+  const cancelLabel = inputValue || !onReset ? "검색 취소" : "필터 해제";
+
   return (
     <SearchContainer>
       <SearchInputWrapper>
@@ -72,8 +86,8 @@ export const TodoSearch = ({
           <ResultCount>
             검색 결과 <strong>{resultCount}</strong>건
           </ResultCount>
-          <CancelSearchButton onClick={handleClear}>
-            검색 취소
+          <CancelSearchButton type="button" onClick={handleCancel}>
+            {cancelLabel}
           </CancelSearchButton>
         </SearchResultInfo>
       )}

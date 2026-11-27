@@ -124,7 +124,7 @@ describe("TodoSearch 초기값/지우기", () => {
 
 describe("TodoSearch 검색 결과 정보", () => {
   it("isSearching이면 결과 개수와 검색 취소 버튼을 보여준다", () => {
-    renderSearch({ isSearching: true, resultCount: 5 });
+    renderSearch({ isSearching: true, resultCount: 5, initialValue: "회의" });
 
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("검색 취소")).toBeInTheDocument();
@@ -145,5 +145,28 @@ describe("TodoSearch 검색 결과 정보", () => {
 
     expect(input.value).toBe("");
     expect(onClear).toHaveBeenCalled();
+  });
+});
+
+describe("TodoSearch 필터 전체 해제(onReset)", () => {
+  it("입력이 비어 있고 칩만 켜져 있으면 버튼 이름이 '필터 해제'이고 누르면 onReset을 부른다", () => {
+    const onReset = vi.fn();
+    renderSearch({ isSearching: true, onReset });
+
+    expect(screen.queryByRole("button", { name: "검색 취소" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "필터 해제" }));
+
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("입력이 있으면 '검색 취소'이고, 누르면 입력을 비우고 onReset도 부른다", () => {
+    const onReset = vi.fn();
+    renderSearch({ isSearching: true, onReset, initialValue: "회의" });
+    const input = screen.getByPlaceholderText("할 일 검색...") as HTMLInputElement;
+
+    fireEvent.click(screen.getByRole("button", { name: "검색 취소" }));
+
+    expect(input.value).toBe("");
+    expect(onReset).toHaveBeenCalledTimes(1);
   });
 });

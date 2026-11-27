@@ -38,7 +38,7 @@ const KanbanBoard = () => {
   const isTablet = useMediaQuery("tablet");
   const toast = useToast();
   // 칸반은 목록의 완료 탭(tab)을 쓰지 않는다 — 검색어·우선순위만 사용.
-  const { filter, setQuery, togglePriority } = useTodoFilterParams();
+  const { filter, setQuery, togglePriority, resetFilter } = useTodoFilterParams();
   const isFiltering = isTodoFilterActive(filter);
 
   // TodoSearch의 디바운스 effect는 onClear에 의존하므로 참조를 고정해야 한다. 렌더마다
@@ -169,6 +169,7 @@ const KanbanBoard = () => {
           initialValue={filter.query}
           onSearch={setQuery}
           onClear={handleClearQuery}
+          onReset={resetFilter}
           resultCount={filteredCount}
           isSearching={isFiltering}
         />

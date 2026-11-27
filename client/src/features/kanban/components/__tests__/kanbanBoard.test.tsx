@@ -211,6 +211,19 @@ describe("KanbanBoard 검색·우선순위 필터", () => {
     expect(titlesOf("done")).toEqual([]);
   });
 
+  it("칩만 켜져 있으면 '필터 해제'로 칩을 끄고 모든 카드를 되돌린다", async () => {
+    renderKanbanBoard("/kanban?p=high");
+    expect(titlesOf("todo")).toEqual(["보고서 작성"]);
+
+    await act(async () => {
+      screen.getByRole("button", { name: "필터 해제" }).click();
+    });
+
+    expect(titlesOf("todo")).toEqual(["보고서 작성", "장보기"]);
+    expect(titlesOf("done")).toEqual(["월간 보고서"]);
+    expect(capturedDragProps!.isReorderLocked).toBe(false);
+  });
+
   it("모바일 탭 카운트는 걸러진 수를 보여준다", () => {
     isTabletMock.mockReturnValue(true);
     renderKanbanBoard("/kanban?q=" + encodeURIComponent("보고서"));

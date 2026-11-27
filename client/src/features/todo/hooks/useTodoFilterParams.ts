@@ -19,10 +19,17 @@ const parsePriorities = (raw: string | null): TodoPriority[] => {
 export const useTodoFilterParams = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // 세터 참조를 고정한 채로 지금 주소를 읽기 위한 ref(세터는 TodoSearch의 디바운스
-  // effect 의존성으로 들어가므로 URL이 바뀔 때마다 새로 만들면 안 된다).
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
+  // 가장 최근에 "의도한" 주소. react-router의 setSearchParams(prev => …)는 prev로 진짜
+  // 대기 중인 값이 아니라 마지막 렌더의 searchParams를 주므로, 같은 틱에 두 번 부르면
+  // 뒤 호출이 앞 호출을 덮어쓴다(예: resetFilter 직후 onClear의 setQuery("")가 p를 되살림).
+  // 그래서 세터는 이 ref를 기준으로 다음 주소를 계산하고, URL이 실제로 바뀌면(뒤로 가기 등
+  // 바깥 이동 포함) 렌더 때 다시 맞춘다. 세터 참조도 이 덕분에 URL이 바뀌어도 고정된다.
+  const latestRef = useRef(searchParams);
+  const seenRef = useRef(searchParams);
+  if (seenRef.current !== searchParams) {
+    seenRef.current = searchParams;
+    latestRef.current = searchParams;
+  }
 
   /**
    * 주소를 바꾼다. 결과가 지금 주소와 같으면 아무것도 하지 않는다: react-router는 같은
@@ -31,17 +38,12 @@ export const useTodoFilterParams = () => {
    */
   const updateParams = useCallback(
     (mutate: (next: URLSearchParams) => void) => {
-      const current = new URLSearchParams(searchParamsRef.current);
-      mutate(current);
-      if (current.toString() === searchParamsRef.current.toString()) return;
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          mutate(next);
-          return next;
-        },
-        { replace: true },
-      );
+      const base = latestRef.current;
+      const next = new URLSearchParams(base);
+      mutate(next);
+      if (next.toString() === base.toString()) return;
+      latestRef.current = next;
+      setSearchParams(next, { replace: true });
     },
     [setSearchParams],
   );

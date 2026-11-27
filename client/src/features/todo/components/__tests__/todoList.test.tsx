@@ -332,6 +332,90 @@ describe('TodoList', () => {
       expect(lastRenderedIds(3)).toEqual(['todo-a', 'todo-b', 'todo-c'])
     })
   })
+  describe('칩만 켠 상태의 필터 해제', () => {
+    const chipTodos = () => [
+      makeTodo({ id: 'todo-a', title: '장보기', priority: 'high', order: 0 }),
+      makeTodo({ id: 'todo-b', title: '이사 준비', priority: 'medium', order: 1 }),
+    ]
+    const wait = (ms: number) =>
+      act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, ms))
+      })
+
+    it('칩만 켜져 있으면 검색칸 버튼이 "필터 해제"이고, 누르면 칩이 꺼지고 목록이 돌아온다', async () => {
+      projectCardCalls.length = 0
+      const user = setupUser()
+      renderTodoList(chipTodos())
+
+      await user.click(screen.getByRole('button', { name: '높음' }))
+      expect(document.body.textContent).toContain('검색 결과 1건')
+      expect(screen.queryByRole('button', { name: '검색 취소' })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: '필터 해제' }))
+      await wait(400)
+
+      expect(document.body.textContent).not.toContain('검색 결과')
+      expect(screen.getByRole('button', { name: '높음' })).toHaveAttribute('aria-pressed', 'false')
+      expect(lastRenderedIds(2)).toEqual(['todo-a', 'todo-b'])
+    })
+
+    it('검색어와 칩이 함께 있으면 "검색 취소"가 둘 다 지운다', async () => {
+      projectCardCalls.length = 0
+      const user = setupUser()
+      renderTodoList(chipTodos())
+
+      await user.type(screen.getByPlaceholderText('할 일 검색...'), '장보기')
+      await user.click(screen.getByRole('button', { name: '높음' }))
+      await waitFor(() => expect(document.body.textContent).toContain('검색 결과 1건'))
+
+      await user.click(screen.getByRole('button', { name: '검색 취소' }))
+      await wait(400)
+
+      expect(screen.getByPlaceholderText('할 일 검색...')).toHaveValue('')
+      expect(document.body.textContent).not.toContain('검색 결과')
+      expect(screen.getByRole('button', { name: '높음' })).toHaveAttribute('aria-pressed', 'false')
+      expect(lastRenderedIds(2)).toEqual(['todo-a', 'todo-b'])
+    })
+
+    it('칩만으로 결과가 없으면 빈 상태에도 "필터 해제"가 있고 누르면 목록이 돌아온다', async () => {
+      projectCardCalls.length = 0
+      const user = setupUser()
+      renderTodoList(chipTodos())
+
+      await user.click(screen.getByRole('button', { name: '낮음' }))
+      const emptyTitle = await screen.findByText('검색 결과가 없습니다')
+      const emptyState = emptyTitle.parentElement as HTMLElement
+      await user.click(within(emptyState).getByRole('button', { name: '필터 해제' }))
+      await wait(400)
+
+      expect(screen.queryByText('검색 결과가 없습니다')).not.toBeInTheDocument()
+      expect(document.body.textContent).not.toContain('검색 결과')
+      expect(lastRenderedIds(2)).toEqual(['todo-a', 'todo-b'])
+    })
+
+    it('완료 탭에서도 칩만으로 결과가 없으면 빈 상태의 "필터 해제"로 되돌린다', async () => {
+      const doneAt = new Date(2026, 10, 20, 12).toISOString()
+      const user = setupUser()
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <ToastProvider>
+            <MemoryRouter initialEntries={['/?tab=done&p=low']}>
+              <TodoList
+                todos={[makeTodo({ id: 'd1', title: '보고서', status: 'done', priority: 'medium', doneAt, updatedAt: doneAt })]}
+              />
+            </MemoryRouter>
+          </ToastProvider>
+        </QueryClientProvider>,
+      )
+
+      const emptyTitle = await screen.findByText('검색 결과가 없습니다')
+      const emptyState = emptyTitle.parentElement as HTMLElement
+      await user.click(within(emptyState).getByRole('button', { name: '필터 해제' }))
+
+      expect(await screen.findByText('보고서')).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: '완료' })).toHaveAttribute('aria-selected', 'true')
+    })
+  })
   describe('진행 중 | 완료 탭', () => {
     const renderWithClient = (todos: Todo[], initialEntry = '/') => {
       const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })

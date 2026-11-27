@@ -51,7 +51,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [isAddChildSubmitting, setIsAddChildSubmitting] = useState(false);
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
-  const { filter, tab, setQuery, togglePriority, setTab } = useTodoFilterParams();
+  const { filter, tab, setQuery, togglePriority, setTab, resetFilter } =
+    useTodoFilterParams();
   // 완료 탭의 카드 수(검색 결과 수 표시용). CompletedList가 계산해 알려 준다.
   const [completedCount, setCompletedCount] = useState(0);
   // 검색 칸은 내부 입력값을 들고 있으므로, 바깥(빈 상태의 "검색 취소")에서 지울 때는
@@ -116,10 +117,12 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
     if (expandContextRef.current.filter.query) setQuery("");
   }, [setQuery]);
 
+  // 검색칸 결과 줄의 "검색 취소/필터 해제"와 빈 상태의 버튼이 함께 쓴다. 검색어만이
+  // 아니라 칩까지 한 번에 지운다 — 칩만 켜진 상태에서 검색어만 지우면 아무 일도 없다.
   const handleCancelSearch = useCallback(() => {
-    setQuery("");
+    resetFilter();
     setSearchInputKey((k) => k + 1);
-  }, [setQuery]);
+  }, [resetFilter]);
 
   // 펼침 = 사용자가 직접 펼침 || (검색으로 자동 펼침 && 사용자가 접지 않음).
   // 사용자가 펼친 상태(expandedProjectIds)는 검색과 무관하게 유지되므로, 검색을
@@ -257,6 +260,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         initialValue={searchInputKey === 0 ? filter.query : ""}
         onSearch={setQuery}
         onClear={handleClearQuery}
+        onReset={handleCancelSearch}
         resultCount={tab === "done" ? completedCount : projectCards.length}
         isSearching={isFiltering}
       />

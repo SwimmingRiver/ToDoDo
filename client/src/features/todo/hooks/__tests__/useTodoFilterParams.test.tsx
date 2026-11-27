@@ -102,4 +102,28 @@ describe("useTodoFilterParams", () => {
     expect(search(result).get("x")).toBe("1");
     expect(result.current.navType).toBe("REPLACE");
   });
+
+  it("같은 틱에 연달아 불러도 앞선 변경을 덮어쓰지 않는다(resetFilter 직후 setQuery(\"\")가 p를 되살리지 않음)", () => {
+    const { result } = setup("/list?q=a&p=high&tab=done");
+
+    act(() => {
+      result.current.params.resetFilter();
+      result.current.params.setQuery("");
+    });
+
+    expect(search(result).has("q")).toBe(false);
+    expect(search(result).has("p")).toBe(false);
+    expect(search(result).get("tab")).toBe("done");
+  });
+
+  it("같은 틱에 칩 두 개를 연달아 켜도 둘 다 남는다", () => {
+    const { result } = setup("/list");
+
+    act(() => {
+      result.current.params.togglePriority("low");
+      result.current.params.togglePriority("high");
+    });
+
+    expect(search(result).get("p")).toBe("high,low");
+  });
 });
