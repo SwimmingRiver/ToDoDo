@@ -186,6 +186,12 @@ describe("법적 문서 본문", () => {
     expect(periodOf("알림 발송 기록")).toContain("다음 알림 처리");
   });
 
+  it("처리 위탁 표의 Cloudflare 행은 의견을 받아 전달하는 feedback-proxy Worker를 다룬다", () => {
+    const transfer = LEGAL_DOCUMENTS.privacy.sections.find((s) => s.heading.includes("처리 위탁"));
+    const row = transfer?.table?.rows.find(([name]) => name.includes("Cloudflare"));
+    expect(row?.[1]).toContain("의견");
+  });
+
   it("의견 항목은 실제로 저장하는 회원 식별자와 작성 시각까지 적는다(feedbackApi)", () => {
     const purpose = LEGAL_DOCUMENTS.privacy.sections.find((s) => s.heading.includes("목적"));
     const row = purpose?.table?.rows.find(([item]) => item.includes("의견"));
