@@ -105,13 +105,6 @@ export const getTodoDetail = async (id: string) => {
   return mapDocToTodo(snapshot.id, data);
 };
 
-export const getSearchTodoList = async (queryStr: string) => {
-  const todos = await getTodos();
-  return todos.filter((todo) =>
-    todo.title.toLowerCase().includes(queryStr.toLowerCase()),
-  );
-};
-
 export const createTodo = async (todo: Todo) => {
   assertNoRecurrenceParentConflict(todo);
   assertValidTodoDates(todo);

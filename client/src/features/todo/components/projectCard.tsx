@@ -37,6 +37,8 @@ interface ProjectCardProps {
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onAddChild: (parentId: string) => void;
+  /** 검색·필터 중일 때 걸린 하위 id. 주어지면 여기에 없는 하위는 흐리게 보여준다. */
+  highlightedChildIds?: ReadonlySet<string>;
 }
 
 const ProjectCard = memo(({
@@ -47,6 +49,7 @@ const ProjectCard = memo(({
   onEdit,
   onDelete,
   onAddChild,
+  highlightedChildIds,
 }: ProjectCardProps) => {
   const {
     todo,
@@ -172,6 +175,10 @@ const ProjectCard = memo(({
                   key={childTodo.id}
                   todo={childTodo}
                   onEdit={onEdit}
+                  dimmed={
+                    highlightedChildIds !== undefined &&
+                    !highlightedChildIds.has(childTodo.id)
+                  }
                 />
               ))
             )}
@@ -194,6 +201,10 @@ const ProjectCard = memo(({
                   key={childTodo.id}
                   todo={childTodo}
                   onEdit={onEdit}
+                  dimmed={
+                    highlightedChildIds !== undefined &&
+                    !highlightedChildIds.has(childTodo.id)
+                  }
                 />
               ))
             )}

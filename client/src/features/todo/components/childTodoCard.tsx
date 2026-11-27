@@ -27,9 +27,12 @@ const STATUS_LABELS: Record<Status, string> = {
 const ChildTodoCard = memo(({
   todo,
   onEdit,
+  dimmed = false,
 }: {
   todo: Todo;
   onEdit: (todo: Todo) => void;
+  /** 검색·필터에 안 걸린 하위를 맥락으로만 보여줄 때 흐리게 표시(클릭·메뉴는 그대로) */
+  dimmed?: boolean;
 }) => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
@@ -75,7 +78,12 @@ const ChildTodoCard = memo(({
         onConfirm={handleDelete}
         onCancel={() => setIsDeleteOpen(false)}
       />
-      <ChildCardWrapper $status={todo.status} $priority={todo.priority}>
+      <ChildCardWrapper
+        $status={todo.status}
+        $priority={todo.priority}
+        $dimmed={dimmed}
+        data-dimmed={dimmed || undefined}
+      >
         <ChildCardContainer>
           <ChildCardLeft>
             <StatusDotTrigger

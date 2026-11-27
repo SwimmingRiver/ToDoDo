@@ -196,62 +196,6 @@ describe('todoApi', () => {
     })
   })
 
-  describe('getSearchTodoList', () => {
-    beforeEach(async () => {
-      vi.clearAllMocks()
-      const firebase = await import('@/shared/lib/firebase')
-      // auth.currentUser가 설정되어 있는지 확인 (vi.mock에서 이미 설정됨)
-      if (!firebase.auth.currentUser) {
-        Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
-      }
-    })
-
-    it('검색어와 일치하는 할 일만 반환해야 한다', async () => {
-      const { getDocs } = await import('firebase/firestore')
-      const { getSearchTodoList } = await import('../todoApi')
-
-      const mockTodos = [
-        makeTodo({ id: 'todo-1', title: '회의 준비' }),
-        makeTodo({ id: 'todo-2', title: '장 보기' }),
-        makeTodo({ id: 'todo-3', title: '회의록 작성' }),
-      ]
-
-      vi.mocked(getDocs).mockResolvedValueOnce({
-        docs: mockTodos.map((t) => ({
-          id: t.id,
-          data: () => { const { id: _, ...rest } = t; return rest },
-        })),
-      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
-
-      const result = await getSearchTodoList('회의')
-
-      expect(result).toHaveLength(2)
-      expect(result.map((t) => t.title)).toContain('회의 준비')
-      expect(result.map((t) => t.title)).toContain('회의록 작성')
-    })
-
-    it('검색어가 대소문자 구분 없이 동작해야 한다', async () => {
-      const { getDocs } = await import('firebase/firestore')
-      const { getSearchTodoList } = await import('../todoApi')
-
-      const mockTodos = [
-        makeTodo({ id: 'todo-1', title: 'React 공부' }),
-        makeTodo({ id: 'todo-2', title: 'react 버전 업데이트' }),
-      ]
-
-      vi.mocked(getDocs).mockResolvedValueOnce({
-        docs: mockTodos.map((t) => ({
-          id: t.id,
-          data: () => { const { id: _, ...rest } = t; return rest },
-        })),
-      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
-
-      const result = await getSearchTodoList('react')
-
-      expect(result).toHaveLength(2)
-    })
-  })
-
   describe('reorderTodos', () => {
     const makeBatch = () => ({
       set: vi.fn(),
