@@ -15,7 +15,12 @@ import { getArchivedTodos } from "../api";
  */
 export const ARCHIVED_TODOS_KEY = ["archivedTodos"] as const;
 
-/** `완료` 탭을 처음 열 때만(enabled) 보관분을 1회 읽는다. 보관함은 읽기 전용이라 오래 신선하다. */
+/**
+ * `완료` 탭을 처음 열 때만(enabled) 보관분을 1회 읽는다. 보관함은 읽기 전용이라 오래 신선하다.
+ * gcTime도 Infinity: 완료 탭·목록을 떠나면 CompletedList가 언마운트돼 관찰자가 없어지는데,
+ * 기본 gcTime(5분)이면 그 뒤 다시 열 때 보관 문서 전체를 또 읽는다. 키가 사용자별이라
+ * 다른 계정 데이터가 섞이지는 않는다.
+ */
 export const useGetArchivedTodos = (enabled: boolean) => {
   const uid = auth.currentUser?.uid;
   return useQuery({
@@ -23,5 +28,6 @@ export const useGetArchivedTodos = (enabled: boolean) => {
     queryFn: getArchivedTodos,
     enabled: enabled && !!uid,
     staleTime: Infinity,
+    gcTime: Infinity,
   });
 };

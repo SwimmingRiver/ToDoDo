@@ -95,4 +95,30 @@ describe('useGetArchivedTodos 훅', () => {
     await queryClient.invalidateQueries({ queryKey: ARCHIVED_TODOS_KEY })
     await waitFor(() => expect(vi.mocked(getArchivedTodos)).toHaveBeenCalledTimes(2))
   })
+
+  it('완료 탭을 떠나(언마운트) 5분 넘게 지나도 캐시를 버리지 않아 다시 열 때 재조회하지 않는다', async () => {
+    const { getArchivedTodos } = await import('../../api')
+    vi.mocked(getArchivedTodos).mockResolvedValue([])
+    const { Wrapper, queryClient } = createWrapper()
+
+    const first = renderHook(() => useGetArchivedTodos(true), { wrapper: Wrapper })
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true))
+    expect(vi.mocked(getArchivedTodos)).toHaveBeenCalledTimes(1)
+
+    // gc 타이머는 언마운트 시점에 걸리므로 그 전에 가짜 타이머를 켠다.
+    vi.useFakeTimers()
+    try {
+      first.unmount()
+      // 기본 gcTime(5분)이면 이 시점에 캐시가 지워진다.
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(queryClient.getQueryData([...ARCHIVED_TODOS_KEY, 'test-user-id'])).toEqual([])
+
+    const second = renderHook(() => useGetArchivedTodos(true), { wrapper: Wrapper })
+    expect(second.result.current.isSuccess).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(vi.mocked(getArchivedTodos)).toHaveBeenCalledTimes(1)
+  })
 })
