@@ -128,4 +128,9 @@ describe("buildCompletedGroups", () => {
     const g = buildCompletedGroups([make({ id: "a", doneAt: at(11, 30, 23, 30) })], EMPTY_TODO_FILTER);
     expect(g[0].monthKey).toBe("2026-11");
   });
+
+  it("월 경계: 로컬 12-01 00:30은 2026-12", () => {
+    const g = buildCompletedGroups([make({ id: "a", doneAt: at(12, 1, 0, 30) })], EMPTY_TODO_FILTER);
+    expect(g[0].monthKey).toBe("2026-12");
+  });
 });
