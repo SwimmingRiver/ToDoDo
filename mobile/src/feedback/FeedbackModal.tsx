@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../shared/ui/button/Button";
 import { colors } from "../theme/colors";
 import { MIN_TOUCH_TARGET, radius, spacing } from "../theme/spacing";
 import { FeedbackError, submitFeedback } from "./feedbackProxyApi";
+import { useSheetKeyboardInset } from "./useSheetKeyboardInset";
 
 const MAX_LENGTH = 1000;
 const CLOSE_DELAY_MS = 1500;
@@ -27,6 +28,8 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
   // 같은 틱의 중복 탭을 막고, 닫힌 뒤 도착한 응답을 버리기 위한 값(state는 비동기라 쓸 수 없다).
   const submittingRef = useRef(false);
   const generationRef = useRef(0);
+  // pageSheet에서는 KeyboardAvoidingView가 시트 상단 오프셋만큼 덜 올려 보내기 버튼이 가려졌다(훅 주석 참고).
+  const { ref: keyboardAreaRef, inset: keyboardInset } = useSheetKeyboardInset();
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -78,7 +81,7 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View ref={keyboardAreaRef} style={[styles.flex, { paddingBottom: keyboardInset }]}>
           <View style={styles.header}>
             <Text style={styles.title}>의견 보내기</Text>
             <Pressable
@@ -108,7 +111,7 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
             {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
             <Button title="보내기" onPress={() => void handleSubmit()} disabled={!canSubmit} loading={isSubmitting} />
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </Modal>
   );
