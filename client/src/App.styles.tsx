@@ -2,8 +2,12 @@ import { styled } from "styled-components";
 import { media } from "./styles/breakpoints";
 import { colors } from "./styles/colors";
 
+// iOS Safari의 100vh는 주소창이 접힌 '큰' 뷰포트 기준이라, 주소창이 보이는 동안
+// 셸 하단이 화면 밖으로 내려가 목록 하단 버튼이 고정 탭바에 가려진다(시뮬레이터 실측
+// 27px 겹침). 100dvh는 현재 보이는 높이를 따른다. 미지원 브라우저용으로 100vh를 먼저 둔다.
 const Container = styled.div`
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 `;
