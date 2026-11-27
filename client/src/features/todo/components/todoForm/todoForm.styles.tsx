@@ -1,6 +1,7 @@
 import { styled } from "styled-components";
 import { colors } from "@/styles/colors";
 import { media } from "@/styles/breakpoints";
+import { nativeDateInputReset } from "@/styles/nativeDateInput";
 const FormContainer = styled.form`
   display: flex;
   flex-direction: column;
@@ -26,6 +27,10 @@ const Input = styled.input`
 
   &:focus {
     border-color: ${colors.brand.strong};
+  }
+
+  &[type="datetime-local"] {
+    ${nativeDateInputReset}
   }
 `;
 
