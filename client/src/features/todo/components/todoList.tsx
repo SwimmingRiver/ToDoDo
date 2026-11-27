@@ -50,7 +50,11 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
   const { filter, setQuery, togglePriority } = useTodoFilterParams();
   // 검색 칸은 내부 입력값을 들고 있으므로, 바깥(빈 상태의 "검색 취소")에서 지울 때는
-  // key를 바꿔 빈 값으로 다시 마운트한다.
+  // key를 바꿔 빈 값으로 다시 마운트한다. 이때 initialValue를 filter.query로 주면 안 된다:
+  // react-router는 URL 갱신을 startTransition으로 적용하므로 key 변경(긴급 업데이트)이
+  // 먼저 렌더돼 옛 q로 다시 마운트되고, 디바운스가 그 검색어를 되살린다. 그래서 다시
+  // 마운트한 뒤(key > 0)에는 항상 빈 값으로 시작한다 — URL q로 입력을 채우는 건 첫
+  // 마운트(상세 → 뒤로 가기 복원)뿐이다.
   const [searchInputKey, setSearchInputKey] = useState(0);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
     new Set()
@@ -243,7 +247,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
 
       <TodoSearch
         key={searchInputKey}
-        initialValue={filter.query}
+        initialValue={searchInputKey === 0 ? filter.query : ""}
         onSearch={setQuery}
         onClear={handleClearQuery}
         resultCount={projectCards.length}

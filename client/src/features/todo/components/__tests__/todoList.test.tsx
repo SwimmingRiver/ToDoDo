@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { getDocs } from 'firebase/firestore'
@@ -288,6 +288,48 @@ describe('TodoList', () => {
       expect(lastCallFor('todo-b')!.isExpanded).toBe(false)
       toggle()
       expect(lastCallFor('todo-b')!.isExpanded).toBe(true)
+    })
+
+    it('빈 결과의 "검색 취소"를 누르면 입력이 비고 목록이 돌아온다(디바운스 후에도 검색이 되살아나지 않음)', async () => {
+      projectCardCalls.length = 0
+      const user = setupUser()
+      renderTodoList(searchTodos())
+
+      const input = screen.getByPlaceholderText('할 일 검색...')
+      await user.type(input, '없는검색어')
+      const emptyTitle = await screen.findByText('검색 결과가 없습니다')
+      // 검색칸 자체의 "검색 취소"가 아니라 빈 상태 안의 버튼을 누른다
+      const emptyState = emptyTitle.parentElement as HTMLElement
+      await user.click(within(emptyState).getByRole('button', { name: '검색 취소' }))
+
+      // 디바운스(300ms)보다 충분히 기다려도 옛 검색어가 다시 적용되지 않아야 한다
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600))
+      })
+      expect(screen.getByPlaceholderText('할 일 검색...')).toHaveValue('')
+      expect(screen.queryByText('검색 결과가 없습니다')).not.toBeInTheDocument()
+      expect(document.body.textContent).not.toContain('검색 결과')
+      expect(lastRenderedIds(3)).toEqual(['todo-a', 'todo-b', 'todo-c'])
+    })
+
+    it('검색칸의 "검색 취소"를 누르면 입력이 비고 목록이 돌아온다', async () => {
+      projectCardCalls.length = 0
+      const user = setupUser()
+      renderTodoList(searchTodos())
+
+      await user.type(screen.getByPlaceholderText('할 일 검색...'), '전입')
+      await waitFor(() =>
+        expect(document.body.textContent).toContain('검색 결과 2건'),
+      )
+      const [searchBoxCancel] = screen.getAllByRole('button', { name: '검색 취소' })
+      await user.click(searchBoxCancel)
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600))
+      })
+      expect(screen.getByPlaceholderText('할 일 검색...')).toHaveValue('')
+      expect(document.body.textContent).not.toContain('검색 결과')
+      expect(lastRenderedIds(3)).toEqual(['todo-a', 'todo-b', 'todo-c'])
     })
   })
 })
