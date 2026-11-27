@@ -56,3 +56,81 @@ export function getDropDates(
 }
 
 export { isDateInGoogleEventRange } from "@tododo/core/dist/calendarSync/index.js";
+
+/* ───────────── 캘린더 URL 상태(보던 기간·뷰·열린 날짜 시트) ─────────────
+ * 상세(/todo/:id)로 갔다가 뒤로 오면 캘린더가 다시 마운트된다. 상태를 컴포넌트 안에만
+ * 두면 보던 달·뷰·시트가 전부 초기값으로 돌아가므로 search params에 보존한다.
+ * URL은 사용자가 직접 고칠 수 있는 입력이라, 형식·실재하는 날짜·범위를 모두 확인하고
+ * 하나라도 어긋나면 기본값(null)으로 처리한다.
+ */
+
+export const CALENDAR_PARAM = {
+  date: "date",
+  view: "view",
+  sheet: "sheet",
+} as const;
+
+export type CalendarView = "dayGridMonth" | "dayGridWeek";
+
+const VIEW_TO_PARAM: Record<CalendarView, string> = {
+  dayGridMonth: "month",
+  dayGridWeek: "week",
+};
+
+/** FC가 다루기 어려운 먼 과거/미래(오타 등)는 기본값으로 돌린다. */
+const MIN_YEAR = 1970;
+const MAX_YEAR = 2100;
+const DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * URL 값이 실재하는 "yyyy-MM-dd" 날짜면 그대로, 아니면 null.
+ * 연/월/일로 로컬 Date를 만들어 다시 키로 바꿨을 때 같아야 한다 — "2026-02-30"처럼
+ * Date가 다음 달로 넘겨버리는 값을 거른다. `new Date("yyyy-MM-dd")`(UTC 자정 해석)는
+ * 음수 오프셋에서 하루 당겨지므로 쓰지 않는다.
+ */
+export function parseDateKeyParam(value: string | null): string | null {
+  if (!value) return null;
+  const match = DATE_KEY_RE.exec(value);
+  if (!match) return null;
+  const [, y, m, d] = match.map(Number);
+  if (y < MIN_YEAR || y > MAX_YEAR) return null;
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return value;
+}
+
+export function parseViewParam(value: string | null): CalendarView | null {
+  if (value === VIEW_TO_PARAM.dayGridMonth) return "dayGridMonth";
+  if (value === VIEW_TO_PARAM.dayGridWeek) return "dayGridWeek";
+  return null;
+}
+
+export interface CalendarUrlState {
+  /** 보던 기간의 기준 날짜. null이면 오늘이 들어 있는 기간(기본값) */
+  anchorDate: string | null;
+  view: CalendarView;
+  /** 열린 날짜 시트. null이면 닫힘 */
+  sheetDate: string | null;
+}
+
+export function readCalendarUrlState(params: URLSearchParams): CalendarUrlState {
+  return {
+    anchorDate: parseDateKeyParam(params.get(CALENDAR_PARAM.date)),
+    view: parseViewParam(params.get(CALENDAR_PARAM.view)) ?? "dayGridMonth",
+    sheetDate: parseDateKeyParam(params.get(CALENDAR_PARAM.sheet)),
+  };
+}
+
+/**
+ * 상태를 params에 반영한다(제자리 수정). 기본값은 파라미터를 지워 URL을 깨끗하게 두고,
+ * 캘린더가 쓰지 않는 다른 파라미터(OAuth 콜백 등)는 건드리지 않는다.
+ */
+export function writeCalendarUrlState(params: URLSearchParams, state: CalendarUrlState): void {
+  const set = (key: string, value: string | null) => {
+    if (value == null) params.delete(key);
+    else params.set(key, value);
+  };
+  set(CALENDAR_PARAM.date, state.anchorDate);
+  set(CALENDAR_PARAM.view, state.view === "dayGridMonth" ? null : VIEW_TO_PARAM[state.view]);
+  set(CALENDAR_PARAM.sheet, state.sheetDate);
+}
