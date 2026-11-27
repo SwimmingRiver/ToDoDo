@@ -96,6 +96,22 @@ export const getTodos = async () => {
     .sort((a, b) => normalizeOrder(a.order) - normalizeOrder(b.order));
 };
 
+/**
+ * 30일 지나 보관된(archived == true) 내 할 일. `완료` 탭을 처음 열 때만 읽는다
+ * (useGetArchivedTodos의 enabled). getTodos와 같은 모양의 등호 조건 2개라 새 복합
+ * 인덱스가 필요 없다. 완료 탭은 완료일 기준으로 정렬하므로 order 정렬은 하지 않는다.
+ */
+export const getArchivedTodos = async () => {
+  const userId = getUserId();
+  const q = query(
+    todosRef,
+    where("userId", "==", userId),
+    where("archived", "==", true),
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((doc) => mapDocToTodo(doc.id, doc.data()));
+};
+
 export const getTodoDetail = async (id: string) => {
   const userId = getUserId();
   const snapshot = await getDoc(doc(db, "todos", id));

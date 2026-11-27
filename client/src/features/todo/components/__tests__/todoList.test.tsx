@@ -332,4 +332,80 @@ describe('TodoList', () => {
       expect(lastRenderedIds(3)).toEqual(['todo-a', 'todo-b', 'todo-c'])
     })
   })
+  describe('진행 중 | 완료 탭', () => {
+    const renderWithClient = (todos: Todo[], initialEntry = '/') => {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const utils = render(
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <MemoryRouter initialEntries={[initialEntry]}>
+              <TodoList todos={todos} />
+            </MemoryRouter>
+          </ToastProvider>
+        </QueryClientProvider>,
+      )
+      return { ...utils, queryClient }
+    }
+
+    it('탭 목록이 있고 처음엔 진행 중 탭이 선택돼 있다', () => {
+      renderWithClient([makeTodo()])
+      const tablist = screen.getByRole('tablist')
+      expect(within(tablist).getByRole('tab', { name: '진행 중' })).toHaveAttribute('aria-selected', 'true')
+      expect(within(tablist).getByRole('tab', { name: '완료' })).toHaveAttribute('aria-selected', 'false')
+    })
+
+    it('보관분은 완료 탭을 처음 열 때 1회만 읽고, ["todos"]를 무효화한 뒤 다시 열어도 다시 읽지 않는다', async () => {
+      vi.mocked(getDocs).mockClear()
+      const user = setupUser()
+      const { queryClient } = renderWithClient([makeTodo()])
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(getDocs).toHaveBeenCalledTimes(0)
+
+      await user.click(screen.getByRole('tab', { name: '완료' }))
+      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+
+      await user.click(screen.getByRole('tab', { name: '진행 중' }))
+      await act(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['todos'] })
+      })
+      await user.click(screen.getByRole('tab', { name: '완료' }))
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(getDocs).toHaveBeenCalledTimes(1)
+    })
+
+    it('완료 탭에서는 새 할 일·AI 버튼이 없고 검색창·칩은 그대로 있다', async () => {
+      const user = setupUser()
+      renderWithClient([makeTodo()])
+      expect(screen.getByRole('button', { name: /새 할일/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI로 계획' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: '완료' }))
+
+      expect(screen.getByRole('tab', { name: '완료' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByRole('button', { name: /새 할일/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'AI로 계획' })).not.toBeInTheDocument()
+      expect(screen.getByPlaceholderText('할 일 검색...')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '높음' })).toBeInTheDocument()
+      expect(await screen.findByText('완료한 프로젝트가 아직 없어요')).toBeInTheDocument()
+    })
+
+    it('URL의 tab=done이면 완료 탭으로 시작하고 완료 카드 수를 결과 수로 보여준다', async () => {
+      const doneAt = new Date(2026, 10, 20, 12).toISOString()
+      renderWithClient(
+        [
+          makeTodo({ id: 'd1', title: '보고서', status: 'done', doneAt, updatedAt: doneAt }),
+          makeTodo({ id: 'd2', title: '발표', status: 'done', doneAt, updatedAt: doneAt }),
+          makeTodo({ id: 'a1', title: '보고서 초안', status: 'todo' }),
+        ],
+        '/?tab=done&q=%EB%B3%B4%EA%B3%A0%EC%84%9C',
+      )
+      expect(screen.getByRole('tab', { name: '완료' })).toHaveAttribute('aria-selected', 'true')
+      await waitFor(() => expect(document.body.textContent).toContain('검색 결과 1건'))
+    })
+  })
 })

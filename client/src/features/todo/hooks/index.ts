@@ -1,5 +1,6 @@
 export { useTodoDetail } from "./useTodoDetail";
 export { useGetTodos } from "./useGetTodos";
+export { useGetArchivedTodos, ARCHIVED_TODOS_KEY } from "./useGetArchivedTodos";
 export { useDeleteTodo } from "./useDeleteTodo";
 export { useUpdateTodo } from "./useUpdateTodo";
 export { useUpdateToDone } from "./useUpdateToDone";

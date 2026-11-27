@@ -129,6 +129,29 @@ describe('todoApi', () => {
     })
   })
 
+  describe('getArchivedTodos', () => {
+    it('내 문서 중 archived == true인 것만 조회해 Todo로 매핑한다', async () => {
+      const { getDocs, query, where } = await import('firebase/firestore')
+      const { getArchivedTodos } = await import('../todoApi')
+
+      vi.mocked(where).mockClear()
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [
+          { id: 'archived-1', data: () => ({ title: '보관된 일', status: 'done', archived: true }) },
+        ],
+      } as unknown as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+
+      const result = await getArchivedTodos()
+
+      expect(where).toHaveBeenCalledWith('userId', '==', 'test-user-id')
+      expect(where).toHaveBeenCalledWith('archived', '==', true)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatchObject({ id: 'archived-1', title: '보관된 일', archived: true })
+    })
+  })
+
   describe('createTodo', () => {
     beforeEach(async () => {
       vi.clearAllMocks()

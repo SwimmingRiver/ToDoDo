@@ -26,10 +26,13 @@ import {
   ProjectCountText,
   NewProjectLink,
 } from "./todoList.styles";
-import { Plus, ClipboardList, SearchX, Sparkles } from "lucide-react";
+import { Plus, ClipboardList, Sparkles } from "lucide-react";
 import { EmptyState } from "@/shared";
 import { TodoSearch } from "./todoSearch";
 import { PriorityFilterChips } from "./priorityFilterChips";
+import { SearchEmptyState } from "./searchEmptyState";
+import { ListTabs } from "./listTabs";
+import CompletedList from "./completedList";
 import { ConfirmModal, useToast } from "@/shared";
 
 const EMPTY_IDS: ReadonlySet<string> = new Set();
@@ -48,7 +51,9 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [isAddChildSubmitting, setIsAddChildSubmitting] = useState(false);
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
-  const { filter, setQuery, togglePriority } = useTodoFilterParams();
+  const { filter, tab, setQuery, togglePriority, setTab } = useTodoFilterParams();
+  // 완료 탭의 카드 수(검색 결과 수 표시용). CompletedList가 계산해 알려 준다.
+  const [completedCount, setCompletedCount] = useState(0);
   // 검색 칸은 내부 입력값을 들고 있으므로, 바깥(빈 상태의 "검색 취소")에서 지울 때는
   // key를 바꿔 빈 값으로 다시 마운트한다. 이때 initialValue를 filter.query로 주면 안 된다:
   // react-router는 URL 갱신을 startTransition으로 적용하므로 key 변경(긴급 업데이트)이
@@ -245,12 +250,14 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         }
       />
 
+      <ListTabs tab={tab} onChange={setTab} />
+      {/* 검색창·칩은 두 탭 공용이라 탭 밖(같은 자리)에 둔다 — 탭을 바꿔도 입력이 유지된다. */}
       <TodoSearch
         key={searchInputKey}
         initialValue={searchInputKey === 0 ? filter.query : ""}
         onSearch={setQuery}
         onClear={handleClearQuery}
-        resultCount={projectCards.length}
+        resultCount={tab === "done" ? completedCount : projectCards.length}
         isSearching={isFiltering}
       />
       <PriorityFilterChips
@@ -259,19 +266,15 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
       />
 
       <ListWrapper>
-        {isFiltering && projectCards.length === 0 ? (
-          <EmptyState
-            icon={SearchX}
-            title="검색 결과가 없습니다"
-            description={
-              filter.query.trim()
-                ? `"${filter.query.trim()}"에 대한 결과를 찾을 수 없습니다`
-                : "조건에 맞는 할 일이 없습니다"
-            }
-            {...(filter.query.trim()
-              ? { actionLabel: "검색 취소", onAction: handleCancelSearch }
-              : {})}
+        {tab === "done" ? (
+          <CompletedList
+            todos={todos}
+            filter={filter}
+            onCancelSearch={handleCancelSearch}
+            onResultCountChange={setCompletedCount}
           />
+        ) : isFiltering && projectCards.length === 0 ? (
+          <SearchEmptyState query={filter.query} onCancelSearch={handleCancelSearch} />
         ) : projectCards.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
@@ -312,16 +315,18 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         )}
       </ListWrapper>
 
-      <AddButtonRow>
-        <AddButton onClick={() => setIsOpen(true)}>
-          <Plus size={16} />
-          새 할일
-        </AddButton>
-        <AiPlanButton onClick={() => setIsAiPlanOpen(true)}>
-          <Sparkles size={16} aria-hidden="true" />
-          AI로 계획
-        </AiPlanButton>
-      </AddButtonRow>
+      {tab === "active" && (
+        <AddButtonRow>
+          <AddButton onClick={() => setIsOpen(true)}>
+            <Plus size={16} />
+            새 할일
+          </AddButton>
+          <AiPlanButton onClick={() => setIsAiPlanOpen(true)}>
+            <Sparkles size={16} aria-hidden="true" />
+            AI로 계획
+          </AiPlanButton>
+        </AddButtonRow>
+      )}
       {isAiPlanOpen && (
         <Suspense fallback={null}>
           <AiPlanModal onClose={() => setIsAiPlanOpen(false)} />
