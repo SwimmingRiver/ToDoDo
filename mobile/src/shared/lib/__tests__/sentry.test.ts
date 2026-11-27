@@ -1,10 +1,11 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import type { ErrorEvent } from "@sentry/react-native";
-import { initSentry, reportError, scrubEvent } from "../sentry";
+import { addLifecycleBreadcrumb, addNavigationBreadcrumb, filterBreadcrumb, initSentry, reportError, scrubEvent } from "../sentry";
 
 const sentry = jest.requireMock("@sentry/react-native") as {
   init: jest.Mock;
   captureException: jest.Mock;
+  addBreadcrumb: jest.Mock;
 };
 
 const g = globalThis as unknown as { __DEV__: boolean };
@@ -171,5 +172,49 @@ describe("reportError", () => {
     });
     expect(() => reportError(new Error("x"), "calendar")).not.toThrow();
     expect(warn).toHaveBeenCalled();
+  });
+});
+
+describe("앱 진행 단계·화면 이동 breadcrumb", () => {
+  beforeEach(() => {
+    sentry.addBreadcrumb.mockClear();
+  });
+
+  it("app.lifecycle은 허용 목록을 통과하고 stage·reason·signed_in만 남는다", () => {
+    const kept = filterBreadcrumb({
+      category: "app.lifecycle",
+      message: "비밀",
+      data: { stage: "splash_hide", reason: "failsafe", signed_in: true, title: "비밀" },
+    });
+    expect(kept).toMatchObject({ category: "app.lifecycle", data: { stage: "splash_hide", reason: "failsafe", signed_in: true } });
+    expect(kept?.message).toBeUndefined();
+    expect(JSON.stringify(kept)).not.toContain("비밀");
+  });
+
+  it("addLifecycleBreadcrumb는 data에 단계를 담아 기록한다(message는 스크러빙되므로 쓰지 않는다)", () => {
+    addLifecycleBreadcrumb("auth_resolved", { signed_in: false });
+    expect(sentry.addBreadcrumb).toHaveBeenCalledWith({
+      category: "app.lifecycle",
+      type: "info",
+      level: "info",
+      data: { stage: "auth_resolved", signed_in: false },
+    });
+  });
+
+  it("addNavigationBreadcrumb는 화면 이름(from/to)만 기록한다", () => {
+    addNavigationBreadcrumb(undefined, "오늘");
+    expect(sentry.addBreadcrumb).toHaveBeenCalledWith({
+      category: "navigation",
+      type: "navigation",
+      data: { from: undefined, to: "오늘" },
+    });
+    expect(filterBreadcrumb(sentry.addBreadcrumb.mock.calls[0][0] as never)).toMatchObject({ data: { to: "오늘" } });
+  });
+
+  it("addBreadcrumb가 던져도 밖으로 던지지 않는다", () => {
+    sentry.addBreadcrumb.mockImplementationOnce(() => {
+      throw new Error("native");
+    });
+    expect(() => addLifecycleBreadcrumb("nav_ready")).not.toThrow();
   });
 });

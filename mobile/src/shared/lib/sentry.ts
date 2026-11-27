@@ -20,8 +20,9 @@ import type { Breadcrumb, ErrorEvent } from "@sentry/react-native";
  */
 
 // 기계적으로 생기는 breadcrumb만 허용한다. touch(누른 요소의 라벨)·console(로그 인자)은 할 일 제목 등
-// 사용자 입력이 섞일 수 있어 통째로 뺀다.
-const ALLOWED_BREADCRUMB_CATEGORIES = new Set(["navigation", "fetch", "xhr"]);
+// 사용자 입력이 섞일 수 있어 통째로 뺀다. app.lifecycle은 앱 코드가 고정 값으로만 남기는 진행 단계다.
+const LIFECYCLE_CATEGORY = "app.lifecycle";
+const ALLOWED_BREADCRUMB_CATEGORIES = new Set(["navigation", "fetch", "xhr", LIFECYCLE_CATEGORY]);
 
 const ALLOWED_BREADCRUMB_DATA_KEYS = new Set([
   "url",
@@ -31,6 +32,10 @@ const ALLOWED_BREADCRUMB_DATA_KEYS = new Set([
   "to",
   "request_body_size",
   "response_body_size",
+  // app.lifecycle 전용. 값은 아래 LifecycleStage·reason·boolean 같은 고정 값뿐이다.
+  "stage",
+  "reason",
+  "signed_in",
 ]);
 
 // 쿼리스트링과 #fragment(OAuth 복귀 주소의 code·token 등)를 함께 자른다.
@@ -117,6 +122,35 @@ export const initSentry = (): void => {
     beforeSend: (event) => scrubEvent(event),
   });
 };
+
+/**
+ * 앱 시작 진행 단계. 네이티브 크래시(WatchdogTermination 등)는 다음 실행 때 네이티브 scope의 breadcrumb과
+ * 함께 보고되므로, 어느 단계에서 멈췄는지 구분하는 단서가 된다(11-26 건은 SDK 시작·connectivity뿐이라 구분 불가였다).
+ */
+export type LifecycleStage = "splash_hold" | "auth_wait_start" | "auth_resolved" | "splash_hide" | "nav_ready";
+
+type LifecycleData = { reason?: "ready" | "failsafe"; signed_in?: boolean };
+
+// breadcrumb 기록이 본래 흐름을 깨면 안 되므로 절대 던지지 않는다. init 전(개발 빌드)엔 아무것도 남지 않는다.
+const safeAddBreadcrumb = (crumb: Breadcrumb): void => {
+  try {
+    Sentry.addBreadcrumb(crumb);
+  } catch {
+    // 무시한다.
+  }
+};
+
+/** 진행 단계를 남긴다. message는 스크러빙으로 지워지므로 단계는 data에 담는다. */
+export const addLifecycleBreadcrumb = (stage: LifecycleStage, extra?: LifecycleData): void =>
+  safeAddBreadcrumb({ category: LIFECYCLE_CATEGORY, type: "info", level: "info", data: { stage, ...extra } });
+
+/**
+ * 화면 이동을 남긴다. 화면 이름만 받는다 — route params(할 일 id 등)는 절대 넘기지 않는다.
+ * reactNavigationIntegration을 쓰지 않는 이유: 그 통합은 이동마다 내비게이션 span을 만든 뒤에야
+ * breadcrumb을 남기는데, 이 앱은 성능 추적(tracing)을 켜지 않으므로 span 수명에 기대지 않고 직접 남긴다.
+ */
+export const addNavigationBreadcrumb = (from: string | undefined, to: string): void =>
+  safeAddBreadcrumb({ category: "navigation", type: "navigation", data: { from, to } });
 
 /** 화면을 깨지 않고 삼켜지는 실패를 보고하는 곳. 웹의 feature 태그와 같은 이름을 쓴다. */
 export type SentryFeature = "iap" | "aiPlan" | "entitlement" | "calendar" | "maintenance" | "auth" | "reminder" | "feedback";

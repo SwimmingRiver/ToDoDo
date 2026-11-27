@@ -45,4 +45,19 @@ describe("useAuthState", () => {
     await act(async () => cb(null));
     expect(sentry.setUser).toHaveBeenLastCalledWith(null);
   });
+
+  it("로그인 확정 대기 시작과 끝(첫 콜백 1회만)을 breadcrumb으로 남긴다", async () => {
+    const sentry = jest.requireMock("@sentry/react-native") as { addBreadcrumb: jest.Mock };
+    sentry.addBreadcrumb.mockClear();
+    const { useAuthState } = await import("../useAuthState");
+    await renderHook(() => useAuthState());
+    const cb = authStateCallbacks[authStateCallbacks.length - 1];
+    await act(async () => cb({ uid: "u1", email: "a@b.c" }));
+    await act(async () => cb(null));
+
+    const data = sentry.addBreadcrumb.mock.calls.map((c) => (c[0] as { data: unknown }).data);
+    expect(data).toEqual([{ stage: "auth_wait_start" }, { stage: "auth_resolved", signed_in: true }]);
+    expect(JSON.stringify(sentry.addBreadcrumb.mock.calls)).not.toContain("a@b.c");
+    expect(JSON.stringify(sentry.addBreadcrumb.mock.calls)).not.toContain("u1");
+  });
 });

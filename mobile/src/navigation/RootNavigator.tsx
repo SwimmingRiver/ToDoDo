@@ -37,7 +37,7 @@ import {
   useRefreshHistoryOnForeground,
   useReminderRefresh,
 } from "../reminders";
-import { flushPendingTodoDetail, navigationRef } from "./navigationRef";
+import { navigationRef, onNavigationReady, onNavigationStateChange } from "./navigationRef";
 
 const TodayStack = createNativeStackNavigator<TodayStackParamList>();
 const TodoListStack = createNativeStackNavigator<TodoListStackParamList>();
@@ -198,7 +198,7 @@ export const RootNavigator = () => {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} onReady={flushPendingTodoDetail}>
+    <NavigationContainer ref={navigationRef} onReady={onNavigationReady} onStateChange={onNavigationStateChange}>
       {user ? (
         <ReminderBannerProvider>
           {/* 할 일 저장 직후의 알림 권한 안내. 폼 화면은 저장하자마자 닫히므로 화면 밖에 둔다. */}
