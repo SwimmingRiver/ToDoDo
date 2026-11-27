@@ -20,7 +20,9 @@ export const DrawerContainer = styled.div<{ $isClosing: boolean }>`
   top: 0;
   left: 0;
   width: 280px;
+  /* 100vh만 쓰면 iOS Safari 주소창에 하단 항목이 가려진다 — App 셸 Container 주석 참고 */
   height: 100vh;
+  height: 100dvh;
   background-color: ${colors.surface.overlay};
   z-index: 9999;
   display: flex;
