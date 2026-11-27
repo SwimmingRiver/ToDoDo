@@ -1,4 +1,5 @@
 import * as SplashScreen from "expo-splash-screen";
+import { addLifecycleBreadcrumb } from "./sentry";
 
 /**
  * 네이티브 스플래시(app.json의 expo-splash-screen 설정)를 로그인 상태가 정해질 때까지 유지한다.
@@ -14,11 +15,14 @@ export const SPLASH_FAILSAFE_MS = 8000;
 
 let hidden = false;
 
-export const hideSplash = (): void => {
+/** reason: 준비 신호로 숨겼는지(ready), 안전 시간이 지나 숨겼는지(failsafe). 후자는 로그인 확정이 늦었다는 단서다. */
+export const hideSplash = (reason: "ready" | "failsafe" = "ready"): void => {
   if (hidden) return;
   hidden = true;
+  addLifecycleBreadcrumb("splash_hide", { reason });
   SplashScreen.hide();
 };
 
+addLifecycleBreadcrumb("splash_hold");
 SplashScreen.preventAutoHideAsync().catch(() => {});
-setTimeout(hideSplash, SPLASH_FAILSAFE_MS);
+setTimeout(() => hideSplash("failsafe"), SPLASH_FAILSAFE_MS);
