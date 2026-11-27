@@ -7,7 +7,7 @@ import { useGetTodos, useUpdateTodoDueAt, TodoForm } from "@/features/todo";
 import type { Todo } from "@/features/todo";
 import type { EventInput, EventClickArg, EventContentArg, MoreLinkArg } from "@fullcalendar/core/index.js";
 import type { DateClickArg } from "@fullcalendar/interaction";
-import type { EventDropArg } from "@fullcalendar/core";
+import type { DatesSetArg, EventDropArg } from "@fullcalendar/core";
 import {
   CalendarContainer,
   CalendarBody,
@@ -32,7 +32,13 @@ import { AlertCircle, Plus, Repeat, CalendarDays, ChevronRight } from "lucide-re
 import styled, { keyframes } from "styled-components";
 import * as Sentry from "@sentry/react";
 import { colors } from "@/styles/colors";
-import { isOverdue, getDropDates } from "../utils/calendarUtils";
+import {
+  isOverdue,
+  getDropDates,
+  readCalendarUrlState,
+  writeCalendarUrlState,
+  type CalendarView,
+} from "../utils/calendarUtils";
 import {
   filterUnsyncedEvents,
   formatGoogleEventTime,
@@ -90,16 +96,41 @@ const Calendar = () => {
   // 이 범위를 따라가야 지난달/다음달로 이동해도 구글 일정이 보인다.
   const [visibleRange, setVisibleRange] = useState<CalendarVisibleRange | null>(null);
   const { data: googleEvents } = useGoogleCalendarEvents(visibleRange);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
-  const [calendarView, setCalendarView] = useState<"dayGridMonth" | "dayGridWeek">("dayGridMonth");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 상세(/todo/:id)로 갔다가 뒤로 오면 다시 마운트된다 — 보던 기간·뷰·열린 시트를
+  // URL에서 복원한다. 초기값으로만 읽고, 이후 변경은 아래 동기화 이펙트가 URL에 쓴다.
+  const [initialUrlState] = useState(() => readCalendarUrlState(searchParams));
+  const [selectedDate, setSelectedDate] = useState<string | null>(initialUrlState.sheetDate);
+  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(initialUrlState.sheetDate != null);
+  const [calendarView, setCalendarView] = useState<CalendarView>(initialUrlState.view);
+  // 보던 기간의 시작일. 오늘이 들어 있는 기간이면 null(기본값이라 URL에 남기지 않는다)
+  const [anchorDate, setAnchorDate] = useState<string | null>(initialUrlState.anchorDate);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
   const toast = useToast();
   // 이벤트 바가 제목 없는 6px 막대로 줄어드는 기준(calendar.styles의 media.mobile)과
   // 같아야 한다 — 제목이 보이는 너비에서까지 상세 이동을 막으면 안 된다.
   const isNarrowGrid = useMediaQuery("mobile");
-  const [searchParams, setSearchParams] = useSearchParams();
+
+  // setSearchParams(fn)의 prev는 렌더 시점 클로저의 값이라, 내비게이션이 반영되기 전에
+  // 두 번 쓰면(예: OAuth 파라미터 삭제 직후 캘린더 상태 쓰기) 뒤의 쓰기가 앞의 변경을
+  // 되돌린다. 마지막으로 쓴 값을 ref에 들고 그 위에 이어 쓴다.
+  const latestParamsRef = useRef(searchParams);
+  useEffect(() => {
+    latestParamsRef.current = searchParams;
+  }, [searchParams]);
+  // 모든 쓰기는 replace — 달을 넘기거나 시트를 여닫을 때마다 히스토리가 쌓이면
+  // 뒤로가기 한 번에 이전 페이지로 돌아가지 못한다.
+  const updateSearchParams = useCallback(
+    (mutate: (params: URLSearchParams) => void) => {
+      const next = new URLSearchParams(latestParamsRef.current);
+      mutate(next);
+      if (next.toString() === latestParamsRef.current.toString()) return;
+      latestParamsRef.current = next;
+      setSearchParams(next, { replace: true });
+    },
+    [setSearchParams],
+  );
   const { markConnected } = useMarkCalendarConnected();
   // setSearchParams로 파라미터를 지워도 라우터 내비게이션이라 비동기다 —
   // StrictMode 이중 실행이나 리마운트 시 같은 클로저의 searchParams를 다시
@@ -116,14 +147,10 @@ const Calendar = () => {
 
     // replace가 아니면 히스토리에 ?calendarConnected=1 항목이 남아, 뒤로가기 후
     // 새로고침하면 콜백 처리가 다시 실행된다.
-    setSearchParams(
-      (prev) => {
-        prev.delete("calendarConnected");
-        prev.delete("calendarError");
-        return prev;
-      },
-      { replace: true },
-    );
+    updateSearchParams((params) => {
+      params.delete("calendarConnected");
+      params.delete("calendarError");
+    });
 
     if (failed) {
       toast.error("연동 실패", "구글 캘린더 연동 중 오류가 발생했습니다");
@@ -319,6 +346,29 @@ const Calendar = () => {
     }
   }, [calendarView]);
 
+  // FC view.currentStart/End는 로컬 자정 Date라 로컬 게터(toDateKey)로 읽는다.
+  // 오늘이 들어 있는 기간은 기본값이므로 URL에 남기지 않는다.
+  const handleDatesSet = useCallback((arg: DatesSetArg) => {
+    setVisibleRange({ start: arg.start.toISOString(), end: arg.end.toISOString() });
+    const start = toDateKey(arg.view.currentStart);
+    const end = toDateKey(arg.view.currentEnd);
+    const today = toDateKey(new Date());
+    setAnchorDate(today >= start && today < end ? null : start);
+  }, []);
+
+  // URL 쓰기는 FC 콜백(datesSet은 FC 마운트 중에도 불린다) 안이 아니라 이펙트에서 한다 —
+  // 라우터는 마운트가 끝나기 전의 navigate를 경고와 함께 무시한다. 마운트 시 한 번
+  // 돌면서 잘못된 URL 값(없는 날짜·뷰)도 기본값으로 정리된다.
+  useEffect(() => {
+    updateSearchParams((params) =>
+      writeCalendarUrlState(params, {
+        anchorDate,
+        view: calendarView,
+        sheetDate: isBottomSheetOpen ? selectedDate : null,
+      }),
+    );
+  }, [anchorDate, calendarView, isBottomSheetOpen, selectedDate, updateSearchParams]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -387,13 +437,13 @@ const Calendar = () => {
             ref={calendarRef}
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView={calendarView}
+            /* 보던 기간이 기본값(null)이면 FC 기본(오늘)이 곧 그 기간이다 */
+            initialDate={initialUrlState.anchorDate ?? undefined}
             events={events as EventInput[]}
             height="100%"
             displayEventTime={false}
             dateClick={handleDateClick}
-            datesSet={(arg) =>
-              setVisibleRange({ start: arg.start.toISOString(), end: arg.end.toISOString() })
-            }
+            datesSet={handleDatesSet}
             eventClick={handleEventClick}
             /* 높이 기반 자동(true)은 이벤트 바가 압축된 이 앱(특히 모바일 6px 바)에서는
                현실적인 건수(3~6건)로 임계치에 닿지 않아 +N개가 표시되지 않는다.

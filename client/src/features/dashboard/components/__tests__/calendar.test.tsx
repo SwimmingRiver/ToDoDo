@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { MemoryRouter, createMemoryRouter, RouterProvider } from 'react-router-dom'
 import Calendar from '../calendar'
@@ -480,5 +480,175 @@ describe('Calendar 구글 이벤트 오버레이 조회 범위', () => {
       const after = (await lastRangeArg())!
       expect(new Date(after.start).getTime()).toBeGreaterThan(new Date(before.start).getTime())
     })
+  })
+})
+
+// 상세(/todo/:id)로 갔다가 뒤로 오면 캘린더가 다시 마운트된다 — 보던 달·뷰·열린 날짜
+// 시트가 초기값으로 돌아가면 모바일 기본 흐름(시트 → 상세 → 뒤로)이 매번 끊긴다.
+// 시스템 시간을 고정하고 나머지 날짜는 그 기준으로 만든다.
+describe('Calendar URL 상태 보존(상세 → 뒤로가기)', () => {
+  let saved: (typeof mockTodos)[number][]
+  // 고정 "오늘"과 다음 달의 한 날짜
+  const today = () => new Date()
+  const nextMonthDay = () => {
+    const t = today()
+    return new Date(t.getFullYear(), t.getMonth() + 1, 10)
+  }
+  const monthTitle = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  const makeRouter = (entry: string) =>
+    createMemoryRouter(
+      [
+        { path: '/prev', element: <div>이전 페이지</div> },
+        { path: '/calendar', element: <Calendar /> },
+        { path: '/todo/:id', element: <div>상세</div> },
+      ],
+      { initialEntries: ['/prev', entry], initialIndex: 1 },
+    )
+
+  const params = (router: ReturnType<typeof makeRouter>) =>
+    new URLSearchParams(router.state.location.search)
+
+  beforeAll(() => {
+    saved = [...mockTodos]
+  })
+
+  beforeEach(() => {
+    // Date만 가짜로 — setTimeout까지 멈추면 findBy/waitFor가 돌지 않는다
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 5, 15, 12, 0))
+    const dueKey = toDateKey(nextMonthDay())
+    mockTodos.splice(
+      0,
+      mockTodos.length,
+      ...saved.map((t) => ({ ...t, dueAt: dueKey })),
+    )
+    mockNavigate.mockClear()
+    mockToast.success.mockReset()
+    mockMarkConnected.mockReset()
+    mockMarkConnected.mockResolvedValue(undefined)
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  afterAll(() => {
+    mockTodos.splice(0, mockTodos.length, ...saved)
+  })
+
+  const title = () => document.querySelector('.fc-toolbar-title')?.textContent
+
+  it('기본 상태(오늘이 든 달, 월간, 시트 닫힘)는 URL에 아무것도 남기지 않는다', async () => {
+    const router = makeRouter('/calendar')
+    render(<RouterProvider router={router} />)
+    await waitFor(() => expect(title()).toBe(monthTitle(today())))
+    expect(router.state.location.search).toBe('')
+  })
+
+  it('넘긴 달과 열린 시트가 상세 갔다 뒤로 와도 복원되고, 히스토리는 쌓이지 않는다', async () => {
+    const router = makeRouter('/calendar')
+    const { unmount } = render(<RouterProvider router={router} />)
+    await waitFor(() => expect(title()).toBe(monthTitle(today())))
+
+    // 다음 달로 넘기고 그 달의 +N개로 날짜 시트를 연다
+    fireEvent.click(document.querySelector('.fc-next-button')!)
+    await waitFor(() => expect(title()).toBe(monthTitle(nextMonthDay())))
+    fireEvent.click(await screen.findByText(/\+\d+개/))
+    const sheetKey = toDateKey(nextMonthDay())
+    await screen.findByRole('button', { name: `${sheetKey} 날짜에 새 할 일 추가` })
+
+    await waitFor(() => expect(params(router).get('sheet')).toBe(sheetKey))
+    const firstOfNextMonth = toDateKey(
+      new Date(nextMonthDay().getFullYear(), nextMonthDay().getMonth(), 1),
+    )
+    expect(params(router).get('date')).toBe(firstOfNextMonth)
+    expect(router.state.historyAction).toBe('REPLACE')
+
+    // 상세로 갔다가 뒤로
+    await act(() => router.navigate('/todo/todo-1'))
+    expect(screen.getByText('상세')).toBeInTheDocument()
+    await act(() => router.navigate(-1))
+
+    await waitFor(() => expect(title()).toBe(monthTitle(nextMonthDay())))
+    expect(
+      await screen.findByRole('button', { name: `${sheetKey} 날짜에 새 할 일 추가` }),
+    ).toBeInTheDocument()
+
+    // 달 이동·시트 열기는 replace였으므로 뒤로 한 번이면 이전 페이지다
+    await act(() => router.navigate(-1))
+    expect(router.state.location.pathname).toBe('/prev')
+    unmount()
+  })
+
+  it('시트를 닫으면 sheet 파라미터가 지워진다', async () => {
+    const router = makeRouter('/calendar')
+    render(<RouterProvider router={router} />)
+    fireEvent.click(document.querySelector('.fc-next-button')!)
+    fireEvent.click(await screen.findByText(/\+\d+개/))
+    await waitFor(() => expect(params(router).get('sheet')).not.toBeNull())
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(params(router).get('sheet')).toBeNull())
+    expect(params(router).get('date')).not.toBeNull()
+  })
+
+  it('주간 뷰와 보던 주가 복원된다', async () => {
+    const router = makeRouter('/calendar')
+    const { unmount } = render(<RouterProvider router={router} />)
+    fireEvent.click(await screen.findByRole('button', { name: '주간' }))
+    await waitFor(() => expect(params(router).get('view')).toBe('week'))
+    // 오늘이 든 주는 기본값이라 date가 없다
+    expect(params(router).get('date')).toBeNull()
+
+    fireEvent.click(document.querySelector('.fc-next-button')!)
+    const t = today()
+    const nextWeekStart = toDateKey(new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay() + 7))
+    await waitFor(() => expect(params(router).get('date')).toBe(nextWeekStart))
+    unmount()
+
+    render(<RouterProvider router={makeRouter(`/calendar${router.state.location.search}`)} />)
+    expect(await screen.findByRole('button', { name: '주간' })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(document.querySelector(`[data-date="${nextWeekStart}"]`)).not.toBeNull())
+    // 주간 뷰라 그 주 7일만 보인다
+    expect(document.querySelectorAll('.fc-daygrid-day[data-date]').length).toBe(7)
+  })
+
+  it('잘못된 URL 값은 기본값으로 처리하고 URL에서 지운다(다른 파라미터는 유지)', async () => {
+    const router = makeRouter('/calendar?date=2026-02-30&view=year&sheet=abc&foo=1')
+    render(<RouterProvider router={router} />)
+    await waitFor(() => expect(title()).toBe(monthTitle(today())))
+    expect(screen.queryByText('이 날짜에 할 일 추가')).toBeNull()
+    await waitFor(() => expect(router.state.location.search).toBe('?foo=1'))
+  })
+
+  it('OAuth 콜백 파라미터와 함께 와도 콜백만 지워지고 캘린더 상태는 남는다', async () => {
+    const t = today()
+    const anchor = toDateKey(new Date(t.getFullYear(), t.getMonth() + 2, 1))
+    const sheet = toDateKey(new Date(t.getFullYear(), t.getMonth() + 2, 4))
+    const router = makeRouter(`/calendar?calendarConnected=1&date=${anchor}&sheet=${sheet}`)
+    render(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>,
+    )
+
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(params(router).get('calendarConnected')).toBeNull())
+    expect(params(router).get('date')).toBe(anchor)
+    expect(params(router).get('sheet')).toBe(sheet)
+    expect(title()).toBe(monthTitle(new Date(t.getFullYear(), t.getMonth() + 2, 1)))
+    expect(
+      screen.getByRole('button', { name: `${sheet} 날짜에 새 할 일 추가` }),
+    ).toBeInTheDocument()
   })
 })

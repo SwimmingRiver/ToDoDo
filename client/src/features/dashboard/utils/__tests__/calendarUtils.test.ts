@@ -147,3 +147,56 @@ describe("isDateInGoogleEventRange", () => {
     expect(isDateInGoogleEventRange("2026-11-16", event)).toBe(false);
   });
 });
+
+describe("캘린더 URL 상태 파싱", () => {
+  it("실재하는 yyyy-MM-dd만 받는다", async () => {
+    const { parseDateKeyParam } = await import("../calendarUtils");
+    expect(parseDateKeyParam("2026-03-01")).toBe("2026-03-01");
+    expect(parseDateKeyParam("2028-02-29")).toBe("2028-02-29"); // 윤년
+    for (const bad of [
+      null,
+      "",
+      "2026-02-30", // Date가 3월로 넘겨버리는 값
+      "2026-13-01",
+      "2026-00-10",
+      "2026-3-1",
+      "2026-03-01T00:00:00.000Z",
+      "abc",
+      "1969-12-31", // 범위 밖
+      "2101-01-01",
+    ]) {
+      expect(parseDateKeyParam(bad)).toBeNull();
+    }
+  });
+
+  it("view는 month/week만 받고 나머지는 null", async () => {
+    const { parseViewParam } = await import("../calendarUtils");
+    expect(parseViewParam("month")).toBe("dayGridMonth");
+    expect(parseViewParam("week")).toBe("dayGridWeek");
+    expect(parseViewParam("dayGridWeek")).toBeNull();
+    expect(parseViewParam("year")).toBeNull();
+    expect(parseViewParam(null)).toBeNull();
+  });
+
+  it("잘못된 값은 기본값으로 읽는다", async () => {
+    const { readCalendarUrlState } = await import("../calendarUtils");
+    expect(readCalendarUrlState(new URLSearchParams("date=x&view=year&sheet=2026-02-30"))).toEqual({
+      anchorDate: null,
+      view: "dayGridMonth",
+      sheetDate: null,
+    });
+  });
+
+  it("쓰기는 기본값 파라미터를 지우고 다른 파라미터는 보존한다", async () => {
+    const { writeCalendarUrlState } = await import("../calendarUtils");
+    const params = new URLSearchParams("calendarConnected=1&date=2026-01-01&view=week&sheet=2026-01-02");
+    writeCalendarUrlState(params, { anchorDate: null, view: "dayGridMonth", sheetDate: null });
+    expect(params.toString()).toBe("calendarConnected=1");
+
+    writeCalendarUrlState(params, { anchorDate: "2026-03-01", view: "dayGridWeek", sheetDate: "2026-03-04" });
+    expect(params.get("calendarConnected")).toBe("1");
+    expect(params.get("date")).toBe("2026-03-01");
+    expect(params.get("view")).toBe("week");
+    expect(params.get("sheet")).toBe("2026-03-04");
+  });
+});
