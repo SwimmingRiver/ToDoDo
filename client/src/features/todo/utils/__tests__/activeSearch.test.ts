@@ -71,6 +71,27 @@ describe("buildActiveSearchResult", () => {
     expect(result.roots.map((t) => t.id)).toEqual(["r1"]);
   });
 
+  it("대표 회차는 안 걸려도 다른 회차가 걸리면 시리즈 카드(대표)를 낸다", () => {
+    // "이 일정과 이후 일정"으로 앞으로의 회차만 이름을 바꾼 경우: 대표(가장 이른 마감)는 옛 이름
+    const todos = [
+      makeTodo({ id: "r1", title: "Gym", recurrenceId: "s", dueAt: localIso(2026, 11, 27) }),
+      makeTodo({ id: "r2", title: "Workout", recurrenceId: "s", dueAt: localIso(2026, 11, 29) }),
+      makeTodo({ id: "r3", title: "Workout", recurrenceId: "s", dueAt: localIso(2026, 11, 30) }),
+    ];
+    const result = buildActiveSearchResult(todos, { query: "Workout", priorities: [] });
+    expect(result.roots.map((t) => t.id)).toEqual(["r1"]);
+    expect(result.autoExpandIds.size).toBe(0);
+  });
+
+  it("보관된(overdueArchived) 회차만 걸리면 시리즈 카드를 내지 않는다", () => {
+    const todos = [
+      makeTodo({ id: "old", title: "Workout", recurrenceId: "s", overdueArchived: true, dueAt: localIso(2026, 11, 20) }),
+      makeTodo({ id: "r1", title: "Gym", recurrenceId: "s", dueAt: localIso(2026, 11, 28) }),
+    ];
+    const result = buildActiveSearchResult(todos, { query: "Workout", priorities: [] });
+    expect(result.roots).toHaveLength(0);
+  });
+
   it("완료된 루트는 걸려도 제외된다", () => {
     const todos = [
       makeTodo({ id: "done", title: "회의", status: "done" }),
