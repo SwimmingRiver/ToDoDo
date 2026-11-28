@@ -27,6 +27,7 @@ jobs:
       feedbackProxy: ${{ steps.filter.outputs.feedbackProxy }}
       mobile: ${{ steps.filter.outputs.mobile }}
       scripts: ${{ steps.filter.outputs.scripts }}
+      rules: ${{ steps.filter.outputs.rules }}
       client: ${{ steps.code.outputs.client }}
 
     steps:
@@ -84,6 +85,13 @@ jobs:
               - 'packages/core/**'
               - 'package.json'
               - 'package-lock.json'
+              - '.github/workflows/ci.yml'
+            # Firestore rules 테스트(packages/core/src/__rules__)는 rules 파일과 core 조회 코드를
+            # 함께 검증한다 — 둘 중 하나만 바뀌어도 돌린다.
+            rules:
+              - 'firestore.rules'
+              - 'firebase.json'
+              - 'packages/core/**'
               - '.github/workflows/ci.yml'
 
       # Client·E2E는 "문서만 바뀐 게 아니면" 돈다 — 필요한 경로를 나열하는 대신 문서만
@@ -398,6 +406,62 @@ jobs:
           TZ: America/New_York
         run: npm run test:scripts
 
+  # firestore.rules 허용·거부 표 + core Firestore 함수를 실제 rules 위에서 돌리는 계약 테스트.
+  # deploy가 rules를 배포하므로 needs로 기다린다 — 그래서 main push에서는 skip하지 않는다
+  # (skip되면 deploy까지 skip된다). 조건은 client job과 같은 패턴.
+  rules:
+    name: Firestore Rules
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      (
+        needs.changes.result != 'success' ||
+        needs.changes.outputs.rules == 'true' ||
+        (github.ref == 'refs/heads/main' && github.event_name == 'push')
+      ) && !cancelled()
+    defaults:
+      run:
+        working-directory: packages/core
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-core-npm
+        with:
+          path: packages/core/node_modules
+          key: ${{ runner.os }}-core-node-modules-${{ hashFiles('packages/core/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-core-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-core-npm.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Cache Firebase emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-firebase-emulators-core-${{ hashFiles('packages/core/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-firebase-emulators-
+
+      - name: Rules Test
+        run: npm run test:rules
+
   worker-auth:
     name: Worker Auth
     runs-on: ubuntu-latest
@@ -711,7 +775,7 @@ jobs:
   deploy:
     name: Deploy to Firebase Hosting
     runs-on: ubuntu-latest
-    needs: [client, e2e, feedback-proxy]
+    needs: [client, e2e, feedback-proxy, rules]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
