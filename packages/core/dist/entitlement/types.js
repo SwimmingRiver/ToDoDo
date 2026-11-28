@@ -4,6 +4,7 @@ export const EMPTY_ENTITLEMENT = {
     source: null,
     premiumUntil: null,
     trialUsedAt: null,
+    trialIdentities: {},
     cancelAt: null,
     currentPeriodEnd: null,
     customerId: null,

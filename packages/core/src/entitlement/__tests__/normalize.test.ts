@@ -22,6 +22,20 @@ describe("normalizeEntitlement", () => {
     expect(doc).toEqual({ ...EMPTY_ENTITLEMENT, plan: "premium", premiumUntil: P });
   });
 
+  it("체험 당시 로그인 계정 키(trialIdentities)를 그대로 보존한다", () => {
+    const doc = normalizeEntitlement({ trialUsedAt: T, trialIdentities: { aa11: "google.com", bb22: "apple.com" } });
+    expect(doc.trialIdentities).toEqual({ aa11: "google.com", bb22: "apple.com" });
+  });
+
+  it("trialIdentities에서 알 수 없는 제공자·잘못된 형태는 버린다", () => {
+    expect(normalizeEntitlement({ trialIdentities: { aa11: "google.com", cc33: "password", dd44: 3 } }).trialIdentities).toEqual({
+      aa11: "google.com",
+    });
+    for (const bad of [null, "x", ["aa11"], 5]) {
+      expect(normalizeEntitlement({ trialIdentities: bad }).trialIdentities).toEqual({});
+    }
+  });
+
   it("migrates legacy paddle doc", () => {
     const doc = normalizeEntitlement({
       plan: "premium",

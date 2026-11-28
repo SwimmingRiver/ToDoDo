@@ -120,6 +120,16 @@ const migrateLegacy = (raw, source) => {
     // source null: Paddle id만 보존한다. apple·google은 예전 문서에 존재할 수 없다.
     return paddle;
 };
+const trialIdentities = (value) => {
+    if (!isObject(value))
+        return {};
+    const out = {};
+    for (const [key, provider] of Object.entries(value)) {
+        if (provider === "google.com" || provider === "apple.com")
+            out[key] = provider;
+    }
+    return out;
+};
 /** Firestore에서 읽은 임의의 값을 EntitlementDoc으로. 잘못된 필드는 기본값, 예전 문서는 sources로 이주. */
 export const normalizeEntitlement = (data) => {
     if (!isObject(data))
@@ -138,6 +148,7 @@ export const normalizeEntitlement = (data) => {
         source,
         premiumUntil: str(data.premiumUntil),
         trialUsedAt: str(data.trialUsedAt),
+        trialIdentities: trialIdentities(data.trialIdentities),
         cancelAt: str(data.cancelAt),
         currentPeriodEnd: str(data.currentPeriodEnd),
         customerId: str(data.customerId),

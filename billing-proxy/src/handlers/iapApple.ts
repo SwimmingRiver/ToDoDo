@@ -8,12 +8,16 @@ import { UserNotFoundError } from "../claims";
 import { commitEntitlement, type CommitDeps } from "../commit";
 import type { Env } from "../env";
 import { decideLink, type StoreLinkStore } from "../storeLinks";
+import { attachTrialIdentities, trialKeysFor } from "../trialHistory";
+import type { VerifiedToken } from "@tododo/worker-auth";
 
 export interface AppleIapDeps extends CommitDeps {
   storeLinks: Pick<StoreLinkStore, "get" | "put">;
   apple: Pick<AppleServerApi, "getSubscriptionSnapshot" | "sendConsumptionInfo">;
   /** Apple 루트로 서명 체인을 검증하고 페이로드를 돌려준다. 실패는 AppleJwsError. */
   verifyAppleJws: (jws: string) => Promise<unknown>;
+  /** 체험 구매를 반영할 때 로그인 계정 키를 만드는 시크릿. 없거나 null이면(시크릿 미설정) 키를 남기지 않는다. */
+  trialHistory?: { secret: string } | null;
 }
 
 type AppleEnv = Pick<Env, "APPLE_BUNDLE_ID" | "IAP_ACCOUNT_TOKEN_SECRET">;
@@ -84,6 +88,7 @@ export const handleAppleVerify = async (
   now: Date,
   env: AppleEnv,
   request: Request,
+  token?: Pick<VerifiedToken, "identities">,
 ): Promise<Response> => {
   const body = await readJson(request);
   const jws = isRecord(body) ? body.jws : undefined;
@@ -110,7 +115,12 @@ export const handleAppleVerify = async (
   // 조회 결과가 요청한 구독이 아니면 추측해서 반영하지 않는다.
   if (snap.transaction.originalTransactionId !== tx.originalTransactionId) return invalid();
 
-  const outcome = await commitEntitlement(deps, uid, (existing) => applyAppleSnapshot(existing, snap, now));
+  // 이번 반영으로 체험이 새로 시작되면 지금 로그인 계정 키를 함께 남긴다(탈퇴 때 재가입 체험 방지용, attachTrialIdentities).
+  // 웹훅 경로는 토큰이 없어 남기지 않는다.
+  const keys = await trialKeysFor(deps.trialHistory, token?.identities);
+  const outcome = await commitEntitlement(deps, uid, (existing) =>
+    attachTrialIdentities(existing, applyAppleSnapshot(existing, snap, now), keys, now),
+  );
   if (outcome.kind === "written") return json({ premiumUntil: outcome.doc.premiumUntil });
   // 다른 유효한 Apple 구독을 추적 중인 경우 등. 권한은 그대로이니 현재 값을 돌려준다.
   console.warn("Apple verify 반영 생략:", outcome.reason, uid, tx.originalTransactionId);

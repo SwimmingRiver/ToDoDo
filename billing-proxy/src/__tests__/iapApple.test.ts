@@ -9,6 +9,7 @@ import { UserNotFoundError } from "../claims";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
 import type { StoreLink } from "../storeLinks";
 import { asStored } from "./helpers/storedDoc";
+import { hmacSha256Hex } from "../hmac";
 import { handleRequest, type BillingDeps } from "../router";
 import type { Env } from "../env";
 import { makeAppleTestChain, signTestJws, NOW, type TestChain } from "./helpers/appleTestChain";
@@ -130,6 +131,27 @@ describe("handleAppleVerify", () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it("시행 후 무료 체험 구매를 반영할 때 지금 토큰의 키를 저장하고, 이미 체험한 계정의 유료 구매에는 저장하지 않는다", async () => {
+    const AFTER = new Date("2026-12-28T03:00:00.000Z");
+    const far = AFTER.getTime() + 30 * DAY;
+    const token = { uid: "u1", premium: false, premiumUntil: null, identities: { "apple.com": ["a1"] } };
+    const history = () => ({ store: { record: vi.fn(), hasActive: vi.fn() }, secret: "s" });
+    const trialTx = transaction({ offerType: 1, offerDiscountType: "FREE_TRIAL", expiresDate: far });
+    const d = { ...deps(), trialHistory: history() };
+    d.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ transaction: trialTx }));
+    const res = await handleAppleVerify("u1", d, AFTER, ENV, verifyRequest({ jws: await signTestJws(trialTx, chain) }), token);
+    expect(res.status).toBe(200);
+    const doc = d.store.write.mock.calls[0][1];
+    expect(doc.trialUsedAt).not.toBeNull();
+    expect(doc.trialIdentities).toEqual({ [await hmacSha256Hex("s", "apple.com:a1")]: "apple.com" });
+
+    const paidTx = transaction({ expiresDate: far });
+    const paid = { ...deps({ ...EMPTY_ENTITLEMENT, trialUsedAt: "2026-12-01T00:00:00.000Z" }), trialHistory: history() };
+    paid.apple.getSubscriptionSnapshot.mockResolvedValue(snapshot({ transaction: paidTx }));
+    await handleAppleVerify("u1", paid, AFTER, ENV, verifyRequest({ jws: await signTestJws(paidTx, chain) }), token);
+    expect(paid.store.write.mock.calls[0][1].trialIdentities).toEqual({});
+  });
 
   it("Sandbox 거래(TestFlight·심사 결제)는 샌드박스 환경으로 조회한다", async () => {
     const d = deps();

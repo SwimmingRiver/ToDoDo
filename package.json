@@ -13,6 +13,7 @@
     "test:scripts": "tsx --test scripts/lib/*.test.ts",
     "audit:done-at": "tsx scripts/auditDoneAtData.ts",
     "backfill:done-at": "tsx scripts/backfillDoneAt.ts",
+    "backfill:trial-identities": "tsx scripts/backfillTrialIdentities.ts",
     "seed:demo": "tsx scripts/seedDemoTodos.ts"
   },
   "repository": {

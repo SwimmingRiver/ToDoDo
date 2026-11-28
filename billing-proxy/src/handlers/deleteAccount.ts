@@ -1,10 +1,11 @@
 import type { AccountDataStore } from "../accountDataStore";
 import type { ClaimsClient } from "../claims";
+import type { EntitlementDoc } from "../entitlement";
 import type { EntitlementStore } from "../entitlementStore";
 import type { PlayApi } from "../google/playApi";
 import type { PaddleClient } from "../paddle";
 import type { VerifiedToken } from "@tododo/worker-auth";
-import { TRIAL_HISTORY_START, trialIdentityKeys, type TrialHistoryStore } from "../trialHistory";
+import { TRIAL_HISTORY_START, trialIdentityKeys, type TrialHistoryStore, type TrialIdentityKey } from "../trialHistory";
 
 export interface AccountDeletionDeps {
   store: Pick<EntitlementStore, "get">;
@@ -21,19 +22,26 @@ const json = (body: unknown, status: number): Response =>
 
 /**
  * 체험을 쓴 계정이면 데이터 삭제 전에 체험 사용 확인값을 남긴다(재가입 체험 재지급 방지, 4판 시행 후부터).
+ * 남기는 키 = 체험 당시 저장해 둔 키(doc.trialIdentities) ∪ 지금 토큰의 키. 토큰에 연결된 계정은 사용자가
+ * 탈퇴 직전에 바꿀 수 있어서, 지금 토큰만 보면 연결을 끊고 탈퇴해 기록을 피할 수 있다.
  * 실패해도 탈퇴는 막지 않는다 — 탈퇴는 이용자 권리다. 로그에는 uid만 남긴다(식별자·해시 금지).
  */
 const recordTrialHistory = async (
   uid: string,
-  trialUsedAt: string | null,
+  doc: Pick<EntitlementDoc, "trialUsedAt" | "trialIdentities">,
   identities: VerifiedToken["identities"],
   deps: AccountDeletionDeps,
   now: Date,
 ): Promise<void> => {
-  if (!deps.trialHistory || trialUsedAt === null || now.getTime() < TRIAL_HISTORY_START.getTime()) return;
+  if (!deps.trialHistory || doc.trialUsedAt === null || now.getTime() < TRIAL_HISTORY_START.getTime()) return;
   try {
-    const keys = await trialIdentityKeys(deps.trialHistory.secret, identities);
+    const byKey = new Map<string, TrialIdentityKey>(
+      Object.entries(doc.trialIdentities).map(([key, provider]) => [key, { provider, key }]),
+    );
+    for (const entry of await trialIdentityKeys(deps.trialHistory.secret, identities)) byKey.set(entry.key, entry);
+    const keys = [...byKey.values()];
     if (keys.length > 0) await deps.trialHistory.store.record(keys, now);
+    else console.warn("탈퇴: 체험을 썼지만 남길 로그인 계정 키가 없음(재가입 체험을 막을 수 없음):", uid);
   } catch (error) {
     console.error("탈퇴 중 체험 사용 확인값 기록 실패(탈퇴는 계속):", uid, error);
   }
@@ -80,7 +88,7 @@ export const handleDeleteAccount = async (
     }
   }
   // 데이터 삭제 전에 남긴다 — 뒤 단계가 실패해 다시 시도해도 trialUsedAt이 남아 있어 다시 기록된다(같은 문서 덮어쓰기).
-  await recordTrialHistory(uid, doc.trialUsedAt, identities, deps, now);
+  await recordTrialHistory(uid, doc, identities, deps, now);
   await deps.accountData.deleteUserData(uid);
   await deps.claims.deleteUser(uid);
   return new Response(null, { status: 204 });

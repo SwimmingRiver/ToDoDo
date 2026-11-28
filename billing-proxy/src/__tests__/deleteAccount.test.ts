@@ -266,6 +266,35 @@ describe("handleDeleteAccount — 체험 사용 확인값", () => {
     expect(at.store_.record).toHaveBeenCalledTimes(1);
   });
 
+  it("탈퇴 전에 로그인 계정 연결을 끊어 토큰이 비어 있어도, 체험 때 저장한 키를 기록한다", async () => {
+    const grantKey = await hmacSha256Hex("s", "google.com:g1");
+    const deps = withHistory({ ...TRIALED, trialIdentities: { [grantKey]: "google.com" } });
+    await handleDeleteAccount("u1", deps, {}, AFTER);
+    expect(deps.store_.record).toHaveBeenCalledWith([{ provider: "google.com", key: grantKey }], AFTER);
+  });
+
+  it("체험 때 저장한 키와 탈퇴 토큰의 키를 합쳐 한 번에 기록하고, 겹치는 키는 한 번만 쓴다", async () => {
+    const g1 = await hmacSha256Hex("s", "google.com:g1");
+    const oldApple = await hmacSha256Hex("s", "apple.com:a0");
+    const deps = withHistory({ ...TRIALED, trialIdentities: { [g1]: "google.com", [oldApple]: "apple.com" } });
+    await handleDeleteAccount("u1", deps, IDS, AFTER);
+    expect(deps.store_.record).toHaveBeenCalledTimes(1);
+    const [recorded] = deps.store_.record.mock.calls[0] as unknown as [{ provider: string; key: string }[], Date];
+    expect(recorded).toHaveLength(3);
+    expect(new Set(recorded.map((e) => e.key))).toEqual(
+      new Set([g1, oldApple, await hmacSha256Hex("s", "apple.com:a1")]),
+    );
+  });
+
+  it("체험을 썼는데 기록할 키가 하나도 없으면 uid만 남기는 경고 로그를 남긴다", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const deps = withHistory(TRIALED);
+    await handleDeleteAccount("u1", deps, {}, AFTER);
+    expect(deps.store_.record).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]).toContain("u1");
+  });
+
   it("식별자가 없으면 기록하지 않는다", async () => {
     const deps = withHistory(TRIALED);
     await handleDeleteAccount("u1", deps, {}, AFTER);
