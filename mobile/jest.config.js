@@ -1,5 +1,6 @@
 // 타임존 고정(client 테스트와 동일). Date 사용 전에 적용되어야 해서 설정 파일 최상단에 둔다.
-process.env.TZ = "Asia/Seoul";
+// 지정이 없을 때만 고정한다 — `TZ=America/New_York npx jest`로 음수 오프셋도 검증할 수 있게.
+process.env.TZ ||= "Asia/Seoul";
 
 module.exports = {
   preset: "jest-expo",
