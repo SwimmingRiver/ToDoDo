@@ -10,6 +10,7 @@ import { collapseRecurringInstances } from "@/features/todo";
 import { useTodoFilterParams } from "@/features/todo/hooks/useTodoFilterParams";
 import { TodoSearch } from "@/features/todo/components/todoSearch";
 import { PriorityFilterChips } from "@/features/todo/components/priorityFilterChips";
+import { SearchEmptyState } from "@/features/todo/components/searchEmptyState";
 import {
   matchesTodoFilter,
   isTodoFilterActive,
@@ -54,6 +55,14 @@ const KanbanBoard = () => {
   const handleClearQuery = useCallback(() => {
     if (queryRef.current) setQuery("");
   }, [setQuery]);
+
+  // 결과 줄 버튼과 빈 상태 버튼이 함께 쓴다. 빈 상태 버튼은 검색칸 밖이라 입력값을 직접
+  // 비울 수 없으므로, key를 바꿔 검색칸을 새로 마운트한다(목록의 handleCancelSearch와 같은 방식).
+  const [searchInputKey, setSearchInputKey] = useState(0);
+  const handleResetFilter = useCallback(() => {
+    resetFilter();
+    setSearchInputKey((k) => k + 1);
+  }, [resetFilter]);
 
   const notifyStatusChangeError = () =>
     toast.error("상태 변경 실패", "할 일 상태 변경 중 오류가 발생했습니다");
@@ -169,10 +178,11 @@ const KanbanBoard = () => {
     <KanbanPageWrapper>
       <FilterBar>
         <TodoSearch
-          initialValue={filter.query}
+          key={searchInputKey}
+          initialValue={searchInputKey === 0 ? filter.query : ""}
           onSearch={setQuery}
           onClear={handleClearQuery}
-          onReset={resetFilter}
+          onReset={handleResetFilter}
           resultCount={filteredCount}
           isSearching={isFiltering}
         />
@@ -181,6 +191,9 @@ const KanbanBoard = () => {
           onToggle={togglePriority}
         />
       </FilterBar>
+      {isFiltering && filteredCount === 0 ? (
+        <SearchEmptyState query={filter.query} onCancelSearch={handleResetFilter} />
+      ) : (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
@@ -249,6 +262,7 @@ const KanbanBoard = () => {
         ) : null}
       </DragOverlay>
     </DndContext>
+      )}
     </KanbanPageWrapper>
   );
 };

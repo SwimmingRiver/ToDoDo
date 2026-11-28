@@ -224,6 +224,26 @@ describe("KanbanBoard 검색·우선순위 필터", () => {
     expect(capturedDragProps!.isReorderLocked).toBe(false);
   });
 
+  it("필터 결과가 0건이면 빈 열 대신 검색 빈 상태를 보여 주고, 버튼으로 필터를 지운다", async () => {
+    renderKanbanBoard("/kanban?q=" + encodeURIComponent("없는말"));
+    // 빈 열 세 개를 그리지 않는다
+    expect(columnCalls).toHaveLength(0);
+    expect(screen.getByText("검색 결과가 없습니다")).toBeInTheDocument();
+    expect(screen.getByText('"없는말"에 대한 결과를 찾을 수 없습니다')).toBeInTheDocument();
+    // 검색칸·칩은 그대로 남는다
+    expect(screen.getByPlaceholderText("할 일 검색...")).toHaveValue("없는말");
+    expect(screen.getByRole("button", { name: "높음" })).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole("button", { name: "검색 취소" });
+    await act(async () => {
+      buttons[buttons.length - 1].click();
+    });
+
+    expect(screen.queryByText("검색 결과가 없습니다")).not.toBeInTheDocument();
+    expect(titlesOf("todo")).toEqual(["보고서 작성", "장보기"]);
+    expect(screen.getByPlaceholderText("할 일 검색...")).toHaveValue("");
+  });
+
   it("모바일 탭 카운트는 걸러진 수를 보여준다", () => {
     isTabletMock.mockReturnValue(true);
     renderKanbanBoard("/kanban?q=" + encodeURIComponent("보고서"));
