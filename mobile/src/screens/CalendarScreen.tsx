@@ -23,6 +23,20 @@ import { formatTodayLabel } from "../shared/utils/formatToday";
 import { parseLocalDateOnly, toDateKey } from "../shared/utils/dateRange";
 import { addGoogleEventDots, type CalendarMarkedDates } from "../shared/utils/calendarMarkers";
 import { colors } from "../theme/colors";
+import {
+  formatWeekLabel,
+  getWeekDateKeys,
+  getWeekStartKey,
+  monthForWeekToMonth,
+  shiftWeekKey,
+  toWeekRange,
+  weekStartForMonthToWeek,
+  type VisibleMonth,
+} from "../calendar/weekRange";
+import { buildWeekDayItems, type WeekDayItem } from "../calendar/weekDayItems";
+import { ViewModeToggle, type CalendarViewMode } from "../calendar/components/ViewModeToggle";
+import { WeekHeader } from "../calendar/components/WeekHeader";
+import { WeekRowsView } from "../calendar/components/WeekRowsView";
 
 // react-native-calendars는 LocaleConfig 등록이 없으면 XDate의 영어 로케일로
 // 월/요일명을 그린다 — 앱 전체가 한국어이므로 모듈 로드 시 한 번 등록한다.
@@ -64,11 +78,7 @@ function withSelection(markedDates: CalendarMarkedDates, selectedDate: string | 
   return { ...markedDates, [selectedDate]: { ...existing, selected: true } };
 }
 
-interface VisibleMonth {
-  year: number;
-  /** 1~12 (react-native-calendars DateData.month와 같은 규칙). */
-  month: number;
-}
+const currentWeekStart = (): string => getWeekStartKey(toDateKey(new Date()));
 
 const currentMonth = (): VisibleMonth => {
   const now = new Date();
@@ -98,9 +108,13 @@ export const CalendarScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<CalendarStackParamList>>();
   const { todos, markedDates, isLoading, isError, getTodosForDate } = useCalendarTodos();
   const [visibleMonth, setVisibleMonth] = useState<VisibleMonth>(currentMonth);
+  // 앱(화면)을 새로 띄우면 월간으로 시작한다 — 마지막 선택은 저장하지 않는다(스펙 4-1).
+  const [mode, setMode] = useState<CalendarViewMode>("month");
+  const [weekStartKey, setWeekStartKey] = useState<string>(currentWeekStart);
   const monthRange = useMemo(() => toMonthRange(visibleMonth), [visibleMonth]);
+  const weekRange = useMemo(() => toWeekRange(weekStartKey), [weekStartKey]);
   // 조회 실패는 화면 오류로 만들지 않는다 — data가 없으면 점·줄만 빠진다.
-  const { data: googleEvents } = useGoogleCalendarEvents(monthRange.range);
+  const { data: googleEvents } = useGoogleCalendarEvents(mode === "week" ? weekRange.range : monthRange.range);
   // ToDoDo가 만든(googleEventId로 링크된) 이벤트는 같은 할 일이 두 번 보이지 않게 뺀다.
   const overlayEvents = useMemo(() => filterUnsyncedEvents(googleEvents ?? [], todos), [googleEvents, todos]);
   const markedDatesWithSelection = useMemo(() => {
@@ -109,6 +123,21 @@ export const CalendarScreen = () => {
     );
     return withSelection(addGoogleEventDots(markedDates, eventDateKeys), selectedDate);
   }, [markedDates, overlayEvents, monthRange, selectedDate]);
+  // 주간 하루 줄 칩. 그날의 할 일은 날짜 시트와 같은 getTodosForDate(기간 할 일은 기간 내 매일),
+  // 구글 일정은 시트와 같은 isDateInGoogleEventRange로 거른다. WeekDayRow가 items 배열 기준으로
+  // 칩을 재므로 매 렌더 새 배열이 되지 않게 메모한다.
+  const itemsByDate = useMemo(() => {
+    if (mode !== "week") return {};
+    const result: Record<string, WeekDayItem[]> = {};
+    for (const dateKey of getWeekDateKeys(weekStartKey)) {
+      result[dateKey] = buildWeekDayItems(
+        dateKey,
+        getTodosForDate(dateKey),
+        overlayEvents.filter((event) => isDateInGoogleEventRange(dateKey, event)),
+      );
+    }
+    return result;
+  }, [mode, weekStartKey, getTodosForDate, overlayEvents]);
   const selectedDateGoogleEvents = useMemo(
     () => (selectedDate ? overlayEvents.filter((event) => isDateInGoogleEventRange(selectedDate, event)) : []),
     [overlayEvents, selectedDate],
@@ -122,13 +151,28 @@ export const CalendarScreen = () => {
     );
   };
 
-  const handleDayPress = (day: DateData) => {
-    // day.dateString은 react-native-calendars가 이미 로컬 캘린더 날짜 기준
-    // "yyyy-MM-dd"로 준다 — 우리 쪽 toDateKey/toDateKeyFromISO 변환을 다시 거치면
-    // 이중 변환이 되므로 그대로 dateKey로 쓴다.
-    setSelectedDate(day.dateString);
+  const openDate = (dateKey: string) => {
+    setSelectedDate(dateKey);
     setIsSheetOpen(true);
   };
+
+  // day.dateString은 react-native-calendars가 이미 로컬 캘린더 날짜 기준 "yyyy-MM-dd"로 준다 —
+  // 우리 쪽 toDateKey/toDateKeyFromISO 변환을 다시 거치면 이중 변환이 되므로 그대로 dateKey로 쓴다.
+  const handleDayPress = (day: DateData) => openDate(day.dateString);
+
+  const handleModeChange = (next: CalendarViewMode) => {
+    if (next === mode) return;
+    const today = new Date();
+    if (next === "week") {
+      setWeekStartKey(weekStartForMonthToWeek({ selectedDate, visibleMonth, today }));
+    } else {
+      // Calendar initialDate가 monthRange.startKey라 이 달로 다시 그려진다.
+      setVisibleMonth(monthForWeekToMonth(weekStartKey, today));
+    }
+    setMode(next);
+  };
+
+  const shiftWeek = (delta: number) => setWeekStartKey((prev) => shiftWeekKey(prev, delta));
 
   const handleAddTodo = () => {
     if (!selectedDate) return;
@@ -169,18 +213,38 @@ export const CalendarScreen = () => {
     <SafeAreaView style={styles.screen} edges={[]}>
       {/* calendarArea 밖에 둬야 onLayout이 연결 줄을 뺀 남은 높이를 잰다. */}
       <CalendarConnectionBar todos={todos} />
-      <View style={styles.calendarArea} onLayout={handleLayout}>
-        <Calendar
-          initialDate={monthRange.startKey}
-          markingType="multi-dot"
-          markedDates={markedDatesWithSelection}
-          onDayPress={handleDayPress}
-          onMonthChange={handleMonthChange}
-          dayComponent={CalendarDayCell}
-          theme={CALENDAR_THEME}
-          style={calendarHeight != null ? { height: calendarHeight } : undefined}
-        />
-      </View>
+      <ViewModeToggle mode={mode} onChange={handleModeChange} />
+      {mode === "week" ? (
+        <>
+          <WeekHeader
+            label={formatWeekLabel(weekStartKey, new Date())}
+            onPrev={() => shiftWeek(-1)}
+            onNext={() => shiftWeek(1)}
+            onToday={() => setWeekStartKey(currentWeekStart())}
+          />
+          <WeekRowsView
+            weekStartKey={weekStartKey}
+            itemsByDate={itemsByDate}
+            todayKey={toDateKey(new Date())}
+            selectedDate={selectedDate}
+            onPressDate={openDate}
+            onSwipeWeek={shiftWeek}
+          />
+        </>
+      ) : (
+        <View style={styles.calendarArea} onLayout={handleLayout}>
+          <Calendar
+            initialDate={monthRange.startKey}
+            markingType="multi-dot"
+            markedDates={markedDatesWithSelection}
+            onDayPress={handleDayPress}
+            onMonthChange={handleMonthChange}
+            dayComponent={CalendarDayCell}
+            theme={CALENDAR_THEME}
+            style={calendarHeight != null ? { height: calendarHeight } : undefined}
+          />
+        </View>
+      )}
       <DateTodosSheet
         isOpen={isSheetOpen}
         onClose={() => setIsSheetOpen(false)}
