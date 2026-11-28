@@ -5,6 +5,9 @@ import { colors } from "../../theme/colors";
 import { countVisibleChips } from "../visibleChipCount";
 import type { WeekDayItem } from "../weekDayItems";
 
+/** +n 자리 폭. "+99"까지 12pt 글자로 들어간다. */
+const MORE_SLOT_WIDTH = 28;
+
 const WEEKDAY_SHORT = ["일", "월", "화", "수", "목", "금", "토"];
 const WEEKDAY_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -93,12 +96,12 @@ export const WeekDayRow = ({ dateKey, items, isToday, isSelected, onPress }: Wee
           {items.slice(0, visibleCount).map((item) => (
             <Chip key={item.key} item={item} testID={`week-chip-${item.key}`} />
           ))}
-          {hiddenCount > 0 && (
-            <Text testID={`week-more-${dateKey}`} style={styles.more}>
-              {`+${hiddenCount}`}
-            </Text>
-          )}
         </View>
+        {hiddenCount > 0 && (
+          <Text testID={`week-more-${dateKey}`} style={styles.more}>
+            {`+${hiddenCount}`}
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -147,11 +150,13 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: "hidden",
   },
+  // 칩은 오른쪽 MORE_SLOT_WIDTH만큼 비워 두고 흐른다 — 그 자리에 +n이 고정된다(측정 층도 같은 폭).
   wrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignContent: "flex-start",
     gap: 4,
+    paddingRight: MORE_SLOT_WIDTH,
   },
   // 보이는 층과 같은 폭에 겹쳐 두고 투명하게 — 칩 배치만 잰다.
   measureLayer: {
@@ -185,9 +190,12 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
   },
   more: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: MORE_SLOT_WIDTH,
+    textAlign: "right",
     fontSize: 12,
     color: colors.text.secondary,
-    alignSelf: "center",
-    paddingHorizontal: 4,
   },
 });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { describe, expect, it, jest } from "@jest/globals";
 import { WeekDayRow } from "../components/WeekDayRow";
 import type { WeekDayItem } from "../weekDayItems";
@@ -57,9 +58,9 @@ describe("WeekDayRow", () => {
     }
     await fireEvent(screen.getByTestId("week-chips-2026-11-24"), "layout", layout(0, 50));
 
-    expect(screen.getByTestId("week-chip-todo-c")).toBeTruthy();
-    expect(screen.queryByTestId("week-chip-todo-d")).toBeNull();
-    expect(screen.getByTestId("week-more-2026-11-24").props.children).toBe("+3");
+    expect(screen.getByTestId("week-chip-todo-d")).toBeTruthy();
+    expect(screen.queryByTestId("week-chip-todo-e")).toBeNull();
+    expect(screen.getByTestId("week-more-2026-11-24").props.children).toBe("+2");
   });
 
   it("다 들어가면 +n이 없다", async () => {
@@ -96,6 +97,22 @@ describe("WeekDayRow", () => {
       />,
     );
     await fireEvent(screen.getByTestId("week-measure-todo-c", HIDDEN), "layout", layout(24, 20));
-    expect(screen.getByTestId("week-more-2026-11-24").props.children).toBe("+2");
+    expect(screen.getByTestId("week-more-2026-11-24").props.children).toBe("+1");
+  });
+
+  it("+n은 칩 흐름 밖(오른쪽 아래 고정)에 그려 큰 글씨로 칩이 한 줄만 들어가도 잘리지 않는다", async () => {
+    const items = ["a", "b", "c"].map((k) => item(`todo-${k}`));
+    await render(
+      <WeekDayRow dateKey="2026-11-24" items={items} isToday={false} isSelected={false} onPress={() => {}} />,
+    );
+    const bottoms = [20, 44, 68];
+    for (const [i, it] of items.entries()) {
+      await fireEvent(screen.getByTestId(`week-measure-${it.key}`, HIDDEN), "layout", layout(bottoms[i] - 20, 20));
+    }
+    await fireEvent(screen.getByTestId("week-chips-2026-11-24"), "layout", layout(0, 30));
+    expect(screen.getByTestId("week-chip-todo-a")).toBeTruthy();
+    const more = screen.getByTestId("week-more-2026-11-24");
+    expect(more.props.children).toBe("+2");
+    expect(StyleSheet.flatten(more.props.style)).toMatchObject({ position: "absolute", right: 0, bottom: 0 });
   });
 });
