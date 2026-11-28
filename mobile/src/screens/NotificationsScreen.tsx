@@ -201,7 +201,8 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   label: { fontSize: 14, color: colors.text.secondary },
   statusOn: { fontSize: 15, fontWeight: "600", color: colors.brand.strong },
-  smallButton: { minWidth: 120 },
+  // primary Button은 기본이 width 100%(하단 풀폭 버튼용)라, 라벨과 한 줄에 둘 땐 내용 폭으로 되돌린다.
+  smallButton: { width: "auto", height: MIN_TOUCH_TARGET, minWidth: 96, paddingHorizontal: spacing.lg },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: colors.text.secondary },
   item: {
     flexDirection: "row",
