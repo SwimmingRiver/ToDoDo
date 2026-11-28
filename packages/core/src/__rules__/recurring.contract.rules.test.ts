@@ -81,7 +81,12 @@ describe("반복 시리즈", () => {
 
   it("editRecurringSeries로 시리즈 제목을 바꾼다", async () => {
     const created = await newSeries(addDays(NOW, 7));
-    await editRecurringSeries(db, "alice", { ...created[0], title: "매일 산책" }, addDays(NOW, 7));
+    await editRecurringSeries(
+      db,
+      "alice",
+      { ...created[0], title: "매일 산책", recurrence: DAILY },
+      addDays(NOW, 7),
+    );
     const stored = await fetchAllUserTodos(db, "alice");
     expect(stored.length).toBeGreaterThan(0);
     expect(stored.every((t) => t.title === "매일 산책")).toBe(true);
