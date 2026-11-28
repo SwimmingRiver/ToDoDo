@@ -7,6 +7,7 @@ import { UserNotFoundError } from "../claims";
 import { EMPTY_ENTITLEMENT, type EntitlementDoc } from "../entitlement";
 import type { StoreLink } from "../storeLinks";
 import { asStored } from "./helpers/storedDoc";
+import { hmacSha256Hex } from "../hmac";
 import { handleRequest, type BillingDeps } from "../router";
 import type { Env } from "../env";
 
@@ -142,6 +143,19 @@ describe("handleGoogleVerify", () => {
   });
   beforeEach(quietConsole);
   afterEach(() => vi.restoreAllMocks());
+
+  it("시행 후 무료 체험 구매를 반영할 때 지금 토큰의 로그인 계정 키를 함께 저장한다", async () => {
+    const token = { uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } };
+    const AFTER = new Date("2026-12-28T03:00:00.000Z");
+    const d = { ...deps(), trialHistory: { store: { record: vi.fn(), hasActive: vi.fn() }, secret: "s" } };
+    const trialItem = { ...subscription().lineItems[0], inFreeTrial: true, expiryTime: new Date(AFTER.getTime() + 30 * DAY).toISOString() };
+    d.play.getSubscription.mockResolvedValue(subscription({ lineItems: [trialItem] }));
+    const res = await handleGoogleVerify("u1", d, AFTER, ENV, verifyRequest(VERIFY_BODY), token);
+    expect(res.status).toBe(200);
+    const doc = d.store.write.mock.calls[0][1];
+    expect(doc.trialUsedAt).not.toBeNull();
+    expect(doc.trialIdentities).toEqual({ [await hmacSha256Hex("s", "google.com:g1")]: "google.com" });
+  });
 
   it("valid token → link, sources.google, acknowledge when ACKNOWLEDGEMENT_STATE_PENDING", async () => {
     const d = deps();

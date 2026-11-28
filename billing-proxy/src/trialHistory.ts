@@ -1,4 +1,5 @@
 import type { LoginProvider, VerifiedToken } from "@tododo/worker-auth";
+import type { Decision, EntitlementDoc } from "./entitlement";
 import { hmacSha256Hex } from "./hmac";
 
 /**
@@ -40,6 +41,35 @@ export const trialIdentityKeys = async (
     }
   }
   return keys;
+};
+
+/** 시크릿이 없는 환경(체험 재지급 방지 꺼짐)이면 키를 만들지 않는다. */
+export const trialKeysFor = async (
+  trialHistory: { secret: string } | null | undefined,
+  identities: VerifiedToken["identities"] | undefined,
+): Promise<TrialIdentityKey[]> => (trialHistory && identities ? trialIdentityKeys(trialHistory.secret, identities) : []);
+
+/**
+ * 권한 결정에 "체험을 쓴 당시 로그인 계정 키"를 붙인다. 이번 결정이 체험을 **새로** 시작할 때만(기존 문서는 trialUsedAt이
+ * 없고 쓰려는 문서에는 있음 — 웹 체험·앱 체험 구매 모두) 지금 토큰의 키를 doc.trialIdentities에 더한다.
+ * 탈퇴 때 이 키를 함께 남겨서, 탈퇴 직전에 로그인 계정 연결을 끊어도 재가입 체험을 막는다.
+ * - 이미 체험한 계정의 이후 결정(유료 구매·복원)에는 붙이지 않는다 — 그때 연결된 계정은 체험 당시 계정이 아니다.
+ * - 체험을 쓰지 않은 문서(일반 구독)에는 붙이지 않는다.
+ * - 시행 시각(TRIAL_HISTORY_START, 4판 처리방침 시행) 전에는 모으지 않는다. 그 전 체험 사용자는 시행일 백필
+ *   (scripts/backfillTrialIdentities.ts)이 채운다.
+ */
+export const attachTrialIdentities = <R extends string>(
+  existing: Pick<EntitlementDoc, "trialUsedAt">,
+  decision: Decision<R>,
+  keys: readonly TrialIdentityKey[],
+  now: Date,
+): Decision<R> => {
+  if (!("write" in decision) || keys.length === 0) return decision;
+  if (now.getTime() < TRIAL_HISTORY_START.getTime()) return decision;
+  if (existing.trialUsedAt !== null || decision.write.trialUsedAt === null) return decision;
+  const trialIdentities = { ...decision.write.trialIdentities };
+  for (const { provider, key } of keys) trialIdentities[key] = provider;
+  return { write: { ...decision.write, trialIdentities } };
 };
 
 /** 서비스 계정으로 trialHistory/{key}를 읽고 쓴다(보안 규칙상 클라이언트는 접근 불가). */

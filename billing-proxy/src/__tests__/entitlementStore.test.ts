@@ -105,6 +105,21 @@ describe("EntitlementStore.write", () => {
     expect(Object.keys(fields).sort()).toEqual(Object.keys(EMPTY_ENTITLEMENT).sort());
   });
 
+  it("체험 당시 로그인 계정 키(trialIdentities)는 쓴 뒤 다시 읽어도 그대로 돌아온다", async () => {
+    const doc: EntitlementDoc = {
+      ...SAMPLE,
+      trialUsedAt: "2026-10-01T00:00:00.000Z",
+      trialIdentities: { "9f2c": "google.com", "0ab1": "apple.com" },
+    };
+    const writeFetch = vi.fn().mockResolvedValue(jsonRes({}));
+    await new EntitlementStore("proj", getToken, writeFetch).write("u1", doc, null);
+    const sent = JSON.parse(writeFetch.mock.calls[0][1].body as string) as { fields: unknown };
+
+    const readFetch = vi.fn().mockResolvedValue(jsonRes({ fields: sent.fields, updateTime: "t" }));
+    const { doc: read } = await new EntitlementStore("proj", getToken, readFetch).get("u1");
+    expect(read.trialIdentities).toEqual({ "9f2c": "google.com", "0ab1": "apple.com" });
+  });
+
   it("문서가 없던 경우 exists=false 사전조건을 쓴다", async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonRes({}));
     await new EntitlementStore("proj", getToken, fetchFn).write("u1", SAMPLE, null);

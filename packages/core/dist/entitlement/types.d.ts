@@ -50,12 +50,20 @@ export interface DuplicateInfo {
     laterSource: PaymentSourceKey;
     detectedAt: string;
 }
+/** 체험 재지급 방지 키를 만드는 로그인 제공자. worker-auth의 LoginProvider와 같은 값이어야 한다. */
+export type TrialIdentityProvider = "google.com" | "apple.com";
 export interface EntitlementDoc {
     plan: "free" | "premium";
     status: EntitlementStatus;
     source: EntitlementSource;
     premiumUntil: string | null;
     trialUsedAt: string | null;
+    /**
+     * 체험을 쓴 당시 로그인 계정의 HMAC 키 → 제공자. 서버(billing-proxy)만 쓴다.
+     * 탈퇴할 때 그 순간 토큰의 계정과 합쳐 trialHistory에 남긴다 — 탈퇴 직전에 연결을 끊어도 빠지지 않게.
+     * 배열이 아니라 맵인 이유: entitlementStore의 Firestore 변환이 배열을 지원하지 않고, 같은 키가 자연히 하나로 모인다.
+     */
+    trialIdentities: Record<string, TrialIdentityProvider>;
     cancelAt: string | null;
     currentPeriodEnd: string | null;
     customerId: string | null;

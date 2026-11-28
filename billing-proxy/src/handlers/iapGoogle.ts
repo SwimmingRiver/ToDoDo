@@ -5,12 +5,16 @@ import type { Env } from "../env";
 import { applyGoogleSubscription, type GoogleEvent } from "../google/decide";
 import type { PlayApi, PlaySubscription } from "../google/playApi";
 import { decideLink, type StoreLinkStore } from "../storeLinks";
+import { attachTrialIdentities, trialKeysFor } from "../trialHistory";
+import type { VerifiedToken } from "@tododo/worker-auth";
 
 export interface GoogleIapDeps extends CommitDeps {
   storeLinks: Pick<StoreLinkStore, "get" | "put">;
   play: Pick<PlayApi, "getSubscription" | "acknowledge">;
   /** Pub/Sub 푸시의 Authorization 헤더(OIDC 토큰) 검증. 공개키 조회 실패만 throw. */
   verifyPubSub: (authHeader: string | null) => Promise<boolean>;
+  /** 체험 구매를 반영할 때 로그인 계정 키를 만드는 시크릿. 없거나 null이면(시크릿 미설정) 키를 남기지 않는다. */
+  trialHistory?: { secret: string } | null;
 }
 
 const PRODUCT_ID = "premium_monthly";
@@ -110,6 +114,7 @@ export const handleGoogleVerify = async (
   now: Date,
   env: Pick<Env, "IAP_ACCOUNT_TOKEN_SECRET">,
   request: Request,
+  token?: Pick<VerifiedToken, "identities">,
 ): Promise<Response> => {
   const body = await readJson(request);
   if (!isRecord(body) || !nonEmpty(body.purchaseToken) || !nonEmpty(body.productId)) return invalid();
@@ -124,8 +129,11 @@ export const handleGoogleVerify = async (
     return json({ error: "LINKED_TO_OTHER_ACCOUNT" }, 409);
   }
 
+  // 이번 반영으로 체험이 새로 시작되면 지금 로그인 계정 키를 함께 남긴다(탈퇴 때 재가입 체험 방지용, attachTrialIdentities).
+  // 웹훅 경로는 토큰이 없어 남기지 않는다.
+  const keys = await trialKeysFor(deps.trialHistory, token?.identities);
   const outcome = await commitEntitlement(deps, uid, (existing) =>
-    applyGoogleSubscription(existing, sub, verifyEvent(purchaseToken), now),
+    attachTrialIdentities(existing, applyGoogleSubscription(existing, sub, verifyEvent(purchaseToken), now), keys, now),
   );
   if (outcome.kind === "skipped" && outcome.reason === "PENDING") {
     // 결제 대기(편의점 결제 등)는 승인할 수 없다. 결제가 끝나면 RTDN이 위 연결로 반영한다.

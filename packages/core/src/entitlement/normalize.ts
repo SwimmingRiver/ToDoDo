@@ -11,6 +11,7 @@ import {
   type SourceRecord,
   type Sources,
   type StoreEnvironment,
+  type TrialIdentityProvider,
 } from "./types.js";
 
 const STATUSES: readonly EntitlementStatus[] = ["none", "trialing", "active", "past_due", "canceled"];
@@ -140,6 +141,15 @@ const migrateLegacy = (raw: Raw, source: EntitlementSource): Sources => {
   return paddle;
 };
 
+const trialIdentities = (value: unknown): Record<string, TrialIdentityProvider> => {
+  if (!isObject(value)) return {};
+  const out: Record<string, TrialIdentityProvider> = {};
+  for (const [key, provider] of Object.entries(value)) {
+    if (provider === "google.com" || provider === "apple.com") out[key] = provider;
+  }
+  return out;
+};
+
 /** Firestore에서 읽은 임의의 값을 EntitlementDoc으로. 잘못된 필드는 기본값, 예전 문서는 sources로 이주. */
 export const normalizeEntitlement = (data: unknown): EntitlementDoc => {
   if (!isObject(data)) return { ...EMPTY_ENTITLEMENT, sources: {} };
@@ -158,6 +168,7 @@ export const normalizeEntitlement = (data: unknown): EntitlementDoc => {
     source,
     premiumUntil: str(data.premiumUntil),
     trialUsedAt: str(data.trialUsedAt),
+    trialIdentities: trialIdentities(data.trialIdentities),
     cancelAt: str(data.cancelAt),
     currentPeriodEnd: str(data.currentPeriodEnd),
     customerId: str(data.customerId),

@@ -97,7 +97,7 @@ const post = (path: string, body?: unknown) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-const call = (request: Request, deps: BillingDeps) => handleRequest(request, ENV, () => deps, NOW);
+const call = (request: Request, deps: BillingDeps, now: Date = NOW) => handleRequest(request, ENV, () => deps, now);
 
 describe("router", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -230,6 +230,38 @@ describe("router", () => {
         [await hmacSha256Hex("s", "google.com:g1"), await hmacSha256Hex("s", "apple.com:a1")],
         NOW,
       );
+    });
+
+    it("체험을 시작하면 지금 토큰의 로그인 계정 키를 권한 문서에 저장한다(탈퇴 때 함께 남기려고)", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({
+        uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"], "apple.com": ["a1"] },
+      });
+      const { deps } = historyDeps(async () => false);
+      expect((await call(post("/trial"), deps, new Date("2026-12-28T03:00:00.000Z"))).status).toBe(200);
+      const written = vi.mocked(deps.store.write).mock.calls[0] as unknown as [string, EntitlementDoc, string | null];
+      expect(written[1].trialIdentities).toEqual({
+        [await hmacSha256Hex("s", "google.com:g1")]: "google.com",
+        [await hmacSha256Hex("s", "apple.com:a1")]: "apple.com",
+      });
+    });
+
+    it("로그인 계정 키 계산이 실패해도 체험은 막지 않는다(조회 실패와 같은 원칙)", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      vi.spyOn(crypto.subtle, "importKey").mockRejectedValue(new Error("crypto down"));
+      const { deps } = historyDeps(async () => false);
+      const res = await call(post("/trial"), deps, new Date("2026-12-28T03:00:00.000Z"));
+      expect(res.status).toBe(200);
+      const written = vi.mocked(deps.store.write).mock.calls[0] as unknown as [string, EntitlementDoc, string | null];
+      expect(written[1].trialUsedAt).not.toBeNull();
+      expect(written[1].trialIdentities).toEqual({});
+    });
+
+    it("시행 시각 전에는 체험을 시작해도 키를 저장하지 않는다", async () => {
+      vi.mocked(verifyFirebaseIdToken).mockResolvedValue({ uid: "u1", premium: false, premiumUntil: null, identities: { "google.com": ["g1"] } });
+      const { deps } = historyDeps(async () => false);
+      expect((await call(post("/trial"), deps)).status).toBe(200);
+      const written = vi.mocked(deps.store.write).mock.calls[0] as unknown as [string, EntitlementDoc, string | null];
+      expect(written[1].trialIdentities).toEqual({});
     });
 
     it("기록이 없으면 체험을 시작한다", async () => {
