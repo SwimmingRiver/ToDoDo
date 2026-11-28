@@ -67,7 +67,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 afterAll(async () => {
-  await env.cleanup();
+  await env?.cleanup(); // beforeAll(createEnv)가 실패하면 env가 없다 — 원래 오류를 가리지 않게
 });
 
 describe("반복 시리즈", () => {

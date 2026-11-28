@@ -4,7 +4,7 @@
  * rules가 거부하는 버그(11-22 G1: deleteTodo 하위 조회에 userId 조건 누락)는 여기서만 잡힌다.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
+import { assertFails, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { doc, getDoc, type Firestore } from "firebase/firestore";
 import {
   createTodo,
@@ -39,7 +39,7 @@ beforeEach(async () => {
   await seed(env, "todos/bobChild", todoDoc({ userId: "bob", parentId: "bobParent", order: 0 }));
 });
 afterAll(async () => {
-  await env.cleanup();
+  await env?.cleanup(); // beforeAll(createEnv)가 실패하면 env가 없다 — 원래 오류를 가리지 않게
 });
 
 describe("조회", () => {
@@ -105,7 +105,8 @@ describe("deleteTodo", () => {
   });
 
   it("남의 할 일 id로는 지울 수 없다", async () => {
-    await expect(deleteTodo(db, "alice", "bobParent")).rejects.toThrow();
+    // 아무 오류나 통과하지 않게 permission-denied(rules 거부)인지까지 본다.
+    await assertFails(deleteTodo(db, "alice", "bobParent"));
     expect(await exists("todos/bobParent")).toBe(true);
   });
 });
