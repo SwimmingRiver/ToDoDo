@@ -4,8 +4,8 @@ import {
   getWeekDateKeys,
   getWeekStartKey,
   monthForWeekToMonth,
+  monthsForWeek,
   shiftWeekKey,
-  toWeekRange,
   weekStartForMonthToWeek,
 } from "../weekRange";
 
@@ -54,18 +54,6 @@ describe("shiftWeekKey", () => {
   });
 });
 
-describe("toWeekRange", () => {
-  it("로컬 일요일 0시 ~ 다음 일요일 0시", () => {
-    const result = toWeekRange("2026-11-22");
-    expect(result.range).toEqual({
-      start: new Date(2026, 10, 22).toISOString(),
-      end: new Date(2026, 10, 29).toISOString(),
-    });
-    expect(result.startKey).toBe("2026-11-22");
-    expect(result.endKeyExclusive).toBe("2026-11-29");
-  });
-});
-
 describe("formatWeekLabel", () => {
   const today = new Date(2026, 10, 28, 12);
   it("같은 달, 달이 걸침, 해가 걸침(올해 시작), 다른 해 시작", () => {
@@ -101,5 +89,13 @@ describe("monthForWeekToMonth", () => {
     expect(monthForWeekToMonth("2026-11-22", today)).toEqual({ year: 2026, month: 11 });
     expect(monthForWeekToMonth("2026-11-29", today)).toEqual({ year: 2026, month: 11 });
     expect(monthForWeekToMonth("2026-11-29", new Date(2026, 11, 2, 12))).toEqual({ year: 2026, month: 12 });
+  });
+});
+
+describe("monthsForWeek", () => {
+  it("한 달 안의 주는 그 달 하나, 걸친 주는 두 달(구글 조회를 월간과 같은 달 단위로 하려고)", () => {
+    expect(monthsForWeek("2026-11-22")).toEqual([{ year: 2026, month: 11 }, null]);
+    expect(monthsForWeek("2026-11-29")).toEqual([{ year: 2026, month: 11 }, { year: 2026, month: 12 }]);
+    expect(monthsForWeek("2026-12-27")).toEqual([{ year: 2026, month: 12 }, { year: 2027, month: 1 }]);
   });
 });

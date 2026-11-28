@@ -86,6 +86,10 @@ jest.mock("../../calendarIntegration/useGoogleCalendarEvents", () => ({
   useGoogleCalendarEvents: (range: { start: string; end: string } | null) => mockUseGoogleCalendarEvents(range),
 }));
 
+// 화면은 렌더마다 구글 조회 훅을 두 번 부른다(첫째 달, 두 달에 걸친 주면 둘째 달 아니면 null).
+// 마지막 렌더의 두 호출 인자.
+const lastRenderRanges = () => mockUseGoogleCalendarEvents.mock.calls.slice(-2).map((c) => c[0]);
+
 const baseTodo: Todo = {
   id: "a",
   userId: "u1",
@@ -264,10 +268,10 @@ describe("CalendarScreen", () => {
       await fireEvent.press(screen.getByTestId("calendar-next-month"));
 
       await waitFor(() => {
-        expect(mockUseGoogleCalendarEvents).toHaveBeenLastCalledWith({
-          start: new Date(2026, 6, 1).toISOString(),
-          end: new Date(2026, 7, 1).toISOString(),
-        });
+        expect(lastRenderRanges()).toEqual([
+          { start: new Date(2026, 6, 1).toISOString(), end: new Date(2026, 7, 1).toISOString() },
+          null,
+        ]);
       });
     });
 
@@ -304,10 +308,10 @@ describe("CalendarScreen", () => {
       await screen.rerender(<CalendarScreen />);
 
       await waitFor(() => expect(screen.getByTestId("calendar-visible-month")).toHaveTextContent("2026-07"));
-      expect(mockUseGoogleCalendarEvents).toHaveBeenLastCalledWith({
-        start: new Date(2026, 6, 1).toISOString(),
-        end: new Date(2026, 7, 1).toISOString(),
-      });
+      expect(lastRenderRanges()).toEqual([
+        { start: new Date(2026, 6, 1).toISOString(), end: new Date(2026, 7, 1).toISOString() },
+        null,
+      ]);
     });
   });
 
@@ -338,10 +342,34 @@ describe("CalendarScreen", () => {
         expect(screen.getByTestId(`week-row-2026-06-${d}`)).toBeTruthy(),
       );
       expect(screen.getByText("6월 14일 – 20일")).toBeTruthy();
-      expect(mockUseGoogleCalendarEvents).toHaveBeenLastCalledWith({
+      // 주간도 월간과 같은 달 단위로 조회한다 — 같은 캐시를 써서 주를 넘길 때마다 다시 부르지 않는다.
+      const juneRange = { start: new Date(2026, 5, 1).toISOString(), end: new Date(2026, 6, 1).toISOString() };
+      expect(lastRenderRanges()).toEqual([juneRange, null]);
+      expect(mockUseGoogleCalendarEvents.mock.calls.map((c) => c[0])).not.toContainEqual({
         start: new Date(2026, 5, 14).toISOString(),
         end: new Date(2026, 5, 21).toISOString(),
       });
+    });
+
+    it("두 달에 걸친 주는 두 달을 조회하고 일정을 합쳐 그날 줄에 보인다(겹치는 일정은 한 번)", async () => {
+      setup();
+      const juneRange = { start: new Date(2026, 5, 1).toISOString(), end: new Date(2026, 6, 1).toISOString() };
+      const julyRange = { start: new Date(2026, 6, 1).toISOString(), end: new Date(2026, 7, 1).toISOString() };
+      const spanning = { id: "span", title: "걸친 일정", start: "2026-06-30", end: "2026-07-02" };
+      mockUseGoogleCalendarEvents.mockImplementation((range) => {
+        if (range?.start === juneRange.start) return { data: [spanning] };
+        if (range?.start === julyRange.start) return { data: [spanning, { id: "jul", title: "7월 일정", start: "2026-07-02", end: "2026-07-03" }] };
+        return { data: undefined };
+      });
+      await renderScreen();
+      await fireEvent.press(screen.getByTestId("view-mode-week"));
+      await fireEvent.press(screen.getByLabelText("다음 주"));
+      await fireEvent.press(screen.getByLabelText("다음 주"));
+
+      expect(lastRenderRanges()).toEqual([juneRange, julyRange]);
+      expect(screen.getByTestId("week-row-2026-07-02")).toBeTruthy();
+      expect(screen.getByText("7월 일정")).toBeTruthy();
+      expect(screen.getAllByTestId("week-chip-google-span")).toHaveLength(2); // 6/30, 7/1 줄에 한 번씩
     });
 
     it("할 일 제목이 그날 줄에 칩으로 보인다", async () => {

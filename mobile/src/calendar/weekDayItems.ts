@@ -21,8 +21,15 @@ const RANK = { overdue: 0, todo: 1, doing: 2, google: 3, done: 4 } as const;
 interface Ranked {
   item: WeekDayItem;
   rank: number;
-  dueAt: string | null;
+  /** 정렬 시각(ms). 없으면 null. */
+  time: number | null;
 }
+
+// 구글 시간 일정의 start는 오프셋 포함 ISO("…+09:00"), 종일 일정은 date-only("2026-11-24")라
+// 문자열 비교는 시각 순이 아니다. 시각으로 바꿔 비교하고, 종일 일정은 그날 맨 앞에 둔다.
+const isDateOnly = (value: string): boolean => !value.includes("T");
+const toSortTime = (value: string | null): number | null =>
+  value === null ? null : isDateOnly(value) ? Number.NEGATIVE_INFINITY : Date.parse(value);
 
 /**
  * 그날 줄의 칩 목록. todos·googleEvents는 호출자가 이미 그날 것으로 거른 목록이다
@@ -37,7 +44,7 @@ export function buildWeekDayItems(dateKey: string, todos: Todo[], googleEvents: 
     const rank = isOverdueDay ? RANK.overdue : RANK[todo.status];
     return {
       rank,
-      dueAt: todo.dueAt,
+      time: toSortTime(todo.dueAt),
       item: {
         key: `todo-${todo.id}`,
         title: todo.title,
@@ -51,17 +58,17 @@ export function buildWeekDayItems(dateKey: string, todos: Todo[], googleEvents: 
   for (const event of googleEvents) {
     ranked.push({
       rank: RANK.google,
-      dueAt: event.start,
+      time: toSortTime(event.start),
       item: { key: `google-${event.id}`, title: event.title, dotColor: colors.text.tertiary, muted: true, kind: "google" },
     });
   }
 
   ranked.sort((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
-    // 마감(구글은 시작) 이른 순, 없는 것은 뒤에서 제목 순. ISO 문자열은 UTC Z라 사전순 = 시간순.
-    if (a.dueAt && b.dueAt && a.dueAt !== b.dueAt) return a.dueAt < b.dueAt ? -1 : 1;
-    if (a.dueAt && !b.dueAt) return -1;
-    if (!a.dueAt && b.dueAt) return 1;
+    // 마감(구글은 시작) 이른 순, 없는 것은 뒤에서 제목 순.
+    if (a.time !== null && b.time !== null && a.time !== b.time) return a.time - b.time;
+    if (a.time !== null && b.time === null) return -1;
+    if (a.time === null && b.time !== null) return 1;
     return a.item.title.localeCompare(b.item.title, "ko");
   });
 

@@ -30,19 +30,6 @@ export const shiftWeekKey = (weekStartKey: string, weeks: number): string => add
 export const getWeekDateKeys = (weekStartKey: string): string[] =>
   Array.from({ length: WEEK_DAYS }, (_, i) => addDays(weekStartKey, i));
 
-/** 구글 일정 조회 범위: 로컬 일요일 0시 ~ 다음 일요일 0시(end 배타). 월간 toMonthRange와 같은 모양. */
-export const toWeekRange = (weekStartKey: string) => {
-  const endKeyExclusive = shiftWeekKey(weekStartKey, 1);
-  return {
-    range: {
-      start: parseLocalDateOnly(weekStartKey).toISOString(),
-      end: parseLocalDateOnly(endKeyExclusive).toISOString(),
-    },
-    startKey: weekStartKey,
-    endKeyExclusive,
-  };
-};
-
 /** "11월 22일 – 28일" / "11월 29일 – 12월 5일" / 시작 연도가 올해가 아니면 "2027년 3월 7일 – 13일". */
 export const formatWeekLabel = (weekStartKey: string, today: Date): string => {
   const start = parseLocalDateOnly(weekStartKey);
@@ -84,4 +71,17 @@ export const monthForWeekToMonth = (weekStartKey: string, today: Date): VisibleM
   const todayKey = toDateKey(today);
   const base = getWeekDateKeys(weekStartKey).includes(todayKey) ? today : parseLocalDateOnly(weekStartKey);
   return { year: base.getFullYear(), month: base.getMonth() + 1 };
+};
+
+/**
+ * 주가 걸친 달(첫째, 둘째 또는 null). 주간 보기도 구글 일정을 월간과 같은 달 단위로 조회해
+ * 같은 쿼리 캐시를 쓰게 한다 — 주 범위로 조회하면 주를 넘길 때마다 calendar-proxy를 다시 불러
+ * 요청 한도를 쓸데없이 쓴다.
+ */
+export const monthsForWeek = (weekStartKey: string): [VisibleMonth, VisibleMonth | null] => {
+  const start = parseLocalDateOnly(weekStartKey);
+  const end = parseLocalDateOnly(addDays(weekStartKey, WEEK_DAYS - 1));
+  const first = { year: start.getFullYear(), month: start.getMonth() + 1 };
+  const sameMonth = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth();
+  return [first, sameMonth ? null : { year: end.getFullYear(), month: end.getMonth() + 1 }];
 };

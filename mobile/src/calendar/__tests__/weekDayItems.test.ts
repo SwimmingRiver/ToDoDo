@@ -79,4 +79,13 @@ describe("buildWeekDayItems", () => {
       { key: "todo-A", title: "A", dotColor: statusColors.done.main, muted: true, kind: "todo" },
     ]);
   });
+
+  it("구글 일정은 오프셋이 달라도 실제 시각 순, 종일 일정이 먼저", () => {
+    const events: GoogleCalendarEvent[] = [
+      { id: "ny", title: "뉴욕 오전", start: "2026-11-24T08:00:00-05:00", end: "2026-11-24T09:00:00-05:00" }, // 13:00Z
+      { id: "kst", title: "서울 오전", start: "2026-11-24T10:00:00+09:00", end: "2026-11-24T11:00:00+09:00" }, // 01:00Z
+      { id: "all", title: "종일", start: "2026-11-24", end: "2026-11-25" },
+    ];
+    expect(buildWeekDayItems("2026-11-24", [], events).map((i) => i.title)).toEqual(["종일", "서울 오전", "뉴욕 오전"]);
+  });
 });

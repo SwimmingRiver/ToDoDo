@@ -28,8 +28,8 @@ import {
   getWeekDateKeys,
   getWeekStartKey,
   monthForWeekToMonth,
+  monthsForWeek,
   shiftWeekKey,
-  toWeekRange,
   weekStartForMonthToWeek,
   type VisibleMonth,
 } from "../calendar/weekRange";
@@ -112,9 +112,22 @@ export const CalendarScreen = () => {
   const [mode, setMode] = useState<CalendarViewMode>("month");
   const [weekStartKey, setWeekStartKey] = useState<string>(currentWeekStart);
   const monthRange = useMemo(() => toMonthRange(visibleMonth), [visibleMonth]);
-  const weekRange = useMemo(() => toWeekRange(weekStartKey), [weekStartKey]);
+  // 구글 일정은 주간에서도 월간과 같은 달 단위로 조회한다 — 같은 쿼리 캐시를 써서 주를 넘길 때마다
+  // calendar-proxy를 다시 부르지 않는다. 두 달에 걸친 주는 두 달을 조회해 합친다(월간이면 둘째는 null).
+  const queryRanges = useMemo(() => {
+    if (mode !== "week") return [monthRange.range, null] as const;
+    const [first, second] = monthsForWeek(weekStartKey);
+    return [toMonthRange(first).range, second ? toMonthRange(second).range : null] as const;
+  }, [mode, weekStartKey, monthRange]);
   // 조회 실패는 화면 오류로 만들지 않는다 — data가 없으면 점·줄만 빠진다.
-  const { data: googleEvents } = useGoogleCalendarEvents(mode === "week" ? weekRange.range : monthRange.range);
+  const { data: primaryEvents } = useGoogleCalendarEvents(queryRanges[0]);
+  const { data: secondaryEvents } = useGoogleCalendarEvents(queryRanges[1]);
+  // 두 달에 걸친 일정은 양쪽 조회에 다 나오므로 id로 한 번만 남긴다.
+  const googleEvents = useMemo(() => {
+    if (!secondaryEvents) return primaryEvents;
+    const seen = new Set((primaryEvents ?? []).map((event) => event.id));
+    return [...(primaryEvents ?? []), ...secondaryEvents.filter((event) => !seen.has(event.id))];
+  }, [primaryEvents, secondaryEvents]);
   // ToDoDo가 만든(googleEventId로 링크된) 이벤트는 같은 할 일이 두 번 보이지 않게 뺀다.
   const overlayEvents = useMemo(() => filterUnsyncedEvents(googleEvents ?? [], todos), [googleEvents, todos]);
   const markedDatesWithSelection = useMemo(() => {
