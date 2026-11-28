@@ -279,6 +279,11 @@ describe('TodoList', () => {
 
       await user.type(screen.getByPlaceholderText('할 일 검색...'), '전입')
       await waitFor(() => expect(lastCallFor('todo-b')!.isExpanded).toBe(true))
+      // ProjectCard 목은 렌더 중에 props를 기록하므로, 커밋 전에 버려질 수 있는
+      // 렌더(URL 갱신은 startTransition)도 잡힌다. 토글 핸들러는 커밋 후 effect로
+      // 갱신되는 ref를 읽으므로, 검색 결과가 실제 DOM에 반영될 때까지 기다린 뒤 누른다.
+      // (CI 부하에서 커밋 전 렌더만 보고 눌러 펼침 판정이 어긋났던 간헐 실패)
+      await waitFor(() => expect(document.body.textContent).toContain('검색 결과'))
 
       const toggle = () =>
         act(() => {
