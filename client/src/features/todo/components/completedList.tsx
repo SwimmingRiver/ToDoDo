@@ -63,7 +63,9 @@ const CompletedList = ({
   const notice = archived.isError ? (
     <ArchiveNotice role="alert">지난 기록을 불러오지 못했어요</ArchiveNotice>
   ) : null;
-  const loadingHint = archived.isPending ? (
+  // isPending만 보면 uid가 없어 쿼리가 꺼진(enabled=false) 경우에도 영영 "불러오는 중"에 멈춘다.
+  // 실제로 가져오는 중일 때(isLoading = isPending && isFetching)만 로딩으로 본다.
+  const loadingHint = archived.isLoading ? (
     <ArchiveLoadingHint role="status">지난 기록을 불러오는 중…</ArchiveLoadingHint>
   ) : null;
 

@@ -13,8 +13,11 @@ vi.mock('react-router-dom', async (importOriginal) => ({
   useNavigate: () => navigateMock,
 }))
 
+const authMock = vi.hoisted(() => ({
+  currentUser: { uid: 'user-1' } as { uid: string } | null,
+}))
 vi.mock('@/shared/lib/firebase', () => ({
-  auth: { currentUser: { uid: 'user-1' } },
+  auth: authMock,
   googleProvider: {},
 }))
 vi.mock('@/shared/lib/firestore', () => ({ db: {} }))
@@ -77,6 +80,7 @@ describe('CompletedList (완료 탭)', () => {
     navigateMock.mockClear()
     getArchivedTodosMock.mockReset()
     getArchivedTodosMock.mockResolvedValue([])
+    authMock.currentUser = { uid: 'user-1' }
   })
 
   afterEach(() => {
@@ -157,6 +161,23 @@ describe('CompletedList (완료 탭)', () => {
 
     expect(await screen.findByText('지난 기록을 불러오지 못했어요')).toBeInTheDocument()
     expect(screen.getByText('기말 과제 제출')).toBeInTheDocument()
+  })
+
+  it('로그인 정보(uid)가 없어 보관분 조회가 꺼져 있으면 로딩 안내 없이 최근 완료만 보여준다', async () => {
+    authMock.currentUser = null
+    renderList([makeTodo({ id: 'recent', title: '기말 과제 제출' })])
+
+    expect(await screen.findByText('기말 과제 제출')).toBeInTheDocument()
+    expect(screen.queryByText('지난 기록을 불러오는 중…')).not.toBeInTheDocument()
+    expect(getArchivedTodosMock).not.toHaveBeenCalled()
+  })
+
+  it('uid가 없고 최근 완료도 없으면 로딩에 멈추지 않고 빈 상태를 보여준다', async () => {
+    authMock.currentUser = null
+    renderList([])
+
+    expect(await screen.findByText('완료한 프로젝트가 아직 없어요')).toBeInTheDocument()
+    expect(screen.queryByText('지난 기록을 불러오는 중…')).not.toBeInTheDocument()
   })
 
   it('완료한 것이 없으면 빈 상태를 보여준다', async () => {
