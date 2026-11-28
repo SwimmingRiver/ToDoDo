@@ -41,9 +41,12 @@ const KanbanBoard = () => {
   const { filter, setQuery, togglePriority, resetFilter } = useTodoFilterParams();
   const isFiltering = isTodoFilterActive(filter);
 
-  // TodoSearch의 디바운스 effect는 onClear에 의존하므로 참조를 고정해야 한다. 렌더마다
-  // 새 함수를 주면 300ms마다 같은 검색어로 setQuery → replace 내비게이션 → 리렌더가 끝없이
-  // 반복된다. 최신 검색어는 ref로 읽는다(목록의 handleClearQuery와 같은 방식).
+  // TodoSearch의 디바운스 effect는 onClear에 의존하므로 렌더마다 새 함수를 주면 effect가
+  // 매번 다시 걸린다. 그래서 useCallback으로 감싸지만, setQuery가 location.search가 바뀔
+  // 때마다 새로 만들어지므로(react-router setSearchParams가 searchParams에 묶임) 이 참조도
+  // 그때는 바뀐다. 같은 검색어로 setQuery → replace 내비게이션 → 리렌더가 반복되지 않는 건
+  // useTodoFilterParams가 주소가 그대로면 내비게이션하지 않기 때문이다. 최신 검색어는
+  // ref로 읽는다(목록의 handleClearQuery와 같은 방식).
   const queryRef = useRef(filter.query);
   useEffect(() => {
     queryRef.current = filter.query;

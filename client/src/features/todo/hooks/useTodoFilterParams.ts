@@ -23,7 +23,10 @@ export const useTodoFilterParams = () => {
   // 대기 중인 값이 아니라 마지막 렌더의 searchParams를 주므로, 같은 틱에 두 번 부르면
   // 뒤 호출이 앞 호출을 덮어쓴다(예: resetFilter 직후 onClear의 setQuery("")가 p를 되살림).
   // 그래서 세터는 이 ref를 기준으로 다음 주소를 계산하고, URL이 실제로 바뀌면(뒤로 가기 등
-  // 바깥 이동 포함) 렌더 때 다시 맞춘다. 세터 참조도 이 덕분에 URL이 바뀌어도 고정된다.
+  // 바깥 이동 포함) 렌더 때 다시 맞춘다. 세터 참조는 고정되지 않는다: react-router의
+  // setSearchParams가 [navigate, searchParams]에 묶인 useCallback이라 location.search가
+  // 바뀔 때마다 updateParams와 모든 세터도 새로 만들어진다. 디바운스 반복을 실제로 끊는 건
+  // 아래 updateParams의 "주소가 그대로면 return" 가드다.
   const latestRef = useRef(searchParams);
   const seenRef = useRef(searchParams);
   if (seenRef.current !== searchParams) {
