@@ -438,6 +438,20 @@ describe('TodoList', () => {
       expect(within(tablist).getByRole('tab', { name: '완료' })).toHaveAttribute('aria-selected', 'false')
     })
 
+    it('탭과 목록 패널이 aria-controls·aria-labelledby로 서로 연결된다', async () => {
+      const user = setupUser()
+      renderWithClient([makeTodo()])
+
+      const panel = screen.getByRole('tabpanel')
+      const active = screen.getByRole('tab', { name: '진행 중' })
+      expect(active).toHaveAttribute('aria-controls', panel.id)
+      expect(panel).toHaveAttribute('aria-labelledby', active.id)
+      expect(screen.getByRole('tabpanel', { name: '진행 중' })).toBe(panel)
+
+      await user.click(screen.getByRole('tab', { name: '완료' }))
+      expect(screen.getByRole('tabpanel', { name: '완료' })).toBeInTheDocument()
+    })
+
     it('보관분은 완료 탭을 처음 열 때 1회만 읽고, ["todos"]를 무효화한 뒤 다시 열어도 다시 읽지 않는다', async () => {
       vi.mocked(getDocs).mockClear()
       const user = setupUser()

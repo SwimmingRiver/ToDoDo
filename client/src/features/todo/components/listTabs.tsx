@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent } from "react";
 import type { ListTab } from "../hooks";
 import { TabList, TabButton } from "./completedList.styles";
+import { LIST_TAB_PANEL_ID, listTabId } from "./listTabIds";
 
 const TABS: readonly { value: ListTab; label: string }[] = [
   { value: "active", label: "진행 중" },
@@ -36,6 +37,8 @@ export const ListTabs = ({ tab, onChange }: ListTabsProps) => {
             }}
             type="button"
             role="tab"
+            id={listTabId(value)}
+            aria-controls={LIST_TAB_PANEL_ID}
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(value)}

@@ -32,6 +32,7 @@ import { TodoSearch } from "./todoSearch";
 import { PriorityFilterChips } from "./priorityFilterChips";
 import { SearchEmptyState } from "./searchEmptyState";
 import { ListTabs } from "./listTabs";
+import { LIST_TAB_PANEL_ID, listTabId } from "./listTabIds";
 import CompletedList from "./completedList";
 import { ConfirmModal, useToast } from "@/shared";
 
@@ -269,7 +270,11 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         onToggle={togglePriority}
       />
 
-      <ListWrapper>
+      <ListWrapper
+        role="tabpanel"
+        id={LIST_TAB_PANEL_ID}
+        aria-labelledby={listTabId(tab)}
+      >
         {tab === "done" ? (
           <CompletedList
             todos={todos}
