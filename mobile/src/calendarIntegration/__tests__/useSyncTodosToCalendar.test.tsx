@@ -65,7 +65,8 @@ const makeTodo = (over: Partial<Todo> = {}): Todo => ({
   status: "todo",
   priority: "medium",
   startAt: null,
-  dueAt: "2026-11-21T03:00:00.000Z",
+  // 로컬 11/21 정오 — UTC 리터럴(03:00Z)은 KST에서만 11/21이라 TZ=America/New_York에서 하루 밀렸다.
+  dueAt: new Date(2026, 10, 21, 12).toISOString(),
   doneAt: null,
   parentId: null,
   order: 0,
