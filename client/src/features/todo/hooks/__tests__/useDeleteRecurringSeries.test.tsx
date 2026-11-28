@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useDeleteRecurringSeries } from '../useDeleteRecurringSeries'
+import { ARCHIVED_TODOS_KEY } from '../useGetArchivedTodos'
 
 vi.mock('@/shared/lib/firebase', () => ({
   auth: { currentUser: { uid: 'test-user-id' } },
@@ -26,7 +27,7 @@ describe('useDeleteRecurringSeries 훅', () => {
     vi.clearAllMocks()
   })
 
-  it('삭제 성공 시 deleteRecurringSeries를 호출하고 todos, todoDetail 쿼리를 무효화해야 한다', async () => {
+  it('삭제 성공 시 deleteRecurringSeries를 호출하고 todos, todoDetail, 보관분(archivedTodos) 쿼리를 무효화해야 한다 (보관된 회차까지 지울 수 있음)', async () => {
     const { deleteRecurringSeries } = await import('../../api')
     vi.mocked(deleteRecurringSeries).mockResolvedValueOnce(undefined)
 
@@ -43,5 +44,6 @@ describe('useDeleteRecurringSeries 훅', () => {
     expect(vi.mocked(deleteRecurringSeries)).toHaveBeenCalledWith('series-1')
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todoDetail'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ARCHIVED_TODOS_KEY })
   })
 })

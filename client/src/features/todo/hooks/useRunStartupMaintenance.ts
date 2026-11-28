@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
 import { runStartupMaintenance } from "../api";
+import { ARCHIVED_TODOS_KEY } from "./useGetArchivedTodos";
 
 // 앱 진입 시 1회 호출하는 백그라운드 유지보수(App.tsx). 완료 프로젝트 아카이빙,
 // 지난 반복 인스턴스 아카이빙, 무기한 반복 시리즈 확장을 한 번의 읽기로 처리한다.
@@ -11,6 +12,8 @@ import { runStartupMaintenance } from "../api";
 // 무효화를 written > 0으로 거는 이유: 세 정책 모두 대부분의 실행에서 쓸 것이 없다.
 // 무조건 무효화하면 하는 일 없이 getTodos() 전체 재조회를 유발한다. 쓴 것이 없으면
 // 서버 데이터가 이 유지보수 때문에 바뀐 게 없으므로 캐시는 이미 최신이다.
+// 보관분(ARCHIVED_TODOS_KEY)도 같은 조건으로 무효화한다 — 이 스윕이 새로 보관한
+// 문서가 완료 탭에 나와야 한다. written엔 다른 정책의 쓰기도 섞이지만 드물어서 허용.
 export const useRunStartupMaintenance = () => {
   const queryClient = useQueryClient();
 
@@ -19,6 +22,7 @@ export const useRunStartupMaintenance = () => {
     onSuccess: (written) => {
       if (written > 0) {
         queryClient.invalidateQueries({ queryKey: ["todos"] });
+        queryClient.invalidateQueries({ queryKey: ARCHIVED_TODOS_KEY });
       }
     },
     onError: (error) => {

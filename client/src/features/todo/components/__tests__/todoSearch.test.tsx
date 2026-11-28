@@ -94,24 +94,13 @@ describe("TodoSearch 디바운스 검색", () => {
   });
 });
 
-describe("TodoSearch 로딩/지우기", () => {
-  it("isLoading이면 지우기 버튼을 숨긴다", () => {
-    const { container, rerender, onSearch, onClear } = renderSearch({
-      isLoading: false,
-    });
+describe("TodoSearch 초기값/지우기", () => {
+  it("initialValue가 입력창 초기값이 된다", () => {
+    renderSearch({ initialValue: "운동" });
 
-    typeInto(screen.getByPlaceholderText("할 일 검색..."), "검색어");
-
-    rerender(
-      <TodoSearch
-        onSearch={onSearch}
-        onClear={onClear}
-        isSearching={false}
-        isLoading={true}
-      />,
-    );
-
-    expect(container.querySelector(".lucide-x")).not.toBeInTheDocument();
+    expect(
+      (screen.getByPlaceholderText("할 일 검색...") as HTMLInputElement).value,
+    ).toBe("운동");
   });
 
   it("입력값이 있으면 지우기 버튼이 나타나고, 클릭하면 입력값이 비워지며 onClear가 호출된다", async () => {
@@ -135,7 +124,7 @@ describe("TodoSearch 로딩/지우기", () => {
 
 describe("TodoSearch 검색 결과 정보", () => {
   it("isSearching이면 결과 개수와 검색 취소 버튼을 보여준다", () => {
-    renderSearch({ isSearching: true, resultCount: 5 });
+    renderSearch({ isSearching: true, resultCount: 5, initialValue: "회의" });
 
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("검색 취소")).toBeInTheDocument();
@@ -156,5 +145,40 @@ describe("TodoSearch 검색 결과 정보", () => {
 
     expect(input.value).toBe("");
     expect(onClear).toHaveBeenCalled();
+  });
+});
+
+describe("TodoSearch 필터 전체 해제(onReset)", () => {
+  it("입력이 비어 있고 칩만 켜져 있으면 버튼 이름이 '필터 해제'이고 누르면 onReset을 부른다", () => {
+    const onReset = vi.fn();
+    renderSearch({ isSearching: true, onReset, hasPriorityFilter: true });
+
+    expect(screen.queryByRole("button", { name: "검색 취소" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "필터 해제" }));
+
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("입력과 칩이 함께 있으면 둘 다 지우므로 '필터 해제'다", () => {
+    const onReset = vi.fn();
+    renderSearch({ isSearching: true, onReset, hasPriorityFilter: true, initialValue: "회의" });
+    const input = screen.getByPlaceholderText("할 일 검색...") as HTMLInputElement;
+
+    expect(screen.queryByRole("button", { name: "검색 취소" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "필터 해제" }));
+
+    expect(input.value).toBe("");
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("칩 없이 입력만 있으면 '검색 취소'이고, 누르면 입력을 비우고 onReset도 부른다", () => {
+    const onReset = vi.fn();
+    renderSearch({ isSearching: true, onReset, initialValue: "회의" });
+    const input = screen.getByPlaceholderText("할 일 검색...") as HTMLInputElement;
+
+    fireEvent.click(screen.getByRole("button", { name: "검색 취소" }));
+
+    expect(input.value).toBe("");
+    expect(onReset).toHaveBeenCalledTimes(1);
   });
 });

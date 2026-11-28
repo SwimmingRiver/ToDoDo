@@ -5,3 +5,4 @@ export * from "./insights";
 export * from "./theme";
 export * from "./reminders";
 export * from "./recurring";
+export * from "./todoFilter";

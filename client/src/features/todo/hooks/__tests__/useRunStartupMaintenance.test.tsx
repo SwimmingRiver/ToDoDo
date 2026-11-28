@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import * as Sentry from '@sentry/react'
 import { useRunStartupMaintenance } from '../useRunStartupMaintenance'
+import { ARCHIVED_TODOS_KEY } from '../useGetArchivedTodos'
 
 vi.mock('@sentry/react', () => ({ captureException: vi.fn() }))
 vi.mock('@/shared/lib/firebase', () => ({
@@ -28,7 +29,7 @@ describe('useRunStartupMaintenance 훅', () => {
     vi.clearAllMocks()
   })
 
-  it('쓴 문서가 있으면 todos 쿼리를 무효화해야 한다', async () => {
+  it('쓴 문서가 있으면 todos와 보관분(archivedTodos) 쿼리를 함께 무효화해야 한다', async () => {
     const { runStartupMaintenance } = await import('../../api')
     vi.mocked(runStartupMaintenance).mockResolvedValueOnce(3)
 
@@ -44,9 +45,10 @@ describe('useRunStartupMaintenance 훅', () => {
 
     expect(vi.mocked(runStartupMaintenance)).toHaveBeenCalled()
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ARCHIVED_TODOS_KEY })
   })
 
-  it('쓴 문서가 없으면 todos 쿼리를 무효화하지 않아야 한다', async () => {
+  it('쓴 문서가 없으면 todos도 보관분도 무효화하지 않아야 한다', async () => {
     const { runStartupMaintenance } = await import('../../api')
     vi.mocked(runStartupMaintenance).mockResolvedValueOnce(0)
 

@@ -1,5 +1,4 @@
 import ProjectCard from "./projectCard";
-import ChildTodoCard from "./childTodoCard";
 import type { Todo } from "../types";
 import type { ProjectCardData } from "../utils/projectUtils";
 import {
@@ -7,15 +6,16 @@ import {
   getProjectSubtaskInfo,
   getProjectOverdue,
   getRecurringMissedCount,
-  collapseRecurringInstances,
 } from "../utils/projectUtils";
-import { useMemo, useState, useCallback, lazy, Suspense } from "react";
+import { buildActiveSearchResult } from "../utils/activeSearch";
+import { isTodoFilterActive, type TodoFilter } from "@tododo/core/dist/todoFilter/index.js";
+import { useMemo, useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import useModal from "@/shared/hooks/useModal";
 import Modal from "@/shared/ui/modal/modal";
 import TodoForm from "./todoForm/todoForm";
-import { useDeleteTodo, useDeleteRecurringSeries } from "../hooks";
+import { useDeleteTodo, useDeleteRecurringSeries, useTodoFilterParams } from "../hooks";
 import {
   TodoListContainer,
   AddButton,
@@ -26,11 +26,17 @@ import {
   ProjectCountText,
   NewProjectLink,
 } from "./todoList.styles";
-import { Plus, ClipboardList, SearchX, Sparkles } from "lucide-react";
+import { Plus, ClipboardList, Sparkles } from "lucide-react";
 import { EmptyState } from "@/shared";
 import { TodoSearch } from "./todoSearch";
-import { useSearchTodo } from "../hooks";
+import { PriorityFilterChips } from "./priorityFilterChips";
+import { SearchEmptyState } from "./searchEmptyState";
+import { ListTabs } from "./listTabs";
+import { LIST_TAB_PANEL_ID, listTabId } from "./listTabIds";
+import CompletedList from "./completedList";
 import { ConfirmModal, useToast } from "@/shared";
+
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 // 모달은 버튼을 눌러야 필요하므로 초기 번들에 넣지 않는다.
 const AiPlanModal = lazy(() => import("@/features/aiPlan/components/aiPlanModal"));
@@ -46,7 +52,17 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const [isAddChildSubmitting, setIsAddChildSubmitting] = useState(false);
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
   const [parentTodoId, setParentTodoId] = React.useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const { filter, tab, setQuery, togglePriority, setTab, resetFilter } =
+    useTodoFilterParams();
+  // 완료 탭의 카드 수(검색 결과 수 표시용). CompletedList가 계산해 알려 준다.
+  const [completedCount, setCompletedCount] = useState(0);
+  // 검색 칸은 내부 입력값을 들고 있으므로, 바깥(빈 상태의 "검색 취소")에서 지울 때는
+  // key를 바꿔 빈 값으로 다시 마운트한다. 이때 initialValue를 filter.query로 주면 안 된다:
+  // react-router는 URL 갱신을 startTransition으로 적용하므로 key 변경(긴급 업데이트)이
+  // 먼저 렌더돼 옛 q로 다시 마운트되고, 디바운스가 그 검색어를 되살린다. 그래서 다시
+  // 마운트한 뒤(key > 0)에는 항상 빈 값으로 시작한다 — URL q로 입력을 채우는 건 첫
+  // 마운트(상세 → 뒤로 가기 복원)뿐이다.
+  const [searchInputKey, setSearchInputKey] = useState(0);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
     new Set()
   );
@@ -57,76 +73,87 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
   const deleteRecurringSeries = useDeleteRecurringSeries();
   const toast = useToast();
 
-  const { data: searchResults, isLoading: isSearchLoading } =
-    useSearchTodo(searchQuery);
+  const isFiltering = isTodoFilterActive(filter);
 
-  const isSearching = searchQuery.length > 0;
+  // 검색·우선순위 필터는 이미 받아온 todos를 거른다(Firestore를 다시 읽지 않음).
+  // 필터가 꺼져 있으면 roots는 지금 목록 규칙(루트·미완료·반복 시리즈당 대표 1건) 그대로다.
+  const { roots, matchedChildIds, autoExpandIds } = useMemo(
+    () => buildActiveSearchResult(todos, filter),
+    [todos, filter]
+  );
 
   const todoTree = useMemo(() => {
-    const rootTodos = todos.filter((todo) => todo.parentId === null);
-
-    const activatedTodos = rootTodos.filter((todo) => todo.status !== "done");
-
-    // 반복 할 일은 최대 4주치 인스턴스가 각각 별도 문서로 존재하므로, 이 목록에서는
-    // 시리즈당 대표 1건(지난 미완료 우선, 없으면 다음 예정 건)만 카드로 노출한다.
-    const collapsedTodos = collapseRecurringInstances(activatedTodos);
-
-    return collapsedTodos.map((rootTodo) => {
+    return roots.map((rootTodo) => {
       return {
         ...rootTodo,
         childTodos: todos.filter((todo) => todo.parentId === rootTodo.id),
       };
     });
-  }, [todos]);
+  }, [roots, todos]);
 
-  const searchResultTree = useMemo(() => {
-    if (!searchResults) return [];
+  // 하위만 걸려 자동으로 펼친 카드를 사용자가 접은 경우. 필터가 바뀌면 무효가 되도록
+  // 어느 필터에서 접었는지 함께 기억한다.
+  const [collapsedAuto, setCollapsedAuto] = useState<{
+    filter: TodoFilter | null;
+    ids: ReadonlySet<string>;
+  }>({ filter: null, ids: EMPTY_IDS });
+  const collapsedAutoIds =
+    collapsedAuto.filter === filter ? collapsedAuto.ids : EMPTY_IDS;
 
-    // 검색 결과도 목록과 동일한 규칙을 따른다: 루트 할 일은 완료(done) 제외 +
-    // 반복 시리즈당 대표 1건으로 축약. 하위 할 일 매치는 그대로 노출한다
-    // (반복은 루트에만 존재하고, 완료된 하위 항목도 검색으로는 찾을 수 있어야 한다).
-    const rootMatches = searchResults.filter(
-      (todo: Todo) => todo.parentId === null && todo.status !== "done"
-    );
-    const collapsedRootMatches = collapseRecurringInstances(rootMatches);
-    const childMatches = searchResults.filter(
-      (todo: Todo) => todo.parentId !== null
-    );
-
-    return [...collapsedRootMatches, ...childMatches].map((todo: Todo) => ({
-      ...todo,
-      childTodos: todo.parentId === null
-        ? todos.filter((t) => t.parentId === todo.id)
-        : [],
-    }));
-  }, [searchResults, todos]);
-
-  const displayTodos = isSearching ? searchResultTree : todoTree;
+  // 토글 핸들러의 참조를 고정하기 위해(ProjectCard memo) 최신 값은 ref로 읽는다.
+  const expandContextRef = useRef({ filter, autoExpandIds, collapsedAutoIds });
+  useEffect(() => {
+    expandContextRef.current = { filter, autoExpandIds, collapsedAutoIds };
+  }, [filter, autoExpandIds, collapsedAutoIds]);
 
   const handleEdit = useCallback((todo: Todo) => {
     setEditingTodo(todo);
     setIsEditOpen(true);
   }, [setIsEditOpen]);
 
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
+  // TodoSearch는 입력이 비면(마운트 포함) 즉시 onClear를 부른다. URL에 q가 없을 때까지
+  // setQuery를 부르면 같은 주소로 replace 내비게이션이 일어나 목록 전체가 한 번 더
+  // 렌더되므로, 지울 검색어가 있을 때만 부른다.
+  const handleClearQuery = useCallback(() => {
+    if (expandContextRef.current.filter.query) setQuery("");
+  }, [setQuery]);
 
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery("");
-  }, []);
+  // 검색칸 결과 줄의 "검색 취소/필터 해제"와 빈 상태의 버튼이 함께 쓴다. 검색어만이
+  // 아니라 칩까지 한 번에 지운다 — 칩만 켜진 상태에서 검색어만 지우면 아무 일도 없다.
+  const handleCancelSearch = useCallback(() => {
+    resetFilter();
+    setSearchInputKey((k) => k + 1);
+  }, [resetFilter]);
 
+  // 펼침 = 사용자가 직접 펼침 || (검색으로 자동 펼침 && 사용자가 접지 않음).
+  // 사용자가 펼친 상태(expandedProjectIds)는 검색과 무관하게 유지되므로, 검색을
+  // 지우면 자동 펼침만 사라지고 직접 펼친 카드는 계속 펼쳐져 있다.
   const handleToggleExpand = useCallback((id: string) => {
+    const { filter: currentFilter, autoExpandIds: auto, collapsedAutoIds: collapsed } =
+      expandContextRef.current;
+    const isAutoExpanded = auto.has(id) && !collapsed.has(id);
+
     setExpandedProjectIds((prev) => {
+      const isExpanded = prev.has(id) || isAutoExpanded;
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (isExpanded) next.delete(id);
+      else next.add(id);
       return next;
     });
+
+    if (auto.has(id)) {
+      const nextCollapsed = new Set(collapsed);
+      if (isAutoExpanded) nextCollapsed.add(id);
+      else nextCollapsed.delete(id);
+      setCollapsedAuto({ filter: currentFilter, ids: nextCollapsed });
+    }
   }, []);
+
+  const isProjectExpanded = (id: string) =>
+    expandedProjectIds.has(id) ||
+    (autoExpandIds.has(id) && !collapsedAutoIds.has(id));
+
+  const highlightedChildIds = isFiltering ? matchedChildIds : undefined;
 
   const handleCardClick = useCallback((todo: Todo) => {
     navigate(`/todo/${todo.id}`);
@@ -227,57 +254,41 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         }
       />
 
+      <ListTabs tab={tab} onChange={setTab} />
+      {/* 검색창·칩은 두 탭 공용이라 탭 밖(같은 자리)에 둔다 — 탭을 바꿔도 입력이 유지된다. */}
       <TodoSearch
-        onSearch={handleSearch}
-        onClear={handleClearSearch}
-        isLoading={isSearchLoading}
-        resultCount={searchResults?.length ?? 0}
-        isSearching={isSearching}
+        key={searchInputKey}
+        initialValue={searchInputKey === 0 ? filter.query : ""}
+        onSearch={setQuery}
+        hasPriorityFilter={filter.priorities.length > 0}
+        onClear={handleClearQuery}
+        onReset={handleCancelSearch}
+        resultCount={tab === "done" ? completedCount : projectCards.length}
+        isSearching={isFiltering}
+      />
+      <PriorityFilterChips
+        selected={filter.priorities}
+        onToggle={togglePriority}
       />
 
-      <ListWrapper>
-        {isSearching ? (
-          displayTodos.length === 0 ? (
-            <EmptyState
-              icon={SearchX}
-              title="검색 결과가 없습니다"
-              description={`"${searchQuery}"에 대한 결과를 찾을 수 없습니다`}
-              actionLabel="검색 취소"
-              onAction={handleClearSearch}
-            />
-          ) : (
-            displayTodos.map((todo) => {
-              if (todo.parentId === null) {
-                const projectData: ProjectCardData = {
-                  todo,
-                  childTodos: todo.childTodos,
-                  progress: getProjectProgress(todos, todo.id),
-                  subtaskInfo: getProjectSubtaskInfo(todos, todo.id),
-                  overdueInfo: getProjectOverdue(todos, todo),
-                  recurringMissedCount: getRecurringMissedCount(todos, todo),
-                };
-                return (
-                  <ProjectCard
-                    key={todo.id}
-                    data={projectData}
-                    isExpanded={expandedProjectIds.has(todo.id)}
-                    onCardClick={handleCardClick}
-                    onToggleExpand={handleToggleExpand}
-                    onEdit={handleEdit}
-                    onDelete={handleDeleteProject}
-                    onAddChild={handleAddChild}
-                  />
-                );
-              }
-              return (
-                <ChildTodoCard
-                  key={todo.id}
-                  todo={todo}
-                  onEdit={handleEdit}
-                />
-              );
-            })
-          )
+      <ListWrapper
+        role="tabpanel"
+        id={LIST_TAB_PANEL_ID}
+        aria-labelledby={listTabId(tab)}
+      >
+        {tab === "done" ? (
+          <CompletedList
+            todos={todos}
+            filter={filter}
+            onCancelSearch={handleCancelSearch}
+            onResultCountChange={setCompletedCount}
+          />
+        ) : isFiltering && projectCards.length === 0 ? (
+          <SearchEmptyState
+          query={filter.query}
+          hasPriorityFilter={filter.priorities.length > 0}
+          onCancelSearch={handleCancelSearch}
+        />
         ) : projectCards.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
@@ -305,7 +316,8 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
               <ProjectCard
                 key={card.todo.id}
                 data={card}
-                isExpanded={expandedProjectIds.has(card.todo.id)}
+                isExpanded={isProjectExpanded(card.todo.id)}
+                highlightedChildIds={highlightedChildIds}
                 onCardClick={handleCardClick}
                 onToggleExpand={handleToggleExpand}
                 onEdit={handleEdit}
@@ -317,16 +329,18 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         )}
       </ListWrapper>
 
-      <AddButtonRow>
-        <AddButton onClick={() => setIsOpen(true)}>
-          <Plus size={16} />
-          새 할일
-        </AddButton>
-        <AiPlanButton onClick={() => setIsAiPlanOpen(true)}>
-          <Sparkles size={16} aria-hidden="true" />
-          AI로 계획
-        </AiPlanButton>
-      </AddButtonRow>
+      {tab === "active" && (
+        <AddButtonRow>
+          <AddButton onClick={() => setIsOpen(true)}>
+            <Plus size={16} />
+            새 할일
+          </AddButton>
+          <AiPlanButton onClick={() => setIsAiPlanOpen(true)}>
+            <Sparkles size={16} aria-hidden="true" />
+            AI로 계획
+          </AiPlanButton>
+        </AddButtonRow>
+      )}
       {isAiPlanOpen && (
         <Suspense fallback={null}>
           <AiPlanModal onClose={() => setIsAiPlanOpen(false)} />

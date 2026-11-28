@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ToastProvider } from "@/shared/ui/toast/toastContext";
 import KanbanBoard from "../kanbanBoard";
 import type { Todo, TodoReorderUpdate } from "@/features/todo";
@@ -43,6 +43,8 @@ const makeTodo = (overrides: Partial<Todo> = {}): Todo => ({
   ...overrides,
 });
 
+let todosData: Todo[] = [makeTodo()];
+
 // 실제 "@/features/todo" 배럴을 importOriginal로 가져오면 todoApi.ts의 모듈
 // 최상단 `collection(db, "todos")` 호출까지 딸려와 mock db 객체로 인해 깨진다.
 // collapseRecurringInstances는 firebase 의존 없는 순수 유틸이라 그 파일만 직접
@@ -53,19 +55,21 @@ vi.mock("@/features/todo", async () => {
   );
   return {
     collapseRecurringInstances,
-    useGetTodos: () => ({ data: [makeTodo()], isLoading: false, isError: false }),
+    useGetTodos: () => ({ data: todosData, isLoading: false, isError: false }),
     useUpdateTodo: () => ({ mutate: updateMutate }),
     useReorderTodos: () => ({ mutate: reorderMutate }),
   };
 });
 
 let capturedDragProps: {
+  isReorderLocked?: boolean;
   onUpdateTodo: (todo: Todo) => void;
   onReorderTodos: (updates: TodoReorderUpdate[]) => void;
 } | null = null;
 
 vi.mock("../../hooks/useKanbanDrag", () => ({
   useKanbanDrag: (props: {
+    isReorderLocked?: boolean;
     onUpdateTodo: (todo: Todo) => void;
     onReorderTodos: (updates: TodoReorderUpdate[]) => void;
   }) => {
@@ -93,10 +97,10 @@ vi.mock("../kanbanColumn", () => ({
   },
 }));
 
-const renderKanbanBoard = () =>
+const renderKanbanBoard = (url = "/kanban") =>
   render(
     <ToastProvider>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[url]}>
         <KanbanBoard />
       </MemoryRouter>
     </ToastProvider>,
@@ -108,6 +112,7 @@ describe("KanbanBoard 뮤테이션 실패 토스트", () => {
     capturedDragProps = null;
     columnCalls.length = 0;
     isTabletMock.mockReturnValue(false);
+    todosData = [makeTodo()];
   });
 
   it("컬럼 간 드래그로 상태 변경이 실패하면 에러 토스트를 보여준다", () => {
@@ -154,5 +159,148 @@ describe("KanbanBoard 뮤테이션 실패 토스트", () => {
     expect(
       screen.getByText("할 일 상태 변경 중 오류가 발생했습니다"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("KanbanBoard 검색·우선순위 필터", () => {
+  const titlesOf = (status: string) => {
+    const call = [...columnCalls].reverse().find((c) => c.status === status);
+    return (call?.todos as Todo[]).map((t) => t.title);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedDragProps = null;
+    columnCalls.length = 0;
+    isTabletMock.mockReturnValue(false);
+    todosData = [
+      makeTodo({ id: "a", title: "보고서 작성", status: "todo", priority: "high", order: 0 }),
+      makeTodo({ id: "b", title: "장보기", status: "todo", priority: "low", order: 1 }),
+      makeTodo({ id: "c", title: "보고서 검토", status: "doing", priority: "medium", order: 0 }),
+      makeTodo({ id: "d", title: "청소", status: "doing", priority: "high", order: 1 }),
+      makeTodo({ id: "e", title: "월간 보고서", status: "done", priority: "low", order: 0, doneAt: "2026-06-14T00:00:00.000Z" }),
+    ];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 14, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("필터가 꺼져 있으면 모든 카드가 보이고 재정렬 잠금이 꺼져 있다", () => {
+    renderKanbanBoard();
+    expect(titlesOf("todo")).toEqual(["보고서 작성", "장보기"]);
+    expect(titlesOf("doing")).toEqual(["보고서 검토", "청소"]);
+    expect(titlesOf("done")).toEqual(["월간 보고서"]);
+    expect(capturedDragProps!.isReorderLocked).toBe(false);
+  });
+
+  it("검색어는 세 열 모두에서 걸린 카드만 남기고 재정렬을 잠근다", () => {
+    renderKanbanBoard("/kanban?q=" + encodeURIComponent("보고서"));
+    expect(titlesOf("todo")).toEqual(["보고서 작성"]);
+    expect(titlesOf("doing")).toEqual(["보고서 검토"]);
+    expect(titlesOf("done")).toEqual(["월간 보고서"]);
+    expect(capturedDragProps!.isReorderLocked).toBe(true);
+  });
+
+  it("우선순위 칩은 해당 우선순위만 남긴다", () => {
+    renderKanbanBoard("/kanban?p=high");
+    expect(titlesOf("todo")).toEqual(["보고서 작성"]);
+    expect(titlesOf("doing")).toEqual(["청소"]);
+    expect(titlesOf("done")).toEqual([]);
+  });
+
+  it("칩만 켜져 있으면 '필터 해제'로 칩을 끄고 모든 카드를 되돌린다", async () => {
+    renderKanbanBoard("/kanban?p=high");
+    expect(titlesOf("todo")).toEqual(["보고서 작성"]);
+
+    await act(async () => {
+      screen.getByRole("button", { name: "필터 해제" }).click();
+    });
+
+    expect(titlesOf("todo")).toEqual(["보고서 작성", "장보기"]);
+    expect(titlesOf("done")).toEqual(["월간 보고서"]);
+    expect(capturedDragProps!.isReorderLocked).toBe(false);
+  });
+
+  it("필터 결과가 0건이면 빈 열 대신 검색 빈 상태를 보여 주고, 버튼으로 필터를 지운다", async () => {
+    renderKanbanBoard("/kanban?q=" + encodeURIComponent("없는말"));
+    // 빈 열 세 개를 그리지 않는다
+    expect(columnCalls).toHaveLength(0);
+    expect(screen.getByText("검색 결과가 없습니다")).toBeInTheDocument();
+    expect(screen.getByText('"없는말"에 대한 결과를 찾을 수 없습니다')).toBeInTheDocument();
+    // 검색칸·칩은 그대로 남는다
+    expect(screen.getByPlaceholderText("할 일 검색...")).toHaveValue("없는말");
+    expect(screen.getByRole("button", { name: "높음" })).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole("button", { name: "검색 취소" });
+    await act(async () => {
+      buttons[buttons.length - 1].click();
+    });
+
+    expect(screen.queryByText("검색 결과가 없습니다")).not.toBeInTheDocument();
+    expect(titlesOf("todo")).toEqual(["보고서 작성", "장보기"]);
+    expect(screen.getByPlaceholderText("할 일 검색...")).toHaveValue("");
+  });
+
+  it("검색어와 칩이 함께 있고 결과가 0건이면 빈 상태 버튼도 '필터 해제'다", () => {
+    renderKanbanBoard("/kanban?q=" + encodeURIComponent("장보기") + "&p=high");
+    expect(screen.getByText("검색 결과가 없습니다")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "검색 취소" })).not.toBeInTheDocument();
+    // 결과 줄 버튼 + 빈 상태 버튼
+    expect(screen.getAllByRole("button", { name: "필터 해제" })).toHaveLength(2);
+  });
+
+  it("모바일 탭 카운트는 걸러진 수를 보여준다", () => {
+    isTabletMock.mockReturnValue(true);
+    renderKanbanBoard("/kanban?q=" + encodeURIComponent("보고서"));
+    expect(screen.getByRole("button", { name: /To Do \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Doing \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Done \(1\)/ })).toBeInTheDocument();
+  });
+});
+
+describe("KanbanBoard 검색어가 URL에 있을 때 반복 내비게이션 없음", () => {
+  // location.key는 내비게이션마다(같은 주소로의 replace 포함) 새로 바뀐다.
+  const locationKeys = new Set<string>();
+  const LocationProbe = () => {
+    locationKeys.add(useLocation().key);
+    return null;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedDragProps = null;
+    columnCalls.length = 0;
+    locationKeys.clear();
+    isTabletMock.mockReturnValue(false);
+    todosData = [makeTodo({ title: "보고서 작성" })];
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 14, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("가만히 두면 디바운스가 같은 검색어로 주소를 계속 다시 쓰지 않는다", async () => {
+    render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/kanban?q=" + encodeURIComponent("보고서")]}>
+          <LocationProbe />
+          <KanbanBoard />
+        </MemoryRouter>
+      </ToastProvider>,
+    );
+
+    for (let i = 0; i < 10; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(310);
+      });
+    }
+
+    // 첫 위치 + (있다면) 디바운스 1회 정도까지만 허용한다. 반복이면 10 이상이 된다.
+    expect(locationKeys.size).toBeLessThanOrEqual(2);
   });
 });

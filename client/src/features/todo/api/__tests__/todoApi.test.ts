@@ -129,6 +129,29 @@ describe('todoApi', () => {
     })
   })
 
+  describe('getArchivedTodos', () => {
+    it('내 문서 중 archived == true인 것만 조회해 Todo로 매핑한다', async () => {
+      const { getDocs, query, where } = await import('firebase/firestore')
+      const { getArchivedTodos } = await import('../todoApi')
+
+      vi.mocked(where).mockClear()
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [
+          { id: 'archived-1', data: () => ({ title: '보관된 일', status: 'done', archived: true }) },
+        ],
+      } as unknown as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
+      vi.mocked(query).mockReturnValue({} as ReturnType<typeof query>)
+      vi.mocked(where).mockReturnValue({} as ReturnType<typeof where>)
+
+      const result = await getArchivedTodos()
+
+      expect(where).toHaveBeenCalledWith('userId', '==', 'test-user-id')
+      expect(where).toHaveBeenCalledWith('archived', '==', true)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatchObject({ id: 'archived-1', title: '보관된 일', archived: true })
+    })
+  })
+
   describe('createTodo', () => {
     beforeEach(async () => {
       vi.clearAllMocks()
@@ -193,62 +216,6 @@ describe('todoApi', () => {
         expect.anything(),
         expect.objectContaining({ archived: false }),
       )
-    })
-  })
-
-  describe('getSearchTodoList', () => {
-    beforeEach(async () => {
-      vi.clearAllMocks()
-      const firebase = await import('@/shared/lib/firebase')
-      // auth.currentUser가 설정되어 있는지 확인 (vi.mock에서 이미 설정됨)
-      if (!firebase.auth.currentUser) {
-        Object.assign(firebase.auth, { currentUser: { uid: 'test-user-id' } })
-      }
-    })
-
-    it('검색어와 일치하는 할 일만 반환해야 한다', async () => {
-      const { getDocs } = await import('firebase/firestore')
-      const { getSearchTodoList } = await import('../todoApi')
-
-      const mockTodos = [
-        makeTodo({ id: 'todo-1', title: '회의 준비' }),
-        makeTodo({ id: 'todo-2', title: '장 보기' }),
-        makeTodo({ id: 'todo-3', title: '회의록 작성' }),
-      ]
-
-      vi.mocked(getDocs).mockResolvedValueOnce({
-        docs: mockTodos.map((t) => ({
-          id: t.id,
-          data: () => { const { id: _, ...rest } = t; return rest },
-        })),
-      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
-
-      const result = await getSearchTodoList('회의')
-
-      expect(result).toHaveLength(2)
-      expect(result.map((t) => t.title)).toContain('회의 준비')
-      expect(result.map((t) => t.title)).toContain('회의록 작성')
-    })
-
-    it('검색어가 대소문자 구분 없이 동작해야 한다', async () => {
-      const { getDocs } = await import('firebase/firestore')
-      const { getSearchTodoList } = await import('../todoApi')
-
-      const mockTodos = [
-        makeTodo({ id: 'todo-1', title: 'React 공부' }),
-        makeTodo({ id: 'todo-2', title: 'react 버전 업데이트' }),
-      ]
-
-      vi.mocked(getDocs).mockResolvedValueOnce({
-        docs: mockTodos.map((t) => ({
-          id: t.id,
-          data: () => { const { id: _, ...rest } = t; return rest },
-        })),
-      } as ReturnType<typeof getDocs> extends Promise<infer T> ? T : never)
-
-      const result = await getSearchTodoList('react')
-
-      expect(result).toHaveLength(2)
     })
   })
 

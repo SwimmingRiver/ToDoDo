@@ -1,6 +1,6 @@
 export { useTodoDetail } from "./useTodoDetail";
 export { useGetTodos } from "./useGetTodos";
-export { useSearchTodo } from "./useSearchTodo";
+export { useGetArchivedTodos, ARCHIVED_TODOS_KEY } from "./useGetArchivedTodos";
 export { useDeleteTodo } from "./useDeleteTodo";
 export { useUpdateTodo } from "./useUpdateTodo";
 export { useUpdateToDone } from "./useUpdateToDone";
@@ -13,3 +13,5 @@ export { useDeleteRecurringSeries } from "./useDeleteRecurringSeries";
 export { useReorderTodos } from "./useReorderTodos";
 export { useRunStartupMaintenance } from "./useRunStartupMaintenance";
 export { useCreatePlanTodos } from "./useCreatePlanTodos";
+export { useTodoFilterParams } from "./useTodoFilterParams";
+export type { ListTab } from "./useTodoFilterParams";

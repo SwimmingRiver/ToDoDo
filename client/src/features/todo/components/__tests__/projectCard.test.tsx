@@ -275,3 +275,25 @@ describe("ProjectCard 모바일 액션시트", () => {
     expect(onDelete).toHaveBeenCalledWith("project-1");
   });
 });
+
+describe("ProjectCard 검색 하위 흐림", () => {
+  const children = [
+    makeTodo({ id: "c1", title: "전입 신고", parentId: "project-1" }),
+    makeTodo({ id: "c2", title: "짐 싸기", parentId: "project-1" }),
+  ];
+
+  it("highlightedChildIds가 있으면 거기에 없는 하위만 흐리게 표시한다", () => {
+    renderCard({
+      data: makeData({ childTodos: children }),
+      isExpanded: true,
+      highlightedChildIds: new Set(["c1"]),
+    });
+    expect(screen.getByText("전입 신고").closest("[data-dimmed]")).toBeNull();
+    expect(screen.getByText("짐 싸기").closest("[data-dimmed]")).not.toBeNull();
+  });
+
+  it("highlightedChildIds가 없으면 아무것도 흐리지 않는다", () => {
+    renderCard({ data: makeData({ childTodos: children }), isExpanded: true });
+    expect(screen.getByText("짐 싸기").closest("[data-dimmed]")).toBeNull();
+  });
+});

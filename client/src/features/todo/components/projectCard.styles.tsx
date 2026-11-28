@@ -162,8 +162,10 @@ export const EmptyChildMessage = styled.p`
 export const ChildCardWrapper = styled.div<{
   $status: Status;
   $priority: Todo["priority"];
+  $dimmed?: boolean;
 }>`
   border-radius: 10px;
+  transition: opacity 0.15s ease;
   border: 1px solid ${({ $status }) => statusColors[$status].border};
   overflow: hidden;
   flex-shrink: 0;
@@ -173,6 +175,17 @@ export const ChildCardWrapper = styled.div<{
     $priority === "high" &&
     css`
       border-left: 3px solid ${colors.danger.main};
+    `}
+
+  ${({ $dimmed }) =>
+    $dimmed &&
+    css`
+      opacity: 0.45;
+
+      &:hover,
+      &:focus-within {
+        opacity: 1;
+      }
     `}
 
   @media (min-width: 768px) {

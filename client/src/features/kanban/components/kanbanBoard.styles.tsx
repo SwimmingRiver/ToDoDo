@@ -5,10 +5,25 @@ const KanbanBoardContainer = styled.div`
   width: 100%;
   height: 100%;
   flex: 1;
+  min-height: 0;
   display: flex;
   gap: 8px;
   padding: 8px;
   overflow: hidden;
+`;
+
+// ContentContainer가 가로 flex라, 검색 줄과 보드를 세로로 쌓는 래퍼가 필요하다.
+const KanbanPageWrapper = styled.div`
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`;
+
+const FilterBar = styled.div`
+  padding: 8px 8px 0;
 `;
 
 const KanbanColumn = styled.div`
@@ -157,6 +172,8 @@ const EmptyText = styled.p`
 `;
 
 export {
+  KanbanPageWrapper,
+  FilterBar,
   KanbanBoardContainer,
   KanbanColumn,
   ColumnTitle,
