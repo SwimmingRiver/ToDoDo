@@ -359,7 +359,7 @@ describe('TodoList', () => {
       expect(lastRenderedIds(2)).toEqual(['todo-a', 'todo-b'])
     })
 
-    it('검색어와 칩이 함께 있으면 "검색 취소"가 둘 다 지운다', async () => {
+    it('검색어와 칩이 함께 있으면 "필터 해제"가 둘 다 지운다', async () => {
       projectCardCalls.length = 0
       const user = setupUser()
       renderTodoList(chipTodos())
@@ -368,7 +368,8 @@ describe('TodoList', () => {
       await user.click(screen.getByRole('button', { name: '높음' }))
       await waitFor(() => expect(document.body.textContent).toContain('검색 결과 1건'))
 
-      await user.click(screen.getByRole('button', { name: '검색 취소' }))
+      expect(screen.queryByRole('button', { name: '검색 취소' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: '필터 해제' }))
       await wait(400)
 
       expect(screen.getByPlaceholderText('할 일 검색...')).toHaveValue('')

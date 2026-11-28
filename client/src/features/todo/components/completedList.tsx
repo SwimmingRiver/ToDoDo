@@ -75,7 +75,11 @@ const CompletedList = ({
       return (
         <>
           {notice}
-          <SearchEmptyState query={filter.query} onCancelSearch={onCancelSearch} />
+          <SearchEmptyState
+            query={filter.query}
+            hasPriorityFilter={filter.priorities.length > 0}
+            onCancelSearch={onCancelSearch}
+          />
         </>
       );
     }

@@ -181,6 +181,7 @@ const KanbanBoard = () => {
           key={searchInputKey}
           initialValue={searchInputKey === 0 ? filter.query : ""}
           onSearch={setQuery}
+          hasPriorityFilter={filter.priorities.length > 0}
           onClear={handleClearQuery}
           onReset={handleResetFilter}
           resultCount={filteredCount}
@@ -192,7 +193,11 @@ const KanbanBoard = () => {
         />
       </FilterBar>
       {isFiltering && filteredCount === 0 ? (
-        <SearchEmptyState query={filter.query} onCancelSearch={handleResetFilter} />
+        <SearchEmptyState
+          query={filter.query}
+          hasPriorityFilter={filter.priorities.length > 0}
+          onCancelSearch={handleResetFilter}
+        />
       ) : (
     <DndContext
       sensors={sensors}

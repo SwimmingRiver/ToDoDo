@@ -260,6 +260,7 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
         key={searchInputKey}
         initialValue={searchInputKey === 0 ? filter.query : ""}
         onSearch={setQuery}
+        hasPriorityFilter={filter.priorities.length > 0}
         onClear={handleClearQuery}
         onReset={handleCancelSearch}
         resultCount={tab === "done" ? completedCount : projectCards.length}
@@ -283,7 +284,11 @@ const TodoList = ({ todos }: { todos: Todo[] }) => {
             onResultCountChange={setCompletedCount}
           />
         ) : isFiltering && projectCards.length === 0 ? (
-          <SearchEmptyState query={filter.query} onCancelSearch={handleCancelSearch} />
+          <SearchEmptyState
+          query={filter.query}
+          hasPriorityFilter={filter.priorities.length > 0}
+          onCancelSearch={handleCancelSearch}
+        />
         ) : projectCards.length === 0 ? (
           <EmptyState
             icon={ClipboardList}

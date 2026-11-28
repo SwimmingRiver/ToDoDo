@@ -244,6 +244,14 @@ describe("KanbanBoard 검색·우선순위 필터", () => {
     expect(screen.getByPlaceholderText("할 일 검색...")).toHaveValue("");
   });
 
+  it("검색어와 칩이 함께 있고 결과가 0건이면 빈 상태 버튼도 '필터 해제'다", () => {
+    renderKanbanBoard("/kanban?q=" + encodeURIComponent("장보기") + "&p=high");
+    expect(screen.getByText("검색 결과가 없습니다")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "검색 취소" })).not.toBeInTheDocument();
+    // 결과 줄 버튼 + 빈 상태 버튼
+    expect(screen.getAllByRole("button", { name: "필터 해제" })).toHaveLength(2);
+  });
+
   it("모바일 탭 카운트는 걸러진 수를 보여준다", () => {
     isTabletMock.mockReturnValue(true);
     renderKanbanBoard("/kanban?q=" + encodeURIComponent("보고서"));

@@ -19,6 +19,8 @@ interface TodoSearchProps {
    * 입력을 비우는 것만으로는 아무 일도 없으므로, 주면 이 버튼이 "필터 해제"로도 동작한다.
    */
   onReset?: () => void;
+  /** 우선순위 칩이 하나라도 켜져 있는지. 켜져 있으면 버튼이 칩까지 지우므로 "필터 해제"라 부른다. */
+  hasPriorityFilter?: boolean;
   initialValue?: string;
   resultCount?: number;
   isSearching: boolean;
@@ -28,6 +30,7 @@ export const TodoSearch = ({
   onSearch,
   onClear,
   onReset,
+  hasPriorityFilter = false,
   initialValue = "",
   resultCount = 0,
   isSearching,
@@ -59,8 +62,8 @@ export const TodoSearch = ({
     onReset?.();
   }, [onReset]);
 
-  // 입력이 비어 있는데 결과 줄이 떠 있으면 칩만 켜진 상태다.
-  const cancelLabel = inputValue || !onReset ? "검색 취소" : "필터 해제";
+  // 칩이 켜져 있으면(검색어가 있든 없든) 버튼이 칩까지 지우므로 "필터 해제", 검색어만이면 "검색 취소".
+  const cancelLabel = hasPriorityFilter && onReset ? "필터 해제" : "검색 취소";
 
   return (
     <SearchContainer>
